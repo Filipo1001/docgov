@@ -48,9 +48,15 @@ export interface PDFContrato {
   supervisor: PDFPartner
 }
 
+export interface PDFEvidencia {
+  url: string
+  nombre_archivo: string
+}
+
 export interface PDFActividad {
   descripcion: string
   cantidad: number
+  evidencias: PDFEvidencia[]
 }
 
 export interface PDFObligacion {

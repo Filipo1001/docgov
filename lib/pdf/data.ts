@@ -68,17 +68,35 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     .eq('contrato_id', contrato.id ?? '')
     .order('orden')
 
-  // Fetch activities for this specific period
+  // Fetch activities WITH their evidence photos for this specific period
   const { data: actividadesDelPeriodo } = await supabase
     .from('actividades')
-    .select('obligacion_id, descripcion, cantidad')
+    .select('id, obligacion_id, descripcion, cantidad, evidencias(id, url, nombre_archivo)')
     .eq('periodo_id', periodoId)
     .order('orden')
 
-  const actsPorObligacion = new Map<string, Array<{ descripcion: string; cantidad: number }>>()
-  for (const act of actividadesDelPeriodo ?? []) {
+  type ActRow = {
+    id: string
+    obligacion_id: string
+    descripcion: string
+    cantidad: number
+    evidencias: Array<{ id: string; url: string; nombre_archivo: string }>
+  }
+
+  const actsPorObligacion = new Map<
+    string,
+    Array<{ descripcion: string; cantidad: number; evidencias: Array<{ url: string; nombre_archivo: string }> }>
+  >()
+  for (const act of (actividadesDelPeriodo ?? []) as ActRow[]) {
     const list = actsPorObligacion.get(act.obligacion_id) ?? []
-    list.push({ descripcion: act.descripcion, cantidad: act.cantidad })
+    list.push({
+      descripcion: act.descripcion,
+      cantidad: act.cantidad,
+      evidencias: (act.evidencias ?? []).map((ev) => ({
+        url: ev.url,
+        nombre_archivo: ev.nombre_archivo,
+      })),
+    })
     actsPorObligacion.set(act.obligacion_id, list)
   }
 
