@@ -2,13 +2,38 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
+import { useUsuario } from '@/lib/user-context'
+
+// Qué estado ve cada rol para poder revisar
+const estadoQueRevisa: Record<string, string> = {
+  supervisor: 'enviado',
+  asesor: 'revision_asesor',
+  gobierno: 'revision_gobierno',
+  hacienda: 'revision_hacienda',
+}
+
+// Al aprobar, a qué estado pasa
+const estadoSiguiente: Record<string, string> = {
+  enviado: 'revision_asesor',
+  revision_asesor: 'revision_gobierno',
+  revision_gobierno: 'revision_hacienda',
+  revision_hacienda: 'aprobado',
+}
+
+// Quién aprobó en cada transición
+const labelAprobador: Record<string, string> = {
+  enviado: 'Supervisor',
+  revision_asesor: 'Asesor jurídico',
+  revision_gobierno: 'Gobierno',
+  revision_hacienda: 'Hacienda',
+}
 
 export default function PeriodoDetallePage() {
   const { id: contratoId, periodoId } = useParams()
-  const router = useRouter()
+  const { usuario } = useUsuario()
   const supabase = createClient()
 
   const [contrato, setContrato] = useState<any>(null)
@@ -17,6 +42,12 @@ export default function PeriodoDetallePage() {
   const [actividades, setActividades] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [enviando, setEnviando] = useState(false)
+
+  // Panel de aprobación
+  const [aprobando, setAprobando] = useState(false)
+  const [mostrarRechazo, setMostrarRechazo] = useState(false)
+  const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [rechazando, setRechazando] = useState(false)
 
   // Form para nueva actividad
   const [formActivo, setFormActivo] = useState<string | null>(null)
@@ -30,7 +61,7 @@ export default function PeriodoDetallePage() {
       .select(`
         *,
         contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula),
-        supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo),
+        supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, id),
         dependencia:dependencias(nombre)
       `)
       .eq('id', contratoId)
@@ -116,9 +147,7 @@ export default function PeriodoDetallePage() {
       return
     }
 
-    const { data: urlData } = supabase.storage
-      .from('evidencias')
-      .getPublicUrl(path)
+    const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(path)
 
     await supabase.from('evidencias').insert({
       actividad_id: actividadId,
@@ -145,10 +174,7 @@ export default function PeriodoDetallePage() {
     setEnviando(true)
     const { error } = await supabase
       .from('periodos')
-      .update({
-        estado: 'enviado',
-        fecha_envio: new Date().toISOString(),
-      })
+      .update({ estado: 'enviado', fecha_envio: new Date().toISOString() })
       .eq('id', periodoId)
 
     if (error) {
@@ -158,6 +184,70 @@ export default function PeriodoDetallePage() {
       cargarDatos()
     }
     setEnviando(false)
+  }
+
+  async function aprobarPeriodo() {
+    if (!periodo) return
+    setAprobando(true)
+
+    const siguienteEstado = estadoSiguiente[periodo.estado]
+    if (!siguienteEstado) {
+      toast.error('Estado no reconocido')
+      setAprobando(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('periodos')
+      .update({ estado: siguienteEstado })
+      .eq('id', periodoId)
+
+    if (error) {
+      toast.error('Error: ' + error.message)
+    } else {
+      const aprobador = labelAprobador[periodo.estado]
+      const esUltimo = siguienteEstado === 'aprobado'
+      toast.success(esUltimo ? 'Periodo aprobado definitivamente' : `Aprobado por ${aprobador}, pasa a siguiente revisión`)
+      cargarDatos()
+    }
+    setAprobando(false)
+  }
+
+  async function rechazarPeriodo() {
+    if (!motivoRechazo.trim()) {
+      toast.error('Escribe el motivo del rechazo')
+      return
+    }
+    setRechazando(true)
+
+    const { error } = await supabase
+      .from('periodos')
+      .update({ estado: 'rechazado', motivo_rechazo: motivoRechazo.trim() })
+      .eq('id', periodoId)
+
+    if (error) {
+      toast.error('Error: ' + error.message)
+    } else {
+      toast.success('Periodo rechazado')
+      setMostrarRechazo(false)
+      setMotivoRechazo('')
+      cargarDatos()
+    }
+    setRechazando(false)
+  }
+
+  async function marcarPagado() {
+    const { error } = await supabase
+      .from('periodos')
+      .update({ estado: 'pagado' })
+      .eq('id', periodoId)
+
+    if (error) {
+      toast.error('Error: ' + error.message)
+    } else {
+      toast.success('Periodo marcado como pagado')
+      cargarDatos()
+    }
   }
 
   const estadoColor: Record<string, string> = {
@@ -185,6 +275,14 @@ export default function PeriodoDetallePage() {
   }
 
   const esEditable = periodo?.estado === 'borrador' || periodo?.estado === 'rechazado'
+
+  // Determinar si el usuario actual puede aprobar/rechazar este periodo
+  const puedeRevisar = (() => {
+    if (!usuario || !periodo) return false
+    if (usuario.rol === 'admin') return ['enviado', 'revision_asesor', 'revision_gobierno', 'revision_hacienda'].includes(periodo.estado)
+    const estadoEsperado = estadoQueRevisa[usuario.rol]
+    return estadoEsperado === periodo.estado
+  })()
 
   if (cargando) return <p className="text-gray-500">Cargando periodo...</p>
 
@@ -227,7 +325,6 @@ export default function PeriodoDetallePage() {
           </div>
         </div>
 
-        {/* Barra de progreso */}
         <div className="mt-4 flex items-center gap-2 text-xs">
           <span className="text-gray-400">Actividades registradas:</span>
           <span className="font-medium text-gray-900">{actividades.length}</span>
@@ -245,13 +342,92 @@ export default function PeriodoDetallePage() {
         )}
       </div>
 
+      {/* Panel de aprobación — solo visible para el revisor correspondiente */}
+      {puedeRevisar && (
+        <div className="bg-white rounded-2xl border border-amber-200 p-6 mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+              <span className="text-base">🔍</span>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900">Este periodo requiere tu revisión</h3>
+              <p className="text-xs text-gray-400">
+                Revisa las actividades y evidencias antes de aprobar o rechazar.
+              </p>
+            </div>
+          </div>
+
+          {!mostrarRechazo ? (
+            <div className="flex gap-3">
+              <button
+                onClick={aprobarPeriodo}
+                disabled={aprobando}
+                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {aprobando ? 'Aprobando...' : '✓ Aprobar'}
+              </button>
+              <button
+                onClick={() => setMostrarRechazo(true)}
+                className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
+              >
+                ✕ Rechazar
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <textarea
+                value={motivoRechazo}
+                onChange={(e) => setMotivoRechazo(e.target.value)}
+                placeholder="Escribe el motivo del rechazo..."
+                rows={3}
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={rechazarPeriodo}
+                  disabled={rechazando || !motivoRechazo.trim()}
+                  className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {rechazando ? 'Rechazando...' : 'Confirmar rechazo'}
+                </button>
+                <button
+                  onClick={() => { setMostrarRechazo(false); setMotivoRechazo('') }}
+                  className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Botón pagado — solo admin/hacienda cuando está aprobado */}
+      {periodo?.estado === 'aprobado' && (usuario?.rol === 'admin' || usuario?.rol === 'hacienda') && (
+        <div className="bg-white rounded-2xl border border-green-200 p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium text-gray-900">Periodo aprobado</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Marca el pago como realizado cuando hayas transferido el valor al contratista.
+              </p>
+            </div>
+            <button
+              onClick={marcarPagado}
+              className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors"
+            >
+              Marcar como pagado
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Obligaciones con actividades */}
       <div className="space-y-4 mb-6">
         {obligaciones.map((obl, oblIndex) => {
           const actsDeObl = actividadesPorObligacion(obl.id)
           return (
             <div key={obl.id} className="bg-white rounded-2xl border p-6">
-              {/* Header de la obligación */}
               <div className="flex items-start gap-3 mb-4">
                 <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
@@ -390,15 +566,14 @@ export default function PeriodoDetallePage() {
         })}
       </div>
 
-      {/* Botón de enviar */}
+      {/* Botón de enviar (contratista) */}
       {esEditable && (
         <div className="bg-white rounded-2xl border p-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-medium text-gray-900">¿Listo para enviar?</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Al enviar, se generarán automáticamente la Cuenta de Cobro y el Informe de Actividades.
-                Los revisores serán notificados.
+                Al enviar, el supervisor recibirá este periodo para revisión.
               </p>
             </div>
             <button
@@ -412,11 +587,20 @@ export default function PeriodoDetallePage() {
         </div>
       )}
 
-      {/* Estado no editable */}
-      {!esEditable && periodo?.estado !== 'rechazado' && (
+      {/* Estado no editable y sin acciones */}
+      {!esEditable && !puedeRevisar && periodo?.estado !== 'aprobado' && periodo?.estado !== 'pagado' && (
         <div className="bg-gray-50 rounded-2xl border p-6 text-center">
           <p className="text-sm text-gray-500">
-            Este periodo está en estado <strong>{estadoLabel[periodo?.estado]}</strong> y no puede ser editado.
+            Este periodo está en estado <strong>{estadoLabel[periodo?.estado]}</strong> y está siendo revisado por la instancia correspondiente.
+          </p>
+        </div>
+      )}
+
+      {periodo?.estado === 'pagado' && (
+        <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 text-center">
+          <p className="text-lg font-bold text-emerald-700">Periodo pagado</p>
+          <p className="text-sm text-emerald-600 mt-1">
+            El pago de ${periodo?.valor_cobro?.toLocaleString('es-CO')} fue procesado exitosamente.
           </p>
         </div>
       )}

@@ -3,80 +3,284 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useUsuario } from '@/lib/user-context'
+
+// Estado pendiente según rol revisor
+const estadoPendientePorRol: Record<string, string> = {
+  supervisor: 'enviado',
+  asesor: 'revision_asesor',
+  gobierno: 'revision_gobierno',
+  hacienda: 'revision_hacienda',
+}
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({ contratos: 0, pendientes: 0, aprobados: 0 })
+  const { usuario, cargando: cargandoUser } = useUsuario()
+  const [stats, setStats] = useState({ a: 0, b: 0, c: 0 })
+  const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
+    if (!usuario) return
+
     async function cargar() {
       const supabase = createClient()
-      
-      const { count: totalContratos } = await supabase
-        .from('contratos')
-        .select('*', { count: 'exact', head: true })
 
-      const { count: pendientes } = await supabase
-        .from('periodos')
-        .select('*', { count: 'exact', head: true })
-        .in('estado', ['enviado', 'revision_supervisor', 'revision_asesor', 'revision_gobierno', 'revision_hacienda'])
+      if (usuario!.rol === 'admin') {
+        const [{ count: a }, { count: b }, { count: c }] = await Promise.all([
+          supabase.from('contratos').select('*', { count: 'exact', head: true }),
+          supabase
+            .from('periodos')
+            .select('*', { count: 'exact', head: true })
+            .in('estado', ['enviado', 'revision_asesor', 'revision_gobierno', 'revision_hacienda']),
+          supabase
+            .from('periodos')
+            .select('*', { count: 'exact', head: true })
+            .eq('estado', 'aprobado'),
+        ])
+        setStats({ a: a || 0, b: b || 0, c: c || 0 })
+      } else if (usuario!.rol === 'supervisor') {
+        const { data: misContratos } = await supabase
+          .from('contratos')
+          .select('id')
+          .eq('supervisor_id', usuario!.id)
+        const ids = misContratos?.map((c) => c.id) ?? []
 
-      const { count: aprobados } = await supabase
-        .from('periodos')
-        .select('*', { count: 'exact', head: true })
-        .eq('estado', 'aprobado')
+        const [{ count: b }, { count: c }] = await Promise.all([
+          ids.length > 0
+            ? supabase
+                .from('periodos')
+                .select('*', { count: 'exact', head: true })
+                .in('contrato_id', ids)
+                .eq('estado', 'enviado')
+            : Promise.resolve({ count: 0 }),
+          ids.length > 0
+            ? supabase
+                .from('periodos')
+                .select('*', { count: 'exact', head: true })
+                .in('contrato_id', ids)
+                .eq('estado', 'aprobado')
+            : Promise.resolve({ count: 0 }),
+        ])
+        setStats({ a: ids.length, b: b || 0, c: c || 0 })
+      } else if (usuario!.rol === 'contratista') {
+        const { data: misContratos } = await supabase
+          .from('contratos')
+          .select('id')
+          .eq('contratista_id', usuario!.id)
+        const ids = misContratos?.map((c) => c.id) ?? []
 
-      setStats({
-        contratos: totalContratos || 0,
-        pendientes: pendientes || 0,
-        aprobados: aprobados || 0,
-      })
+        const [{ count: b }, { count: c }] = await Promise.all([
+          ids.length > 0
+            ? supabase
+                .from('periodos')
+                .select('*', { count: 'exact', head: true })
+                .in('contrato_id', ids)
+                .in('estado', ['borrador', 'rechazado'])
+            : Promise.resolve({ count: 0 }),
+          ids.length > 0
+            ? supabase
+                .from('periodos')
+                .select('*', { count: 'exact', head: true })
+                .in('contrato_id', ids)
+                .eq('estado', 'aprobado')
+            : Promise.resolve({ count: 0 }),
+        ])
+        setStats({ a: ids.length, b: b || 0, c: c || 0 })
+      } else {
+        // asesor, gobierno, hacienda
+        const estadoPendiente = estadoPendientePorRol[usuario!.rol] ?? 'revision_asesor'
+        const [{ count: b }, { count: c }] = await Promise.all([
+          supabase
+            .from('periodos')
+            .select('*', { count: 'exact', head: true })
+            .eq('estado', estadoPendiente),
+          supabase
+            .from('periodos')
+            .select('*', { count: 'exact', head: true })
+            .eq('estado', 'aprobado'),
+        ])
+        setStats({ a: 0, b: b || 0, c: c || 0 })
+      }
+
+      setCargando(false)
     }
+
     cargar()
-  }, [])
+  }, [usuario])
+
+  if (cargandoUser || cargando) {
+    return <p className="text-gray-500">Cargando...</p>
+  }
+
+  if (!usuario) return null
+
+  type ConfigRol = {
+    titulo: string
+    subtitulo: string
+    cards: Array<{ label: string; val: number; color: string }>
+    accesos: Array<{ href: string; icon: string; label: string; desc: string }>
+  }
+
+  const config: Partial<Record<string, ConfigRol>> = {
+    admin: {
+      titulo: 'Panel de administración',
+      subtitulo: 'Vista general de todos los contratos y periodos',
+      cards: [
+        { label: 'Contratos totales', val: stats.a, color: 'text-gray-900' },
+        { label: 'Periodos en revisión', val: stats.b, color: 'text-amber-600' },
+        { label: 'Periodos aprobados', val: stats.c, color: 'text-green-600' },
+      ],
+      accesos: [
+        {
+          href: '/dashboard/contratos/nuevo',
+          icon: '➕',
+          label: 'Registrar contrato',
+          desc: 'Crear un nuevo contrato de prestación de servicios',
+        },
+        {
+          href: '/dashboard/contratos',
+          icon: '📋',
+          label: 'Ver contratos',
+          desc: 'Lista de todos los contratos activos',
+        },
+        {
+          href: '/dashboard/aprobaciones',
+          icon: '✅',
+          label: 'Aprobaciones',
+          desc: 'Periodos pendientes de revisión en el sistema',
+        },
+      ],
+    },
+    supervisor: {
+      titulo: 'Panel de supervisión',
+      subtitulo: 'Contratos que estás supervisando',
+      cards: [
+        { label: 'Contratos supervisados', val: stats.a, color: 'text-gray-900' },
+        { label: 'Periodos por revisar', val: stats.b, color: 'text-amber-600' },
+        { label: 'Periodos aprobados', val: stats.c, color: 'text-green-600' },
+      ],
+      accesos: [
+        {
+          href: '/dashboard/aprobaciones',
+          icon: '✅',
+          label: 'Revisar periodos',
+          desc: 'Aprobar o rechazar los periodos enviados por los contratistas',
+        },
+        {
+          href: '/dashboard/contratos',
+          icon: '📋',
+          label: 'Mis contratos',
+          desc: 'Ver los contratos que estás supervisando',
+        },
+      ],
+    },
+    contratista: {
+      titulo: 'Mis contratos',
+      subtitulo: 'Registra tus actividades mensuales y envía tus cuentas de cobro',
+      cards: [
+        { label: 'Mis contratos', val: stats.a, color: 'text-gray-900' },
+        { label: 'Periodos por completar', val: stats.b, color: 'text-amber-600' },
+        { label: 'Periodos aprobados', val: stats.c, color: 'text-green-600' },
+      ],
+      accesos: [
+        {
+          href: '/dashboard/contratos',
+          icon: '📋',
+          label: 'Mis contratos',
+          desc: 'Ver tus contratos vigentes y registrar actividades por periodo',
+        },
+      ],
+    },
+    asesor: {
+      titulo: 'Revisión jurídica',
+      subtitulo: 'Periodos pendientes de tu aprobación',
+      cards: [
+        { label: 'Pendientes de revisión', val: stats.b, color: 'text-amber-600' },
+        { label: 'Periodos aprobados', val: stats.c, color: 'text-green-600' },
+        { label: '', val: 0, color: '' },
+      ],
+      accesos: [
+        {
+          href: '/dashboard/aprobaciones',
+          icon: '✅',
+          label: 'Revisar periodos',
+          desc: 'Periodos en revisión jurídica que requieren tu aprobación',
+        },
+      ],
+    },
+    gobierno: {
+      titulo: 'Revisión de gobierno',
+      subtitulo: 'Periodos pendientes de tu aprobación',
+      cards: [
+        { label: 'Pendientes de revisión', val: stats.b, color: 'text-amber-600' },
+        { label: 'Periodos aprobados', val: stats.c, color: 'text-green-600' },
+        { label: '', val: 0, color: '' },
+      ],
+      accesos: [
+        {
+          href: '/dashboard/aprobaciones',
+          icon: '✅',
+          label: 'Revisar periodos',
+          desc: 'Periodos que requieren aprobación de gobierno',
+        },
+      ],
+    },
+    hacienda: {
+      titulo: 'Hacienda',
+      subtitulo: 'Periodos pendientes de pago',
+      cards: [
+        { label: 'Pendientes de aprobación', val: stats.b, color: 'text-amber-600' },
+        { label: 'Periodos aprobados', val: stats.c, color: 'text-green-600' },
+        { label: '', val: 0, color: '' },
+      ],
+      accesos: [
+        {
+          href: '/dashboard/aprobaciones',
+          icon: '✅',
+          label: 'Gestionar pagos',
+          desc: 'Aprobar periodos para pago final',
+        },
+      ],
+    },
+  }
+
+  const cfg = config[usuario.rol] ?? config.contratista!
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-1">{cfg.titulo}</h2>
+      <p className="text-sm text-gray-400 mb-6">
+        Bienvenido, {usuario.nombre_completo.split(' ')[0]} — {cfg.subtitulo}
+      </p>
 
-      {/* Tarjetas de estadísticas */}
+      {/* Cards de estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-2xl border p-6">
-          <p className="text-sm text-gray-400 mb-1">Contratos activos</p>
-          <p className="text-3xl font-bold text-gray-900">{stats.contratos}</p>
-        </div>
-        <div className="bg-white rounded-2xl border p-6">
-          <p className="text-sm text-gray-400 mb-1">Periodos pendientes</p>
-          <p className="text-3xl font-bold text-amber-600">{stats.pendientes}</p>
-        </div>
-        <div className="bg-white rounded-2xl border p-6">
-          <p className="text-sm text-gray-400 mb-1">Periodos aprobados</p>
-          <p className="text-3xl font-bold text-green-600">{stats.aprobados}</p>
-        </div>
+        {cfg.cards.map((card, i) =>
+          card.label ? (
+            <div key={i} className="bg-white rounded-2xl border p-6">
+              <p className="text-sm text-gray-400 mb-1">{card.label}</p>
+              <p className={`text-3xl font-bold ${card.color}`}>{card.val}</p>
+            </div>
+          ) : (
+            <div key={i} />
+          )
+        )}
       </div>
 
       {/* Accesos rápidos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link
-          href="/dashboard/contratos/nuevo"
-          className="bg-white rounded-2xl border p-6 hover:border-gray-300 transition-colors group"
-        >
-          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
-            <span className="text-xl">➕</span>
-          </div>
-          <h3 className="font-medium text-gray-900">Registrar contrato</h3>
-          <p className="text-sm text-gray-500 mt-1">Crear un nuevo contrato de prestación de servicios</p>
-        </Link>
-
-        <Link
-          href="/dashboard/contratos"
-          className="bg-white rounded-2xl border p-6 hover:border-gray-300 transition-colors group"
-        >
-          <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
-            <span className="text-xl">📋</span>
-          </div>
-          <h3 className="font-medium text-gray-900">Ver contratos</h3>
-          <p className="text-sm text-gray-500 mt-1">Lista de contratos activos y sus periodos de pago</p>
-        </Link>
+        {cfg.accesos.map((acceso, i) => (
+          <Link
+            key={i}
+            href={acceso.href}
+            className="bg-white rounded-2xl border p-6 hover:border-gray-300 transition-colors group"
+          >
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-gray-200 transition-colors">
+              <span className="text-xl">{acceso.icon}</span>
+            </div>
+            <h3 className="font-medium text-gray-900">{acceso.label}</h3>
+            <p className="text-sm text-gray-500 mt-1">{acceso.desc}</p>
+          </Link>
+        ))}
       </div>
     </div>
   )

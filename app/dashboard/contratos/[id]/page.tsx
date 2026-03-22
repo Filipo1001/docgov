@@ -5,10 +5,12 @@ import { createClient } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
+import { useUsuario } from '@/lib/user-context'
 
 export default function ContratoDetallePage() {
   const { id } = useParams()
   const router = useRouter()
+  const { usuario } = useUsuario()
   const [contrato, setContrato] = useState<any>(null)
   const [obligaciones, setObligaciones] = useState<any[]>([])
   const [periodos, setPeriodos] = useState<any[]>([])
@@ -115,12 +117,10 @@ export default function ContratoDetallePage() {
       const mesIndex = fechaMes.getMonth()
       const anio = fechaMes.getFullYear()
 
-      // Primer día del periodo
       const inicioP = i === 0
         ? contrato.fecha_inicio
         : `${anio}-${String(mesIndex + 1).padStart(2, '0')}-01`
 
-      // Último día del periodo
       const ultimoDia = new Date(anio, mesIndex + 1, 0).getDate()
       const finP = i === contrato.plazo_meses - 1
         ? contrato.fecha_fin
@@ -138,9 +138,7 @@ export default function ContratoDetallePage() {
       })
     }
 
-    const { error } = await supabase
-      .from('periodos')
-      .insert(periodosNuevos)
+    const { error } = await supabase.from('periodos').insert(periodosNuevos)
 
     if (error) {
       toast.error('Error generando periodos: ' + error.message)
@@ -178,13 +176,17 @@ export default function ContratoDetallePage() {
   if (cargando) return <p className="text-gray-500">Cargando contrato...</p>
   if (!contrato) return <p className="text-red-500">Contrato no encontrado</p>
 
+  const esAdmin = usuario?.rol === 'admin'
+
   return (
     <div className="max-w-4xl">
       <Toaster position="top-center" richColors />
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
-        <Link href="/dashboard/contratos" className="hover:text-gray-600">Contratos</Link>
+        <Link href="/dashboard/contratos" className="hover:text-gray-600">
+          {esAdmin ? 'Contratos' : 'Mis contratos'}
+        </Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">N.º {contrato.numero}</span>
       </div>
@@ -250,45 +252,55 @@ export default function ContratoDetallePage() {
                   {obl.es_permanente && (
                     <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Permanente</span>
                   )}
-                  <button
-                    onClick={() => eliminarObligacion(obl.id)}
-                    className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
-                  >
-                    ✕
-                  </button>
+                  {esAdmin && (
+                    <button
+                      onClick={() => eliminarObligacion(obl.id)}
+                      className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Agregar obligación */}
-        <form onSubmit={agregarObligacion} className="flex gap-2">
-          <div className="flex-1">
-            <input
-              value={nuevaObligacion}
-              onChange={(e) => setNuevaObligacion(e.target.value)}
-              placeholder="Escribir nueva obligación..."
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none"
-            />
-            <label className="flex items-center gap-2 mt-2 ml-1">
+        {/* Solo admin puede agregar obligaciones */}
+        {esAdmin && (
+          <form onSubmit={agregarObligacion} className="flex gap-2">
+            <div className="flex-1">
               <input
-                type="checkbox"
-                checked={esPermanente}
-                onChange={(e) => setEsPermanente(e.target.checked)}
-                className="rounded"
+                value={nuevaObligacion}
+                onChange={(e) => setNuevaObligacion(e.target.value)}
+                placeholder="Escribir nueva obligación..."
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none"
               />
-              <span className="text-xs text-gray-500">Es actividad permanente</span>
-            </label>
-          </div>
-          <button
-            type="submit"
-            disabled={agregando || !nuevaObligacion.trim()}
-            className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 self-start"
-          >
-            Agregar
-          </button>
-        </form>
+              <label className="flex items-center gap-2 mt-2 ml-1">
+                <input
+                  type="checkbox"
+                  checked={esPermanente}
+                  onChange={(e) => setEsPermanente(e.target.checked)}
+                  className="rounded"
+                />
+                <span className="text-xs text-gray-500">Es actividad permanente</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={agregando || !nuevaObligacion.trim()}
+              className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 self-start"
+            >
+              Agregar
+            </button>
+          </form>
+        )}
+
+        {!esAdmin && obligaciones.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-4">
+            El administrador aún no ha definido las obligaciones de este contrato.
+          </p>
+        )}
       </div>
 
       {/* Periodos de pago */}
@@ -297,7 +309,7 @@ export default function ContratoDetallePage() {
           <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
             Periodos de pago ({periodos.length})
           </h3>
-          {periodos.length === 0 && obligaciones.length > 0 && (
+          {esAdmin && periodos.length === 0 && obligaciones.length > 0 && (
             <button
               onClick={generarPeriodos}
               disabled={generandoPeriodos}
@@ -308,15 +320,21 @@ export default function ContratoDetallePage() {
           )}
         </div>
 
-        {periodos.length === 0 && obligaciones.length === 0 && (
+        {periodos.length === 0 && esAdmin && obligaciones.length === 0 && (
           <p className="text-sm text-gray-400 text-center py-6">
             Agrega las obligaciones del contrato primero, luego genera los periodos.
           </p>
         )}
 
-        {periodos.length === 0 && obligaciones.length > 0 && (
+        {periodos.length === 0 && esAdmin && obligaciones.length > 0 && (
           <p className="text-sm text-gray-400 text-center py-6">
             Haz clic en "Generar periodos automáticamente" para crear los {contrato.plazo_meses} periodos mensuales.
+          </p>
+        )}
+
+        {periodos.length === 0 && !esAdmin && (
+          <p className="text-sm text-gray-400 text-center py-6">
+            Los periodos de pago aún no han sido generados por el administrador.
           </p>
         )}
 

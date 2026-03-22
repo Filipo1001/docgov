@@ -3,15 +3,20 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useUsuario } from '@/lib/user-context'
 
 export default function ContratosPage() {
+  const { usuario, cargando: cargandoUser } = useUsuario()
   const [contratos, setContratos] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
+    if (!usuario) return
+
     async function cargar() {
       const supabase = createClient()
-      const { data } = await supabase
+
+      let query = supabase
         .from('contratos')
         .select(`
           *,
@@ -21,26 +26,41 @@ export default function ContratosPage() {
         `)
         .order('created_at', { ascending: false })
 
+      // Filtrar según rol
+      if (usuario!.rol === 'supervisor') {
+        query = query.eq('supervisor_id', usuario!.id)
+      } else if (usuario!.rol === 'contratista') {
+        query = query.eq('contratista_id', usuario!.id)
+      }
+      // admin ve todo, sin filtro adicional
+
+      const { data } = await query
       setContratos(data || [])
       setCargando(false)
     }
-    cargar()
-  }, [])
 
-  if (cargando) {
+    cargar()
+  }, [usuario])
+
+  if (cargandoUser || cargando) {
     return <p className="text-gray-500">Cargando contratos...</p>
   }
+
+  const esAdmin = usuario?.rol === 'admin'
+  const titulo = esAdmin ? 'Contratos' : 'Mis contratos'
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Contratos</h2>
-        <Link
-          href="/dashboard/contratos/nuevo"
-          className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
-        >
-          + Nuevo contrato
-        </Link>
+        <h2 className="text-2xl font-bold text-gray-900">{titulo}</h2>
+        {esAdmin && (
+          <Link
+            href="/dashboard/contratos/nuevo"
+            className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+          >
+            + Nuevo contrato
+          </Link>
+        )}
       </div>
 
       {contratos.length === 0 ? (
@@ -48,14 +68,22 @@ export default function ContratosPage() {
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl">📄</span>
           </div>
-          <h3 className="font-medium text-gray-900 mb-2">No hay contratos registrados</h3>
-          <p className="text-sm text-gray-500 mb-4">Registra el primer contrato para comenzar a gestionar los pagos.</p>
-          <Link
-            href="/dashboard/contratos/nuevo"
-            className="inline-block bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
-          >
-            Registrar primer contrato
-          </Link>
+          <h3 className="font-medium text-gray-900 mb-2">
+            {esAdmin ? 'No hay contratos registrados' : 'No tienes contratos asignados'}
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">
+            {esAdmin
+              ? 'Registra el primer contrato para comenzar a gestionar los pagos.'
+              : 'Cuando el administrador te asigne un contrato, aparecerá aquí.'}
+          </p>
+          {esAdmin && (
+            <Link
+              href="/dashboard/contratos/nuevo"
+              className="inline-block bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              Registrar primer contrato
+            </Link>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
