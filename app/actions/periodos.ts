@@ -26,16 +26,19 @@ import { revalidatePath } from 'next/cache'
 
 async function getAuthContext() {
   const supabase = await createServerSupabaseClient()
-  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!session) {
+  // getUser() validates the JWT via a network call — more reliable in Server Actions
+  // than getSession() which only reads from local storage/cookies without revalidating.
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
     throw new Error('No autorizado: sesión inválida')
   }
 
   const { data: usuario, error } = await supabase
     .from('usuarios')
     .select('id, rol, nombre_completo')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   if (error || !usuario) {

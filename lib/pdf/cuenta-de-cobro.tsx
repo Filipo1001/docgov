@@ -1,9 +1,37 @@
 import React from 'react'
-import { Document, Page, Text, View } from '@react-pdf/renderer'
-import { shared } from './styles'
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData } from './types'
 
-function formatCurrency(value: number): string {
+// ─── Date utilities ───────────────────────────────────────────
+
+const MESES_ES = [
+  'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+  'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE',
+]
+
+/** "2026-02-28" → "FEBRERO 28 DE 2026" */
+function fechaLargaMayus(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${MESES_ES[parseInt(m) - 1]} ${d} DE ${y}`
+}
+
+/** "2026-02-02" → "02" */
+function dia(iso: string): string {
+  return iso.split('-')[2]
+}
+
+/** "2026-02-28" → "FEBRERO" */
+function mes(iso: string): string {
+  return MESES_ES[parseInt(iso.split('-')[1]) - 1]
+}
+
+/** "2026-02-28" → "2026" */
+function anio(iso: string): string {
+  return iso.split('-')[0]
+}
+
+/** "$3,000,000" format for COP */
+function formatCOP(value: number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
     currency: 'COP',
@@ -11,143 +39,273 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
+// ─── Styles ───────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  page: {
+    fontFamily: 'Helvetica',
+    fontSize: 10,
+    color: '#000',
+    paddingTop: 44,
+    paddingBottom: 56,
+    paddingHorizontal: 52,
+  },
+
+  // ── Title block
+  docTitle: {
+    fontSize: 14,
+    fontFamily: 'Helvetica-Bold',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  municipioLine: {
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  nitLine: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  debeA: {
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
+    textAlign: 'center',
+    marginBottom: 14,
+    letterSpacing: 0.3,
+  },
+
+  // ── Bordered form table
+  table: {
+    borderWidth: 1,
+    borderColor: '#000',
+    borderStyle: 'solid',
+    marginBottom: 20,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
+    borderBottomStyle: 'solid',
+  },
+  tableRowLast: {
+    flexDirection: 'row',
+  },
+  cellLabel: {
+    width: '42%',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    borderRightStyle: 'solid',
+    padding: '5 7',
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 9,
+    backgroundColor: '#f7f7f7',
+  },
+  cellValue: {
+    flex: 1,
+    padding: '5 7',
+    fontSize: 9.5,
+  },
+
+  // ── Signatures
+  sigSection: {
+    marginTop: 36,
+  },
+  sigLabel: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 24,
+  },
+  sigLine: {
+    borderTopWidth: 1,
+    borderTopColor: '#000',
+    borderTopStyle: 'solid',
+    width: '60%',
+    marginBottom: 5,
+  },
+  sigName: {
+    fontSize: 9.5,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 2,
+  },
+  sigDetail: {
+    fontSize: 9,
+    marginBottom: 1,
+  },
+  voBoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  voBoLabel: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    marginRight: 8,
+  },
+  voBoLine: {
+    flex: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
+    borderBottomStyle: 'solid',
+  },
+
+  // ── Footer
+  footer: {
+    position: 'absolute',
+    bottom: 22,
+    left: 52,
+    right: 52,
+    borderTopWidth: 0.5,
+    borderTopColor: '#bbb',
+    borderTopStyle: 'solid',
+    paddingTop: 5,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  footerText: {
+    fontSize: 7.5,
+    color: '#999',
+  },
+})
+
+// ─── Table row helper ─────────────────────────────────────────
+
+function Row({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
+  return (
+    <View style={last ? s.tableRowLast : s.tableRow}>
+      <View style={s.cellLabel}>
+        <Text>{label}</Text>
+      </View>
+      <View style={s.cellValue}>
+        <Text>{value}</Text>
+      </View>
+    </View>
+  )
 }
 
+// ─── Component ────────────────────────────────────────────────
+
 export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
-  const { municipio, contrato, periodo, fechaGeneracion } = data
+  const { municipio, contrato, periodo } = data
+
+  // Period value in words — use stored letras or fall back to contract's letras
+  const valorLetras = periodo.valor_letras ?? contrato.valor_letras_mensual
+  const valorTexto = valorLetras
+    ? `${valorLetras} (${formatCOP(periodo.valor_cobro)})`
+    : formatCOP(periodo.valor_cobro)
+
+  // Total contract value in words
+  const totalLetras = contrato.valor_letras_total
+    ? `${contrato.valor_letras_total} (${formatCOP(contrato.valor_total)})`
+    : formatCOP(contrato.valor_total)
+
+  // Contract duration
+  const plazoTexto = contrato.duracion_letras && contrato.plazo_meses
+    ? `${contrato.duracion_letras} (${contrato.plazo_meses}) MESES`
+    : contrato.plazo_meses
+      ? `${contrato.plazo_meses} MESES`
+      : '—'
+
+  // Period date range: "DEL 02 AL 28 DE FEBRERO DE 2026"
+  const periodoTexto = `DEL ${dia(periodo.fecha_inicio)} AL ${dia(periodo.fecha_fin)} DE ${mes(periodo.fecha_fin)} DE ${anio(periodo.fecha_fin)}`
+
+  // Bank display
+  const bancoCuenta = `${contrato.banco.toUpperCase()} / CUENTA ${contrato.tipo_cuenta.toUpperCase()}`
+
+  // Numero de la cuenta de cobro zero-padded (01, 02, ...)
+  const ccNumero = String(periodo.numero).padStart(2, '0')
+
+  // Municipality header line
+  const municipioHeader = municipio.departamento
+    ? `EL MUNICIPIO DE ${municipio.nombre.toUpperCase()} ${municipio.departamento.toUpperCase()}`
+    : `EL MUNICIPIO DE ${municipio.nombre.toUpperCase()}`
 
   return (
     <Document
-      title={`Cuenta de Cobro — Contrato ${contrato.numero}-${contrato.anio} — Periodo ${periodo.numero}`}
+      title={`Cuenta de Cobro N.º ${ccNumero} — Contrato ${contrato.numero}-${contrato.anio}`}
       author={contrato.contratista.nombre_completo}
       subject="Cuenta de Cobro"
       creator="DocGov"
     >
-      <Page size="A4" style={shared.page}>
+      <Page size="A4" style={s.page}>
 
-        {/* ── Header ─────────────────────────────────── */}
-        <View style={shared.headerBox}>
-          <Text style={shared.headerTitle}>Alcaldía Municipal de {municipio}</Text>
-          <Text style={shared.headerSubtitle}>{contrato.dependencia}</Text>
-          <Text style={shared.documentTitle}>Cuenta de Cobro</Text>
-          <Text style={shared.documentNumber}>
-            Contrato N.º {contrato.numero}-{contrato.anio} — Periodo {periodo.numero} — {periodo.mes} {periodo.anio}
-          </Text>
+        {/* ── Title block ───────────────────────────── */}
+        <Text style={s.docTitle}>CUENTA DE COBRO No. {ccNumero}</Text>
+        <Text style={s.municipioLine}>{municipioHeader}</Text>
+        {municipio.nit && (
+          <Text style={s.nitLine}>NIT {municipio.nit}</Text>
+        )}
+        <Text style={s.debeA}>DEBE A:</Text>
+
+        {/* ── Form table ────────────────────────────── */}
+        <View style={s.table}>
+          <Row label="Fecha:" value={fechaLargaMayus(periodo.fecha_fin)} />
+          <Row
+            label="Nombre contratista:"
+            value={contrato.contratista.nombre_completo.toUpperCase()}
+          />
+          <Row
+            label="Número de identificación tributaria:"
+            value={contrato.contratista.cedula}
+          />
+          <Row
+            label="Nº convenio o contrato:"
+            value={`${contrato.numero}-${contrato.anio}`}
+          />
+          <Row label="Objeto del contrato:" value={contrato.objeto.toUpperCase()} />
+          <Row label="Valor total del contrato:" value={totalLetras.toUpperCase()} />
+          <Row label="Plazo de ejecución:" value={plazoTexto} />
+          <Row
+            label="Dependencia:"
+            value={contrato.dependencia.toUpperCase()}
+          />
+          <Row
+            label="Nombre del supervisor:"
+            value={contrato.supervisor.nombre_completo.toUpperCase()}
+          />
+          <Row
+            label="Valor de la cuenta de cobro:"
+            value={valorTexto.toUpperCase()}
+          />
+          <Row label="Periodo:" value={periodoTexto} />
+          <Row
+            label="Cuenta bancaria autorizada — Banco y Tipo de Cuenta:"
+            value={bancoCuenta}
+          />
+          <Row label="No.:" value={contrato.numero_cuenta} last />
         </View>
 
-        {/* ── Declaration ────────────────────────────── */}
-        <View style={shared.section}>
-          <Text style={{ ...shared.value, lineHeight: 1.6 }}>
-            Yo, <Text style={{ fontFamily: 'Helvetica-Bold' }}>{contrato.contratista.nombre_completo}</Text>,
-            identificado(a) con Cédula de Ciudadanía N.º{' '}
-            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{contrato.contratista.cedula}</Text>,
-            me permito presentar la presente cuenta de cobro al municipio de {municipio} por concepto de
-            honorarios correspondientes al periodo{' '}
-            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{periodo.mes} {periodo.anio}</Text>,
-            en cumplimiento del Contrato de Prestación de Servicios N.º{' '}
-            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{contrato.numero}-{contrato.anio}</Text>.
-          </Text>
-        </View>
+        {/* ── Signature block ────────────────────────── */}
+        <View style={s.sigSection}>
+          <Text style={s.sigLabel}>Firma Contratista:</Text>
 
-        {/* ── Contract object ────────────────────────── */}
-        <View style={shared.section}>
-          <Text style={shared.sectionTitle}>Objeto del Contrato</Text>
-          <Text style={{ ...shared.value, lineHeight: 1.5 }}>{contrato.objeto}</Text>
-        </View>
+          <View style={s.sigLine} />
+          <Text style={s.sigName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
+          <Text style={s.sigDetail}>CC. {contrato.contratista.cedula}</Text>
+          {contrato.contratista.direccion && (
+            <Text style={s.sigDetail}>Dirección: {contrato.contratista.direccion}</Text>
+          )}
+          {contrato.contratista.telefono && (
+            <Text style={s.sigDetail}>Teléfono: {contrato.contratista.telefono}</Text>
+          )}
 
-        {/* ── Value ──────────────────────────────────── */}
-        <View style={shared.section}>
-          <Text style={shared.sectionTitle}>Valor a Cobrar</Text>
-          <View style={shared.amountBox}>
-            <Text style={shared.amountLabel}>Valor del periodo</Text>
-            <Text style={shared.amountValue}>{formatCurrency(periodo.valor_cobro)}</Text>
-            <Text style={shared.amountWords}>{contrato.valor_letras_mensual}</Text>
+          <View style={s.voBoRow}>
+            <Text style={s.voBoLabel}>VoBo. Supervisor:</Text>
+            <View style={s.voBoLine} />
           </View>
         </View>
 
-        {/* ── Period details ─────────────────────────── */}
-        <View style={shared.section}>
-          <Text style={shared.sectionTitle}>Periodo de Ejecución</Text>
-          <View style={shared.row}>
-            <View style={shared.col2}>
-              <Text style={shared.label}>Fecha de inicio</Text>
-              <Text style={shared.value}>{formatDate(periodo.fecha_inicio)}</Text>
-            </View>
-            <View style={shared.col2}>
-              <Text style={shared.label}>Fecha de fin</Text>
-              <Text style={shared.value}>{formatDate(periodo.fecha_fin)}</Text>
-            </View>
-            <View style={shared.col2}>
-              <Text style={shared.label}>Periodo N.º</Text>
-              <Text style={shared.value}>{periodo.numero}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Banking info ───────────────────────────── */}
-        <View style={shared.section}>
-          <Text style={shared.sectionTitle}>Información de Pago</Text>
-          <View style={shared.row}>
-            <View style={shared.col2}>
-              <Text style={shared.label}>Banco</Text>
-              <Text style={shared.value}>{contrato.banco}</Text>
-            </View>
-            <View style={shared.col2}>
-              <Text style={shared.label}>Tipo de cuenta</Text>
-              <Text style={shared.value} render={() =>
-                contrato.tipo_cuenta === 'ahorros' ? 'Cuenta de Ahorros' : 'Cuenta Corriente'
-              } />
-            </View>
-            <View style={shared.col2}>
-              <Text style={shared.label}>N.º de cuenta</Text>
-              <Text style={shared.value}>{contrato.numero_cuenta}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Supervisor ─────────────────────────────── */}
-        <View style={shared.section}>
-          <Text style={shared.sectionTitle}>Supervisor del Contrato</Text>
-          <View style={shared.row}>
-            <View style={shared.col2}>
-              <Text style={shared.label}>Nombre</Text>
-              <Text style={shared.value}>{contrato.supervisor.nombre_completo}</Text>
-            </View>
-            <View style={shared.col2}>
-              <Text style={shared.label}>Cédula</Text>
-              <Text style={shared.value}>{contrato.supervisor.cedula}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Signatures ─────────────────────────────── */}
-        <View style={shared.signaturesRow}>
-          <View style={shared.signatureBlock}>
-            <View style={{ height: 40 }} />
-            <View style={shared.signatureLine} />
-            <Text style={shared.signatureName}>{contrato.contratista.nombre_completo}</Text>
-            <Text style={shared.signatureRole}>Contratista</Text>
-            <Text style={shared.signatureCedula}>C.C. {contrato.contratista.cedula}</Text>
-          </View>
-
-          <View style={shared.signatureBlock}>
-            <View style={{ height: 40 }} />
-            <View style={shared.signatureLine} />
-            <Text style={shared.signatureName}>{contrato.supervisor.nombre_completo}</Text>
-            <Text style={shared.signatureRole}>Supervisor del Contrato</Text>
-            <Text style={shared.signatureCedula}>C.C. {contrato.supervisor.cedula}</Text>
-          </View>
-        </View>
-
-        {/* ── Footer ─────────────────────────────────── */}
-        <View style={shared.footer} fixed>
-          <Text style={shared.footerText}>DocGov — Alcaldía de {municipio}</Text>
-          <Text style={shared.footerText}>Generado el {fechaGeneracion}</Text>
+        {/* ── Footer ────────────────────────────────── */}
+        <View style={s.footer} fixed>
+          <Text style={s.footerText}>DocGov — Alcaldía de {municipio.nombre}</Text>
+          <Text style={s.footerText}>Generado el {data.fechaGeneracion}</Text>
           <Text
-            style={shared.footerText}
+            style={s.footerText}
             render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
           />
         </View>
