@@ -505,6 +505,38 @@ export default function PeriodoDetallePage() {
           </p>
         </div>
       )}
+
+      {/* PDF downloads — available once the period has been submitted */}
+      {periodo.estado !== 'borrador' && (
+        <div className="bg-white rounded-2xl border p-6 mt-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-1">Documentos</h3>
+          <p className="text-xs text-gray-400 mb-4">Descarga los documentos oficiales de este periodo.</p>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href={`/api/pdf/${periodoId}/cuenta-cobro`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Cuenta de Cobro
+            </a>
+            <a
+              href={`/api/pdf/${periodoId}/informe`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 text-sm font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Informe de Actividades
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
