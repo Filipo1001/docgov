@@ -41,7 +41,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
         contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula),
         supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
         dependencia:dependencias(nombre),
-        municipio:municipios(nombre)
+        municipio:municipios(nombre, departamento, nit, representante_legal, cedula_representante)
       )
     `)
     .eq('id', periodoId)

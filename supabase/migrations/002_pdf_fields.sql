@@ -24,3 +24,13 @@ ALTER TABLE usuarios
   ADD COLUMN IF NOT EXISTS cargo      TEXT,            -- e.g. "SISTEMAS Y GD"
   ADD COLUMN IF NOT EXISTS telefono   TEXT,            -- e.g. "3192420334"
   ADD COLUMN IF NOT EXISTS direccion  TEXT;            -- e.g. "Vereda la Delgadita - Amagá"
+
+-- ── Datos del municipio de Fredonia ──────────────────────────
+-- Actualiza el registro existente con los datos oficiales del contratante.
+UPDATE municipios
+SET
+  departamento       = 'Antioquia',
+  representante_legal   = 'Aldubar de Jesús Vanegas Marín',
+  cedula_representante  = '8.461.720',
+  nit                   = '890980848-1'
+WHERE nombre ILIKE '%fredonia%';
