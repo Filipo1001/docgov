@@ -4,36 +4,8 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEffect } from 'react'
-import { UserProvider, useUsuario, Rol } from '@/lib/user-context'
-
-const menuPorRol: Record<Rol, Array<{ href: string; label: string; icon: string }>> = {
-  admin: [
-    { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-    { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
-    { href: '/dashboard/aprobaciones', label: 'Aprobaciones', icon: '✅' },
-  ],
-  supervisor: [
-    { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-    { href: '/dashboard/contratos', label: 'Mis contratos', icon: '📄' },
-    { href: '/dashboard/aprobaciones', label: 'Por aprobar', icon: '✅' },
-  ],
-  contratista: [
-    { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-    { href: '/dashboard/contratos', label: 'Mis contratos', icon: '📄' },
-  ],
-  asesor: [
-    { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-    { href: '/dashboard/aprobaciones', label: 'Por aprobar', icon: '✅' },
-  ],
-  gobierno: [
-    { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-    { href: '/dashboard/aprobaciones', label: 'Por aprobar', icon: '✅' },
-  ],
-  hacienda: [
-    { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-    { href: '/dashboard/aprobaciones', label: 'Por aprobar', icon: '✅' },
-  ],
-}
+import { UserProvider, useUsuario } from '@/lib/user-context'
+import { MENU_POR_ROL } from '@/lib/constants'
 
 function Sidebar() {
   const pathname = usePathname()
@@ -44,7 +16,7 @@ function Sidebar() {
     if (!cargando && !usuario) router.push('/login')
   }, [cargando, usuario, router])
 
-  const menuItems = usuario ? (menuPorRol[usuario.rol] ?? menuPorRol.contratista) : []
+  const menuItems = usuario ? (MENU_POR_ROL[usuario.rol] ?? MENU_POR_ROL.contratista) : []
 
   async function cerrarSesion() {
     const supabase = createClient()

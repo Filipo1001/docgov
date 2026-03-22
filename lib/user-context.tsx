@@ -2,21 +2,11 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase'
-
-export type Rol = 'admin' | 'supervisor' | 'contratista' | 'asesor' | 'gobierno' | 'hacienda'
-
-export interface Usuario {
-  id: string
-  nombre_completo: string
-  cedula: string
-  email: string
-  telefono: string
-  rol: Rol
-}
+import type { Usuario, Municipio } from '@/lib/types'
 
 interface UserCtx {
   usuario: Usuario | null
-  municipio: any
+  municipio: Municipio | null
   cargando: boolean
 }
 
@@ -24,7 +14,7 @@ const Ctx = createContext<UserCtx>({ usuario: null, municipio: null, cargando: t
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
-  const [municipio, setMunicipio] = useState<any>(null)
+  const [municipio, setMunicipio] = useState<Municipio | null>(null)
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
@@ -38,8 +28,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         supabase.from('municipios').select('*').single(),
       ])
 
-      setUsuario(u)
-      setMunicipio(m)
+      setUsuario(u as Usuario ?? null)
+      setMunicipio(m as Municipio ?? null)
       setCargando(false)
     }
     load()
@@ -49,3 +39,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 }
 
 export const useUsuario = () => useContext(Ctx)
+
+// Re-export types for convenience
+export type { Usuario, Municipio }
+export type { Rol } from '@/lib/types'
