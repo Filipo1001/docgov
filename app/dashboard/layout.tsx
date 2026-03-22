@@ -3,18 +3,63 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { UserProvider, useUsuario } from '@/lib/user-context'
-import { MENU_POR_ROL } from '@/lib/constants'
+import { MENU_POR_ROL, ESTADO_REVISOR } from '@/lib/constants'
+import type { EstadoPeriodo } from '@/lib/types'
 
+// ─── Pending count badge ──────────────────────────────────────
+function Badge({ n }: { n: number }) {
+  if (n === 0) return null
+  return (
+    <span className="ml-auto min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none">
+      {n > 99 ? '99+' : n}
+    </span>
+  )
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────
 function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { usuario, municipio, cargando } = useUsuario()
+  const [pendientes, setPendientes] = useState(0)
 
   useEffect(() => {
     if (!cargando && !usuario) router.push('/login')
   }, [cargando, usuario, router])
+
+  // Fetch the count of periods waiting for this user's review
+  useEffect(() => {
+    if (!usuario) return
+    const rolEstado: EstadoPeriodo | undefined = ESTADO_REVISOR[usuario.rol]
+    if (!rolEstado && usuario.rol !== 'admin') return
+
+    async function fetchPendientes() {
+      const supabase = createClient()
+
+      if (usuario!.rol === 'admin') {
+        // Admin sees all in-review periods
+        const { count } = await supabase
+          .from('periodos')
+          .select('id', { count: 'exact', head: true })
+          .in('estado', ['enviado', 'revision_asesor', 'revision_gobierno', 'revision_hacienda'])
+        setPendientes(count ?? 0)
+      } else if (rolEstado) {
+        // Each reviewer sees only their own queue
+        const { count } = await supabase
+          .from('periodos')
+          .select('id', { count: 'exact', head: true })
+          .eq('estado', rolEstado)
+        setPendientes(count ?? 0)
+      }
+    }
+
+    fetchPendientes()
+    // Re-check every 60 s without hammering the DB
+    const timer = setInterval(fetchPendientes, 60_000)
+    return () => clearInterval(timer)
+  }, [usuario])
 
   const menuItems = usuario ? (MENU_POR_ROL[usuario.rol] ?? MENU_POR_ROL.contratista) : []
 
@@ -46,6 +91,7 @@ function Sidebar() {
             const activo =
               pathname === item.href ||
               (item.href !== '/dashboard' && pathname.startsWith(item.href))
+            const esAprobaciones = item.href === '/dashboard/aprobaciones'
             return (
               <li key={item.href}>
                 <Link
@@ -55,7 +101,8 @@ function Sidebar() {
                   }`}
                 >
                   <span>{item.icon}</span>
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {esAprobaciones && <Badge n={pendientes} />}
                 </Link>
               </li>
             )

@@ -14,7 +14,7 @@ import {
   LABEL_APROBADOR,
   ESTADO_SIGUIENTE,
 } from '@/lib/constants'
-import type { Contrato, Periodo, Obligacion, Actividad } from '@/lib/types'
+import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo } from '@/lib/types'
 import { getPeriodoConContrato } from '@/services/periodos'
 import { crearActividad, eliminarActividad } from '@/services/periodos'
 import { enviarPeriodo, aprobarPeriodo, rechazarPeriodo, marcarPagado } from '@/app/actions/periodos'
@@ -192,6 +192,21 @@ export default function PeriodoDetallePage() {
   const estadoClass = ESTADO_COLOR[periodo.estado] ?? 'bg-gray-100 text-gray-600'
   const estadoTexto = ESTADO_LABEL[periodo.estado] ?? periodo.estado
 
+  // ── Approval timeline steps ────────────────────────────────
+  const STEPS: { estado: EstadoPeriodo; label: string; short: string }[] = [
+    { estado: 'borrador',          label: 'Borrador',       short: 'Borrador' },
+    { estado: 'enviado',           label: 'Enviado',        short: 'Enviado'  },
+    { estado: 'revision_asesor',   label: 'Asesor',         short: 'Asesor'   },
+    { estado: 'revision_gobierno', label: 'Gobierno',       short: 'Gob.'     },
+    { estado: 'revision_hacienda', label: 'Hacienda',       short: 'Hac.'     },
+    { estado: 'aprobado',          label: 'Aprobado',       short: 'Aprobado' },
+    { estado: 'pagado',            label: 'Pagado',         short: 'Pagado'   },
+  ]
+
+  const ORDER = STEPS.map((s) => s.estado)
+  const currentIdx = ORDER.indexOf(periodo.estado)
+  const rechazado  = periodo.estado === 'rechazado'
+
   return (
     <div className="max-w-4xl">
       <Toaster position="top-center" richColors />
@@ -205,6 +220,66 @@ export default function PeriodoDetallePage() {
         </Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">{periodo.mes} {periodo.anio}</span>
+      </div>
+
+      {/* ── Approval timeline ───────────────────────────────── */}
+      <div className="bg-white rounded-2xl border p-5 mb-6">
+        {rechazado ? (
+          /* Rejected state — full-width pill */
+          <div className="flex items-center gap-3">
+            <span className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-red-700">Periodo rechazado</p>
+              {periodo.motivo_rechazo && (
+                <p className="text-xs text-red-500 mt-0.5">{periodo.motivo_rechazo}</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Normal flow — horizontal stepper */
+          <div className="flex items-center gap-0">
+            {STEPS.map((step, i) => {
+              const done    = i < currentIdx
+              const active  = i === currentIdx
+              const pending = i > currentIdx
+              return (
+                <div key={step.estado} className="flex items-center flex-1 min-w-0">
+                  {/* Step circle + label */}
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                      done    ? 'bg-emerald-500 text-white' :
+                      active  ? 'bg-gray-900 text-white ring-2 ring-gray-900 ring-offset-2' :
+                                'bg-gray-100 text-gray-400'
+                    }`}>
+                      {done ? (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span>{i + 1}</span>
+                      )}
+                    </div>
+                    <span className={`text-[9px] mt-1 font-medium text-center leading-tight ${
+                      active  ? 'text-gray-900' :
+                      done    ? 'text-emerald-600' :
+                                'text-gray-400'
+                    }`}>
+                      {step.short}
+                    </span>
+                  </div>
+                  {/* Connector line (not after last step) */}
+                  {i < STEPS.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-1 mb-4 ${done ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Period header */}
@@ -237,12 +312,7 @@ export default function PeriodoDetallePage() {
           <span className="font-medium text-gray-900">{totalAcciones()}</span>
         </div>
 
-        {periodo.estado === 'rechazado' && periodo.motivo_rechazo && (
-          <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
-            <p className="text-sm font-medium text-red-800">Motivo del rechazo:</p>
-            <p className="text-sm text-red-700 mt-1">{periodo.motivo_rechazo}</p>
-          </div>
-        )}
+        {/* Rejection reason shown in timeline above */}
       </div>
 
       {/* Approval panel — visible only to the responsible reviewer */}

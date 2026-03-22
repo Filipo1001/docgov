@@ -1,56 +1,59 @@
+/**
+ * Cuenta de Cobro PDF — matches the real Fredonia document exactly.
+ *
+ * Real document structure (extracted via coordinate analysis):
+ * - Header: 3 centered bold lines (title, municipality, NIT)
+ * - "DEBE A:" centered bold
+ * - 12-row form table (label left ~40% | value right ~60%)
+ * - Last table row has a nested 4-column sub-table for bank info
+ * - Signature block: "Firma Contratista:" label → long space → underline
+ *   → name / CC / Dirección / Teléfono all in BOLD
+ * - VoBo. Supervisor: label + blank line (no name pre-printed)
+ * - NO footer, NO page numbers
+ */
+
 import React from 'react'
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData } from './types'
 
-// ─── Date utilities ───────────────────────────────────────────
+// ─── Date helpers ─────────────────────────────────────────────
 
-const MESES_ES = [
+const MESES = [
   'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
   'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE',
 ]
 
 /** "2026-02-28" → "FEBRERO 28 DE 2026" */
-function fechaLargaMayus(iso: string): string {
+function fechaMayus(iso: string): string {
   const [y, m, d] = iso.split('-')
-  return `${MESES_ES[parseInt(m) - 1]} ${d} DE ${y}`
+  return `${MESES[parseInt(m) - 1]} ${parseInt(d)} DE ${y}`
 }
 
-/** "2026-02-02" → "02" */
-function dia(iso: string): string {
-  return iso.split('-')[2]
-}
+/** "2026-02-28" → "02" (no leading zero trim so "02" stays "02") */
+function dd(iso: string): string { return iso.split('-')[2] }
 
 /** "2026-02-28" → "FEBRERO" */
-function mes(iso: string): string {
-  return MESES_ES[parseInt(iso.split('-')[1]) - 1]
-}
+function mmNombre(iso: string): string { return MESES[parseInt(iso.split('-')[1]) - 1] }
 
 /** "2026-02-28" → "2026" */
-function anio(iso: string): string {
-  return iso.split('-')[0]
+function yyyy(iso: string): string { return iso.split('-')[0] }
+
+/** Calendar days between two ISO dates → e.g. "245 DÍAS" */
+function calcDias(inicio?: string, fin?: string): string {
+  if (!inicio || !fin) return '—'
+  const diff = Math.round(
+    (new Date(fin).getTime() - new Date(inicio).getTime()) / 86_400_000
+  )
+  return diff > 0 ? `${diff} DÍAS` : '—'
 }
 
-/**
- * Calculates the number of calendar days between two ISO date strings.
- * Returns e.g. "245 DÍAS" or null if dates are missing/invalid.
- */
-function calcularDiasContrato(inicio?: string, fin?: string): string | null {
-  if (!inicio || !fin) return null
-  const d1 = new Date(inicio)
-  const d2 = new Date(fin)
-  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return null
-  const dias = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24))
-  if (dias <= 0) return null
-  return `${dias} DÍAS`
-}
-
-/** "$3,000,000" format for COP */
-function formatCOP(value: number): string {
+/** COP currency: $24.000.000 (Colombian dot separator) */
+function formatCOP(n: number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
     currency: 'COP',
     minimumFractionDigits: 0,
-  }).format(value)
+  }).format(n)
 }
 
 // ─── Styles ───────────────────────────────────────────────────
@@ -58,108 +61,150 @@ function formatCOP(value: number): string {
 const s = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
-    fontSize: 10,
+    fontSize: 10.5,
     color: '#000',
-    paddingTop: 44,
-    paddingBottom: 56,
-    paddingHorizontal: 52,
+    paddingTop: 40,
+    paddingBottom: 48,
+    paddingHorizontal: 50,
   },
 
-  // ── Title block
-  docTitle: {
-    fontSize: 14,
+  // ── Header (3 centered lines)
+  h1: {
     fontFamily: 'Helvetica-Bold',
+    fontSize: 12,
     textAlign: 'center',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-    letterSpacing: 0.5,
+    marginBottom: 3,
   },
-  municipioLine: {
+  h2: {
+    fontFamily: 'Helvetica-Bold',
     fontSize: 11,
-    fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
-    textTransform: 'uppercase',
-    marginBottom: 2,
+    marginBottom: 3,
   },
-  nitLine: {
-    fontSize: 10,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  debeA: {
-    fontSize: 11,
-    fontFamily: 'Helvetica-Bold',
+  h3: {
+    fontFamily: 'Helvetica',
+    fontSize: 10.5,
     textAlign: 'center',
     marginBottom: 14,
-    letterSpacing: 0.3,
+  },
+  debeA: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 10,
   },
 
-  // ── Bordered form table
+  // ── Form table
   table: {
     borderWidth: 1,
     borderColor: '#000',
     borderStyle: 'solid',
-    marginBottom: 20,
+    marginBottom: 28,
   },
-  tableRow: {
+  row: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#000',
     borderBottomStyle: 'solid',
   },
-  tableRowLast: {
+  rowLast: {
     flexDirection: 'row',
   },
-  cellLabel: {
-    width: '42%',
+  lbl: {
+    width: '40%',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    borderRightStyle: 'solid',
+    padding: '5 8',
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 9.5,
+    lineHeight: 1.5,
+  },
+  val: {
+    flex: 1,
+    padding: '5 8',
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+
+  // ── Bank sub-row (nested 4 columns inside the last table row)
+  bankCell: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  bankSubLbl: {
+    width: '34%',
     borderRightWidth: 1,
     borderRightColor: '#000',
     borderRightStyle: 'solid',
     padding: '5 7',
     fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
-    backgroundColor: '#f7f7f7',
+    fontSize: 9.5,
+    lineHeight: 1.5,
   },
-  cellValue: {
+  bankSubVal: {
+    width: '30%',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    borderRightStyle: 'solid',
+    padding: '5 7',
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+  bankNoLbl: {
+    width: '10%',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    borderRightStyle: 'solid',
+    padding: '5 4',
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 9.5,
+    textAlign: 'center',
+  },
+  bankNoVal: {
     flex: 1,
     padding: '5 7',
-    fontSize: 9.5,
+    fontSize: 10,
   },
 
-  // ── Signatures
-  sigSection: {
-    marginTop: 36,
+  // ── Signature section
+  sigIntro: {
+    fontSize: 11,
+    marginBottom: 0,
   },
-  sigLabel: {
-    fontSize: 9,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 24,
+  sigSpace: {
+    height: 50,
   },
   sigLine: {
     borderTopWidth: 1,
     borderTopColor: '#000',
     borderTopStyle: 'solid',
-    width: '60%',
-    marginBottom: 5,
+    width: '65%',
+    marginBottom: 6,
   },
+  // All sig details are BOLD in the real document
   sigName: {
-    fontSize: 9.5,
     fontFamily: 'Helvetica-Bold',
-    marginBottom: 2,
+    fontSize: 10.5,
+    marginBottom: 3,
+    textTransform: 'uppercase',
   },
   sigDetail: {
-    fontSize: 9,
-    marginBottom: 1,
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 10.5,
+    marginBottom: 3,
   },
+
+  // ── VoBo line
   voBoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 24,
   },
-  voBoLabel: {
-    fontSize: 9,
-    fontFamily: 'Helvetica-Bold',
+  voBoLbl: {
+    fontSize: 11,
     marginRight: 8,
+    flexShrink: 0,
   },
   voBoLine: {
     flex: 1,
@@ -167,158 +212,156 @@ const s = StyleSheet.create({
     borderBottomColor: '#000',
     borderBottomStyle: 'solid',
   },
-
-  // ── Footer
-  footer: {
-    position: 'absolute',
-    bottom: 22,
-    left: 52,
-    right: 52,
-    borderTopWidth: 0.5,
-    borderTopColor: '#bbb',
-    borderTopStyle: 'solid',
-    paddingTop: 5,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  footerText: {
-    fontSize: 7.5,
-    color: '#999',
-  },
 })
-
-// ─── Table row helper ─────────────────────────────────────────
-
-function Row({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
-  return (
-    <View style={last ? s.tableRowLast : s.tableRow}>
-      <View style={s.cellLabel}>
-        <Text>{label}</Text>
-      </View>
-      <View style={s.cellValue}>
-        <Text>{value}</Text>
-      </View>
-    </View>
-  )
-}
 
 // ─── Component ────────────────────────────────────────────────
 
 export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
   const { municipio, contrato, periodo } = data
 
-  // Period value in words — use stored letras or fall back to contract's letras
+  // Period value — words + numeric in parentheses
   const valorLetras = periodo.valor_letras ?? contrato.valor_letras_mensual
-  const valorTexto = valorLetras
-    ? `${valorLetras} (${formatCOP(periodo.valor_cobro)})`
+  const valorPeriodo = valorLetras
+    ? `${valorLetras.toUpperCase()} (${formatCOP(periodo.valor_cobro)})`
     : formatCOP(periodo.valor_cobro)
 
-  // Total contract value in words
-  const totalLetras = contrato.valor_letras_total
-    ? `${contrato.valor_letras_total} (${formatCOP(contrato.valor_total)})`
+  // Total contract value — words + numeric in parentheses
+  const valorTotal = contrato.valor_letras_total
+    ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
     : formatCOP(contrato.valor_total)
 
-  // Contract duration — calculated as calendar days between start and end
-  const plazoTexto =
-    calcularDiasContrato(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato) ?? '—'
+  // Plazo — calendar days between contract start and end
+  const plazo = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
 
-  // Period date range: "DEL 02 AL 28 DE FEBRERO DE 2026"
-  const periodoTexto = `DEL ${dia(periodo.fecha_inicio)} AL ${dia(periodo.fecha_fin)} DE ${mes(periodo.fecha_fin)} DE ${anio(periodo.fecha_fin)}`
+  // Period range — "DEL 02 AL 28 DE FEBRERO DE 2026"
+  const periodoTexto = `DEL ${dd(periodo.fecha_inicio)} AL ${dd(periodo.fecha_fin)} DE ${mmNombre(periodo.fecha_fin)} DE ${yyyy(periodo.fecha_fin)}`
 
-  // Bank display
-  const bancoCuenta = `${contrato.banco.toUpperCase()} / CUENTA ${contrato.tipo_cuenta.toUpperCase()}`
+  // CC number (zero-padded)
+  const ccNum = String(periodo.numero).padStart(2, '0')
 
-  // Numero de la cuenta de cobro zero-padded (01, 02, ...)
-  const ccNumero = String(periodo.numero).padStart(2, '0')
-
-  // Municipality header line
+  // Municipality header
   const municipioHeader = municipio.departamento
     ? `EL MUNICIPIO DE ${municipio.nombre.toUpperCase()} ${municipio.departamento.toUpperCase()}`
     : `EL MUNICIPIO DE ${municipio.nombre.toUpperCase()}`
 
+  // Bank + account type on separate display lines
+  const bancoNombre = contrato.banco.toUpperCase()
+  const cuentaTipo = `CUENTA\n${contrato.tipo_cuenta.toUpperCase()}`
+
   return (
     <Document
-      title={`Cuenta de Cobro N.º ${ccNumero} — Contrato ${contrato.numero}-${contrato.anio}`}
+      title={`Cuenta de Cobro N.º ${ccNum} — Contrato ${contrato.numero}-${contrato.anio}`}
       author={contrato.contratista.nombre_completo}
       subject="Cuenta de Cobro"
       creator="DocGov"
     >
       <Page size="A4" style={s.page}>
 
-        {/* ── Title block ───────────────────────────── */}
-        <Text style={s.docTitle}>CUENTA DE COBRO No. {ccNumero}</Text>
-        <Text style={s.municipioLine}>{municipioHeader}</Text>
-        {municipio.nit && (
-          <Text style={s.nitLine}>NIT {municipio.nit}</Text>
-        )}
+        {/* ── Header ──────────────────────────────── */}
+        <Text style={s.h1}>CUENTA DE COBRO No. {ccNum}</Text>
+        <Text style={s.h2}>{municipioHeader}</Text>
+        {municipio.nit
+          ? <Text style={s.h3}>NIT {municipio.nit}</Text>
+          : <Text style={s.h3}> </Text>}
+
         <Text style={s.debeA}>DEBE A:</Text>
 
-        {/* ── Form table ────────────────────────────── */}
+        {/* ── Form table ──────────────────────────── */}
         <View style={s.table}>
-          <Row label="Fecha:" value={fechaLargaMayus(periodo.fecha_fin)} />
-          <Row
-            label="Nombre contratista:"
-            value={contrato.contratista.nombre_completo.toUpperCase()}
-          />
-          <Row
-            label="Número de identificación tributaria:"
-            value={contrato.contratista.cedula}
-          />
-          <Row
-            label="Nº convenio o contrato:"
-            value={`${contrato.numero}-${contrato.anio}`}
-          />
-          <Row label="Objeto del contrato:" value={contrato.objeto.toUpperCase()} />
-          <Row label="Valor total del contrato:" value={totalLetras.toUpperCase()} />
-          <Row label="Plazo de ejecución:" value={plazoTexto} />
-          <Row
-            label="Dependencia:"
-            value={contrato.dependencia.toUpperCase()}
-          />
-          <Row
-            label="Nombre del supervisor:"
-            value={contrato.supervisor.nombre_completo.toUpperCase()}
-          />
-          <Row
-            label="Valor de la cuenta de cobro:"
-            value={valorTexto.toUpperCase()}
-          />
-          <Row label="Periodo:" value={periodoTexto} />
-          <Row
-            label="Cuenta bancaria autorizada — Banco y Tipo de Cuenta:"
-            value={bancoCuenta}
-          />
-          <Row label="No.:" value={contrato.numero_cuenta} last />
-        </View>
 
-        {/* ── Signature block ────────────────────────── */}
-        <View style={s.sigSection}>
-          <Text style={s.sigLabel}>Firma Contratista:</Text>
-
-          <View style={s.sigLine} />
-          <Text style={s.sigName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
-          <Text style={s.sigDetail}>CC. {contrato.contratista.cedula}</Text>
-          {contrato.contratista.direccion && (
-            <Text style={s.sigDetail}>Dirección: {contrato.contratista.direccion}</Text>
-          )}
-          {contrato.contratista.telefono && (
-            <Text style={s.sigDetail}>Teléfono: {contrato.contratista.telefono}</Text>
-          )}
-
-          <View style={s.voBoRow}>
-            <Text style={s.voBoLabel}>VoBo. Supervisor:</Text>
-            <View style={s.voBoLine} />
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Fecha:</Text></View>
+            <View style={s.val}><Text>{fechaMayus(periodo.fecha_fin)}</Text></View>
           </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Nombre contratista:</Text></View>
+            <View style={s.val}><Text>{contrato.contratista.nombre_completo.toUpperCase()}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Número de identificación tributaria</Text></View>
+            <View style={s.val}><Text>{contrato.contratista.cedula}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Nº convenio o contrato:</Text></View>
+            <View style={s.val}><Text>{contrato.numero}-{contrato.anio}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Objeto del contrato:</Text></View>
+            <View style={s.val}><Text>{contrato.objeto.toUpperCase()}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Valor total del contrato:</Text></View>
+            <View style={s.val}><Text>{valorTotal}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Plazo de ejecución:</Text></View>
+            <View style={s.val}><Text>{plazo}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Dependencia:</Text></View>
+            <View style={s.val}><Text>{contrato.dependencia.toUpperCase()}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Nombre del supervisor</Text></View>
+            <View style={s.val}><Text>{contrato.supervisor.nombre_completo.toUpperCase()}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Valor de la cuenta de cobro:</Text></View>
+            <View style={s.val}><Text>{valorPeriodo}</Text></View>
+          </View>
+
+          <View style={s.row}>
+            <View style={s.lbl}><Text>Periodo:</Text></View>
+            <View style={s.val}><Text>{periodoTexto}</Text></View>
+          </View>
+
+          {/* Last row — bank info as nested sub-table */}
+          <View style={s.rowLast}>
+            <View style={s.lbl}><Text>Cuenta bancaria autorizada:</Text></View>
+            <View style={s.bankCell}>
+              <View style={s.bankSubLbl}><Text>Banco Y Tipo De Cuenta</Text></View>
+              <View style={s.bankSubVal}>
+                <Text>{bancoNombre}{'\n'}{cuentaTipo}</Text>
+              </View>
+              <View style={s.bankNoLbl}><Text>No.</Text></View>
+              <View style={s.bankNoVal}><Text>{contrato.numero_cuenta}</Text></View>
+            </View>
+          </View>
+
         </View>
 
-        {/* ── Footer ────────────────────────────────── */}
-        <View style={s.footer} fixed>
-          <Text style={s.footerText}>DocGov — Alcaldía de {municipio.nombre}</Text>
-          <Text style={s.footerText}>Generado el {data.fechaGeneracion}</Text>
-          <Text
-            style={s.footerText}
-            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-          />
+        {/* ── Signature block ──────────────────────── */}
+        <Text style={s.sigIntro}>Firma Contratista:</Text>
+
+        {/* Blank space for wet signature */}
+        <View style={s.sigSpace} />
+
+        {/* Underline */}
+        <View style={s.sigLine} />
+
+        {/* Name, CC, address, phone — all BOLD (matching real document) */}
+        <Text style={s.sigName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
+        <Text style={s.sigDetail}>CC. {contrato.contratista.cedula}</Text>
+        {contrato.contratista.direccion && (
+          <Text style={s.sigDetail}>Dirección: {contrato.contratista.direccion}</Text>
+        )}
+        {contrato.contratista.telefono && (
+          <Text style={s.sigDetail}>Teléfono: {contrato.contratista.telefono}</Text>
+        )}
+
+        {/* VoBo. Supervisor — blank line, no name pre-printed */}
+        <View style={s.voBoRow}>
+          <Text style={s.voBoLbl}>VoBo. Supervisor:</Text>
+          <View style={s.voBoLine} />
         </View>
 
       </Page>
