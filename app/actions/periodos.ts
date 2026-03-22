@@ -17,7 +17,6 @@ import {
   ESTADO_REVISOR,
   ESTADOS_EDITABLES,
   ESTADOS_EN_REVISION,
-  LABEL_APROBADOR,
 } from '@/lib/constants'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
@@ -264,5 +263,3 @@ export async function marcarPagado(periodoId: string): Promise<ActionResult> {
   }
 }
 
-// Re-export label for use in toast messages
-export { LABEL_APROBADOR }
