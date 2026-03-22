@@ -107,9 +107,11 @@ const s = StyleSheet.create({
   },
 
   // ── Activities heading
+  // NOTE: do NOT combine Helvetica-Bold with fontStyle:'italic' — react-pdf
+  // has no built-in bold-italic Helvetica variant and will throw at runtime.
   activitiesHeading: {
     fontSize: 9.5,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Helvetica',
     fontStyle: 'italic',
     textAlign: 'center',
     marginBottom: 10,

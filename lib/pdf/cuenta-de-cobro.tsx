@@ -30,6 +30,20 @@ function anio(iso: string): string {
   return iso.split('-')[0]
 }
 
+/**
+ * Calculates the number of calendar days between two ISO date strings.
+ * Returns e.g. "245 DÍAS" or null if dates are missing/invalid.
+ */
+function calcularDiasContrato(inicio?: string, fin?: string): string | null {
+  if (!inicio || !fin) return null
+  const d1 = new Date(inicio)
+  const d2 = new Date(fin)
+  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return null
+  const dias = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24))
+  if (dias <= 0) return null
+  return `${dias} DÍAS`
+}
+
 /** "$3,000,000" format for COP */
 function formatCOP(value: number): string {
   return new Intl.NumberFormat('es-CO', {
@@ -204,12 +218,9 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
     ? `${contrato.valor_letras_total} (${formatCOP(contrato.valor_total)})`
     : formatCOP(contrato.valor_total)
 
-  // Contract duration
-  const plazoTexto = contrato.duracion_letras && contrato.plazo_meses
-    ? `${contrato.duracion_letras} (${contrato.plazo_meses}) MESES`
-    : contrato.plazo_meses
-      ? `${contrato.plazo_meses} MESES`
-      : '—'
+  // Contract duration — calculated as calendar days between start and end
+  const plazoTexto =
+    calcularDiasContrato(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato) ?? '—'
 
   // Period date range: "DEL 02 AL 28 DE FEBRERO DE 2026"
   const periodoTexto = `DEL ${dia(periodo.fecha_inicio)} AL ${dia(periodo.fecha_fin)} DE ${mes(periodo.fecha_fin)} DE ${anio(periodo.fecha_fin)}`

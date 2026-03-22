@@ -42,6 +42,8 @@ export interface PDFContrato {
   tipo_cuenta: string
   numero_cuenta: string
   dependencia: string
+  fecha_inicio_contrato?: string // "YYYY-MM-DD" — start of the full contract
+  fecha_fin_contrato?: string    // "YYYY-MM-DD" — end of the full contract
   contratista: PDFPartner
   supervisor: PDFPartner
 }

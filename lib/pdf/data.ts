@@ -52,6 +52,15 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const contrato = periodo.contrato as any
   if (!contrato) return null
 
+  // Optional secondary query for contract start/end dates.
+  // If the columns don't exist yet, Supabase returns error + null data — we
+  // just skip them rather than failing the whole PDF generation.
+  const { data: contratoDates } = await supabase
+    .from('contratos')
+    .select('fecha_inicio, fecha_fin')
+    .eq('id', contrato.id ?? '')
+    .single()
+
   // Fetch obligations for this contract
   const { data: obligacionesRaw } = await supabase
     .from('obligaciones')
@@ -103,6 +112,8 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       tipo_cuenta: contrato.tipo_cuenta,
       numero_cuenta: contrato.numero_cuenta,
       dependencia: contrato.dependencia?.nombre ?? '',
+      fecha_inicio_contrato: (contratoDates as any)?.fecha_inicio ?? undefined,
+      fecha_fin_contrato: (contratoDates as any)?.fecha_fin ?? undefined,
       contratista: {
         nombre_completo: contrato.contratista?.nombre_completo ?? '',
         cedula: contrato.contratista?.cedula ?? '',
