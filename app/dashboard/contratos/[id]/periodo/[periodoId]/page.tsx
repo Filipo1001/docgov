@@ -34,7 +34,6 @@ const labelAprobador: Record<string, string> = {
 export default function PeriodoDetallePage() {
   const { id: contratoId, periodoId } = useParams()
   const { usuario } = useUsuario()
-  const supabase = createClient()
 
   const [contrato, setContrato] = useState<any>(null)
   const [periodo, setPeriodo] = useState<any>(null)
@@ -54,6 +53,9 @@ export default function PeriodoDetallePage() {
   const [nuevaActividad, setNuevaActividad] = useState('')
   const [nuevaCantidad, setNuevaCantidad] = useState(1)
   const [guardando, setGuardando] = useState(false)
+
+  // Cliente creado dentro del componente cliente, no en SSR
+  const supabase = createClient()
 
   async function cargarDatos() {
     const { data: cont } = await supabase
