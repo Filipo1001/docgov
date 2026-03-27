@@ -3,7 +3,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { buildPDFData } from '@/lib/pdf/data'
-import { CuentaDeCobroPDF } from '@/lib/pdf/cuenta-de-cobro'
+import { ActaSupervisionPDF } from '@/lib/pdf/acta-supervision'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,7 +14,6 @@ export async function GET(
 ) {
   const { periodoId } = await params
 
-  // Auth check
   const supabase = await createServerSupabaseClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) {
@@ -26,9 +25,9 @@ export async function GET(
     return NextResponse.json({ error: 'Periodo no encontrado' }, { status: 404 })
   }
 
-  const buffer = await renderToBuffer(React.createElement(CuentaDeCobroPDF, { data }) as any)
+  const buffer = await renderToBuffer(React.createElement(ActaSupervisionPDF, { data }) as any)
 
-  const filename = `cuenta-cobro-${data.contrato.numero}-${data.contrato.anio}-periodo-${data.periodo.numero}.pdf`
+  const filename = `acta-supervision-${data.contrato.numero}-${data.contrato.anio}-periodo-${data.periodo.numero}.pdf`
 
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {

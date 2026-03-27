@@ -1,25 +1,20 @@
 // ─────────────────────────────────────────────
 // Core domain types for DocGov
-// All Supabase table shapes and role definitions
 // ─────────────────────────────────────────────
 
 export type Rol =
   | 'admin'
-  | 'supervisor'
+  | 'supervisor'   // Secretaria (Sara, Yorledy, Lucas, Ivan)
   | 'contratista'
-  | 'asesor'
-  | 'gobierno'
-  | 'hacienda'
+  | 'asesor'       // Daniel Marín, Karen
 
 export type EstadoPeriodo =
-  | 'borrador'
-  | 'enviado'
-  | 'revision_asesor'
-  | 'revision_gobierno'
-  | 'revision_hacienda'
-  | 'aprobado'
-  | 'rechazado'
-  | 'pagado'
+  | 'borrador'          // Contratista editing
+  | 'enviado'           // Submitted — visible to asesores & secretaria
+  | 'aprobado_asesor'   // Pre-approved by asesor — waiting for secretary final approval
+  | 'aprobado'          // Secretary approved → downloadable package
+  | 'radicado'          // Physically filed (radicado)
+  | 'rechazado'         // Rejected → back to contratista for edits
 
 export type TipoCuenta = 'ahorros' | 'corriente'
 
@@ -32,11 +27,58 @@ export interface Usuario {
   email: string
   telefono: string
   rol: Rol
+  cargo?: string
+  direccion?: string
+  firma_url?: string  // URL to signature image
+  foto_url?: string
+  dependencia_id?: string
+  dependencia?: Pick<Dependencia, 'nombre' | 'abreviatura'>
+}
+
+export interface Preaprobacion {
+  id: string
+  periodo_id: string
+  asesor_id: string
+  created_at: string
+  // Joined
+  asesor?: Pick<Usuario, 'id' | 'nombre_completo'>
+}
+
+export interface HistorialPeriodo {
+  id: string
+  periodo_id: string
+  estado_anterior: EstadoPeriodo | null
+  estado_nuevo: EstadoPeriodo | null
+  usuario_id: string
+  comentario: string | null
+  created_at: string
+  usuario?: { id: string; nombre_completo: string; rol?: string }
+}
+
+export interface Notificacion {
+  id: string
+  usuario_id: string
+  tipo: string
+  titulo: string
+  mensaje: string | null
+  leida: boolean
+  periodo_id: string | null
+  created_at: string
+  periodo?: {
+    id: string
+    mes: string
+    anio: number
+    contrato?: { numero: string }
+  }
 }
 
 export interface Municipio {
   id: string
   nombre: string
+  departamento?: string
+  nit?: string
+  representante_legal?: string
+  cedula_representante?: string
 }
 
 export interface Dependencia {
@@ -59,16 +101,18 @@ export interface Contrato {
   valor_letras_total: string
   valor_letras_mensual: string
   plazo_meses: number
-  fecha_inicio: string  // ISO date string YYYY-MM-DD
+  fecha_inicio: string  // ISO date YYYY-MM-DD
   fecha_fin: string
   banco: string
   tipo_cuenta: TipoCuenta
   numero_cuenta: string
   municipio_id: string
+  cdp?: string          // Certificado de Disponibilidad Presupuestal
+  crp?: string          // Certificado de Registro Presupuestal
   created_at: string
-  // Joined relations (optional — present when selected)
-  contratista?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula' | 'email' | 'telefono'>
-  supervisor?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula'>
+  // Joined relations (optional)
+  contratista?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula' | 'email' | 'telefono' | 'cargo' | 'direccion' | 'firma_url'>
+  supervisor?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula' | 'cargo' | 'firma_url'>
   dependencia?: Pick<Dependencia, 'nombre' | 'abreviatura'>
 }
 
@@ -92,12 +136,20 @@ export interface Periodo {
   estado: EstadoPeriodo
   fecha_envio: string | null
   motivo_rechazo: string | null
+  planilla_ss_url: string | null    // Uploaded security social PDF
+  numero_planilla: string | null     // Planilla number
+  numero_radicado: string | null     // Radicado number assigned on filing
   // Joined
-  contrato?: Pick<Contrato, 'id' | 'numero' | 'objeto' | 'contratista_id' | 'supervisor_id'> & {
-    contratista?: Pick<Usuario, 'nombre_completo' | 'cedula'>
+  contrato?: Pick<Contrato, 'id' | 'numero' | 'objeto' | 'contratista_id' | 'supervisor_id' | 'dependencia_id'> & {
+    contratista?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula'>
     supervisor?: Pick<Usuario, 'id' | 'nombre_completo'>
     dependencia?: Pick<Dependencia, 'nombre' | 'abreviatura'>
   }
+  planilla_estado?: 'pendiente' | 'aprobada' | 'rechazada' | null
+  planilla_comentario?: string | null
+  // Pre-approvals (joined)
+  preaprobaciones?: Preaprobacion[]
+  historial?: HistorialPeriodo[]
 }
 
 export interface Actividad {

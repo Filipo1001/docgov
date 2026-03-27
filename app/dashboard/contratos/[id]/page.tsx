@@ -232,6 +232,19 @@ export default function ContratoDetallePage() {
             <p className="text-xs text-gray-400">{contrato.valor_letras_mensual}</p>
           </div>
         </div>
+
+        {(contrato.cdp || contrato.crp) && (
+          <div className="grid grid-cols-2 gap-4 text-sm mt-4 pt-4 border-t border-gray-100">
+            <div>
+              <span className="text-gray-400 text-xs">No. CDP</span>
+              <p className="font-medium text-gray-900">{contrato.cdp || '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-400 text-xs">No. CRP</span>
+              <p className="font-medium text-gray-900">{contrato.crp || '—'}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Obligaciones */}

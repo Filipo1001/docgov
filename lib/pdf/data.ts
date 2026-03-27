@@ -1,20 +1,14 @@
 /**
- * Assembles the flat PDFData object needed by both PDF templates.
+ * Assembles the flat PDFData object needed by all PDF templates.
  * Runs server-side only (called from API routes).
- *
- * IMPORTANT: Only query columns that are guaranteed to exist in the current
- * schema. Optional fields (NIT, cargo, telefono, etc.) are set to undefined
- * and the PDF templates handle their absence gracefully.
- * Run supabase/migrations/002_pdf_fields.sql to unlock those fields.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import type { PDFData } from './types'
+import type { PDFData, PDFPagoHistorial } from './types'
 
 export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const supabase = await createServerSupabaseClient()
 
-  // Only query columns that are guaranteed to exist in the base schema
   const { data: periodo, error } = await supabase
     .from('periodos')
     .select(`
@@ -26,6 +20,8 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_fin,
       valor_cobro,
       estado,
+      planilla_ss_url,
+      numero_planilla,
       contrato:contratos(
         id,
         numero,
@@ -34,12 +30,18 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
         modalidad_seleccion,
         valor_total,
         valor_mensual,
+        valor_letras_total,
         valor_letras_mensual,
+        plazo_meses,
         banco,
         tipo_cuenta,
         numero_cuenta,
-        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula),
-        supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
+        fecha_inicio,
+        fecha_fin,
+        cdp,
+        crp,
+        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, cargo, telefono, direccion, firma_url),
+        supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula, cargo, firma_url),
         dependencia:dependencias(nombre),
         municipio:municipios(nombre, departamento, nit, representante_legal, cedula_representante)
       )
@@ -52,23 +54,36 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const contrato = periodo.contrato as any
   if (!contrato) return null
 
-  // Optional secondary query for contract start/end dates.
-  // If the columns don't exist yet, Supabase returns error + null data — we
-  // just skip them rather than failing the whole PDF generation.
-  const { data: contratoDates } = await supabase
-    .from('contratos')
-    .select('fecha_inicio, fecha_fin')
-    .eq('id', contrato.id ?? '')
-    .single()
+  // Fetch all periods for this contract (for payment history table)
+  const { data: allPeriodos } = await supabase
+    .from('periodos')
+    .select('numero_periodo, valor_cobro, estado')
+    .eq('contrato_id', contrato.id)
+    .order('numero_periodo')
 
-  // Fetch obligations for this contract
+  // Build payment history (up to current period)
+  const pagosHistorial: PDFPagoHistorial[] = []
+  let acumulado = 0
+  for (const p of (allPeriodos ?? []) as any[]) {
+    if (p.numero_periodo > periodo.numero_periodo) break
+    acumulado += p.valor_cobro
+    pagosHistorial.push({
+      acta_numero: p.numero_periodo,
+      valor_contrato: contrato.valor_total,
+      valor_pagado_acumulado: acumulado - p.valor_cobro,
+      valor_acta: p.valor_cobro,
+      saldo_pendiente: contrato.valor_total - acumulado,
+    })
+  }
+
+  // Fetch obligations
   const { data: obligacionesRaw } = await supabase
     .from('obligaciones')
     .select('id, descripcion, es_permanente')
     .eq('contrato_id', contrato.id ?? '')
     .order('orden')
 
-  // Fetch activities WITH their evidence photos for this specific period
+  // Fetch activities with evidence for this period
   const { data: actividadesDelPeriodo } = await supabase
     .from('actividades')
     .select('id, obligacion_id, descripcion, cantidad, evidencias(id, url, nombre_archivo)')
@@ -108,7 +123,6 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   return {
     municipio: {
       nombre: municipio.nombre ?? 'Municipio',
-      // Extended fields — available after running migration 002_pdf_fields.sql
       departamento: municipio.departamento ?? undefined,
       nit: municipio.nit ?? undefined,
       representante_legal: municipio.representante_legal ?? undefined,
@@ -122,7 +136,6 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       valor_total: contrato.valor_total,
       valor_mensual: contrato.valor_mensual,
       valor_letras_mensual: contrato.valor_letras_mensual ?? '',
-      // Extended fields — available after running migration 002_pdf_fields.sql
       valor_letras_total: contrato.valor_letras_total ?? undefined,
       plazo_meses: contrato.plazo_meses ?? undefined,
       duracion_letras: contrato.duracion_letras ?? undefined,
@@ -130,21 +143,23 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       tipo_cuenta: contrato.tipo_cuenta,
       numero_cuenta: contrato.numero_cuenta,
       dependencia: contrato.dependencia?.nombre ?? '',
-      fecha_inicio_contrato: (contratoDates as any)?.fecha_inicio ?? undefined,
-      fecha_fin_contrato: (contratoDates as any)?.fecha_fin ?? undefined,
+      fecha_inicio_contrato: contrato.fecha_inicio ?? undefined,
+      fecha_fin_contrato: contrato.fecha_fin ?? undefined,
+      cdp: contrato.cdp ?? undefined,
+      crp: contrato.crp ?? undefined,
       contratista: {
         nombre_completo: contrato.contratista?.nombre_completo ?? '',
         cedula: contrato.contratista?.cedula ?? '',
-        // Extended fields — available after running migration 002_pdf_fields.sql
         cargo: contrato.contratista?.cargo ?? undefined,
         telefono: contrato.contratista?.telefono ?? undefined,
         direccion: contrato.contratista?.direccion ?? undefined,
+        firma_url: contrato.contratista?.firma_url ?? undefined,
       },
       supervisor: {
         nombre_completo: contrato.supervisor?.nombre_completo ?? '',
         cedula: contrato.supervisor?.cedula ?? '',
-        // Extended fields — available after running migration 002_pdf_fields.sql
         cargo: contrato.supervisor?.cargo ?? undefined,
+        firma_url: contrato.supervisor?.firma_url ?? undefined,
       },
     },
     periodo: {
@@ -154,8 +169,8 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_inicio: periodo.fecha_inicio,
       fecha_fin: periodo.fecha_fin,
       valor_cobro: periodo.valor_cobro,
-      // Extended field — available after running migration 002_pdf_fields.sql
       valor_letras: undefined,
+      numero_planilla: (periodo as any).numero_planilla ?? undefined,
     },
     obligaciones: (obligacionesRaw ?? []).map((obl: any) => ({
       descripcion: obl.descripcion,
@@ -163,5 +178,6 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       actividades: actsPorObligacion.get(obl.id) ?? [],
     })),
     fechaGeneracion,
+    pagosHistorial,
   }
 }

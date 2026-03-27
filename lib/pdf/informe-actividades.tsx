@@ -397,7 +397,7 @@ interface ActivityRowProps {
   actIndex: number
   showOblInfo: boolean   // only true for the first activity of each obligation
   totalAcciones: number  // sum of all activity counts for this obligation
-  rowStyle: object
+  rowStyle: any
 }
 
 function ActivityRow({
@@ -445,7 +445,7 @@ function ActivityRow({
 
 // ─── Permanent obligation row ─────────────────────────────────
 
-function PermanentRow({ obl, oblIndex, rowStyle }: { obl: PDFObligacion; oblIndex: number; rowStyle: object }) {
+function PermanentRow({ obl, oblIndex, rowStyle }: { obl: PDFObligacion; oblIndex: number; rowStyle: any }) {
   return (
     <View style={rowStyle}>
       <View style={s.col1}>

@@ -3,31 +3,28 @@
 /**
  * Server Actions: Period workflow
  *
- * All state transitions for the approval workflow run here.
- * Benefits vs. direct client calls:
- *   - Role validation happens on the server (cannot be bypassed from browser)
- *   - State machine is enforced before hitting the DB (clear error messages)
- *   - Supabase RLS provides a second layer of enforcement
- *   - Ready for audit logging, email notifications, PDF generation hooks
+ * State transitions:
+ *   borrador/rechazado → enviado       (contratista submits)
+ *   enviado → aprobado_asesor          (asesor approves)
+ *   enviado/aprobado_asesor → rechazado (asesor rejects to contratista)
+ *   rechazado → aprobado_asesor        (asesor re-approves)
+ *   aprobado_asesor → aprobado         (secretary approves)
+ *   aprobado_asesor/enviado → enviado  (secretary rejects back for asesor review)
+ *   aprobado → radicado                (asesor registers physical filing)
+ *
+ * Every state change logs into historial_periodos and sends notifications.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import {
-  ESTADO_SIGUIENTE,
-  ESTADO_REVISOR,
-  ESTADOS_EDITABLES,
-  ESTADOS_EN_REVISION,
-} from '@/lib/constants'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { ESTADOS_EDITABLES } from '@/lib/constants'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
 
-// ─── Internal helper ─────────────────────────────────────────
+// ─── Internal helpers ────────────────────────────────────────
 
 async function getAuthContext() {
   const supabase = await createServerSupabaseClient()
-
-  // getUser() validates the JWT via a network call — more reliable in Server Actions
-  // than getSession() which only reads from local storage/cookies without revalidating.
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
@@ -36,7 +33,7 @@ async function getAuthContext() {
 
   const { data: usuario, error } = await supabase
     .from('usuarios')
-    .select('id, rol, nombre_completo')
+    .select('id, rol, nombre_completo, dependencia_id')
     .eq('id', user.id)
     .single()
 
@@ -44,34 +41,81 @@ async function getAuthContext() {
     throw new Error('No autorizado: perfil de usuario no encontrado')
   }
 
-  return { supabase, usuario: usuario as { id: string; rol: Rol; nombre_completo: string } }
+  return { supabase, usuario: usuario as { id: string; rol: Rol; nombre_completo: string; dependencia_id: string | null } }
 }
 
 async function getPeriodo(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, periodoId: string) {
   const { data, error } = await supabase
     .from('periodos')
-    .select('id, estado, contrato_id')
+    .select('id, estado, contrato_id, mes, anio')
     .eq('id', periodoId)
     .single()
 
   if (error || !data) return null
-  return data as { id: string; estado: EstadoPeriodo; contrato_id: string }
+  return data as { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number }
 }
 
-async function getSupervisorId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, contratoId: string) {
+async function getContratoIds(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, contratoId: string) {
   const { data } = await supabase
     .from('contratos')
-    .select('supervisor_id, contratista_id')
+    .select('supervisor_id, contratista_id, dependencia_id')
     .eq('id', contratoId)
     .single()
   return data
 }
 
-// ─── Actions ─────────────────────────────────────────────────
+function revalidar(contratoId?: string, periodoId?: string) {
+  if (contratoId && periodoId) {
+    revalidatePath(`/dashboard/contratos/${contratoId}/periodo/${periodoId}`)
+    revalidatePath(`/dashboard/contratos/${contratoId}`)
+  }
+  revalidatePath('/dashboard/informes')
+  revalidatePath('/dashboard/contratistas')
+  revalidatePath('/dashboard/colaboradores')
+  revalidatePath('/dashboard')
+}
+
+/** Insert into historial_periodos using regular client (authenticated user). */
+async function insertHistorial(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  periodoId: string,
+  estadoAnterior: EstadoPeriodo | null,
+  estadoNuevo: EstadoPeriodo | null,
+  usuarioId: string,
+  comentario?: string
+) {
+  await supabase.from('historial_periodos').insert({
+    periodo_id: periodoId,
+    estado_anterior: estadoAnterior,
+    estado_nuevo: estadoNuevo,
+    usuario_id: usuarioId,
+    comentario: comentario ?? null,
+  })
+}
+
+/** Insert notification using admin client to bypass RLS. */
+async function insertNotificacion(
+  destinatarioId: string,
+  tipo: string,
+  titulo: string,
+  mensaje: string,
+  periodoId: string
+) {
+  const adminClient = createAdminSupabaseClient()
+  await adminClient.from('notificaciones').insert({
+    usuario_id: destinatarioId,
+    tipo,
+    titulo,
+    mensaje,
+    periodo_id: periodoId,
+    leida: false,
+  })
+}
+
+// ─── Contratista Actions ────────────────────────────────────
 
 /**
  * Contratista submits a period for review.
- * Validates: role, ownership, editable state, at least one activity.
  */
 export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
   try {
@@ -88,15 +132,15 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       return { error: `No se puede enviar un periodo en estado "${periodo.estado}"` }
     }
 
-    // Verify ownership (contratista must own this contract)
+    // Verify ownership
     if (usuario.rol === 'contratista') {
-      const contrato = await getSupervisorId(supabase, periodo.contrato_id)
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.contratista_id !== usuario.id) {
         return { error: 'No tienes permiso para enviar este periodo' }
       }
     }
 
-    // Must have at least one activity registered
+    // Must have at least one activity
     const { count } = await supabase
       .from('actividades')
       .select('*', { count: 'exact', head: true })
@@ -106,15 +150,66 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       return { error: 'Debes registrar al menos una actividad antes de enviar' }
     }
 
+    const estadoAnterior = periodo.estado
     const { error } = await supabase
       .from('periodos')
-      .update({ estado: 'enviado', fecha_envio: new Date().toISOString() })
+      .update({ estado: 'enviado', fecha_envio: new Date().toISOString(), motivo_rechazo: null })
       .eq('id', periodoId)
 
     if (error) return { error: `Error al enviar: ${error.message}` }
 
-    revalidatePath(`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodoId}`)
-    revalidatePath(`/dashboard/contratos/${periodo.contrato_id}`)
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id)
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Asesor Actions ─────────────────────────────────────────
+
+/**
+ * Asesor approves a period (enviado or rechazado → aprobado_asesor).
+ */
+export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
+      return { error: 'Solo los asesores pueden aprobar informes' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (periodo.estado !== 'enviado' && periodo.estado !== 'rechazado') {
+      return { error: 'Solo se pueden aprobar periodos en estado "enviado" o "rechazado"' }
+    }
+
+    const estadoAnterior = periodo.estado
+    const { error } = await supabase
+      .from('periodos')
+      .update({ estado: 'aprobado_asesor', motivo_rechazo: null })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al aprobar: ${error.message}` }
+
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'aprobado_asesor', usuario.id)
+
+    // Notify contratista
+    const contrato = await getContratoIds(supabase, periodo.contrato_id)
+    if (contrato?.contratista_id) {
+      await insertNotificacion(
+        contrato.contratista_id,
+        'aprobado_asesor',
+        'Tu informe fue pre-aprobado 🎉',
+        `Tu informe de ${periodo.mes} ${periodo.anio} fue revisado y pre-aprobado por el asesor. Está listo para la aprobación de la secretaria.`,
+        periodoId
+      )
+    }
+
+    revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
@@ -122,65 +217,10 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 }
 
 /**
- * Reviewer approves a period, advancing it to the next state.
- * Validates: role matches current estado, supervisor contract ownership.
+ * Asesor rejects a period → rechazado (back to contratista).
+ * Also allows revoking aprobado_asesor state.
  */
-export async function aprobarPeriodo(periodoId: string): Promise<ActionResult<{ siguienteEstado: string }>> {
-  try {
-    const { supabase, usuario } = await getAuthContext()
-
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
-
-    if (!ESTADOS_EN_REVISION.includes(periodo.estado)) {
-      return { error: 'Este periodo no está en un estado que pueda ser aprobado' }
-    }
-
-    // Validate role is authorized to approve this specific state
-    if (usuario.rol !== 'admin') {
-      const estadoEsperado = ESTADO_REVISOR[usuario.rol]
-      if (estadoEsperado !== periodo.estado) {
-        return {
-          error: `Tu rol (${usuario.rol}) no puede aprobar un periodo en estado "${periodo.estado}"`,
-        }
-      }
-
-      // Supervisor must be assigned to this contract
-      if (usuario.rol === 'supervisor') {
-        const contrato = await getSupervisorId(supabase, periodo.contrato_id)
-        if (contrato?.supervisor_id !== usuario.id) {
-          return { error: 'No eres el supervisor asignado a este contrato' }
-        }
-      }
-    }
-
-    const siguienteEstado = ESTADO_SIGUIENTE[periodo.estado]
-    if (!siguienteEstado) {
-      return { error: 'Este periodo no puede avanzar en el flujo de aprobación' }
-    }
-
-    const { error } = await supabase
-      .from('periodos')
-      .update({ estado: siguienteEstado })
-      .eq('id', periodoId)
-
-    if (error) return { error: `Error al aprobar: ${error.message}` }
-
-    revalidatePath(`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodoId}`)
-    revalidatePath('/dashboard/aprobaciones')
-    revalidatePath('/dashboard')
-
-    return { data: { siguienteEstado } }
-  } catch (e: unknown) {
-    return { error: e instanceof Error ? e.message : 'Error inesperado' }
-  }
-}
-
-/**
- * Reviewer rejects a period, returning it to the contratista with a reason.
- * Validates: role, estado, supervisor ownership, non-empty reason.
- */
-export async function rechazarPeriodo(
+export async function rechazarComoAsesor(
   periodoId: string,
   motivo: string
 ): Promise<ActionResult> {
@@ -191,29 +231,18 @@ export async function rechazarPeriodo(
 
     const { supabase, usuario } = await getAuthContext()
 
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
+      return { error: 'Solo los asesores pueden rechazar informes' }
+    }
+
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
 
-    if (!ESTADOS_EN_REVISION.includes(periodo.estado)) {
-      return { error: 'Este periodo no puede ser rechazado en su estado actual' }
+    if (periodo.estado !== 'enviado' && periodo.estado !== 'aprobado_asesor') {
+      return { error: 'Solo se pueden rechazar periodos en estado "enviado" o "aprobado_asesor"' }
     }
 
-    if (usuario.rol !== 'admin') {
-      const estadoEsperado = ESTADO_REVISOR[usuario.rol]
-      if (estadoEsperado !== periodo.estado) {
-        return {
-          error: `Tu rol (${usuario.rol}) no puede rechazar un periodo en estado "${periodo.estado}"`,
-        }
-      }
-
-      if (usuario.rol === 'supervisor') {
-        const contrato = await getSupervisorId(supabase, periodo.contrato_id)
-        if (contrato?.supervisor_id !== usuario.id) {
-          return { error: 'No eres el supervisor asignado a este contrato' }
-        }
-      }
-    }
-
+    const estadoAnterior = periodo.estado
     const { error } = await supabase
       .from('periodos')
       .update({ estado: 'rechazado', motivo_rechazo: motivo.trim() })
@@ -221,10 +250,21 @@ export async function rechazarPeriodo(
 
     if (error) return { error: `Error al rechazar: ${error.message}` }
 
-    revalidatePath(`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodoId}`)
-    revalidatePath('/dashboard/aprobaciones')
-    revalidatePath('/dashboard')
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivo.trim())
 
+    // Notify contratista
+    const contrato = await getContratoIds(supabase, periodo.contrato_id)
+    if (contrato?.contratista_id) {
+      await insertNotificacion(
+        contrato.contratista_id,
+        'rechazado',
+        'Tu informe requiere correcciones',
+        `Tu informe de ${periodo.mes} ${periodo.anio} fue rechazado. Motivo: ${motivo.trim()}`,
+        periodoId
+      )
+    }
+
+    revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
@@ -232,34 +272,427 @@ export async function rechazarPeriodo(
 }
 
 /**
- * Admin or hacienda marks an approved period as paid.
+ * Asesor pre-approves a period (adds a flag, doesn't change state).
+ * @deprecated Use aprobarComoAsesor instead. Kept for backwards compatibility.
  */
-export async function marcarPagado(periodoId: string): Promise<ActionResult> {
+export async function preAprobarPeriodo(periodoId: string): Promise<ActionResult> {
+  return aprobarComoAsesor(periodoId)
+}
+
+/**
+ * Asesor revokes their pre-approval.
+ * @deprecated Use rechazarComoAsesor instead. Kept for backwards compatibility.
+ */
+export async function revocarPreaprobacion(periodoId: string): Promise<ActionResult> {
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'admin' && usuario.rol !== 'hacienda') {
-      return { error: 'Solo admin o hacienda pueden marcar periodos como pagados' }
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
+      return { error: 'Solo los asesores pueden revocar pre-aprobaciones' }
     }
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
 
-    if (periodo.estado !== 'aprobado') {
-      return { error: 'Solo se pueden marcar como pagados los periodos aprobados' }
+    if (periodo.estado !== 'aprobado_asesor') {
+      return { error: 'Solo se puede revocar la aprobación de periodos en estado "aprobado_asesor"' }
     }
 
+    const estadoAnterior = periodo.estado
     const { error } = await supabase
       .from('periodos')
-      .update({ estado: 'pagado' })
+      .update({ estado: 'enviado' })
       .eq('id', periodoId)
 
-    if (error) return { error: `Error al marcar como pagado: ${error.message}` }
+    if (error) return { error: `Error al revocar: ${error.message}` }
 
-    revalidatePath(`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodoId}`)
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id, 'Aprobación revocada por asesor')
+
+    revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }
 
+// ─── Secretary (Supervisor) Actions ─────────────────────────
+
+/**
+ * Secretary approves one or more periods (aprobado_asesor → aprobado).
+ * Admin can also approve from enviado (skipping asesor step).
+ */
+export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResult<{ aprobados: number }>> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo la secretaria puede aprobar informes' }
+    }
+
+    let aprobados = 0
+
+    for (const periodoId of periodoIds) {
+      const periodo = await getPeriodo(supabase, periodoId)
+      if (!periodo) continue
+
+      // Supervisor expects aprobado_asesor; admin also allows enviado
+      const estadosPermitidos: EstadoPeriodo[] = usuario.rol === 'admin'
+        ? ['aprobado_asesor', 'enviado']
+        : ['aprobado_asesor']
+
+      if (!estadosPermitidos.includes(periodo.estado)) continue
+
+      const estadoAnterior = periodo.estado
+      const { error } = await supabase
+        .from('periodos')
+        .update({ estado: 'aprobado', motivo_rechazo: null })
+        .eq('id', periodoId)
+
+      if (!error) {
+        aprobados++
+        await insertHistorial(supabase, periodoId, estadoAnterior, 'aprobado', usuario.id)
+
+        // Notify contratista
+        const contrato = await getContratoIds(supabase, periodo.contrato_id)
+        if (contrato?.contratista_id) {
+          await insertNotificacion(
+            contrato.contratista_id,
+            'aprobado',
+            '¡Enhorabuena! Tu informe fue aprobado 🎉',
+            `Tu informe de ${periodo.mes} ${periodo.anio} fue aprobado por la secretaria.`,
+            periodoId
+          )
+        }
+      }
+    }
+
+    revalidar()
+    return { data: { aprobados } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Secretary rejects one or more periods back to asesor review (→ enviado).
+ * Logs in historial but does NOT notify contratista.
+ */
+export async function rechazarPeriodos(
+  periodoIds: string[],
+  motivo: string
+): Promise<ActionResult<{ rechazados: number }>> {
+  try {
+    if (!motivo?.trim()) {
+      return { error: 'El motivo de rechazo es obligatorio' }
+    }
+
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo la secretaria puede rechazar informes' }
+    }
+
+    let rechazados = 0
+
+    for (const periodoId of periodoIds) {
+      const periodo = await getPeriodo(supabase, periodoId)
+      if (!periodo) continue
+
+      const estadoAnterior = periodo.estado
+      const { error } = await supabase
+        .from('periodos')
+        .update({ estado: 'enviado', motivo_rechazo: motivo.trim() })
+        .eq('id', periodoId)
+
+      if (!error) {
+        rechazados++
+        await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id, motivo.trim())
+      }
+    }
+
+    revalidar()
+    return { data: { rechazados } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Asesor or secretary marks an approved period as radicado (physically filed).
+ * Optionally stores the radicado number and notifies the contratista.
+ */
+export async function marcarRadicado(
+  periodoId: string,
+  numeroRadicado?: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'admin' && usuario.rol !== 'asesor' && usuario.rol !== 'supervisor') {
+      return { error: 'Solo el asesor, la secretaria o el admin pueden radicar periodos' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (periodo.estado !== 'aprobado') {
+      return { error: 'Solo se pueden radicar los periodos aprobados' }
+    }
+
+    const estadoAnterior = periodo.estado
+    const { error } = await supabase
+      .from('periodos')
+      .update({
+        estado: 'radicado',
+        ...(numeroRadicado?.trim() ? { numero_radicado: numeroRadicado.trim() } : {}),
+      })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al radicar: ${error.message}` }
+
+    const comentario = numeroRadicado?.trim()
+      ? `Radicado con No. ${numeroRadicado.trim()}`
+      : undefined
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'radicado', usuario.id, comentario)
+
+    // Notify contratista
+    const contrato = await getContratoIds(supabase, periodo.contrato_id)
+    if (contrato?.contratista_id) {
+      const mensaje = numeroRadicado?.trim()
+        ? `Tu informe ha sido radicado con el No. ${numeroRadicado.trim()}.`
+        : `Tu informe de ${periodo.mes} ${periodo.anio} ha sido radicado exitosamente.`
+      await insertNotificacion(
+        contrato.contratista_id,
+        'radicado',
+        '¡Informe radicado! 📁',
+        mensaje,
+        periodoId
+      )
+    }
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Planilla review ─────────────────────────────────────────
+
+/**
+ * Asesor reviews the planilla de seguridad social.
+ */
+export async function revisarPlanilla(
+  periodoId: string,
+  estado: 'aprobada' | 'rechazada',
+  comentario?: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
+      return { error: 'Solo los asesores pueden revisar la planilla' }
+    }
+
+    const { error } = await supabase
+      .from('periodos')
+      .update({
+        planilla_estado: estado,
+        planilla_comentario: comentario?.trim() ?? null,
+      })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al revisar planilla: ${error.message}` }
+
+    revalidar(undefined, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── File upload actions ────────────────────────────────────
+
+/**
+ * Upload planilla de seguridad social for a period.
+ */
+export async function subirPlanilla(
+  periodoId: string,
+  formData: FormData
+): Promise<ActionResult<{ url: string }>> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede subir la planilla' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+      return { error: 'No se puede reemplazar la planilla de un periodo ya aprobado o radicado' }
+    }
+
+    const file = formData.get('file') as File
+    if (!file) return { error: 'No se recibió el archivo' }
+
+    if (file.size > 10 * 1024 * 1024) {
+      return { error: 'El archivo no puede superar 10 MB' }
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
+    const path = `planillas/${periodoId}/${Date.now()}.${ext}`
+
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const { error: uploadError } = await supabase.storage
+      .from('documentos')
+      .upload(path, buffer, { contentType: file.type, upsert: true })
+
+    if (uploadError) return { error: `Error al subir: ${uploadError.message}` }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documentos')
+      .getPublicUrl(path)
+
+    // Use admin client to bypass RLS (planilla is editable across multiple states)
+    const adminClient = createAdminSupabaseClient()
+    const { error: updateError } = await adminClient
+      .from('periodos')
+      .update({ planilla_ss_url: publicUrl })
+      .eq('id', periodoId)
+
+    if (updateError) return { error: `Error al guardar: ${updateError.message}` }
+
+    revalidar(periodo.contrato_id, periodoId)
+    return { data: { url: publicUrl } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/** States where contratista can still manage their planilla (anything before final approval). */
+const ESTADOS_PLANILLA_EDITABLE: EstadoPeriodo[] = ['borrador', 'enviado', 'aprobado_asesor', 'rechazado']
+
+/**
+ * Delete the planilla de seguridad social for a period (set URL to null).
+ * Allowed until the period is fully approved or radicado.
+ */
+export async function eliminarPlanilla(periodoId: string): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede eliminar la planilla' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+      return { error: 'No se puede eliminar la planilla de un periodo ya aprobado o radicado' }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ planilla_ss_url: null, numero_planilla: null, planilla_estado: 'pendiente' })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al eliminar: ${error.message}` }
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Save numero_planilla for a period.
+ */
+export async function guardarNumeroPlanilla(
+  periodoId: string,
+  numeroPlanilla: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede actualizar el número de planilla' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+      return { error: 'No se puede modificar la planilla de un periodo ya aprobado o radicado' }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ numero_planilla: numeroPlanilla.trim() })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al guardar: ${error.message}` }
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Upload user signature image.
+ * Contratista can upload their own, admin can upload anyone's.
+ */
+export async function subirFirma(
+  formData: FormData,
+  targetUserId?: string
+): Promise<ActionResult<{ url: string }>> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    // Only contratista (own) or admin (anyone) can upload
+    const uploadForId = targetUserId || usuario.id
+    if (usuario.rol !== 'admin' && uploadForId !== usuario.id) {
+      return { error: 'Solo puedes subir tu propia firma' }
+    }
+
+    const file = formData.get('file') as File
+    if (!file) return { error: 'No se recibió el archivo' }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return { error: 'La firma no puede superar 5 MB' }
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+    const path = `firmas/${uploadForId}/${Date.now()}.${ext}`
+
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const { error: uploadError } = await supabase.storage
+      .from('documentos')
+      .upload(path, buffer, { contentType: file.type, upsert: true })
+
+    if (uploadError) return { error: `Error al subir: ${uploadError.message}` }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documentos')
+      .getPublicUrl(path)
+
+    const adminClient = createAdminSupabaseClient()
+    const { error: updateError } = await adminClient
+      .from('usuarios')
+      .update({ firma_url: publicUrl })
+      .eq('id', uploadForId)
+
+    if (updateError) return { error: `Error al guardar firma: ${updateError.message}` }
+
+    revalidatePath('/dashboard')
+    return { data: { url: publicUrl } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}

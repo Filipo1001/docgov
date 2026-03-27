@@ -5,8 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import { UserProvider, useUsuario } from '@/lib/user-context'
-import { MENU_POR_ROL, ESTADO_REVISOR } from '@/lib/constants'
-import type { EstadoPeriodo } from '@/lib/types'
+import { getMenuPorRol } from '@/lib/constants'
+import NotificacionesBell from '@/components/NotificacionesBell'
 
 // ─── Pending count badge ──────────────────────────────────────
 function Badge({ n }: { n: number }) {
@@ -29,39 +29,26 @@ function Sidebar() {
     if (!cargando && !usuario) router.push('/login')
   }, [cargando, usuario, router])
 
-  // Fetch the count of periods waiting for this user's review
+  // Fetch the count of periods waiting for review (for supervisor/admin)
   useEffect(() => {
     if (!usuario) return
-    const rolEstado: EstadoPeriodo | undefined = ESTADO_REVISOR[usuario.rol]
-    if (!rolEstado && usuario.rol !== 'admin') return
+    if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') return
 
     async function fetchPendientes() {
       const supabase = createClient()
-
-      if (usuario!.rol === 'admin') {
-        // Admin sees all in-review periods
-        const { count } = await supabase
-          .from('periodos')
-          .select('id', { count: 'exact', head: true })
-          .in('estado', ['enviado', 'revision_asesor', 'revision_gobierno', 'revision_hacienda'])
-        setPendientes(count ?? 0)
-      } else if (rolEstado) {
-        // Each reviewer sees only their own queue
-        const { count } = await supabase
-          .from('periodos')
-          .select('id', { count: 'exact', head: true })
-          .eq('estado', rolEstado)
-        setPendientes(count ?? 0)
-      }
+      const { count } = await supabase
+        .from('periodos')
+        .select('id', { count: 'exact', head: true })
+        .eq('estado', 'enviado')
+      setPendientes(count ?? 0)
     }
 
     fetchPendientes()
-    // Re-check every 60 s without hammering the DB
     const timer = setInterval(fetchPendientes, 60_000)
     return () => clearInterval(timer)
   }, [usuario])
 
-  const menuItems = usuario ? (MENU_POR_ROL[usuario.rol] ?? MENU_POR_ROL.contratista) : []
+  const menuItems = usuario ? getMenuPorRol(usuario.rol) : []
 
   async function cerrarSesion() {
     const supabase = createClient()
@@ -91,7 +78,7 @@ function Sidebar() {
             const activo =
               pathname === item.href ||
               (item.href !== '/dashboard' && pathname.startsWith(item.href))
-            const esAprobaciones = item.href === '/dashboard/aprobaciones'
+            const esInformes = item.href === '/dashboard/informes'
             return (
               <li key={item.href}>
                 <Link
@@ -102,13 +89,20 @@ function Sidebar() {
                 >
                   <span>{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
-                  {esAprobaciones && <Badge n={pendientes} />}
+                  {esInformes && pendientes > 0 && <Badge n={pendientes} />}
                 </Link>
               </li>
             )
           })}
         </ul>
       </nav>
+
+      {/* Notifications — contratista only */}
+      {usuario?.rol === 'contratista' && (
+        <div className="px-4 pb-2">
+          <NotificacionesBell />
+        </div>
+      )}
 
       {/* Usuario */}
       <div className="p-4 border-t border-gray-100">

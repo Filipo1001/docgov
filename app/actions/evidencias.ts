@@ -24,7 +24,7 @@ export async function subirEvidencia(
     }
 
     // ── File type validation ──────────────────────────────────
-    const tiposPermitidos: readonly string[] = FILE_UPLOAD.TIPOS_PERMITIDOS
+    const tiposPermitidos: readonly string[] = FILE_UPLOAD.TIPOS_IMAGEN
     if (!tiposPermitidos.includes(file.type)) {
       return {
         error: `Tipo de archivo no permitido. Solo se aceptan: JPG, PNG, WebP, HEIC`,
