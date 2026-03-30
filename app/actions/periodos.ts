@@ -502,7 +502,9 @@ export async function marcarRadicado(
     }
 
     const estadoAnterior = periodo.estado
-    const { error } = await supabase
+    // Use admin client: RLS does not cover aprobado → radicado transition
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
       .from('periodos')
       .update({
         estado: 'radicado',
@@ -759,6 +761,51 @@ export async function subirFirma(
 
     revalidatePath('/dashboard')
     return { data: { url: publicUrl } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Update the radicado number of an already-radicado period.
+ * Does NOT change the estado — only updates numero_radicado.
+ * Allowed for asesor, supervisor, and admin.
+ */
+export async function actualizarNumeroRadicado(
+  periodoId: string,
+  numeroRadicado: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'admin' && usuario.rol !== 'asesor' && usuario.rol !== 'supervisor') {
+      return { error: 'Solo el asesor, la secretaria o el admin pueden editar el número de radicado' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (periodo.estado !== 'radicado') {
+      return { error: 'Solo se puede editar el número de radicado de un periodo ya radicado' }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ numero_radicado: numeroRadicado.trim() || null })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al actualizar radicado: ${error.message}` }
+
+    await insertHistorial(
+      supabase, periodoId,
+      'radicado', 'radicado',
+      usuario.id,
+      `Número de radicado actualizado a: ${numeroRadicado.trim() || '(eliminado)'}`
+    )
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }

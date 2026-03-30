@@ -21,6 +21,7 @@ import {
   aprobarPeriodos,
   rechazarPeriodos,
   marcarRadicado,
+  actualizarNumeroRadicado,
   subirPlanilla,
   eliminarPlanilla,
   guardarNumeroPlanilla,
@@ -57,6 +58,13 @@ export default function PeriodoDetallePage() {
   // Radicado state
   const [numRadicado, setNumRadicado] = useState('')
   const [radicando, setRadicando] = useState(false)
+  const [editandoRadicado, setEditandoRadicado] = useState(false)
+  const [numRadicadoEdit, setNumRadicadoEdit] = useState('')
+  const [guardandoRadicado, setGuardandoRadicado] = useState(false)
+
+  // Upload progress state per activity
+  const [subiendoEvidencia, setSubiendoEvidencia] = useState<Record<string, number | null>>({})
+  // null = not uploading, 0-100 = progress
 
   // Planilla dropdown state
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
@@ -203,6 +211,23 @@ export default function PeriodoDetallePage() {
     setRadicando(false)
   }
 
+  function handleAbrirEditRadicado() {
+    setNumRadicadoEdit(periodo?.numero_radicado ?? '')
+    setEditandoRadicado(true)
+  }
+
+  async function handleGuardarRadicadoEdit() {
+    setGuardandoRadicado(true)
+    const result = await actualizarNumeroRadicado(periodoId, numRadicadoEdit)
+    if (result.error) toast.error(result.error)
+    else {
+      toast.success('Número de radicado actualizado ✓')
+      setEditandoRadicado(false)
+      cargarDatos()
+    }
+    setGuardandoRadicado(false)
+  }
+
   async function handleAgregarActividad(obligacionId: string) {
     if (!nuevaActividad.trim()) return
     setGuardando(true)
@@ -224,11 +249,42 @@ export default function PeriodoDetallePage() {
   }
 
   async function handleSubirEvidencia(actividadId: string, file: File) {
+    // Validate file size (10 MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('La imagen no puede superar 10 MB')
+      return
+    }
+
+    // Start animated progress
+    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 0 }))
+
+    // Animate progress to ~80% while uploading (real progress unavailable via server action)
+    let fakeProgress = 0
+    const fileSizeMB = file.size / (1024 * 1024)
+    const estimatedMs = Math.max(800, fileSizeMB * 1200) // rough estimate
+    const interval = setInterval(() => {
+      fakeProgress = Math.min(fakeProgress + (80 / (estimatedMs / 100)), 80)
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: Math.round(fakeProgress) }))
+    }, 100)
+
     const formData = new FormData()
     formData.append('file', file)
     const result = await subirEvidencia(actividadId, periodoId, formData)
-    if (result.error) toast.error(result.error)
-    else { toast.success('Evidencia subida'); cargarDatos() }
+
+    clearInterval(interval)
+
+    if (result.error) {
+      toast.error(result.error)
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+    } else {
+      // Jump to 100% then clear
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 100 }))
+      toast.success('Evidencia subida ✓')
+      setTimeout(() => {
+        setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+        cargarDatos()
+      }, 600)
+    }
   }
 
   async function handleEliminarEvidencia(evId: string) {
@@ -645,7 +701,7 @@ export default function PeriodoDetallePage() {
                                 {esEditable && (
                                   <button
                                     onClick={() => handleEliminarEvidencia(ev.id)}
-                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity flex items-center justify-center"
                                   >
                                     ✕
                                   </button>
@@ -654,23 +710,62 @@ export default function PeriodoDetallePage() {
                             ))}
                           </div>
                         )}
-                        {esEditable && (
-                          <label className="inline-flex items-center gap-2 text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Subir evidencia
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp,image/heic"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file) handleSubirEvidencia(act.id, file)
-                                e.target.value = ''
-                              }}
-                            />
-                          </label>
+
+                        {/* Upload progress bar */}
+                        {subiendoEvidencia[act.id] !== null && subiendoEvidencia[act.id] !== undefined && (
+                          <div className="mb-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-blue-600 font-medium">Subiendo imagen...</span>
+                              <span className="text-xs text-blue-400">{subiendoEvidencia[act.id]}%</span>
+                            </div>
+                            <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="bg-blue-500 h-1.5 rounded-full transition-all duration-150 ease-out"
+                                style={{ width: `${subiendoEvidencia[act.id]}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {esEditable && subiendoEvidencia[act.id] == null && (
+                          <div className="flex flex-wrap items-center gap-3">
+                            {/* Gallery / file picker */}
+                            <label className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 cursor-pointer bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              Subir imagen
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleSubirEvidencia(act.id, file)
+                                  e.target.value = ''
+                                }}
+                              />
+                            </label>
+                            {/* Camera capture (mobile) */}
+                            <label className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              Tomar foto
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleSubirEvidencia(act.id, file)
+                                  e.target.value = ''
+                                }}
+                              />
+                            </label>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -771,17 +866,66 @@ export default function PeriodoDetallePage() {
       )}
 
       {periodo.estado === 'radicado' && (
-        <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 mb-6 text-center">
-          <div className="text-3xl mb-2">📁</div>
-          <p className="text-lg font-bold text-emerald-700">Periodo radicado</p>
-          {periodo.numero_radicado ? (
-            <p className="text-2xl font-extrabold text-emerald-800 mt-2 tracking-wide">
-              No. {periodo.numero_radicado}
-            </p>
-          ) : null}
-          <p className="text-sm text-emerald-600 mt-2">
-            El paquete de ${periodo.valor_cobro?.toLocaleString('es-CO')} ha sido radicado exitosamente.
-          </p>
+        <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📁</span>
+              <p className="text-base font-bold text-emerald-700">Periodo radicado</p>
+            </div>
+            {/* Edit button — only for asesor/supervisor/admin */}
+            {(esAsesor || esSecretaria) && !editandoRadicado && (
+              <button
+                onClick={handleAbrirEditRadicado}
+                className="flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition-colors"
+                title="Editar número de radicado"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Editar No.
+              </button>
+            )}
+          </div>
+
+          {editandoRadicado ? (
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="text"
+                value={numRadicadoEdit}
+                onChange={e => setNumRadicadoEdit(e.target.value)}
+                placeholder="Número de radicado"
+                className="flex-1 px-3 py-2 border border-emerald-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                autoFocus
+              />
+              <button
+                onClick={handleGuardarRadicadoEdit}
+                disabled={guardandoRadicado}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                {guardandoRadicado ? 'Guardando...' : 'Guardar'}
+              </button>
+              <button
+                onClick={() => setEditandoRadicado(false)}
+                className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <>
+              {periodo.numero_radicado ? (
+                <p className="text-2xl font-extrabold text-emerald-800 tracking-wide">
+                  No. {periodo.numero_radicado}
+                </p>
+              ) : (
+                <p className="text-sm text-emerald-600 italic">Sin número de radicado asignado</p>
+              )}
+              <p className="text-sm text-emerald-600 mt-1">
+                El paquete de ${periodo.valor_cobro?.toLocaleString('es-CO')} ha sido radicado exitosamente.
+              </p>
+            </>
+          )}
         </div>
       )}
 
