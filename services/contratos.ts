@@ -90,14 +90,23 @@ export async function generarPeriodos(contrato: Contrato): Promise<{ error?: str
   const supabase = createClient()
 
   const fechaInicio = new Date(contrato.fecha_inicio + 'T00:00:00')
+  const fechaFin    = new Date(contrato.fecha_fin    + 'T00:00:00')
+
+  // Derive number of monthly periods from the actual date range
+  const startMonthIdx = fechaInicio.getFullYear() * 12 + fechaInicio.getMonth()
+  const endMonthIdx   = fechaFin.getFullYear()    * 12 + fechaFin.getMonth()
+  const numMeses      = endMonthIdx - startMonthIdx + 1
+
+  if (numMeses <= 0) return { error: 'Rango de fechas inválido' }
+
   const periodosNuevos = []
 
-  for (let i = 0; i < contrato.plazo_meses; i++) {
+  for (let i = 0; i < numMeses; i++) {
     const fechaMes = new Date(fechaInicio)
     fechaMes.setMonth(fechaInicio.getMonth() + i)
 
     const mesIndex = fechaMes.getMonth()
-    const anio = fechaMes.getFullYear()
+    const anio     = fechaMes.getFullYear()
 
     const inicioP =
       i === 0
@@ -106,7 +115,7 @@ export async function generarPeriodos(contrato: Contrato): Promise<{ error?: str
 
     const ultimoDia = new Date(anio, mesIndex + 1, 0).getDate()
     const finP =
-      i === contrato.plazo_meses - 1
+      i === numMeses - 1
         ? contrato.fecha_fin
         : `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${ultimoDia}`
 

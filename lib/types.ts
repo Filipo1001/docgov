@@ -100,7 +100,8 @@ export interface Contrato {
   valor_mensual: number
   valor_letras_total: string
   valor_letras_mensual: string
-  plazo_meses: number
+  plazo_meses: number   // kept for backwards compat (PDF generation)
+  plazo_dias: number    // primary field — actual days from contract
   fecha_inicio: string  // ISO date YYYY-MM-DD
   fecha_fin: string
   banco: string
