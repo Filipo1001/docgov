@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/lib/user-context'
 import SupervisorHome from './SupervisorHome'
+import PageHeader from '@/components/ui/PageHeader'
+import StatCard from '@/components/ui/StatCard'
+import Card from '@/components/ui/Card'
 
 const estadoPendientePorRol: Record<string, string> = {
   supervisor:  'enviado',
@@ -73,68 +76,65 @@ export default function DashboardPage() {
   type Cfg = {
     titulo: string
     subtitulo: string
-    cards: Array<{ label: string; val: number; color: string }>
+    cards: Array<{ label: string; val: number; color: 'emerald' | 'blue' | 'amber' | 'red' | 'indigo' | 'gray' }>
     accesos: Array<{ href: string; icon: string; label: string; desc: string }>
   }
 
   const config: Partial<Record<string, Cfg>> = {
     admin: {
-      titulo: 'Panel de administración',
+      titulo: 'Panel de administracion',
       subtitulo: 'Vista general de todos los contratos y periodos',
       cards: [
-        { label: 'Contratos totales',    val: stats.a, color: 'text-gray-900' },
-        { label: 'Periodos en revisión', val: stats.b, color: 'text-amber-600' },
-        { label: 'Periodos aprobados',   val: stats.c, color: 'text-green-600' },
+        { label: 'Contratos totales',    val: stats.a, color: 'gray' },
+        { label: 'Periodos en revision', val: stats.b, color: 'amber' },
+        { label: 'Periodos aprobados',   val: stats.c, color: 'emerald' },
       ],
       accesos: [
-        { href: '/dashboard/contratos/nuevo', icon: '➕', label: 'Registrar contrato',  desc: 'Crear un nuevo contrato de prestación de servicios' },
+        { href: '/dashboard/contratos/nuevo', icon: '➕', label: 'Registrar contrato',  desc: 'Crear un nuevo contrato de prestacion de servicios' },
         { href: '/dashboard/contratos',       icon: '📋', label: 'Ver contratos',        desc: 'Lista de todos los contratos activos' },
-        { href: '/dashboard/aprobaciones',    icon: '✅', label: 'Aprobaciones',          desc: 'Periodos pendientes de revisión en el sistema' },
+        { href: '/dashboard/aprobaciones',    icon: '✅', label: 'Aprobaciones',          desc: 'Periodos pendientes de revision en el sistema' },
       ],
     },
     contratista: {
       titulo: 'Mis contratos',
-      subtitulo: 'Registra tus actividades mensuales y envía tus cuentas de cobro',
+      subtitulo: 'Registra tus actividades mensuales y envia tus cuentas de cobro',
       cards: [
-        { label: 'Mis contratos',           val: stats.a, color: 'text-gray-900' },
-        { label: 'Periodos por completar',  val: stats.b, color: 'text-amber-600' },
-        { label: 'Periodos aprobados',      val: stats.c, color: 'text-green-600' },
+        { label: 'Mis contratos',           val: stats.a, color: 'gray' },
+        { label: 'Periodos por completar',  val: stats.b, color: 'amber' },
+        { label: 'Periodos aprobados',      val: stats.c, color: 'emerald' },
       ],
       accesos: [
         { href: '/dashboard/contratos', icon: '📋', label: 'Mis contratos', desc: 'Ver tus contratos vigentes y registrar actividades por periodo' },
       ],
     },
     asesor: {
-      titulo: 'Revisión jurídica',
-      subtitulo: 'Periodos pendientes de tu aprobación',
+      titulo: 'Revision juridica',
+      subtitulo: 'Periodos pendientes de tu aprobacion',
       cards: [
-        { label: 'Pendientes de revisión', val: stats.b, color: 'text-amber-600' },
-        { label: 'Periodos aprobados',     val: stats.c, color: 'text-green-600' },
-        { label: '', val: 0, color: '' },
+        { label: 'Pendientes de revision', val: stats.b, color: 'amber' },
+        { label: 'Periodos aprobados',     val: stats.c, color: 'emerald' },
       ],
       accesos: [
-        { href: '/dashboard/aprobaciones', icon: '✅', label: 'Revisar periodos', desc: 'Periodos en revisión jurídica que requieren tu aprobación' },
+        { href: '/dashboard/aprobaciones', icon: '✅', label: 'Revisar periodos', desc: 'Periodos en revision juridica que requieren tu aprobacion' },
       ],
     },
     gobierno: {
-      titulo: 'Revisión de gobierno',
-      subtitulo: 'Periodos pendientes de tu aprobación',
+      titulo: 'Revision de gobierno',
+      subtitulo: 'Periodos pendientes de tu aprobacion',
       cards: [
-        { label: 'Pendientes de revisión', val: stats.b, color: 'text-amber-600' },
-        { label: 'Periodos aprobados',     val: stats.c, color: 'text-green-600' },
-        { label: '', val: 0, color: '' },
+        { label: 'Pendientes de revision', val: stats.b, color: 'amber' },
+        { label: 'Periodos aprobados',     val: stats.c, color: 'emerald' },
       ],
       accesos: [
-        { href: '/dashboard/aprobaciones', icon: '✅', label: 'Revisar periodos', desc: 'Periodos que requieren aprobación de gobierno' },
+        { href: '/dashboard/aprobaciones', icon: '✅', label: 'Revisar periodos', desc: 'Periodos que requieren aprobacion de gobierno' },
       ],
     },
     hacienda: {
       titulo: 'Hacienda',
       subtitulo: 'Periodos pendientes de pago',
       cards: [
-        { label: 'Pendientes de aprobación', val: stats.b, color: 'text-amber-600' },
-        { label: 'Periodos aprobados',       val: stats.c, color: 'text-green-600' },
-        { label: '', val: 0, color: '' },
+        { label: 'Pendientes de aprobacion', val: stats.b, color: 'amber' },
+        { label: 'Periodos aprobados',       val: stats.c, color: 'emerald' },
       ],
       accesos: [
         { href: '/dashboard/aprobaciones', icon: '✅', label: 'Gestionar pagos', desc: 'Aprobar periodos para pago final' },
@@ -146,31 +146,32 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">{cfg.titulo}</h2>
-      <p className="text-sm text-gray-400 mb-6">
-        Bienvenido, {usuario.nombre_completo.split(' ')[0]} — {cfg.subtitulo}
-      </p>
+      <PageHeader
+        title={cfg.titulo}
+        subtitle={`Bienvenido, ${usuario.nombre_completo.split(' ')[0]} — ${cfg.subtitulo}`}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        {cfg.cards.map((card, i) =>
-          card.label ? (
-            <div key={i} className="bg-white rounded-2xl border p-6">
-              <p className="text-sm text-gray-400 mb-1">{card.label}</p>
-              <p className={`text-3xl font-bold ${card.color}`}>{card.val}</p>
-            </div>
-          ) : <div key={i} />
-        )}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {cfg.cards.map((card, i) => (
+          <StatCard
+            key={i}
+            label={card.label}
+            value={card.val}
+            color={card.color}
+          />
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {cfg.accesos.map((acceso, i) => (
-          <Link key={i} href={acceso.href}
-            className="bg-white rounded-2xl border p-6 hover:border-gray-300 transition-colors group">
-            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-gray-200 transition-colors">
-              <span className="text-xl">{acceso.icon}</span>
-            </div>
-            <h3 className="font-medium text-gray-900">{acceso.label}</h3>
-            <p className="text-sm text-gray-500 mt-1">{acceso.desc}</p>
+          <Link key={i} href={acceso.href} className="block">
+            <Card className="hover:border-gray-300 transition-colors group h-full">
+              <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-gray-200 transition-colors">
+                <span className="text-xl">{acceso.icon}</span>
+              </div>
+              <h3 className="font-medium text-gray-900">{acceso.label}</h3>
+              <p className="text-sm text-gray-500 mt-1">{acceso.desc}</p>
+            </Card>
           </Link>
         ))}
       </div>

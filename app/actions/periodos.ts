@@ -20,6 +20,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { ESTADOS_EDITABLES } from '@/lib/constants'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
+import { enviarNotificacion, enviarNotificacionMultiple } from '@/lib/notifications'
 
 // ─── Internal helpers ────────────────────────────────────────
 
@@ -58,7 +59,7 @@ async function getPeriodo(supabase: Awaited<ReturnType<typeof createServerSupaba
 async function getContratoIds(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, contratoId: string) {
   const { data } = await supabase
     .from('contratos')
-    .select('supervisor_id, contratista_id, dependencia_id')
+    .select('numero, supervisor_id, contratista_id, dependencia_id')
     .eq('id', contratoId)
     .single()
   return data
@@ -93,24 +94,6 @@ async function insertHistorial(
   })
 }
 
-/** Insert notification using admin client to bypass RLS. */
-async function insertNotificacion(
-  destinatarioId: string,
-  tipo: string,
-  titulo: string,
-  mensaje: string,
-  periodoId: string
-) {
-  const adminClient = createAdminSupabaseClient()
-  await adminClient.from('notificaciones').insert({
-    usuario_id: destinatarioId,
-    tipo,
-    titulo,
-    mensaje,
-    periodo_id: periodoId,
-    leida: false,
-  })
-}
 
 // ─── Contratista Actions ────────────────────────────────────
 
@@ -160,6 +143,45 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id)
 
+    // Notify asesor(es) and supervisor about the submission
+    const contrato = await getContratoIds(supabase, periodo.contrato_id)
+    if (contrato) {
+      const titulo = `Nuevo informe enviado — ${periodo.mes} ${periodo.anio}`
+      const mensaje = `${usuario.nombre_completo} envió su informe de ${periodo.mes} ${periodo.anio} para revisión.`
+
+      const notifBase = {
+        tipo: 'enviado',
+        titulo,
+        mensaje,
+        periodoId,
+        mes: periodo.mes,
+        anio: periodo.anio,
+        contrato: contrato.numero || '',
+        nombreRemitente: usuario.nombre_completo,
+      }
+
+      // Notify supervisor
+      if (contrato.supervisor_id) {
+        await enviarNotificacion({ ...notifBase, destinatarioId: contrato.supervisor_id })
+      }
+
+      // Notify asesores in the same dependencia
+      if (contrato.dependencia_id) {
+        const adminClient = createAdminSupabaseClient()
+        const { data: asesores } = await adminClient
+          .from('usuarios')
+          .select('id')
+          .eq('rol', 'asesor')
+          .eq('dependencia_id', contrato.dependencia_id)
+        if (asesores) {
+          await enviarNotificacionMultiple(
+            asesores.map(a => a.id),
+            notifBase
+          )
+        }
+      }
+    }
+
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
@@ -200,13 +222,17 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
     // Notify contratista
     const contrato = await getContratoIds(supabase, periodo.contrato_id)
     if (contrato?.contratista_id) {
-      await insertNotificacion(
-        contrato.contratista_id,
-        'aprobado_asesor',
-        'Tu informe fue pre-aprobado 🎉',
-        `Tu informe de ${periodo.mes} ${periodo.anio} fue revisado y pre-aprobado por el asesor. Está listo para la aprobación de la secretaria.`,
-        periodoId
-      )
+      await enviarNotificacion({
+        destinatarioId: contrato.contratista_id,
+        tipo: 'aprobado_asesor',
+        titulo: 'Tu informe fue pre-aprobado',
+        mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue revisado y pre-aprobado por el asesor. Está listo para la aprobación de la secretaria.`,
+        periodoId,
+        mes: periodo.mes,
+        anio: periodo.anio,
+        contrato: contrato.numero || '',
+        nombreRemitente: usuario.nombre_completo,
+      })
     }
 
     revalidar(periodo.contrato_id, periodoId)
@@ -255,13 +281,18 @@ export async function rechazarComoAsesor(
     // Notify contratista
     const contrato = await getContratoIds(supabase, periodo.contrato_id)
     if (contrato?.contratista_id) {
-      await insertNotificacion(
-        contrato.contratista_id,
-        'rechazado',
-        'Tu informe requiere correcciones',
-        `Tu informe de ${periodo.mes} ${periodo.anio} fue rechazado. Motivo: ${motivo.trim()}`,
-        periodoId
-      )
+      await enviarNotificacion({
+        destinatarioId: contrato.contratista_id,
+        tipo: 'rechazado',
+        titulo: 'Tu informe requiere correcciones',
+        mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue rechazado. Motivo: ${motivo.trim()}`,
+        periodoId,
+        mes: periodo.mes,
+        anio: periodo.anio,
+        contrato: contrato.numero || '',
+        motivo: motivo.trim(),
+        nombreRemitente: usuario.nombre_completo,
+      })
     }
 
     revalidar(periodo.contrato_id, periodoId)
@@ -355,13 +386,17 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
         // Notify contratista
         const contrato = await getContratoIds(supabase, periodo.contrato_id)
         if (contrato?.contratista_id) {
-          await insertNotificacion(
-            contrato.contratista_id,
-            'aprobado',
-            '¡Enhorabuena! Tu informe fue aprobado 🎉',
-            `Tu informe de ${periodo.mes} ${periodo.anio} fue aprobado por la secretaria.`,
-            periodoId
-          )
+          await enviarNotificacion({
+            destinatarioId: contrato.contratista_id,
+            tipo: 'aprobado',
+            titulo: 'Tu informe fue aprobado',
+            mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue aprobado por la secretaria.`,
+            periodoId,
+            mes: periodo.mes,
+            anio: periodo.anio,
+            contrato: contrato.numero || '',
+            nombreRemitente: usuario.nombre_completo,
+          })
         }
       }
     }
@@ -407,6 +442,33 @@ export async function rechazarPeriodos(
       if (!error) {
         rechazados++
         await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id, motivo.trim())
+
+        // Notify asesores about the rejection
+        const contrato = await getContratoIds(supabase, periodo.contrato_id)
+        if (contrato?.dependencia_id) {
+          const adminClient = createAdminSupabaseClient()
+          const { data: asesores } = await adminClient
+            .from('usuarios')
+            .select('id')
+            .eq('rol', 'asesor')
+            .eq('dependencia_id', contrato.dependencia_id)
+          if (asesores) {
+            await enviarNotificacionMultiple(
+              asesores.map(a => a.id),
+              {
+                tipo: 'rechazado',
+                titulo: `Informe devuelto por secretaría — ${periodo.mes} ${periodo.anio}`,
+                mensaje: `La secretaría devolvió el informe de ${periodo.mes} ${periodo.anio}: ${motivo.trim()}`,
+                periodoId,
+                mes: periodo.mes,
+                anio: periodo.anio,
+                contrato: contrato.numero || '',
+                motivo: motivo.trim(),
+                nombreRemitente: usuario.nombre_completo,
+              }
+            )
+          }
+        }
       }
     }
 
@@ -461,13 +523,18 @@ export async function marcarRadicado(
       const mensaje = numeroRadicado?.trim()
         ? `Tu informe ha sido radicado con el No. ${numeroRadicado.trim()}.`
         : `Tu informe de ${periodo.mes} ${periodo.anio} ha sido radicado exitosamente.`
-      await insertNotificacion(
-        contrato.contratista_id,
-        'radicado',
-        '¡Informe radicado! 📁',
+      await enviarNotificacion({
+        destinatarioId: contrato.contratista_id,
+        tipo: 'radicado',
+        titulo: 'Informe radicado',
         mensaje,
-        periodoId
-      )
+        periodoId,
+        mes: periodo.mes,
+        anio: periodo.anio,
+        contrato: contrato.numero || '',
+        numeroRadicado: numeroRadicado?.trim(),
+        nombreRemitente: usuario.nombre_completo,
+      })
     }
 
     revalidar(periodo.contrato_id, periodoId)

@@ -8,6 +8,10 @@ import {
   type PeriodoPendienteSupervisor,
   type StatsSupervisor,
 } from '@/services/supervisor'
+import PageHeader from '@/components/ui/PageHeader'
+import StatCard from '@/components/ui/StatCard'
+import Card from '@/components/ui/Card'
+import EmptyState from '@/components/ui/EmptyState'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -17,7 +21,7 @@ function fmt(n: number) {
 
 function urgencyConfig(dias: number) {
   if (dias >= 5) return { color: 'bg-red-50 border-red-200', badge: 'bg-red-100 text-red-700', label: `${dias}d — Urgente` }
-  if (dias >= 2) return { color: 'bg-amber-50 border-amber-200', badge: 'bg-amber-100 text-amber-700', label: `${dias}d — Atención` }
+  if (dias >= 2) return { color: 'bg-amber-50 border-amber-200', badge: 'bg-amber-100 text-amber-700', label: `${dias}d — Atencion` }
   return { color: 'bg-white border-gray-200', badge: 'bg-gray-100 text-gray-600', label: dias === 0 ? 'Hoy' : `${dias}d` }
 }
 
@@ -31,35 +35,6 @@ function Avatar({ foto, nombre, size = 'md' }: { foto?: string | null; nombre: s
     : 'w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-xs font-bold text-white ring-2 ring-white shadow-sm'
   if (foto) return <img src={foto} alt={nombre} className={cls} />
   return <div className={fallback}>{initials}</div>
-}
-
-// ─── Stat card ────────────────────────────────────────────────
-
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-  icon,
-}: {
-  label: string
-  value: string | number
-  sub?: string
-  accent?: string
-  icon: string
-}) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5 flex items-start gap-4">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${accent ?? 'bg-gray-100'}`}>
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-400 font-medium truncate">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-none">{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-      </div>
-    </div>
-  )
 }
 
 // ─── Pending period mini-card ─────────────────────────────────
@@ -82,14 +57,21 @@ function PeriodoCard({
     <div className={`rounded-2xl border p-5 transition-all ${urg.color}`}>
       <div className="flex items-start gap-4">
         {/* Avatar */}
-        <Avatar foto={c.contratista.foto_url} nombre={c.contratista.nombre_completo} />
+        <div className="hidden sm:block">
+          <Avatar foto={c.contratista.foto_url} nombre={c.contratista.nombre_completo} />
+        </div>
 
         {/* Main content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-900 truncate">{c.contratista.nombre_completo}</p>
-              <p className="text-xs text-gray-500">C.C. {c.contratista.cedula}</p>
+            <div className="min-w-0 flex items-center gap-3">
+              <div className="sm:hidden">
+                <Avatar foto={c.contratista.foto_url} nombre={c.contratista.nombre_completo} size="sm" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900 truncate">{c.contratista.nombre_completo}</p>
+                <p className="text-xs text-gray-500">C.C. {c.contratista.cedula}</p>
+              </div>
             </div>
             <div className="text-right flex-shrink-0">
               <p className="font-bold text-gray-900">{fmt(periodo.valor_cobro)}</p>
@@ -100,7 +82,7 @@ function PeriodoCard({
           {/* Contract */}
           <div className="mt-2 mb-3">
             <p className="text-xs font-medium text-gray-700">
-              Contrato N.º {c.numero}
+              Contrato N.o {c.numero}
               {c.dependencia?.abreviatura && (
                 <span className="ml-2 text-gray-400">· {c.dependencia.abreviatura}</span>
               )}
@@ -109,11 +91,11 @@ function PeriodoCard({
           </div>
 
           {/* Meta row */}
-          <div className="flex items-center gap-3 text-xs text-gray-400 mb-4">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-400 mb-4 flex-wrap">
             <span>📋 {periodo.num_actividades} actividad{periodo.num_actividades !== 1 ? 'es' : ''}</span>
-            <span>·</span>
+            <span className="hidden sm:inline">·</span>
             <span>📷 {periodo.num_evidencias} foto{periodo.num_evidencias !== 1 ? 's' : ''}</span>
-            <span>·</span>
+            <span className="hidden sm:inline">·</span>
             <span className={`px-2 py-0.5 rounded-full font-medium ${urg.badge}`}>
               ⏱ {urg.label}
             </span>
@@ -140,7 +122,7 @@ function PeriodoCard({
               disabled={procesando === periodo.id}
               className="text-xs px-4 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 font-medium"
             >
-              {procesando === periodo.id ? '…' : '✓ Aprobar'}
+              {procesando === periodo.id ? '...' : '✓ Aprobar'}
             </button>
           </div>
         </div>
@@ -166,7 +148,7 @@ function RechazoModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <h3 className="text-base font-bold text-gray-900 mb-1">Rechazar periodo</h3>
         <p className="text-sm text-gray-500 mb-4">
-          El contratista recibirá este motivo y podrá corregir y reenviar.
+          El contratista recibira este motivo y podra corregir y reenviar.
         </p>
         <textarea
           value={motivo}
@@ -182,7 +164,7 @@ function RechazoModal({
             disabled={loading || !motivo.trim()}
             className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50"
           >
-            {loading ? 'Rechazando…' : 'Confirmar rechazo'}
+            {loading ? 'Rechazando...' : 'Confirmar rechazo'}
           </button>
           <button
             onClick={onCancel}
@@ -213,7 +195,7 @@ export default function SupervisorHome({
 
   const firstName = nombre.split(' ')[0]
   const hour = new Date().getHours()
-  const saludo = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
+  const saludo = hour < 12 ? 'Buenos dias' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
 
   async function cargar() {
     const [s, p] = await Promise.all([
@@ -272,27 +254,23 @@ export default function SupervisorHome({
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {saludo}, {firstName} 👋
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        {stats && stats.porRevisar > 0 && (
-          <Link
-            href="/dashboard/aprobaciones"
-            className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition flex items-center gap-2"
-          >
-            <span className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center text-xs font-bold">
-              {stats.porRevisar}
-            </span>
-            Ver cola completa →
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        title={`${saludo}, ${firstName} 👋`}
+        subtitle={new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        action={
+          stats && stats.porRevisar > 0 ? (
+            <Link
+              href="/dashboard/aprobaciones"
+              className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition flex items-center gap-2"
+            >
+              <span className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center text-xs font-bold">
+                {stats.porRevisar}
+              </span>
+              Ver cola completa →
+            </Link>
+          ) : undefined
+        }
+      />
 
       {/* ── Stats ── */}
       {stats && (
@@ -301,48 +279,39 @@ export default function SupervisorHome({
             label="Contratos supervisados"
             value={stats.totalContratos}
             icon="📄"
-            accent="bg-gray-100"
+            color="gray"
           />
           <StatCard
             label="Por revisar"
             value={stats.porRevisar}
-            sub={stats.valorPendiente > 0 ? `${fmt(stats.valorPendiente)} en espera` : undefined}
             icon="⏳"
-            accent={stats.porRevisar > 0 ? 'bg-amber-100' : 'bg-gray-100'}
+            color={stats.porRevisar > 0 ? 'amber' : 'gray'}
           />
           <StatCard
             label="Aprobados este mes"
             value={stats.aprobadosMes}
             icon="✅"
-            accent="bg-emerald-100"
+            color="emerald"
           />
           <StatCard
             label="Total aprobados"
             value={stats.totalAprobados}
             icon="🏆"
-            accent="bg-blue-100"
+            color="blue"
           />
         </div>
       )}
 
       {/* ── Empty state ── */}
       {periodos.length === 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-            🎉
-          </div>
-          <h3 className="font-semibold text-gray-900 mb-1">Todo al día</h3>
-          <p className="text-sm text-gray-500 mb-5">
-            No tienes periodos pendientes de revisión. Los contratistas aún no han enviado sus informes,
-            o ya los aprobaste todos.
-          </p>
-          <Link
-            href="/dashboard/colaboradores"
-            className="text-sm text-emerald-600 font-medium hover:underline"
-          >
-            Ver mis colaboradores →
-          </Link>
-        </div>
+        <Card>
+          <EmptyState
+            icon="🎉"
+            title="Todo al dia"
+            description="No tienes periodos pendientes de revision. Los contratistas aun no han enviado sus informes, o ya los aprobaste todos."
+            action={{ href: '/dashboard/colaboradores', label: 'Ver mis colaboradores →' }}
+          />
+        </Card>
       )}
 
       {/* ── Urgentes ── */}
@@ -350,9 +319,9 @@ export default function SupervisorHome({
         <section>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">🚨</span>
-            <h2 className="font-semibold text-gray-900">Requieren atención inmediata</h2>
+            <h2 className="font-semibold text-gray-900">Requieren atencion inmediata</h2>
             <span className="ml-auto text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-full font-medium">
-              {urgentes.length} con +5 días
+              {urgentes.length} con +5 dias
             </span>
           </div>
           <div className="space-y-3">
@@ -374,7 +343,7 @@ export default function SupervisorHome({
         <section>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">📋</span>
-            <h2 className="font-semibold text-gray-900">Pendientes de revisión</h2>
+            <h2 className="font-semibold text-gray-900">Pendientes de revision</h2>
             <span className="ml-auto text-xs text-gray-500">
               {normales.length} periodo{normales.length !== 1 ? 's' : ''}
             </span>

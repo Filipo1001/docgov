@@ -99,20 +99,24 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
       { href: '/dashboard/admin/municipio', label: 'Municipio', icon: '🏛️' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
     asesor: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/contratistas', label: 'Contratistas', icon: '👥' },
       { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
     supervisor: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/colaboradores', label: 'Colaboradores', icon: '👥' },
       { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
     contratista: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/contratos', label: 'Mis contratos', icon: '📄' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
   }
 
