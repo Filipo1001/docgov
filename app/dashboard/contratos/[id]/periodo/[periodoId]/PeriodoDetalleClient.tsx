@@ -27,7 +27,7 @@ import {
   guardarNumeroPlanilla,
   revisarPlanilla,
 } from '@/app/actions/periodos'
-import { subirEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
+import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 
 export default function PeriodoDetallePage() {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
@@ -249,42 +249,67 @@ export default function PeriodoDetallePage() {
   }
 
   async function handleSubirEvidencia(actividadId: string, file: File) {
-    // Validate file size (10 MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('La imagen no puede superar 10 MB')
+    // ── Step 1: server-side validation + get presigned URL ────
+    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 0 }))
+
+    const prep = await prepararUploadEvidencia(
+      actividadId,
+      periodoId,
+      file.name,
+      file.size,
+      file.type,
+    )
+
+    if (prep.error || !prep.data) {
+      toast.error(prep.error ?? 'Error al preparar la subida')
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
       return
     }
 
-    // Start animated progress
-    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 0 }))
+    const { signedUrl, publicUrl } = prep.data
 
-    // Animate progress to ~80% while uploading (real progress unavailable via server action)
-    let fakeProgress = 0
-    const fileSizeMB = file.size / (1024 * 1024)
-    const estimatedMs = Math.max(800, fileSizeMB * 1200) // rough estimate
-    const interval = setInterval(() => {
-      fakeProgress = Math.min(fakeProgress + (80 / (estimatedMs / 100)), 80)
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: Math.round(fakeProgress) }))
-    }, 100)
-
-    const formData = new FormData()
-    formData.append('file', file)
-    const result = await subirEvidencia(actividadId, periodoId, formData)
-
-    clearInterval(interval)
-
-    if (result.error) {
-      toast.error(result.error)
+    // ── Step 2: upload DIRECTLY to Supabase (browser → Supabase, no Vercel) ──
+    // Using XHR so we get real upload.onprogress events (0→95%).
+    const mime = file.type || 'image/jpeg'
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 95)
+            setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: pct }))
+          }
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve()
+          else reject(new Error(`Error al subir: ${xhr.status} ${xhr.statusText}`))
+        }
+        xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
+        xhr.open('PUT', signedUrl)
+        xhr.setRequestHeader('Content-Type', mime)
+        xhr.send(file)
+      })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error al subir la imagen')
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-    } else {
-      // Jump to 100% then clear
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 100 }))
-      toast.success('Evidencia subida ✓')
-      setTimeout(() => {
-        setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-        cargarDatos()
-      }, 600)
+      return
     }
+
+    // ── Step 3: register DB record ─────────────────────────────
+    const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, file.name)
+
+    if (reg.error) {
+      toast.error(reg.error)
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+      return
+    }
+
+    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 100 }))
+    toast.success('Evidencia subida ✓')
+    setTimeout(() => {
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+      cargarDatos()
+    }, 600)
   }
 
   async function handleEliminarEvidencia(evId: string) {

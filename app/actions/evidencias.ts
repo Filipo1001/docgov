@@ -1,38 +1,63 @@
 'use server'
 
 /**
- * Server Action: Evidence file upload
+ * Server Actions: Evidence file upload (presigned URL pattern)
  *
- * Validates file type, size, and period editability on the server
- * before uploading to Supabase Storage. This cannot be bypassed
- * by a client-side check alone.
+ * Why presigned URLs instead of streaming through the Server Action:
+ * - Vercel serverless functions have a 10s timeout on the hobby plan.
+ * - Uploading a 3-8 MB phone photo via `file.arrayBuffer()` + supabase.storage.upload()
+ *   inside a Server Action consistently exceeds that limit, leaving the client
+ *   stuck at ~80% with a fake progress bar that never resolves.
+ *
+ * New flow:
+ *   1. prepararUploadEvidencia() — validates auth/period/file, returns a signed upload URL
+ *   2. Client uploads the file DIRECTLY to Supabase Storage via XHR (no Vercel involved)
+ *   3. registrarEvidencia()    — inserts the DB record once the upload succeeds
+ *
+ * Security is preserved: all checks (auth, period state, activity ownership,
+ * file type, file size) still happen server-side in step 1.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { FILE_UPLOAD, ESTADOS_EDITABLES } from '@/lib/constants'
 import type { ActionResult } from '@/lib/types'
 
-export async function subirEvidencia(
+// ── Extension → MIME fallback ────────────────────────────────────────────────
+// Some mobile cameras (Android WebViews, Samsung/Xiaomi ROMs) send an empty or
+// non-standard file.type.  Fall back to extension-based detection in that case.
+const EXT_TO_MIME: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+}
+
+// ── Step 1 ───────────────────────────────────────────────────────────────────
+
+/**
+ * Validate the upload request and return a short-lived signed upload URL.
+ * The client will PUT the file directly to that URL (browser → Supabase),
+ * completely bypassing Vercel and its function timeout.
+ */
+export async function prepararUploadEvidencia(
   actividadId: string,
   periodoId: string,
-  formData: FormData
-): Promise<ActionResult<{ url: string; nombre: string }>> {
+  fileName: string,
+  fileSize: number,
+  fileMime: string,
+): Promise<ActionResult<{ signedUrl: string; path: string; publicUrl: string }>> {
   try {
-    const file = formData.get('file') as File | null
-    if (!file || file.size === 0) {
-      return { error: 'No se encontró ningún archivo' }
-    }
+    const fileExt = fileName.split('.').pop()?.toLowerCase() ?? ''
+    const effectiveMime = fileMime?.toLowerCase() || EXT_TO_MIME[fileExt] || ''
 
     // ── File type validation ──────────────────────────────────
     const tiposPermitidos: readonly string[] = FILE_UPLOAD.TIPOS_IMAGEN
-    if (!tiposPermitidos.includes(file.type)) {
+    if (!tiposPermitidos.includes(effectiveMime)) {
       return {
         error: `Tipo de archivo no permitido. Solo se aceptan: JPG, PNG, WebP, HEIC`,
       }
     }
 
     // ── File size validation ──────────────────────────────────
-    if (file.size > FILE_UPLOAD.TAMANO_MAX_BYTES) {
+    if (fileSize > FILE_UPLOAD.TAMANO_MAX_BYTES) {
       return {
         error: `El archivo supera el tamaño máximo de ${FILE_UPLOAD.TAMANO_MAX_LABEL}`,
       }
@@ -71,41 +96,80 @@ export async function subirEvidencia(
       return { error: 'La actividad no pertenece a este periodo' }
     }
 
-    // ── Upload to Supabase Storage ────────────────────────────
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const path = `evidencias/${periodoId}/${actividadId}/${Date.now()}.${ext}`
+    // ── Issue a presigned upload URL (valid for 60 s) ─────────
+    const path = `evidencias/${periodoId}/${actividadId}/${Date.now()}.${fileExt || 'jpg'}`
 
-    const arrayBuffer = await file.arrayBuffer()
-    const { error: uploadError } = await supabase.storage
+    const { data: signedData, error: signedError } = await supabase.storage
       .from('evidencias')
-      .upload(path, arrayBuffer, { contentType: file.type })
+      .createSignedUploadUrl(path)
 
-    if (uploadError) {
-      return { error: `Error al subir el archivo: ${uploadError.message}` }
+    if (signedError || !signedData) {
+      return { error: `Error al preparar la subida: ${signedError?.message}` }
     }
 
-    // ── Get public URL and save record ────────────────────────
-    const { data: urlData } = supabase.storage
-      .from('evidencias')
-      .getPublicUrl(path)
+    const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(path)
+
+    return {
+      data: {
+        signedUrl: signedData.signedUrl,
+        path,
+        publicUrl: urlData.publicUrl,
+      },
+    }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al preparar la subida' }
+  }
+}
+
+// ── Step 2 ───────────────────────────────────────────────────────────────────
+
+/**
+ * Register the evidence record in the DB.
+ * Called by the client AFTER it has successfully uploaded the file directly
+ * to Supabase Storage via the presigned URL obtained in step 1.
+ */
+export async function registrarEvidencia(
+  actividadId: string,
+  periodoId: string,
+  publicUrl: string,
+  nombreArchivo: string,
+): Promise<ActionResult<{ url: string; nombre: string }>> {
+  try {
+    const supabase = await createServerSupabaseClient()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { error: 'No autorizado' }
+
+    // Re-verify activity ownership so a forged publicUrl can't inject records
+    // into another user's period.
+    const { data: actividad } = await supabase
+      .from('actividades')
+      .select('id')
+      .eq('id', actividadId)
+      .eq('periodo_id', periodoId)
+      .single()
+
+    if (!actividad) return { error: 'La actividad no pertenece a este periodo' }
 
     const { error: insertError } = await supabase
       .from('evidencias')
       .insert({
         actividad_id: actividadId,
-        url: urlData.publicUrl,
-        nombre_archivo: file.name,
+        url: publicUrl,
+        nombre_archivo: nombreArchivo,
       })
 
     if (insertError) {
       return { error: `Error al registrar la evidencia: ${insertError.message}` }
     }
 
-    return { data: { url: urlData.publicUrl, nombre: file.name } }
+    return { data: { url: publicUrl, nombre: nombreArchivo } }
   } catch (e: unknown) {
-    return { error: e instanceof Error ? e.message : 'Error inesperado al subir evidencia' }
+    return { error: e instanceof Error ? e.message : 'Error inesperado al registrar evidencia' }
   }
 }
+
+// ── Delete ───────────────────────────────────────────────────────────────────
 
 export async function eliminarEvidencia(evidenciaId: string): Promise<ActionResult> {
   try {
@@ -114,7 +178,6 @@ export async function eliminarEvidencia(evidenciaId: string): Promise<ActionResu
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return { error: 'No autorizado' }
 
-    // Verify the period is still editable before deleting
     const { data: evidencia } = await supabase
       .from('evidencias')
       .select('id, actividad:actividades(periodo_id, periodo:periodos(estado))')

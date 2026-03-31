@@ -73,23 +73,27 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   }
 
   // 3. Send email (if enabled and configured)
+  console.log(`[Notif] tipo=${payload.tipo} to=${usuario.email} emailEnabled=${emailEnabled} RESEND_FROM=${RESEND_FROM}`)
   if (emailEnabled && usuario.email) {
     try {
       const resend = getResendClient()
+      console.log(`[Notif] resend=${resend ? 'OK' : 'NULL (missing RESEND_API_KEY)'}`)
       if (resend) {
         const template = EMAIL_TEMPLATES[payload.tipo]
+        console.log(`[Notif] template=${template ? 'found' : 'NOT FOUND for tipo=' + payload.tipo}`)
         if (template) {
           const { subject, html } = template(templateData)
-          await resend.emails.send({
+          const result = await resend.emails.send({
             from: RESEND_FROM,
             to: usuario.email,
             subject,
             html,
           })
+          console.log(`[Notif] Email result:`, JSON.stringify(result))
         }
       }
     } catch (err) {
-      console.error('[Notification] Email failed:', err)
+      console.error('[Notif] Email failed:', err)
     }
   }
 
