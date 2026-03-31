@@ -425,11 +425,11 @@ function ActivityRow({
       <View style={s.col2}>
         <Text style={s.actText}>{act.descripcion}</Text>
         {act.evidencias.map((ev, ei) => (
-          <Image
-            key={ei}
-            src={ev.url}
-            style={s.photo}
-          />
+          // wrap={false}: each photo is indivisible — if it doesn't fit on the
+          // remaining page it moves entirely to the next page, never sliced.
+          <View key={ei} wrap={false}>
+            <Image src={ev.url} style={s.photo} />
+          </View>
         ))}
       </View>
 
@@ -602,7 +602,11 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
             )
           )}
 
-          {/* ── Closing row — full width, inside the table ── */}
+          {/* ── Closing + Signature — kept together as one indivisible block.
+               wrap={false} on the outer View ensures "En constancia..." and
+               both signature columns always land on the same page. ── */}
+          <View wrap={false}>
+
           <View style={s.closingRow}>
             <Text style={s.closingText}>
               En constancia de lo anterior se firma el {fechaFirmaMinusc(periodo.fecha_fin)}.
@@ -610,7 +614,7 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
           </View>
 
           {/* ── Signature row — 2 columns, inside the table ── */}
-          <View style={s.sigSectionRow} wrap={false}>
+          <View style={s.sigSectionRow}>
 
             {/* LEFT — Contratista */}
             <View style={s.sigLeft}>
@@ -690,6 +694,8 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
             </View>
 
           </View>
+
+          </View>{/* end closing+signature wrap={false} block */}
         </View>
 
         {/* ── Footer (fixed — appears on every page) ────── */}

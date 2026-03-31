@@ -525,7 +525,9 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
         {/* CONSIDERANDO */}
         <View style={s.considerando}>
-          <Text style={s.considerandoTitle}>CONSIDERANDO</Text>
+          {/* minPresenceAhead: if less than 120pt remain on the page, break before
+              the title so it never appears stranded at the very bottom. */}
+          <Text style={s.considerandoTitle} minPresenceAhead={120}>CONSIDERANDO</Text>
 
           <Text style={s.considerandoText}>
             Se firma la presente acta en virtud de que las actividades efectuadas como parte de las obligaciones contempladas en el contrato fueron recibidas a entera satisfacción por parte del supervisor.
@@ -533,7 +535,8 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
           <Text style={s.considerandoText}>Se anexa para el correspondiente pago:</Text>
 
-          <View style={s.bullet}>
+          {/* wrap={false} on each bullet: the dot and its text always stay together */}
+          <View style={s.bullet} wrap={false}>
             <Text style={s.bulletDot}>■</Text>
             <Text style={s.bulletText}>
               Documento que acredita que el contratista se encuentra a paz y salvo por concepto del pago de aportes a los sistemas de seguridad social en salud, pensiones, ARP y parafiscales, de él y de sus trabajadores, cuando a ello haya lugar, de conformidad con lo dispuesto en el Artículo 23 de la Ley 1150 de 2007.{' '}
@@ -543,31 +546,35 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             </Text>
           </View>
 
-          <View style={s.bullet}>
+          <View style={s.bullet} wrap={false}>
             <Text style={s.bulletDot}>■</Text>
             <Text style={s.bulletText}>
               Informe de actividades y/o cuenta de cobro presentado por el contratista.
             </Text>
           </View>
 
-          <Text style={s.considerandoText}>
-            Para constancia de lo anterior, firma el presente informe de supervisión a {fechaFirmaTexto(periodo.fecha_fin)}
-          </Text>
-        </View>
+          {/* "Para constancia..." + signature block are indivisible:
+              if they don't fit together they move as a unit to the next page. */}
+          <View wrap={false}>
+            <Text style={s.considerandoText}>
+              Para constancia de lo anterior, firma el presente informe de supervisión a {fechaFirmaTexto(periodo.fecha_fin)}
+            </Text>
 
-        {/* Signature */}
-        <View style={s.sigBlock}>
-          {contrato.supervisor.firma_url ? (
-            <Image src={contrato.supervisor.firma_url} style={{ width: 150, height: 50, objectFit: 'contain' }} />
-          ) : (
-            <View style={s.sigSpace} />
-          )}
-          <View style={s.sigLine} />
-          <Text style={s.sigName}>Nombre: {contrato.supervisor.nombre_completo.toUpperCase()}</Text>
-          {contrato.supervisor.cargo && (
-            <Text style={s.sigCargo}>{contrato.supervisor.cargo}</Text>
-          )}
-          <Text style={s.sigCargo}>Supervisor Contrato No {contrato.numero}-{contrato.anio}</Text>
+            {/* Signature */}
+            <View style={s.sigBlock}>
+              {contrato.supervisor.firma_url ? (
+                <Image src={contrato.supervisor.firma_url} style={{ width: 150, height: 50, objectFit: 'contain' }} />
+              ) : (
+                <View style={s.sigSpace} />
+              )}
+              <View style={s.sigLine} />
+              <Text style={s.sigName}>Nombre: {contrato.supervisor.nombre_completo.toUpperCase()}</Text>
+              {contrato.supervisor.cargo && (
+                <Text style={s.sigCargo}>{contrato.supervisor.cargo}</Text>
+              )}
+              <Text style={s.sigCargo}>Supervisor Contrato No {contrato.numero}-{contrato.anio}</Text>
+            </View>
+          </View>
         </View>
 
         {/* Footer */}

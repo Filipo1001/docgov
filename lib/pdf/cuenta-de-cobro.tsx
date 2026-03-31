@@ -339,29 +339,34 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
 
         </View>
 
-        {/* ── Signature block ──────────────────────── */}
-        <Text style={s.sigIntro}>Firma Contratista:</Text>
+        {/* ── Signature block — entire block is indivisible.
+             wrap={false} ensures "Firma Contratista" label, space, underline,
+             name/CC/details, and VoBo line always appear on the same page.
+             If the block doesn't fit, it moves entirely to the next page. ── */}
+        <View wrap={false}>
+          <Text style={s.sigIntro}>Firma Contratista:</Text>
 
-        {/* Blank space for wet signature */}
-        <View style={s.sigSpace} />
+          {/* Blank space for wet signature */}
+          <View style={s.sigSpace} />
 
-        {/* Underline */}
-        <View style={s.sigLine} />
+          {/* Underline */}
+          <View style={s.sigLine} />
 
-        {/* Name, CC, address, phone — all BOLD (matching real document) */}
-        <Text style={s.sigName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
-        <Text style={s.sigDetail}>CC. {contrato.contratista.cedula}</Text>
-        {contrato.contratista.direccion && (
-          <Text style={s.sigDetail}>Dirección: {contrato.contratista.direccion}</Text>
-        )}
-        {contrato.contratista.telefono && (
-          <Text style={s.sigDetail}>Teléfono: {contrato.contratista.telefono}</Text>
-        )}
+          {/* Name, CC, address, phone — all BOLD (matching real document) */}
+          <Text style={s.sigName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
+          <Text style={s.sigDetail}>CC. {contrato.contratista.cedula}</Text>
+          {contrato.contratista.direccion && (
+            <Text style={s.sigDetail}>Dirección: {contrato.contratista.direccion}</Text>
+          )}
+          {contrato.contratista.telefono && (
+            <Text style={s.sigDetail}>Teléfono: {contrato.contratista.telefono}</Text>
+          )}
 
-        {/* VoBo. Supervisor — blank line, no name pre-printed */}
-        <View style={s.voBoRow}>
-          <Text style={s.voBoLbl}>VoBo. Supervisor:</Text>
-          <View style={s.voBoLine} />
+          {/* VoBo. Supervisor — blank line, no name pre-printed */}
+          <View style={s.voBoRow}>
+            <Text style={s.voBoLbl}>VoBo. Supervisor:</Text>
+            <View style={s.voBoLine} />
+          </View>
         </View>
 
       </Page>

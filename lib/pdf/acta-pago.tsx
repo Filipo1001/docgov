@@ -330,39 +330,41 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
         </View>
 
         {/* CONSIDERANDO */}
-        <Text style={s.considerandoTitle}>CONSIDERANDO:</Text>
+        {/* minPresenceAhead: break before title if less than 100pt remain */}
+        <Text style={s.considerandoTitle} minPresenceAhead={100}>CONSIDERANDO:</Text>
 
-        <View style={s.bullet}>
+        {/* wrap={false} on each bullet prevents dot/text from splitting */}
+        <View style={s.bullet} wrap={false}>
           <Text style={s.bulletDot}>•</Text>
           <Text style={s.bulletText}>
             Que, entre el Municipio de Fredonia, Antioquia y {contrato.contratista.nombre_completo}, se celebró el contrato: {contrato.numero}-{contrato.anio}, por un valor de: {valorContratoTexto.toUpperCase()} y un plazo de {plazoTexto}.
           </Text>
         </View>
 
-        <View style={s.bullet}>
+        <View style={s.bullet} wrap={false}>
           <Text style={s.bulletDot}>•</Text>
           <Text style={s.bulletText}>
             Que el Contratista presentó informe de los trabajos ejecutados como parte de las obligaciones contempladas en el contrato, los cuales fueron recibidos a satisfacción por parte de la supervisión.
           </Text>
         </View>
 
-        <View style={s.bullet}>
+        <View style={s.bullet} wrap={false}>
           <Text style={s.bulletDot}>•</Text>
           <Text style={s.bulletText}>
             Que el Contratista aportó los documentos que acreditan que se encuentra a paz y salvo por concepto del pago de aportes a los sistemas de seguridad social en salud, pensiones, ARP y parafiscales, de él, de conformidad con lo dispuesto en el Artículo 23 de la Ley 1150 de 2007. (Si se trata de un contrato suscrito con persona natural, el ingreso base de cotización equivaldrá al 40% del valor mensual del contrato).
           </Text>
         </View>
 
-        <View style={s.bullet}>
+        <View style={s.bullet} wrap={false}>
           <Text style={s.bulletDot}>•</Text>
           <Text style={s.bulletText}>
             Que en el desarrollo del contrato se efectuará el siguiente pago:
           </Text>
         </View>
 
-        {/* Payment table */}
+        {/* Payment table — each data row is indivisible */}
         <View style={s.payTable}>
-          <View style={s.payHeaderRow}>
+          <View style={s.payHeaderRow} wrap={false}>
             <Text style={s.payHeaderCell}>Acta de{'\n'}Pago</Text>
             <Text style={s.payHeaderCell}>Valor Contrato</Text>
             <Text style={s.payHeaderCell}>Valor Pagado{'\n'}Acumulado</Text>
@@ -370,7 +372,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
             <Text style={s.payHeaderCellLast}>Saldo Pendiente</Text>
           </View>
           {pagosHistorial.map((p, i) => (
-            <View key={i} style={s.payDataRow}>
+            <View key={i} style={s.payDataRow} wrap={false}>
               <Text style={s.payDataCell}>{String(p.acta_numero).padStart(2, '0')}</Text>
               <Text style={s.payDataCell}>{formatCOP(p.valor_contrato)}</Text>
               <Text style={s.payDataCell}>{formatCOP(p.valor_pagado_acumulado)}</Text>
@@ -380,25 +382,28 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
           ))}
         </View>
 
-        {/* ACUERDAN */}
-        <Text style={s.acuerdanTitle}>ACUERDAN</Text>
-        <Text style={s.acuerdanText}>
-          Pagar al Contratista la suma de {valorMensualTexto} correspondientes al acta de pago No. {periodoNum} del contrato No. {contrato.numero}-{contrato.anio}. Periodo de actividades del mes de {mesAnio(periodo.fecha_inicio)}.
-        </Text>
+        {/* ACUERDAN + signature are indivisible: they always appear on the same page.
+            If they don't fit together, the whole block moves to the next page. */}
+        <View wrap={false}>
+          <Text style={s.acuerdanTitle}>ACUERDAN</Text>
+          <Text style={s.acuerdanText}>
+            Pagar al Contratista la suma de {valorMensualTexto} correspondientes al acta de pago No. {periodoNum} del contrato No. {contrato.numero}-{contrato.anio}. Periodo de actividades del mes de {mesAnio(periodo.fecha_inicio)}.
+          </Text>
 
-        {/* Signature */}
-        <View style={s.sigBlock}>
-          {contrato.supervisor.firma_url ? (
-            <Image src={contrato.supervisor.firma_url} style={{ width: 150, height: 50, objectFit: 'contain' }} />
-          ) : (
-            <View style={s.sigSpace} />
-          )}
-          <View style={s.sigLine} />
-          <Text style={s.sigName}>{contrato.supervisor.nombre_completo.toUpperCase()}</Text>
-          {contrato.supervisor.cargo && (
-            <Text style={s.sigCargo}>{contrato.supervisor.cargo}</Text>
-          )}
-          <Text style={s.sigCargo}>Supervisor</Text>
+          {/* Signature */}
+          <View style={s.sigBlock}>
+            {contrato.supervisor.firma_url ? (
+              <Image src={contrato.supervisor.firma_url} style={{ width: 150, height: 50, objectFit: 'contain' }} />
+            ) : (
+              <View style={s.sigSpace} />
+            )}
+            <View style={s.sigLine} />
+            <Text style={s.sigName}>{contrato.supervisor.nombre_completo.toUpperCase()}</Text>
+            {contrato.supervisor.cargo && (
+              <Text style={s.sigCargo}>{contrato.supervisor.cargo}</Text>
+            )}
+            <Text style={s.sigCargo}>Supervisor</Text>
+          </View>
         </View>
 
 
