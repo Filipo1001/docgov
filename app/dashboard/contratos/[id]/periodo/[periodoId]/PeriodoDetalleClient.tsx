@@ -62,9 +62,11 @@ export default function PeriodoDetallePage() {
   const [numRadicadoEdit, setNumRadicadoEdit] = useState('')
   const [guardandoRadicado, setGuardandoRadicado] = useState(false)
 
-  // Upload progress state per activity
+  // Upload progress state per activity (null = idle, 0-100 = uploading)
   const [subiendoEvidencia, setSubiendoEvidencia] = useState<Record<string, number | null>>({})
-  // null = not uploading, 0-100 = progress
+  // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
+  // Stored so the user can retry step 3 without re-uploading the file.
+  const [pendienteRegistro, setPendienteRegistro] = useState<Record<string, { publicUrl: string; nombre: string } | null>>({})
 
   // Shared file input refs — one for gallery, one for camera.
   // Using refs + programmatic .click() instead of hidden inputs inside <label> tags
@@ -78,17 +80,23 @@ export default function PeriodoDetallePage() {
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
   const [subiendoPlanilla, setSubiendoPlanilla] = useState(false)
 
-  const cargarDatos = useCallback(async () => {
+  const cargarDatos = useCallback(async (silencioso = false) => {
     const datos = await getPeriodoConContrato(periodoId, contratoId)
     setContrato(datos.contrato)
     setPeriodo(datos.periodo)
     setObligaciones(datos.obligaciones)
     setActividades(datos.actividades)
     if (datos.periodo?.numero_planilla) setNumPlanilla(datos.periodo.numero_planilla)
-    setCargando(false)
+    if (!silencioso) setCargando(false)
   }, [periodoId, contratoId])
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
+
+  // Background polling every 30s — contratista sees estado changes without manual refresh
+  useEffect(() => {
+    const timer = setInterval(() => cargarDatos(true), 30_000)
+    return () => clearInterval(timer)
+  }, [cargarDatos])
 
   // Toast de radicado para contratista (una sola vez al cargar)
   const radicadoToastMostrado = useRef(false)
@@ -304,11 +312,15 @@ export default function PeriodoDetallePage() {
     }
 
     // ── Step 3: register DB record ─────────────────────────────
+    // The file is already in Supabase Storage. If this step fails (network drop,
+    // transient error), we store the pending registration so the user can retry
+    // without re-uploading the entire file.
     const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, file.name)
 
     if (reg.error) {
-      toast.error(reg.error)
+      setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre: file.name } }))
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+      toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
       return
     }
 
@@ -324,6 +336,25 @@ export default function PeriodoDetallePage() {
     const result = await eliminarEvidencia(evId)
     if (result.error) toast.error(result.error)
     else { toast.success('Evidencia eliminada'); cargarDatos() }
+  }
+
+  async function handleReintentarRegistro(actividadId: string) {
+    const pending = pendienteRegistro[actividadId]
+    if (!pending) return
+    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 98 }))
+    const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.nombre)
+    if (reg.error) {
+      toast.error(`Reintento fallido: ${reg.error}`)
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+    } else {
+      setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 100 }))
+      toast.success('Evidencia registrada ✓')
+      setTimeout(() => {
+        setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+        cargarDatos()
+      }, 600)
+    }
   }
 
   async function handleSubirPlanilla(file: File) {
@@ -741,6 +772,19 @@ export default function PeriodoDetallePage() {
                                 )}
                               </div>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Retry banner — file uploaded but DB registration failed */}
+                        {pendienteRegistro[act.id] && subiendoEvidencia[act.id] == null && (
+                          <div className="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <span className="text-xs text-amber-700 flex-1">La imagen se subió pero no se registró.</span>
+                            <button
+                              onClick={() => handleReintentarRegistro(act.id)}
+                              className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
+                            >
+                              Reintentar
+                            </button>
                           </div>
                         )}
 

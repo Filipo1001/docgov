@@ -290,18 +290,25 @@ export default function InformesPage() {
 
   const mesNombre = MESES[mesIdx]
 
-  const cargar = useCallback(async () => {
+  const cargar = useCallback(async (silencioso = false) => {
     if (!usuario) return
-    setCargando(true)
+    if (!silencioso) setCargando(true)
 
     // Asesor only sees their dependencia
     const depId = usuario.rol === 'asesor' ? usuario.dependencia_id ?? undefined : undefined
     const data = await getInformesMensuales(mesNombre, anio, depId)
     setPeriodos(data)
-    setCargando(false)
+    if (!silencioso) setCargando(false)
   }, [usuario, mesNombre, anio])
 
+  // Initial load
   useEffect(() => { cargar() }, [cargar])
+
+  // Background polling every 30s — keeps all roles in sync without manual refresh
+  useEffect(() => {
+    const timer = setInterval(() => cargar(true), 30_000)
+    return () => clearInterval(timer)
+  }, [cargar])
 
   // Navigation
   function mesAnterior() {

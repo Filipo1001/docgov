@@ -351,58 +351,70 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
 /**
  * Secretary approves one or more periods (aprobado_asesor → aprobado).
  * Admin can also approve from enviado (skipping asesor step).
+ *
+ * Performance: replaces N+1 loop with 3 queries total regardless of batch size:
+ *   1. SELECT all periods with contract data in one .in() query
+ *   2. Single batch UPDATE .in(validIds)
+ *   3. Parallel historial inserts + parallel notifications
  */
 export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResult<{ aprobados: number }>> {
   try {
+    if (!periodoIds.length) return { data: { aprobados: 0 } }
+
     const { supabase, usuario } = await getAuthContext()
 
     if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
       return { error: 'Solo la secretaria puede aprobar informes' }
     }
 
-    let aprobados = 0
+    const estadosPermitidos: EstadoPeriodo[] = usuario.rol === 'admin'
+      ? ['aprobado_asesor', 'enviado']
+      : ['aprobado_asesor']
 
-    for (const periodoId of periodoIds) {
-      const periodo = await getPeriodo(supabase, periodoId)
-      if (!periodo) continue
+    // 1 query: fetch all periods + contract info together
+    const { data: periodos, error: fetchError } = await supabase
+      .from('periodos')
+      .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, contratista_id)')
+      .in('id', periodoIds)
+      .in('estado', estadosPermitidos)
 
-      // Supervisor expects aprobado_asesor; admin also allows enviado
-      const estadosPermitidos: EstadoPeriodo[] = usuario.rol === 'admin'
-        ? ['aprobado_asesor', 'enviado']
-        : ['aprobado_asesor']
+    if (fetchError) return { error: fetchError.message }
+    if (!periodos || periodos.length === 0) return { data: { aprobados: 0 } }
 
-      if (!estadosPermitidos.includes(periodo.estado)) continue
+    const validIds = periodos.map(p => p.id)
 
-      const estadoAnterior = periodo.estado
-      const { error } = await supabase
-        .from('periodos')
-        .update({ estado: 'aprobado', motivo_rechazo: null })
-        .eq('id', periodoId)
+    // 1 query: batch update all valid periods
+    const { error: updateError } = await supabase
+      .from('periodos')
+      .update({ estado: 'aprobado', motivo_rechazo: null })
+      .in('id', validIds)
 
-      if (!error) {
-        aprobados++
-        await insertHistorial(supabase, periodoId, estadoAnterior, 'aprobado', usuario.id)
+    if (updateError) return { error: updateError.message }
 
-        // Notify contratista
-        const contrato = await getContratoIds(supabase, periodo.contrato_id)
-        if (contrato?.contratista_id) {
+    // Parallel: historial inserts + notifications (don't block each other)
+    await Promise.all([
+      ...periodos.map(p => insertHistorial(supabase, p.id, p.estado as EstadoPeriodo, 'aprobado', usuario.id)),
+      Promise.allSettled(
+        periodos.map(async (p) => {
+          const contrato = p.contrato as { numero: string; contratista_id: string } | null
+          if (!contrato?.contratista_id) return
           await enviarNotificacion({
             destinatarioId: contrato.contratista_id,
             tipo: 'aprobado',
             titulo: 'Tu informe fue aprobado',
-            mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue aprobado por la secretaria.`,
-            periodoId,
-            mes: periodo.mes,
-            anio: periodo.anio,
+            mensaje: `Tu informe de ${p.mes} ${p.anio} fue aprobado por la secretaria.`,
+            periodoId: p.id,
+            mes: p.mes,
+            anio: p.anio,
             contrato: contrato.numero || '',
             nombreRemitente: usuario.nombre_completo,
           })
-        }
-      }
-    }
+        })
+      ),
+    ])
 
     revalidar()
-    return { data: { aprobados } }
+    return { data: { aprobados: validIds.length } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
@@ -411,15 +423,19 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
 /**
  * Secretary rejects one or more periods back to asesor review (→ enviado).
  * Logs in historial but does NOT notify contratista.
+ *
+ * Performance: replaces N+1 loop with 3 queries total:
+ *   1. SELECT all periods + contract data in one .in() query
+ *   2. Single batch UPDATE
+ *   3. Batch asesor lookup (one query for all unique dependencias) + parallel notifications
  */
 export async function rechazarPeriodos(
   periodoIds: string[],
   motivo: string
 ): Promise<ActionResult<{ rechazados: number }>> {
   try {
-    if (!motivo?.trim()) {
-      return { error: 'El motivo de rechazo es obligatorio' }
-    }
+    if (!motivo?.trim()) return { error: 'El motivo de rechazo es obligatorio' }
+    if (!periodoIds.length) return { data: { rechazados: 0 } }
 
     const { supabase, usuario } = await getAuthContext()
 
@@ -427,53 +443,68 @@ export async function rechazarPeriodos(
       return { error: 'Solo la secretaria puede rechazar informes' }
     }
 
-    let rechazados = 0
+    // 1 query: fetch all periods + contract info together
+    const { data: periodos, error: fetchError } = await supabase
+      .from('periodos')
+      .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, dependencia_id)')
+      .in('id', periodoIds)
 
-    for (const periodoId of periodoIds) {
-      const periodo = await getPeriodo(supabase, periodoId)
-      if (!periodo) continue
+    if (fetchError) return { error: fetchError.message }
+    if (!periodos || periodos.length === 0) return { data: { rechazados: 0 } }
 
-      const estadoAnterior = periodo.estado
-      const { error } = await supabase
-        .from('periodos')
-        .update({ estado: 'enviado', motivo_rechazo: motivo.trim() })
-        .eq('id', periodoId)
+    // 1 query: batch update
+    const { error: updateError } = await supabase
+      .from('periodos')
+      .update({ estado: 'enviado', motivo_rechazo: motivo.trim() })
+      .in('id', periodos.map(p => p.id))
 
-      if (!error) {
-        rechazados++
-        await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id, motivo.trim())
+    if (updateError) return { error: updateError.message }
 
-        // Notify asesores about the rejection
-        const contrato = await getContratoIds(supabase, periodo.contrato_id)
-        if (contrato?.dependencia_id) {
-          const adminClient = createAdminSupabaseClient()
-          const { data: asesores } = await adminClient
-            .from('usuarios')
-            .select('id')
-            .eq('rol', 'asesor')
-            .eq('dependencia_id', contrato.dependencia_id)
-          if (asesores) {
-            await enviarNotificacionMultiple(
-              asesores.map(a => a.id),
-              {
-                tipo: 'rechazado',
-                titulo: `Informe devuelto por secretaría — ${periodo.mes} ${periodo.anio}`,
-                mensaje: `La secretaría devolvió el informe de ${periodo.mes} ${periodo.anio}: ${motivo.trim()}`,
-                periodoId,
-                mes: periodo.mes,
-                anio: periodo.anio,
-                contrato: contrato.numero || '',
-                motivo: motivo.trim(),
-                nombreRemitente: usuario.nombre_completo,
-              }
-            )
-          }
-        }
+    // Parallel historial inserts
+    await Promise.all(
+      periodos.map(p => insertHistorial(supabase, p.id, p.estado as EstadoPeriodo, 'enviado', usuario.id, motivo.trim()))
+    )
+
+    // 1 query: fetch all asesores for all affected dependencias at once
+    const dependenciaIds = [...new Set(
+      periodos.map(p => (p.contrato as { numero: string; dependencia_id: string } | null)?.dependencia_id).filter(Boolean)
+    )] as string[]
+
+    if (dependenciaIds.length > 0) {
+      const adminClient = createAdminSupabaseClient()
+      const { data: asesores } = await adminClient
+        .from('usuarios')
+        .select('id, dependencia_id')
+        .eq('rol', 'asesor')
+        .in('dependencia_id', dependenciaIds)
+
+      if (asesores && asesores.length > 0) {
+        await Promise.allSettled(
+          periodos.map(async (p) => {
+            const contrato = p.contrato as { numero: string; dependencia_id: string } | null
+            if (!contrato?.dependencia_id) return
+            const asesorIds = asesores
+              .filter(a => a.dependencia_id === contrato.dependencia_id)
+              .map(a => a.id)
+            if (!asesorIds.length) return
+            await enviarNotificacionMultiple(asesorIds, {
+              tipo: 'rechazado',
+              titulo: `Informe devuelto por secretaría — ${p.mes} ${p.anio}`,
+              mensaje: `La secretaría devolvió el informe de ${p.mes} ${p.anio}: ${motivo.trim()}`,
+              periodoId: p.id,
+              mes: p.mes,
+              anio: p.anio,
+              contrato: contrato.numero || '',
+              motivo: motivo.trim(),
+              nombreRemitente: usuario.nombre_completo,
+            })
+          })
+        )
       }
     }
 
     revalidar()
-    return { data: { rechazados } }
+    return { data: { rechazados: periodos.length } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
@@ -502,17 +533,25 @@ export async function marcarRadicado(
     }
 
     const estadoAnterior = periodo.estado
-    // Use admin client: RLS does not cover aprobado → radicado transition
+    // Use admin client: RLS does not cover aprobado → radicado transition.
+    // Optimistic lock: WHERE estado = 'aprobado' ensures concurrent calls don't
+    // silently overwrite each other — if another request already radicó this
+    // period, the update matches 0 rows and we return a clear error.
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { error, data: updated } = await adminClient
       .from('periodos')
       .update({
         estado: 'radicado',
         ...(numeroRadicado?.trim() ? { numero_radicado: numeroRadicado.trim() } : {}),
       })
       .eq('id', periodoId)
+      .eq('estado', 'aprobado')   // optimistic lock
+      .select('id')
 
     if (error) return { error: `Error al radicar: ${error.message}` }
+    if (!updated || updated.length === 0) {
+      return { error: 'Este periodo ya fue radicado por otra acción simultánea' }
+    }
 
     const comentario = numeroRadicado?.trim()
       ? `Radicado con No. ${numeroRadicado.trim()}`
