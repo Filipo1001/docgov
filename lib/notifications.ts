@@ -79,7 +79,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
       const resend = getResendClient()
       console.log(`[Notif] resend=${resend ? 'OK' : 'NULL (missing RESEND_API_KEY)'}`)
       if (resend) {
-        const template = EMAIL_TEMPLATES[payload.tipo]
+        const template = (EMAIL_TEMPLATES as Record<string, typeof EMAIL_TEMPLATES[string] | undefined>)[payload.tipo]
         console.log(`[Notif] template=${template ? 'found' : 'NOT FOUND for tipo=' + payload.tipo}`)
         if (template) {
           const { subject, html } = template(templateData)
