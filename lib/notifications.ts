@@ -73,14 +73,14 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   }
 
   // 3. Send email (if enabled and configured)
-  console.log(`[Notification] tipo=${payload.tipo} email=${usuario.email} emailEnabled=${emailEnabled}`)
+  console.log(`[Notif] tipo=${payload.tipo} to=${usuario.email} emailEnabled=${emailEnabled} RESEND_FROM=${RESEND_FROM}`)
   if (emailEnabled && usuario.email) {
     try {
       const resend = getResendClient()
-      console.log(`[Notification] resend client=${resend ? 'OK' : 'NULL (missing RESEND_API_KEY)'}`)
+      console.log(`[Notif] resend=${resend ? 'OK' : 'NULL (missing RESEND_API_KEY)'}`)
       if (resend) {
-        const template = (EMAIL_TEMPLATES as Record<string, typeof EMAIL_TEMPLATES[string] | undefined>)[payload.tipo]
-        console.log(`[Notification] template=${template ? 'found' : 'NOT FOUND'} for tipo=${payload.tipo}`)
+        const template = EMAIL_TEMPLATES[payload.tipo]
+        console.log(`[Notif] template=${template ? 'found' : 'NOT FOUND for tipo=' + payload.tipo}`)
         if (template) {
           const { subject, html } = template(templateData)
           const result = await resend.emails.send({
@@ -89,14 +89,12 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
             subject,
             html,
           })
-          console.log(`[Notification] Email sent:`, JSON.stringify(result))
+          console.log(`[Notif] Email result:`, JSON.stringify(result))
         }
       }
     } catch (err) {
-      console.error('[Notification] Email failed:', err)
+      console.error('[Notif] Email failed:', err)
     }
-  } else {
-    console.log(`[Notification] Email skipped: emailEnabled=${emailEnabled} email=${usuario.email}`)
   }
 
   // 4. Send WhatsApp (if enabled and configured)
