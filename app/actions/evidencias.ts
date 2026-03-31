@@ -24,8 +24,17 @@ export async function subirEvidencia(
     }
 
     // ── File type validation ──────────────────────────────────
+    // Some mobile cameras (Android WebViews, Samsung/Xiaomi ROMs) send an empty
+    // or non-standard file.type. Fall back to extension-based detection in that case.
+    const EXT_TO_MIME: Record<string, string> = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+    }
+    const fileExt = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const effectiveMime = file.type?.toLowerCase() || EXT_TO_MIME[fileExt] || ''
+
     const tiposPermitidos: readonly string[] = FILE_UPLOAD.TIPOS_IMAGEN
-    if (!tiposPermitidos.includes(file.type)) {
+    if (!tiposPermitidos.includes(effectiveMime)) {
       return {
         error: `Tipo de archivo no permitido. Solo se aceptan: JPG, PNG, WebP, HEIC`,
       }
@@ -72,13 +81,12 @@ export async function subirEvidencia(
     }
 
     // ── Upload to Supabase Storage ────────────────────────────
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const path = `evidencias/${periodoId}/${actividadId}/${Date.now()}.${ext}`
+    const path = `evidencias/${periodoId}/${actividadId}/${Date.now()}.${fileExt || 'jpg'}`
 
     const arrayBuffer = await file.arrayBuffer()
     const { error: uploadError } = await supabase.storage
       .from('evidencias')
-      .upload(path, arrayBuffer, { contentType: file.type })
+      .upload(path, arrayBuffer, { contentType: effectiveMime || 'image/jpeg' })
 
     if (uploadError) {
       return { error: `Error al subir el archivo: ${uploadError.message}` }

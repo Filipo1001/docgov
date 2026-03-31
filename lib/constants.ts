@@ -71,9 +71,12 @@ export const MESES = [
 // ─── File upload constraints ──────────────────
 
 export const FILE_UPLOAD = {
-  TIPOS_IMAGEN: ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] as const,
+  // image/heif  — iPhones report HEIC as heif on some iOS versions
+  // image/jpg   — non-standard but emitted by Samsung/Xiaomi cameras
+  // ''          — some Android WebViews omit the MIME type entirely (handled via extension fallback in evidencias.ts)
+  TIPOS_IMAGEN: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const,
   TIPOS_DOCUMENTO: ['application/pdf', 'image/jpeg', 'image/png'] as const,
-  EXTENSIONES_IMAGEN: ['jpg', 'jpeg', 'png', 'webp', 'heic'] as const,
+  EXTENSIONES_IMAGEN: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'] as const,
   EXTENSIONES_DOCUMENTO: ['pdf', 'jpg', 'jpeg', 'png'] as const,
   TAMANO_MAX_BYTES: 10 * 1024 * 1024, // 10 MB
   TAMANO_MAX_LABEL: '10 MB',

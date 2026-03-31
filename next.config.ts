@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
   // Keep @react-pdf/renderer and canvas on the Node.js server only.
   // Prevents bundling issues when these packages are imported in API routes.
   serverExternalPackages: ['@react-pdf/renderer', 'canvas'],
+
+  // Raise Server Action body limit to 10 MB so mobile phone photos (3–8 MB)
+  // don't silently fail against the default 1 MB cap.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
 }
 
 export default nextConfig
