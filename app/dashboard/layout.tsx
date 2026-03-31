@@ -8,6 +8,33 @@ import { UserProvider, useUsuario } from '@/lib/user-context'
 import { getMenuPorRol } from '@/lib/constants'
 import NotificacionesBell from '@/components/NotificacionesBell'
 
+// ─── User avatar (photo or initials) ─────────────────────────
+function getInitiales(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/)
+  if (partes.length === 1) return partes[0].charAt(0).toUpperCase()
+  return (partes[0].charAt(0) + partes[1].charAt(0)).toUpperCase()
+}
+
+function UserAvatar({ nombre, fotoUrl, size = 9 }: { nombre: string; fotoUrl?: string | null; size?: number }) {
+  const dim = `w-${size} h-${size}`
+  if (fotoUrl) {
+    return (
+      <img
+        src={fotoUrl}
+        alt={nombre}
+        className={`${dim} rounded-full object-cover flex-shrink-0`}
+      />
+    )
+  }
+  return (
+    <div className={`${dim} bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0`}>
+      <span className="text-xs font-semibold text-blue-700 leading-none">
+        {getInitiales(nombre)}
+      </span>
+    </div>
+  )
+}
+
 // ─── Pending count badge ──────────────────────────────────────
 function PendingBadge({ n }: { n: number }) {
   if (n === 0) return null
@@ -129,11 +156,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         <div className="p-4 border-t border-gray-100">
           {usuario && (
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-blue-700">
-                  {usuario.nombre_completo.charAt(0)}
-                </span>
-              </div>
+              <UserAvatar nombre={usuario.nombre_completo} fotoUrl={usuario.foto_url} size={9} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {usuario.nombre_completo.split(' ')[0]}
