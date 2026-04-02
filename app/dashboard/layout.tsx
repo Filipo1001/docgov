@@ -128,19 +128,25 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         {/* Usuario */}
         <div className="p-4 border-t border-gray-100">
           {usuario && (
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center">
+            <Link
+              href="/dashboard/perfil"
+              className="flex items-center gap-3 mb-3 rounded-xl p-1.5 -mx-1.5 hover:bg-gray-50 transition-colors group"
+            >
+              <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-medium text-blue-700">
                   {usuario.nombre_completo.charAt(0)}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
                   {usuario.nombre_completo.split(' ')[0]}
                 </p>
                 <p className="text-xs text-gray-400 capitalize">{usuario.rol}</p>
               </div>
-            </div>
+              <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           )}
           <button
             onClick={cerrarSesion}
