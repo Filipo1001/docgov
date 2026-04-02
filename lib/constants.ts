@@ -30,6 +30,13 @@ export const ESTADO_COLOR: Record<EstadoPeriodo, string> = {
   rechazado: 'bg-red-100 text-red-700',
 }
 
+// ─── Historical period display ───────────────
+
+export const HISTORICO_LABEL = 'Histórico'
+export const HISTORICO_COLOR = 'bg-amber-100 text-amber-700'
+export const HISTORICO_BORDER = 'border-amber-200 bg-amber-50/40'
+export const HISTORICO_BANNER = 'bg-amber-50 border-amber-200 text-amber-800'
+
 // ─── Approval state machine ──────────────────
 
 /**
@@ -99,6 +106,7 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
       { href: '/dashboard/admin/municipio', label: 'Municipio', icon: '🏛️' },
+      { href: '/dashboard/admin/historicos', label: 'Históricos', icon: '🔒' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
     asesor: [

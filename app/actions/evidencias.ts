@@ -72,11 +72,15 @@ export async function prepararUploadEvidencia(
     // ── Period editability check ──────────────────────────────
     const { data: periodo } = await supabase
       .from('periodos')
-      .select('estado')
+      .select('estado, es_historico')
       .eq('id', periodoId)
       .single()
 
     if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (periodo.es_historico) {
+      return { error: 'No se puede subir evidencia a un periodo histórico' }
+    }
 
     if (!ESTADOS_EDITABLES.includes(periodo.estado as never)) {
       return {

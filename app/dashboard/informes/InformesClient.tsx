@@ -49,6 +49,7 @@ function InformeCard({
   const nombre = contrato?.contratista?.nombre_completo ?? 'Sin nombre'
   const tieneNotaSecretaria = periodo.motivo_rechazo && periodo.estado === 'enviado'
 
+  const esHistorico = periodo.es_historico === true
   const esAsesorCard = rol === 'asesor' || rol === 'admin'
   const esSecretariaCard = rol === 'supervisor' || rol === 'admin'
 
@@ -94,11 +95,13 @@ function InformeCard({
     setProcesando(false)
   }
 
-  const cardBorder = tieneNotaSecretaria
-    ? 'border-red-200 bg-red-50/30'
-    : periodo.estado === 'aprobado_asesor'
-      ? 'border-indigo-200 bg-indigo-50/30'
-      : 'border-gray-200 bg-white'
+  const cardBorder = esHistorico
+    ? 'border-amber-200 bg-amber-50/30 opacity-80'
+    : tieneNotaSecretaria
+      ? 'border-red-200 bg-red-50/30'
+      : periodo.estado === 'aprobado_asesor'
+        ? 'border-indigo-200 bg-indigo-50/30'
+        : 'border-gray-200 bg-white'
 
   return (
     <div className={`rounded-2xl border p-5 transition-all ${cardBorder}`}>
@@ -114,17 +117,22 @@ function InformeCard({
             </div>
             <div className="text-right flex-shrink-0">
               <p className="font-bold text-gray-900 text-sm">{fmt(periodo.valor_cobro)}</p>
-              <Badge
-                size="xs"
-                variant={
-                  periodo.estado === 'aprobado' || periodo.estado === 'radicado' ? 'green'
-                    : periodo.estado === 'aprobado_asesor' ? 'indigo'
-                    : periodo.estado === 'rechazado' ? 'red'
-                    : 'blue'
-                }
-              >
-                {ESTADO_LABEL[periodo.estado]}
-              </Badge>
+              <div className="flex items-center gap-1 justify-end flex-wrap">
+                {esHistorico && (
+                  <Badge size="xs" variant="yellow">🔒 Histórico</Badge>
+                )}
+                <Badge
+                  size="xs"
+                  variant={
+                    periodo.estado === 'aprobado' || periodo.estado === 'radicado' ? 'green'
+                      : periodo.estado === 'aprobado_asesor' ? 'indigo'
+                      : periodo.estado === 'rechazado' ? 'red'
+                      : 'blue'
+                  }
+                >
+                  {ESTADO_LABEL[periodo.estado]}
+                </Badge>
+              </div>
             </div>
           </div>
 
@@ -138,7 +146,7 @@ function InformeCard({
           )}
 
           {/* Actions for enviado -- asesor can approve or reject */}
-          {periodo.estado === 'enviado' && !mostrarRechazo && (
+          {!esHistorico && periodo.estado === 'enviado' && !mostrarRechazo && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               {esAsesorCard && (
                 <button
@@ -178,7 +186,7 @@ function InformeCard({
           )}
 
           {/* Actions for aprobado_asesor */}
-          {periodo.estado === 'aprobado_asesor' && !mostrarRechazo && (
+          {!esHistorico && periodo.estado === 'aprobado_asesor' && !mostrarRechazo && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               {/* Secretary approves */}
               {esSecretariaCard && (
@@ -233,7 +241,7 @@ function InformeCard({
           )}
 
           {/* Inline rejection form */}
-          {mostrarRechazo && (
+          {!esHistorico && mostrarRechazo && (
             <div className="mt-3 space-y-2">
               <p className="text-xs text-gray-500 font-medium">
                 {esSecretariaCard && !esAsesorCard
@@ -333,9 +341,9 @@ export default function InformesPage() {
     }
   })()
 
-  // Secretary mass actions -- work on aprobado_asesor primarily
-  const idsAprobadosAsesor = aprobadosAsesor.map(p => p.id)
-  const idsEnviados = enviados.map(p => p.id)
+  // Secretary mass actions -- work on aprobado_asesor primarily (exclude historical)
+  const idsAprobadosAsesor = aprobadosAsesor.filter(p => !p.es_historico).map(p => p.id)
+  const idsEnviados = enviados.filter(p => !p.es_historico).map(p => p.id)
   const idsParaAprobar = [...idsAprobadosAsesor, ...idsEnviados]
 
   async function accionMasiva(accion: string) {

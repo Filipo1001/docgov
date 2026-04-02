@@ -148,6 +148,11 @@ export interface Periodo {
   }
   planilla_estado?: 'pendiente' | 'aprobada' | 'rechazada' | null
   planilla_comentario?: string | null
+  // Historical immutability
+  es_historico: boolean
+  historico_marcado_por: string | null   // UUID of admin who marked it
+  historico_marcado_at: string | null    // ISO timestamp
+  historico_nota: string | null          // Optional human explanation
   // Pre-approvals (joined)
   preaprobaciones?: Preaprobacion[]
   historial?: HistorialPeriodo[]

@@ -101,14 +101,15 @@ export default function PeriodoDetallePage() {
 
   // ── Derived values ──────────────────────────────────────────
 
-  const esEditable = periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false
+  const esHistorico = periodo?.es_historico === true
+  const esEditable = !esHistorico && (periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false)
 
   const esAsesor = usuario?.rol === 'asesor' || usuario?.rol === 'admin'
   const esSecretaria = usuario?.rol === 'supervisor' || usuario?.rol === 'admin'
   const esContratista = usuario?.rol === 'contratista'
 
   // Planilla: contratista puede gestionar hasta que esté aprobado o radicado
-  const esPlanillaGestionable = esContratista && periodo
+  const esPlanillaGestionable = !esHistorico && esContratista && periodo
     ? !['aprobado', 'radicado'].includes(periodo.estado)
     : false
 
@@ -389,6 +390,20 @@ export default function PeriodoDetallePage() {
         <span className="text-gray-900 font-medium">{periodo.mes} {periodo.anio}</span>
       </div>
 
+      {/* ── Historical lock banner ──────────────────────────── */}
+      {esHistorico && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
+          <span className="text-xl flex-shrink-0">🔒</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Periodo histórico — solo lectura</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Este periodo fue procesado antes de la digitalización del sistema y no puede ser modificado.
+              {periodo?.historico_nota ? ` ${periodo.historico_nota}` : ''}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Approval timeline ───────────────────────────────── */}
       <div className="bg-white rounded-2xl border p-5 mb-6">
         {rechazado ? (
@@ -495,7 +510,7 @@ export default function PeriodoDetallePage() {
       </div>
 
       {/* ── Asesor panel (approve / reject) ── */}
-      {(periodo.estado === 'enviado' || periodo.estado === 'aprobado_asesor' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (
+      {!esHistorico && (periodo.estado === 'enviado' || periodo.estado === 'aprobado_asesor' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (
         <div className="bg-white rounded-2xl border border-blue-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-base">🔍</div>
@@ -578,7 +593,7 @@ export default function PeriodoDetallePage() {
       )}
 
       {/* ── Secretaria panel (approve / reject) ── */}
-      {(periodo.estado === 'aprobado_asesor' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
+      {!esHistorico && (periodo.estado === 'aprobado_asesor' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
         <div className="bg-white rounded-2xl border border-amber-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-base">📋</div>
@@ -646,7 +661,7 @@ export default function PeriodoDetallePage() {
       )}
 
       {/* Mark as radicado — asesor/supervisor/admin when aprobado */}
-      {periodo.estado === 'aprobado' && (esAsesor || esSecretaria) && (
+      {!esHistorico && periodo.estado === 'aprobado' && (esAsesor || esSecretaria) && (
         <div className="bg-white rounded-2xl border border-green-200 p-6 mb-6">
           <h3 className="font-medium text-gray-900 mb-1">Paquete aprobado y firmado</h3>
           <p className="text-sm text-gray-500 mb-4">
@@ -852,7 +867,7 @@ export default function PeriodoDetallePage() {
       </div>
 
       {/* Submit button (contratista) */}
-      {esEditable && (
+      {esEditable && !esHistorico && (
         <div className="bg-white rounded-2xl border p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
@@ -873,7 +888,7 @@ export default function PeriodoDetallePage() {
       )}
 
       {/* Read-only state */}
-      {!esEditable && periodo.estado === 'enviado' && usuario?.rol === 'contratista' && (
+      {!esHistorico && !esEditable && periodo.estado === 'enviado' && usuario?.rol === 'contratista' && (
         <div className="bg-gray-50 rounded-2xl border p-6 mb-6 text-center">
           <p className="text-sm text-gray-500">
             Tu informe está <strong>en revisión</strong>. Recibirás una notificación cuando sea aprobado o rechazado.
