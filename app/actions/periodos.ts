@@ -76,6 +76,25 @@ function revalidar(contratoId?: string, periodoId?: string) {
   revalidatePath('/dashboard')
 }
 
+// ─── Date-based submission guard ────────────────────────────
+// Contractors may only submit/edit borrador periods for the current month.
+// Rechazado periods remain editable at any time so contractors can correct issues.
+
+const MES_INDEX: Record<string, number> = {
+  ENERO: 0, FEBRERO: 1, MARZO: 2, ABRIL: 3,
+  MAYO: 4, JUNIO: 5, JULIO: 6, AGOSTO: 7,
+  SEPTIEMBRE: 8, OCTUBRE: 9, NOVIEMBRE: 10, DICIEMBRE: 11,
+}
+
+function isPeriodoVencido(periodo: { mes: string; anio: number; estado: EstadoPeriodo }): boolean {
+  if (periodo.estado === 'rechazado') return false
+  const now = new Date()
+  const mesIdx = MES_INDEX[periodo.mes.toUpperCase()] ?? -1
+  if (periodo.anio < now.getFullYear()) return true
+  if (periodo.anio === now.getFullYear() && mesIdx < now.getMonth()) return true
+  return false
+}
+
 /** Insert into historial_periodos using regular client (authenticated user). */
 async function insertHistorial(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
@@ -114,6 +133,11 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 
     if (!ESTADOS_EDITABLES.includes(periodo.estado)) {
       return { error: `No se puede enviar un periodo en estado "${periodo.estado}"` }
+    }
+
+    // Contratistas can only submit the current month — admin can submit any period
+    if (usuario.rol === 'contratista' && isPeriodoVencido(periodo)) {
+      return { error: 'El plazo para enviar este periodo ya venció. Solo puedes enviar el informe del mes actual.' }
     }
 
     // Verify ownership
