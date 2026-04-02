@@ -128,6 +128,7 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'Este periodo es histórico y no puede ser modificado' }
 
     if (periodo.es_historico) {
       return { error: 'No se puede modificar un periodo histórico' }
@@ -1349,6 +1350,7 @@ export async function actualizarNumeroRadicado(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'Este periodo es histórico y no puede ser modificado' }
 
     if (periodo.estado !== 'radicado') {
       return { error: 'Solo se puede editar el número de radicado de un periodo ya radicado' }

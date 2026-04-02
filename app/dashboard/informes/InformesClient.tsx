@@ -54,6 +54,7 @@ function InformeCard({
   const nombre = contrato?.contratista?.nombre_completo ?? 'Sin nombre'
   const tieneNotaSecretaria = periodo.motivo_rechazo && periodo.estado === 'enviado'
 
+  const esHistorico = periodo.es_historico === true
   const esAsesorCard = rol === 'asesor' || rol === 'admin'
   const esSecretariaCard = rol === 'supervisor' || rol === 'admin'
 
@@ -277,7 +278,7 @@ function InformeCard({
           )}
 
           {/* Inline rejection form */}
-          {mostrarRechazo && (
+          {!esHistorico && mostrarRechazo && (
             <div className="mt-3 space-y-2">
               <p className="text-xs text-gray-500 font-medium">
                 {esSecretariaCard && !esAsesorCard

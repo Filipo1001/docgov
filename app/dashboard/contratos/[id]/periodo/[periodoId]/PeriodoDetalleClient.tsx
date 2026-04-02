@@ -1592,7 +1592,7 @@ export default function PeriodoDetallePage({
       )}
 
       {/* Mark as radicado — asesor/supervisor/admin when aprobado */}
-      {periodo.estado === 'aprobado' && (esAsesor || esSecretaria) && (
+      {!esHistorico && periodo.estado === 'aprobado' && (esAsesor || esSecretaria) && (
         <div className="bg-white rounded-2xl border border-green-200 p-6 mb-6">
           <h3 className="font-medium text-gray-900 mb-1">Paquete aprobado y firmado</h3>
           <p className="text-sm text-gray-500 mb-4">
@@ -2062,7 +2062,7 @@ export default function PeriodoDetallePage({
       )}
 
       {/* Read-only state */}
-      {!esEditable && periodo.estado === 'enviado' && usuario?.rol === 'contratista' && (
+      {!esHistorico && !esEditable && periodo.estado === 'enviado' && usuario?.rol === 'contratista' && (
         <div className="bg-gray-50 rounded-2xl border p-6 mb-6 text-center">
           <p className="text-sm text-gray-500">
             Tu informe está <strong>en revisión</strong>. Recibirás una notificación cuando sea aprobado o rechazado.
