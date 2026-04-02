@@ -404,7 +404,7 @@ export default function PeriodoDetallePage() {
   const STEPS: { estado: EstadoPeriodo; label: string; short: string }[] = [
     { estado: 'borrador',       label: 'Borrador',          short: 'Borrador' },
     { estado: 'enviado',        label: 'En revisión',        short: 'Revisión' },
-    { estado: 'aprobado_asesor', label: 'Aprobado por asesor', short: 'Asesor' },
+    { estado: 'revision', label: 'En revisión', short: 'Revisión' },
     { estado: 'aprobado',       label: 'Aprobado',           short: 'Aprobado' },
     { estado: 'radicado',       label: 'Radicado',           short: 'Radicado' },
   ]
@@ -534,15 +534,15 @@ export default function PeriodoDetallePage() {
       </div>
 
       {/* ── Asesor panel (approve / reject) ── */}
-      {(periodo.estado === 'enviado' || periodo.estado === 'aprobado_asesor' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (
+      {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (
         <div className="bg-white rounded-2xl border border-blue-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-base">🔍</div>
             <div>
               <h3 className="font-medium text-gray-900">Revisión como asesor</h3>
               <p className="text-xs text-gray-400">
-                {periodo.estado === 'aprobado_asesor'
-                  ? 'Has aprobado este informe. Puedes revocar tu aprobación si detectas un problema.'
+                {periodo.estado === 'revision'
+                  ? 'Has marcado este informe como revisado. Puedes revocar si detectas un problema.'
                   : periodo.estado === 'rechazado'
                     ? 'Este informe fue rechazado. Puedes volver a aprobarlo si el contratista corrigió los problemas.'
                     : 'Revisa las actividades y evidencias. Aprueba para avanzar a la secretaria.'}
@@ -561,7 +561,7 @@ export default function PeriodoDetallePage() {
 
           {!mostrarRechazo ? (
             <div className="flex gap-3">
-              {periodo.estado === 'aprobado_asesor' ? (
+              {periodo.estado === 'revision' ? (
                 <button
                   onClick={handleRevocarPreaprobacion}
                   disabled={procesando}
@@ -578,7 +578,7 @@ export default function PeriodoDetallePage() {
                   {procesando ? 'Procesando...' : periodo.estado === 'rechazado' ? '✓ Aprobar ahora' : '✓ Aprobar'}
                 </button>
               )}
-              {(periodo.estado === 'enviado' || periodo.estado === 'aprobado_asesor') && (
+              {(periodo.estado === 'enviado' || periodo.estado === 'revision') && (
                 <button
                   onClick={() => setMostrarRechazo(true)}
                   className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
@@ -617,7 +617,7 @@ export default function PeriodoDetallePage() {
       )}
 
       {/* ── Secretaria panel (approve / reject) ── */}
-      {(periodo.estado === 'aprobado_asesor' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
+      {(periodo.estado === 'revision' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
         <div className="bg-white rounded-2xl border border-amber-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-base">📋</div>
@@ -1008,7 +1008,7 @@ export default function PeriodoDetallePage() {
             {historial.map((h, i) => {
               const esUltimo = i === historial.length - 1
               const icono = h.estado_nuevo === 'aprobado' ? '✅' :
-                            h.estado_nuevo === 'aprobado_asesor' ? '✅' :
+                            h.estado_nuevo === 'revision' ? '🔍' :
                             h.estado_nuevo === 'rechazado' ? '❌' :
                             h.estado_nuevo === 'enviado' ? '📩' :
                             h.estado_nuevo === 'radicado' ? '📁' : '•'

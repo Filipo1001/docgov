@@ -28,7 +28,7 @@ function fmt(n: number) {
   return '$' + n.toLocaleString('es-CO')
 }
 
-type Filtro = 'todos' | 'sin_revisar' | 'aprobado_asesor' | 'aprobados'
+type Filtro = 'todos' | 'sin_revisar' | 'revision' | 'aprobados'
 
 // ─── Informe Card ─────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ function InformeCard({
 
   const cardBorder = tieneNotaSecretaria
     ? 'border-red-200 bg-red-50/30'
-    : periodo.estado === 'aprobado_asesor'
+    : periodo.estado === 'revision'
       ? 'border-indigo-200 bg-indigo-50/30'
       : 'border-gray-200 bg-white'
 
@@ -118,7 +118,7 @@ function InformeCard({
                 size="xs"
                 variant={
                   periodo.estado === 'aprobado' || periodo.estado === 'radicado' ? 'green'
-                    : periodo.estado === 'aprobado_asesor' ? 'indigo'
+                    : periodo.estado === 'revision' ? 'indigo'
                     : periodo.estado === 'rechazado' ? 'red'
                     : 'blue'
                 }
@@ -177,8 +177,8 @@ function InformeCard({
             </div>
           )}
 
-          {/* Actions for aprobado_asesor */}
-          {periodo.estado === 'aprobado_asesor' && !mostrarRechazo && (
+          {/* Actions for revision — asesor has reviewed, secretary can approve */}
+          {periodo.estado === 'revision' && !mostrarRechazo && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               {/* Secretary approves */}
               {esSecretariaCard && (
@@ -327,20 +327,20 @@ export default function InformesPage() {
 
   // Filters
   const enviados = periodos.filter(p => p.estado === 'enviado')
-  const aprobadosAsesor = periodos.filter(p => p.estado === 'aprobado_asesor')
+  const aprobadosAsesor = periodos.filter(p => p.estado === 'revision')
   const sinRevisar = enviados.filter(p => (p.preaprobaciones?.length ?? 0) === 0)
   const aprobados = periodos.filter(p => ['aprobado', 'radicado'].includes(p.estado))
 
   const periodosVisibles = (() => {
     switch (filtro) {
       case 'sin_revisar': return sinRevisar
-      case 'aprobado_asesor': return aprobadosAsesor
+      case 'revision': return aprobadosAsesor
       case 'aprobados': return aprobados
       default: return periodos
     }
   })()
 
-  // Secretary mass actions -- work on aprobado_asesor primarily
+  // Secretary mass actions — revision (asesor reviewed) + enviado (direct)
   const idsAprobadosAsesor = aprobadosAsesor.map(p => p.id)
   const idsEnviados = enviados.map(p => p.id)
   const idsParaAprobar = [...idsAprobadosAsesor, ...idsEnviados]
@@ -437,7 +437,7 @@ export default function InformesPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard label="Total" value={periodos.length} color="gray" />
           <StatCard label="Enviados" value={enviados.length} color="blue" />
-          <StatCard label="Aprobados asesor" value={aprobadosAsesor.length} color="indigo" />
+          <StatCard label="En revisión" value={aprobadosAsesor.length} color="indigo" />
           <StatCard label="Aprobados final" value={aprobados.length} color="emerald" />
         </div>
       )}
@@ -448,7 +448,7 @@ export default function InformesPage() {
           options={[
             { key: 'todos', label: 'Todos', count: periodos.length },
             { key: 'sin_revisar', label: 'Sin revisar', count: sinRevisar.length },
-            { key: 'aprobado_asesor', label: 'Aprobados asesor', count: aprobadosAsesor.length },
+            { key: 'revision', label: 'En revisión', count: aprobadosAsesor.length },
             { key: 'aprobados', label: 'Aprobados', count: aprobados.length },
           ]}
           value={filtro}

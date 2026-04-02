@@ -20,7 +20,7 @@ function tiempoRelativo(fechaISO: string): string {
 
 function iconoPorTipo(tipo: string): string {
   switch (tipo) {
-    case 'aprobado_asesor': return '✅'
+    case 'revision': return '🔍'
     case 'aprobado': return '🎉'
     case 'rechazado': return '❌'
     case 'enviado': return '📩'

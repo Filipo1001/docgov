@@ -370,7 +370,7 @@ function GenericAprobaciones({ rol, userId }: { rol: string; userId: string }) {
                         size="xs"
                         variant={
                           periodo.estado === 'aprobado' || periodo.estado === 'radicado' ? 'green'
-                            : periodo.estado === 'aprobado_asesor' ? 'indigo'
+                            : periodo.estado === 'revision' ? 'indigo'
                             : periodo.estado === 'rechazado' ? 'red'
                             : 'blue'
                         }

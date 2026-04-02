@@ -11,7 +11,7 @@ export type Rol =
 export type EstadoPeriodo =
   | 'borrador'          // Contratista editing
   | 'enviado'           // Submitted — visible to asesores & secretaria
-  | 'aprobado_asesor'   // Pre-approved by asesor — waiting for secretary final approval
+  | 'revision'          // Asesor has reviewed — waiting for secretary final approval
   | 'aprobado'          // Secretary approved → downloadable package
   | 'radicado'          // Physically filed (radicado)
   | 'rechazado'         // Rejected → back to contratista for edits

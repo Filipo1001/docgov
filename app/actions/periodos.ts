@@ -5,11 +5,11 @@
  *
  * State transitions:
  *   borrador/rechazado → enviado       (contratista submits)
- *   enviado → aprobado_asesor          (asesor approves)
- *   enviado/aprobado_asesor → rechazado (asesor rejects to contratista)
- *   rechazado → aprobado_asesor        (asesor re-approves)
- *   aprobado_asesor → aprobado         (secretary approves)
- *   aprobado_asesor/enviado → enviado  (secretary rejects back for asesor review)
+ *   enviado/rechazado → revision        (asesor marks as reviewed — optional step)
+ *   revision → enviado                 (asesor revokes their review)
+ *   enviado/revision → rechazado       (asesor rejects to contratista)
+ *   enviado/revision → aprobado        (secretary approves — always valid, asesor step is optional)
+ *   enviado/revision → enviado         (secretary rejects back for asesor review)
  *   aprobado → radicado                (asesor registers physical filing)
  *
  * Every state change logs into historial_periodos and sends notifications.
@@ -192,7 +192,8 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 // ─── Asesor Actions ─────────────────────────────────────────
 
 /**
- * Asesor approves a period (enviado or rechazado → aprobado_asesor).
+ * Asesor marks a period as reviewed (enviado or rechazado → revision).
+ * This is an optional step — secretary can approve directly from enviado.
  */
 export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult> {
   try {
@@ -212,21 +213,21 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
     const estadoAnterior = periodo.estado
     const { error } = await supabase
       .from('periodos')
-      .update({ estado: 'aprobado_asesor', motivo_rechazo: null })
+      .update({ estado: 'revision', motivo_rechazo: null })
       .eq('id', periodoId)
 
     if (error) return { error: `Error al aprobar: ${error.message}` }
 
-    await insertHistorial(supabase, periodoId, estadoAnterior, 'aprobado_asesor', usuario.id)
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'revision', usuario.id)
 
     // Notify contratista
     const contrato = await getContratoIds(supabase, periodo.contrato_id)
     if (contrato?.contratista_id) {
       await enviarNotificacion({
         destinatarioId: contrato.contratista_id,
-        tipo: 'aprobado_asesor',
-        titulo: 'Tu informe fue pre-aprobado',
-        mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue revisado y pre-aprobado por el asesor. Está listo para la aprobación de la secretaria.`,
+        tipo: 'revision',
+        titulo: 'Tu informe está en revisión',
+        mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue revisado por el asesor y está en revisión por la secretaria.`,
         periodoId,
         mes: periodo.mes,
         anio: periodo.anio,
@@ -244,7 +245,7 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
 
 /**
  * Asesor rejects a period → rechazado (back to contratista).
- * Also allows revoking aprobado_asesor state.
+ * Also allows revoking revision state.
  */
 export async function rechazarComoAsesor(
   periodoId: string,
@@ -264,8 +265,8 @@ export async function rechazarComoAsesor(
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
 
-    if (periodo.estado !== 'enviado' && periodo.estado !== 'aprobado_asesor') {
-      return { error: 'Solo se pueden rechazar periodos en estado "enviado" o "aprobado_asesor"' }
+    if (periodo.estado !== 'enviado' && periodo.estado !== 'revision') {
+      return { error: 'Solo se pueden rechazar periodos en estado "enviado" o "revision"' }
     }
 
     const estadoAnterior = periodo.estado
@@ -325,8 +326,8 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
 
-    if (periodo.estado !== 'aprobado_asesor') {
-      return { error: 'Solo se puede revocar la aprobación de periodos en estado "aprobado_asesor"' }
+    if (periodo.estado !== 'revision') {
+      return { error: 'Solo se puede revocar la revisión de periodos en estado "revision"' }
     }
 
     const estadoAnterior = periodo.estado
@@ -349,8 +350,12 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
 // ─── Secretary (Supervisor) Actions ─────────────────────────
 
 /**
- * Secretary approves one or more periods (aprobado_asesor → aprobado).
- * Admin can also approve from enviado (skipping asesor step).
+ * Secretary approves one or more periods (enviado|revision → aprobado).
+ *
+ * The secretary is the final authority. She can approve from:
+ *   - 'enviado'  → asesor has not reviewed yet (secretary acts directly)
+ *   - 'revision' → asesor has reviewed and flagged it (normal flow)
+ * Both transitions are valid for supervisor and admin.
  *
  * Performance: replaces N+1 loop with 3 queries total regardless of batch size:
  *   1. SELECT all periods with contract data in one .in() query
@@ -367,9 +372,8 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
       return { error: 'Solo la secretaria puede aprobar informes' }
     }
 
-    const estadosPermitidos: EstadoPeriodo[] = usuario.rol === 'admin'
-      ? ['aprobado_asesor', 'enviado']
-      : ['aprobado_asesor']
+    // Secretary can approve from either state — asesor review is optional
+    const estadosPermitidos: EstadoPeriodo[] = ['revision', 'enviado']
 
     // 1 query: fetch all periods + contract info together
     const { data: periodos, error: fetchError } = await supabase
@@ -680,7 +684,7 @@ export async function subirPlanilla(
 }
 
 /** States where contratista can still manage their planilla (anything before final approval). */
-const ESTADOS_PLANILLA_EDITABLE: EstadoPeriodo[] = ['borrador', 'enviado', 'aprobado_asesor', 'rechazado']
+const ESTADOS_PLANILLA_EDITABLE: EstadoPeriodo[] = ['borrador', 'enviado', 'revision', 'rechazado']
 
 /**
  * Delete the planilla de seguridad social for a period (set URL to null).

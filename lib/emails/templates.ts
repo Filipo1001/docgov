@@ -128,7 +128,7 @@ export type EmailTemplate = (data: TemplateData) => { subject: string; html: str
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
-  aprobado_asesor: emailPeriodoAprobadoAsesor,
+  revision: emailPeriodoAprobadoAsesor,
   aprobado: emailPeriodoAprobado,
   rechazado: emailPeriodoRechazado,
   radicado: emailPeriodoRadicado,

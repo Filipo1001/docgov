@@ -15,7 +15,7 @@ import type { EstadoPeriodo, Rol } from './types'
 export const ESTADO_LABEL: Record<EstadoPeriodo, string> = {
   borrador: 'Borrador',
   enviado: 'Enviado',
-  aprobado_asesor: 'Aprobado por asesor',
+  revision: 'En revisión',
   aprobado: 'Aprobado',
   radicado: 'Radicado',
   rechazado: 'Rechazado',
@@ -24,7 +24,7 @@ export const ESTADO_LABEL: Record<EstadoPeriodo, string> = {
 export const ESTADO_COLOR: Record<EstadoPeriodo, string> = {
   borrador: 'bg-gray-100 text-gray-600',
   enviado: 'bg-blue-100 text-blue-700',
-  aprobado_asesor: 'bg-indigo-100 text-indigo-700',
+  revision: 'bg-indigo-100 text-indigo-700',
   aprobado: 'bg-green-100 text-green-700',
   radicado: 'bg-emerald-100 text-emerald-800',
   rechazado: 'bg-red-100 text-red-700',

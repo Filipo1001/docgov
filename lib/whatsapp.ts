@@ -15,8 +15,8 @@ const templates: Record<string, (d: WhatsAppData) => string> = {
   enviado: (d) =>
     `DocGov: ${d.nombreRemitente || 'Un contratista'} envio su informe de ${d.mes} ${d.anio} (Contrato ${d.contrato}) para revision.`,
 
-  aprobado_asesor: (d) =>
-    `DocGov: Tu informe de ${d.mes} ${d.anio} (Contrato ${d.contrato}) fue pre-aprobado por el asesor juridico. Pendiente de aprobacion final.`,
+  revision: (d) =>
+    `DocGov: Tu informe de ${d.mes} ${d.anio} (Contrato ${d.contrato}) fue revisado por el asesor y esta en revision por la secretaria.`,
 
   aprobado: (d) =>
     `DocGov: Tu informe de ${d.mes} ${d.anio} (Contrato ${d.contrato}) fue aprobado. Ya puedes descargar tus documentos.`,
