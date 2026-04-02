@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useUsuario } from '@/lib/user-context'
+import { formatCedula } from '@/lib/format'
 import type { ColaboradorListItem } from '@/services/supervisor'
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
@@ -197,7 +198,7 @@ export default function ColaboradoresPage() {
                   {p.nombre_completo}
                 </p>
                 {p.cedula && (
-                  <p className="text-xs text-gray-400 mt-0.5">C.C. {p.cedula}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">C.C. {formatCedula(p.cedula)}</p>
                 )}
                 <p className="text-xs text-gray-400 mt-0.5">{p.cargo}</p>
               </div>

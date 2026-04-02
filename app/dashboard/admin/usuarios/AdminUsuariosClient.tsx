@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { activarContratista } from '@/app/actions/admin'
+import { formatCedula } from '@/lib/format'
 import type { UsuarioAdmin, ContratistaPendiente, Dependencia } from '@/services/admin'
 
 const ROL_COLOR: Record<string, string> = {
@@ -274,7 +275,7 @@ export default function AdminUsuariosClient({
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{u.cedula}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-600">{formatCedula(u.cedula)}</td>
                     <td className="px-5 py-3.5">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROL_COLOR[u.rol] ?? 'bg-gray-100 text-gray-600'}`}>
                         {u.rol}
@@ -326,7 +327,7 @@ export default function AdminUsuariosClient({
                       <p className="text-sm font-medium text-gray-900">{p.nombre_completo}</p>
                       <p className="text-xs text-gray-400">{p.cargo}</p>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{p.cedula}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-600">{formatCedula(p.cedula)}</td>
                     <td className="px-5 py-3.5 text-sm text-gray-600">{p.secretaria}</td>
                     <td className="px-5 py-3.5 text-right">
                       <button

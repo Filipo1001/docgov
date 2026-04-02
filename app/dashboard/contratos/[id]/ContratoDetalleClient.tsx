@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
+import { formatCedula } from '@/lib/format'
 
 export default function ContratoDetallePage() {
   const { id } = useParams()
@@ -214,12 +215,12 @@ export default function ContratoDetallePage() {
           <div>
             <span className="text-gray-400 text-xs">Contratista</span>
             <p className="font-medium text-gray-900">{contrato.contratista?.nombre_completo}</p>
-            <p className="text-xs text-gray-400">CC {contrato.contratista?.cedula}</p>
+            <p className="text-xs text-gray-400">CC {formatCedula(contrato.contratista?.cedula)}</p>
           </div>
           <div>
             <span className="text-gray-400 text-xs">Supervisor</span>
             <p className="font-medium text-gray-900">{contrato.supervisor?.nombre_completo}</p>
-            <p className="text-xs text-gray-400">CC {contrato.supervisor?.cedula}</p>
+            <p className="text-xs text-gray-400">CC {formatCedula(contrato.supervisor?.cedula)}</p>
           </div>
           <div>
             <span className="text-gray-400 text-xs">Plazo</span>

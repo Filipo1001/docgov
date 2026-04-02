@@ -15,6 +15,7 @@
 import React from 'react'
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData } from './types'
+import { formatCedula } from '@/lib/format'
 
 // ─── Date helpers ─────────────────────────────────────────────
 
@@ -281,7 +282,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Número de identificación tributaria</Text></View>
-            <View style={s.val}><Text>{contrato.contratista.cedula}</Text></View>
+            <View style={s.val}><Text>{formatCedula(contrato.contratista.cedula)}</Text></View>
           </View>
 
           <View style={s.row}>
@@ -354,7 +355,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
 
           {/* Name, CC, address, phone — all BOLD (matching real document) */}
           <Text style={s.sigName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
-          <Text style={s.sigDetail}>CC. {contrato.contratista.cedula}</Text>
+          <Text style={s.sigDetail}>CC. {formatCedula(contrato.contratista.cedula)}</Text>
           {contrato.contratista.direccion && (
             <Text style={s.sigDetail}>Dirección: {contrato.contratista.direccion}</Text>
           )}

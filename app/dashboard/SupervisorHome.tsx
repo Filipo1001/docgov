@@ -8,6 +8,7 @@ import {
   type PeriodoPendienteSupervisor,
   type StatsSupervisor,
 } from '@/services/supervisor'
+import { formatCedula } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
@@ -70,7 +71,7 @@ function PeriodoCard({
               </div>
               <div>
                 <p className="font-semibold text-gray-900 truncate">{c.contratista.nombre_completo}</p>
-                <p className="text-xs text-gray-500">C.C. {c.contratista.cedula}</p>
+                <p className="text-xs text-gray-500">C.C. {formatCedula(c.contratista.cedula)}</p>
               </div>
             </div>
             <div className="text-right flex-shrink-0">

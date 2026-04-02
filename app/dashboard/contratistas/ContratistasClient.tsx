@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useUsuario } from '@/lib/user-context'
 import { getContratistasPorDependencia } from '@/services/periodos'
+import { formatCedula } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
 import Card from '@/components/ui/Card'
@@ -104,7 +105,7 @@ export default function ContratistasPage() {
                   <p className="font-medium text-gray-900 text-sm truncate group-hover:text-green-800 transition-colors">
                     {c.nombre_completo}
                   </p>
-                  <p className="text-xs text-gray-500">C.C. {c.cedula}</p>
+                  <p className="text-xs text-gray-500">C.C. {formatCedula(c.cedula)}</p>
                 </div>
               </div>
               {c.contrato_activo && (
@@ -125,7 +126,7 @@ export default function ContratistasPage() {
                 <Avatar nombre={c.nombre_completo} foto={c.foto_url} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate">{c.nombre_completo}</p>
-                  <p className="text-xs text-gray-500">C.C. {c.cedula}</p>
+                  <p className="text-xs text-gray-500">C.C. {formatCedula(c.cedula)}</p>
                 </div>
               </div>
               <div className="mt-3">

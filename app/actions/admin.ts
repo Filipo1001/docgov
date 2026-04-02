@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import type { ActionResult } from '@/lib/types'
 
 // ─── Auth guard ───────────────────────────────────────────────
@@ -39,12 +40,18 @@ export async function crearUsuario(formData: {
 
   const adminClient = createAdminSupabaseClient()
 
+  // Normalize fields before writing
+  const email         = normalizeEmail(formData.email)
+  const nombreCompleto = normalizeName(formData.nombre_completo)
+  const cargo         = formData.cargo ? normalizeName(formData.cargo) : null
+  const direccion     = formData.direccion ? normalizeFreeText(formData.direccion) : null
+
   // 1. Create auth user (email confirmed immediately, temp password)
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-    email: formData.email.trim().toLowerCase(),
+    email,
     password: 'Fredonia2026*',
     email_confirm: true,
-    user_metadata: { nombre_completo: formData.nombre_completo },
+    user_metadata: { nombre_completo: nombreCompleto },
   })
 
   if (authError || !authData?.user) {
@@ -63,13 +70,13 @@ export async function crearUsuario(formData: {
     .from('usuarios')
     .insert({
       id: userId,
-      email: formData.email.trim().toLowerCase(),
-      nombre_completo: formData.nombre_completo.trim(),
+      email,
+      nombre_completo: nombreCompleto,
       cedula: formData.cedula.trim(),
       rol: formData.rol,
-      cargo: formData.cargo?.trim() || null,
+      cargo,
       telefono: formData.telefono?.trim() || null,
-      direccion: formData.direccion?.trim() || null,
+      direccion,
       rh: formData.rh || null,
       tipo_documento: formData.tipo_documento ?? 'CC',
       dependencia_id: formData.dependencia_id || null,
@@ -109,12 +116,19 @@ export async function activarContratista(
   if (!imp) return { error: 'Contratista no encontrado' }
   if (imp.activado) return { error: 'Este contratista ya fue activado' }
 
+  const emailNorm    = normalizeEmail(email)
+  const nombreNorm   = normalizeName(imp.nombre_completo)
+  const cargoNorm    = extraData.cargo ?? imp.cargo
+    ? normalizeName(extraData.cargo ?? imp.cargo!)
+    : null
+  const direccionNorm = extraData.direccion ? normalizeFreeText(extraData.direccion) : null
+
   // Create auth user
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-    email: email.trim().toLowerCase(),
+    email: emailNorm,
     password: 'Fredonia2026*',
     email_confirm: true,
-    user_metadata: { nombre_completo: imp.nombre_completo },
+    user_metadata: { nombre_completo: nombreNorm },
   })
 
   if (authError || !authData?.user) {
@@ -125,16 +139,15 @@ export async function activarContratista(
   const { data: muni } = await supabase.from('municipios').select('id').limit(1).single()
 
   // Create usuarios row
-  const emailLower = email.trim().toLowerCase()
   const { error: dbError } = await adminClient.from('usuarios').insert({
     id: userId,
-    email: emailLower,
-    nombre_completo: imp.nombre_completo,
+    email: emailNorm,
+    nombre_completo: nombreNorm,
     cedula: extraData.cedula?.trim() || imp.cedula || '',
     rol: imp.rol ?? 'contratista',
-    cargo: extraData.cargo ?? imp.cargo,
+    cargo: cargoNorm,
     telefono: extraData.telefono ?? null,
-    direccion: extraData.direccion ?? null,
+    direccion: direccionNorm,
     rh: extraData.rh ?? null,
     dependencia_id: extraData.dependencia_id ?? null,
     municipio_id: muni?.id,
@@ -179,9 +192,10 @@ export async function actualizarUsuario(
     .from('usuarios')
     .update({
       ...data,
-      cargo: data.cargo?.trim() || null,
+      ...(data.nombre_completo !== undefined && { nombre_completo: normalizeName(data.nombre_completo) }),
+      ...(data.cargo !== undefined && { cargo: data.cargo ? normalizeName(data.cargo) : null }),
+      ...(data.direccion !== undefined && { direccion: data.direccion ? normalizeFreeText(data.direccion) : null }),
       telefono: data.telefono?.trim() || null,
-      direccion: data.direccion?.trim() || null,
       dependencia_id: data.dependencia_id || null,
     })
     .eq('id', id)
@@ -258,7 +272,11 @@ export async function actualizarMunicipio(
   const adminClient = createAdminSupabaseClient()
   const { error } = await adminClient
     .from('municipios')
-    .update(data)
+    .update({
+      ...data,
+      ...(data.nombre && { nombre: normalizeName(data.nombre) }),
+      ...(data.representante_legal && { representante_legal: normalizeName(data.representante_legal) }),
+    })
     .eq('id', id)
 
   if (error) return { error: error.message }

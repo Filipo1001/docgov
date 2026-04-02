@@ -6,6 +6,7 @@ import { useUsuario } from '@/lib/user-context'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import type { Contrato } from '@/lib/types'
+import { formatCedula } from '@/lib/format'
 
 // ─── Display maps ──────────────────────────────────────────────
 
@@ -231,7 +232,7 @@ export default function PerfilPage() {
                 {usuario.cedula && (
                   <p className="text-sm text-gray-600">
                     <span className="text-gray-400">CC </span>
-                    <span className="font-semibold text-gray-700">{usuario.cedula}</span>
+                    <span className="font-semibold text-gray-700">{formatCedula(usuario.cedula)}</span>
                   </p>
                 )}
                 <p className="text-sm text-gray-500">{usuario.email}</p>
@@ -289,7 +290,7 @@ export default function PerfilPage() {
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <SectionHeading>Información personal</SectionHeading>
           <Field label="Nombre completo"    value={usuario.nombre_completo} />
-          <Field label="Cédula"             value={usuario.cedula} />
+          <Field label="Cédula"             value={formatCedula(usuario.cedula)} />
           <Field label="Correo electrónico" value={usuario.email} />
           <Field label="Teléfono"           value={usuario.telefono} />
           <Field label="Dirección"          value={usuario.direccion} />

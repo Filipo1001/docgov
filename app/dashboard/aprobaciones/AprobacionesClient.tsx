@@ -7,6 +7,7 @@ import { useUsuario } from '@/lib/user-context'
 import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_COLA_POR_ROL } from '@/lib/constants'
 import type { Periodo } from '@/lib/types'
 import { getPeriodosPendientesParaRol } from '@/services/periodos'
+import { formatCedula } from '@/lib/format'
 import { getPeriodosPendientesSupervisor, type PeriodoPendienteSupervisor } from '@/services/supervisor'
 import { aprobarPeriodos, rechazarPeriodos } from '@/app/actions/periodos'
 
@@ -172,7 +173,7 @@ function SupervisorAprobaciones({ userId }: { userId: string }) {
                     <div className="flex items-start justify-between gap-2 flex-wrap mb-1">
                       <div>
                         <p className="font-bold text-gray-900 text-sm leading-tight">{c.contratista.nombre_completo}</p>
-                        <p className="text-xs text-gray-500">C.C. {c.contratista.cedula}</p>
+                        <p className="text-xs text-gray-500">C.C. {formatCedula(c.contratista.cedula)}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-base font-bold text-gray-900">{fmt(p.valor_cobro)}</p>

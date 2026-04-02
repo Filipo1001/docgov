@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
 import { ESTADO_LABEL, ESTADO_COLOR } from '@/lib/constants'
+import { formatCedula } from '@/lib/format'
 import type {
   PersonaDetalle,
   ContratoConPeriodos,
@@ -386,7 +387,7 @@ export default function PersonaDetallePage() {
 
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-gray-900 leading-tight">{nombre}</h1>
-            {cedula && <p className="text-sm text-gray-500 mt-0.5">C.C. {cedula}</p>}
+            {cedula && <p className="text-sm text-gray-500 mt-0.5">C.C. {formatCedula(cedula)}</p>}
 
             {/* Status badges */}
             <div className="flex flex-wrap gap-2 mt-2">

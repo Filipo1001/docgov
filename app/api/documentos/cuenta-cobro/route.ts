@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { formatCedula } from '@/lib/format'
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   AlignmentType, BorderStyle, WidthType, ShadingType,
@@ -134,7 +135,7 @@ export async function GET(request: Request) {
             ]}),
             new TableRow({ children: [
               cell('Número de identificación tributaria', { bold: true }),
-              cell(contratista?.cedula || ''),
+              cell(formatCedula(contratista?.cedula) || ''),
             ]}),
             new TableRow({ children: [
               cell('Nº convenio o contrato:', { bold: true }),
@@ -197,7 +198,7 @@ export async function GET(request: Request) {
         new Paragraph({
           spacing: { after: 40 },
           children: [new TextRun({
-            text: `CC. ${contratista?.cedula || ''}`,
+            text: `CC. ${formatCedula(contratista?.cedula) || ''}`,
             size: 20, font: 'Arial'
           })]
         }),

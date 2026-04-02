@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
+import { formatCedula } from '@/lib/format'
 
 // ── Spanish number-to-words (Colombian peso format) ──────────
 function numerosALetras(n: number): string {
@@ -325,7 +326,7 @@ export default function NuevoContratoPage() {
                 className={excelEncontrado && form.contratista_id ? autoClass : inputClass}>
                 <option value="">Seleccionar...</option>
                 {contratistas.map(u => (
-                  <option key={u.id} value={u.id}>{u.nombre_completo} — {u.cedula}</option>
+                  <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
                 ))}
               </select>
             </div>
@@ -335,7 +336,7 @@ export default function NuevoContratoPage() {
                 className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
                 <option value="">Seleccionar...</option>
                 {supervisores.map(u => (
-                  <option key={u.id} value={u.id}>{u.nombre_completo} — {u.cedula}</option>
+                  <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
                 ))}
               </select>
             </div>
