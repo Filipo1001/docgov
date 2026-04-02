@@ -228,6 +228,7 @@ export async function getContratistasPorDependencia(dependenciaId: string): Prom
   nombre_completo: string
   cedula: string
   email: string
+  foto_url?: string | null
   tiene_contrato: boolean
   contrato_activo?: { id: string; numero: string; objeto: string }
 }[]> {
@@ -238,7 +239,7 @@ export async function getContratistasPorDependencia(dependenciaId: string): Prom
     .from('contratos')
     .select(`
       id, numero, objeto, contratista_id, activo,
-      contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email)
+      contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, foto_url)
     `)
     .eq('dependencia_id', dependenciaId)
     .order('created_at', { ascending: false })
@@ -251,6 +252,7 @@ export async function getContratistasPorDependencia(dependenciaId: string): Prom
     nombre_completo: string
     cedula: string
     email: string
+    foto_url?: string | null
     tiene_contrato: boolean
     contrato_activo?: { id: string; numero: string; objeto: string }
   }>()
@@ -265,6 +267,7 @@ export async function getContratistasPorDependencia(dependenciaId: string): Prom
         nombre_completo: cont.nombre_completo,
         cedula: cont.cedula,
         email: cont.email,
+        foto_url: cont.foto_url ?? null,
         tiene_contrato: c.activo !== false,
         contrato_activo: c.activo !== false ? { id: c.id, numero: c.numero, objeto: c.objeto } : undefined,
       })
