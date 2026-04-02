@@ -119,7 +119,7 @@ function InformeCard({
               <p className="font-bold text-gray-900 text-sm">{fmt(periodo.valor_cobro)}</p>
               <div className="flex items-center gap-1 justify-end flex-wrap">
                 {esHistorico && (
-                  <Badge size="xs" variant="yellow">🔒 Histórico</Badge>
+                  <Badge size="xs" variant="amber">🔒 Histórico</Badge>
                 )}
                 <Badge
                   size="xs"
