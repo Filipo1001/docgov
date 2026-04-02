@@ -99,7 +99,7 @@ export default function ContratistasPage() {
               className="bg-green-50 rounded-2xl border border-green-200 p-4 hover:bg-green-100 transition-colors group"
             >
               <div className="flex items-center gap-3">
-                <Avatar nombre={c.nombre_completo} />
+                <Avatar nombre={c.nombre_completo} foto={c.foto_url} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate group-hover:text-green-800 transition-colors">
                     {c.nombre_completo}
@@ -122,7 +122,7 @@ export default function ContratistasPage() {
               className="bg-red-50 rounded-2xl border border-red-200 p-4"
             >
               <div className="flex items-center gap-3">
-                <Avatar nombre={c.nombre_completo} />
+                <Avatar nombre={c.nombre_completo} foto={c.foto_url} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate">{c.nombre_completo}</p>
                   <p className="text-xs text-gray-500">C.C. {c.cedula}</p>

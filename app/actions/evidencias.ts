@@ -72,15 +72,46 @@ export async function prepararUploadEvidencia(
     // ── Period editability check ──────────────────────────────
     const { data: periodo } = await supabase
       .from('periodos')
-      .select('estado')
+      .select('estado, es_historico, mes, anio')
       .eq('id', periodoId)
       .single()
 
     if (!periodo) return { error: 'Periodo no encontrado' }
 
+    if (periodo.es_historico) {
+      return { error: 'No se puede subir evidencia a un periodo histórico' }
+    }
+
     if (!ESTADOS_EDITABLES.includes(periodo.estado as never)) {
       return {
         error: `No se puede subir evidencia: el periodo está en estado "${periodo.estado}"`,
+      }
+    }
+
+    // Block evidence upload on past months for non-admin contratistas
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (authUser) {
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('rol')
+        .eq('id', authUser.id)
+        .single()
+
+      if (usuarioData?.rol === 'contratista') {
+        const MES_IDX: Record<string, number> = {
+          ENERO: 0, FEBRERO: 1, MARZO: 2, ABRIL: 3,
+          MAYO: 4, JUNIO: 5, JULIO: 6, AGOSTO: 7,
+          SEPTIEMBRE: 8, OCTUBRE: 9, NOVIEMBRE: 10, DICIEMBRE: 11,
+        }
+        const now = new Date()
+        const mesIdx = MES_IDX[(periodo.mes as string).toUpperCase()] ?? -1
+        const vencido = periodo.estado !== 'rechazado' && (
+          (periodo.anio as number) < now.getFullYear() ||
+          ((periodo.anio as number) === now.getFullYear() && mesIdx < now.getMonth())
+        )
+        if (vencido) {
+          return { error: 'No se puede subir evidencia a un periodo de meses anteriores.' }
+        }
       }
     }
 

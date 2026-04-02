@@ -94,11 +94,14 @@ function InformeCard({
     setProcesando(false)
   }
 
-  const cardBorder = tieneNotaSecretaria
-    ? 'border-red-200 bg-red-50/30'
-    : periodo.estado === 'revision'
-      ? 'border-indigo-200 bg-indigo-50/30'
-      : 'border-gray-200 bg-white'
+  const esHistorico = periodo.es_historico === true
+  const cardBorder = esHistorico
+    ? 'border-amber-200 bg-amber-50/40'
+    : tieneNotaSecretaria
+      ? 'border-red-200 bg-red-50/30'
+      : periodo.estado === 'revision'
+        ? 'border-indigo-200 bg-indigo-50/30'
+        : 'border-gray-200 bg-white'
 
   return (
     <div className={`rounded-2xl border p-5 transition-all ${cardBorder}`}>
@@ -112,19 +115,23 @@ function InformeCard({
                 Contrato N.° {contrato?.numero} — {contrato?.dependencia?.abreviatura}
               </p>
             </div>
-            <div className="text-right flex-shrink-0">
+            <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
               <p className="font-bold text-gray-900 text-sm">{fmt(periodo.valor_cobro)}</p>
-              <Badge
-                size="xs"
-                variant={
-                  periodo.estado === 'aprobado' || periodo.estado === 'radicado' ? 'green'
-                    : periodo.estado === 'revision' ? 'indigo'
-                    : periodo.estado === 'rechazado' ? 'red'
-                    : 'blue'
-                }
-              >
-                {ESTADO_LABEL[periodo.estado]}
-              </Badge>
+              {esHistorico ? (
+                <Badge size="xs" variant="amber">🔒 Histórico</Badge>
+              ) : (
+                <Badge
+                  size="xs"
+                  variant={
+                    periodo.estado === 'aprobado' || periodo.estado === 'radicado' ? 'green'
+                      : periodo.estado === 'revision' ? 'indigo'
+                      : periodo.estado === 'rechazado' ? 'red'
+                      : 'blue'
+                  }
+                >
+                  {ESTADO_LABEL[periodo.estado]}
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -138,7 +145,7 @@ function InformeCard({
           )}
 
           {/* Actions for enviado -- asesor can approve or reject */}
-          {periodo.estado === 'enviado' && !mostrarRechazo && (
+          {!esHistorico && periodo.estado === 'enviado' && !mostrarRechazo && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               {esAsesorCard && (
                 <button
@@ -178,7 +185,7 @@ function InformeCard({
           )}
 
           {/* Actions for revision — asesor has reviewed, secretary can approve */}
-          {periodo.estado === 'revision' && !mostrarRechazo && (
+          {!esHistorico && periodo.estado === 'revision' && !mostrarRechazo && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               {/* Secretary approves */}
               {esSecretariaCard && (
@@ -221,7 +228,7 @@ function InformeCard({
             </div>
           )}
 
-          {periodo.estado === 'aprobado' && (
+          {!esHistorico && periodo.estado === 'aprobado' && (
             <div className="mt-3">
               <Link
                 href={`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`}
@@ -326,10 +333,10 @@ export default function InformesPage() {
   const esMesActual = mesIdx === now.getMonth() && anio === now.getFullYear()
 
   // Filters
-  const enviados = periodos.filter(p => p.estado === 'enviado')
-  const aprobadosAsesor = periodos.filter(p => p.estado === 'revision')
+  const enviados = periodos.filter(p => p.estado === 'enviado' && !p.es_historico)
+  const aprobadosAsesor = periodos.filter(p => p.estado === 'revision' && !p.es_historico)
   const sinRevisar = enviados.filter(p => (p.preaprobaciones?.length ?? 0) === 0)
-  const aprobados = periodos.filter(p => ['aprobado', 'radicado'].includes(p.estado))
+  const aprobados = periodos.filter(p => ['aprobado', 'radicado'].includes(p.estado) && !p.es_historico)
 
   const periodosVisibles = (() => {
     switch (filtro) {

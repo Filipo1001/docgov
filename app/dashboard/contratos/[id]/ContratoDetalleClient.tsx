@@ -376,9 +376,15 @@ export default function ContratoDetallePage() {
                   <p className="text-sm font-medium text-gray-900">
                     ${periodo.valor_cobro?.toLocaleString('es-CO')}
                   </p>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${estadoColor[periodo.estado] || 'bg-gray-100 text-gray-600'}`}>
-                    {estadoLabel[periodo.estado] || periodo.estado}
-                  </span>
+                  {periodo.es_historico ? (
+                    <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-amber-100 text-amber-700">
+                      🔒 Histórico
+                    </span>
+                  ) : (
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${estadoColor[periodo.estado] || 'bg-gray-100 text-gray-600'}`}>
+                      {estadoLabel[periodo.estado] || periodo.estado}
+                    </span>
+                  )}
                 </div>
               </Link>
             ))}

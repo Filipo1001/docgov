@@ -70,13 +70,16 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 }
 
 function BankField({ label, value }: { label: string; value?: string | null }) {
-  if (!value) return null
   return (
     <div>
       <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-0.5">
         {label}
       </p>
-      <p className="text-sm text-gray-800 font-semibold">{value}</p>
+      {value ? (
+        <p className="text-sm text-gray-800 font-semibold">{value}</p>
+      ) : (
+        <p className="text-sm text-gray-300 italic">No registrado</p>
+      )}
     </div>
   )
 }
@@ -368,7 +371,7 @@ export default function PerfilPage() {
       </div>
 
       {/* ── Banking Information — contratista only ───────────────── */}
-      {rol === 'contratista' && lastContrato && hasBanking && (
+      {rol === 'contratista' && lastContrato && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <SectionHeading>Información bancaria</SectionHeading>

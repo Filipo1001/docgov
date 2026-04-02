@@ -117,14 +117,32 @@ export default function PeriodoDetallePage() {
 
   // ── Derived values ──────────────────────────────────────────
 
-  const esEditable = periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false
-
+  const esHistorico = periodo?.es_historico === true
   const esAsesor = usuario?.rol === 'asesor' || usuario?.rol === 'admin'
   const esSecretaria = usuario?.rol === 'supervisor' || usuario?.rol === 'admin'
   const esContratista = usuario?.rol === 'contratista'
 
+  // Past-month lock: contratistas cannot edit borrador periods from previous months
+  // (rechazado periods remain editable regardless of date)
+  const MES_INDEX: Record<string, number> = {
+    ENERO: 0, FEBRERO: 1, MARZO: 2, ABRIL: 3,
+    MAYO: 4, JUNIO: 5, JULIO: 6, AGOSTO: 7,
+    SEPTIEMBRE: 8, OCTUBRE: 9, NOVIEMBRE: 10, DICIEMBRE: 11,
+  }
+  const periodoVencido = (() => {
+    if (!esContratista || !periodo) return false
+    if (periodo.estado === 'rechazado') return false
+    const now = new Date()
+    const mesIdx = MES_INDEX[(periodo.mes as string).toUpperCase()] ?? -1
+    if ((periodo.anio as number) < now.getFullYear()) return true
+    if ((periodo.anio as number) === now.getFullYear() && mesIdx < now.getMonth()) return true
+    return false
+  })()
+
+  const esEditable = !esHistorico && !periodoVencido && (periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false)
+
   // Planilla: contratista puede gestionar hasta que esté aprobado o radicado
-  const esPlanillaGestionable = esContratista && periodo
+  const esPlanillaGestionable = !esHistorico && !periodoVencido && esContratista && periodo
     ? !['aprobado', 'radicado'].includes(periodo.estado)
     : false
 
@@ -427,6 +445,34 @@ export default function PeriodoDetallePage() {
         <span>/</span>
         <span className="text-gray-900 font-medium">{periodo.mes} {periodo.anio}</span>
       </div>
+
+      {/* ── Historical lock banner ──────────────────────────── */}
+      {esHistorico && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
+          <span className="text-xl flex-shrink-0">🔒</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Periodo histórico — solo lectura</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Este periodo fue procesado antes de la digitalización del sistema y no puede ser modificado.
+              {periodo?.historico_nota ? ` ${periodo.historico_nota}` : ''}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Past-month lock banner (contratista only) ────────── */}
+      {periodoVencido && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
+          <span className="text-xl flex-shrink-0">📅</span>
+          <div>
+            <p className="text-sm font-semibold text-orange-800">Periodo cerrado para envío</p>
+            <p className="text-xs text-orange-700 mt-0.5">
+              El plazo para enviar el informe de <strong>{periodo.mes} {periodo.anio}</strong> ya venció.
+              Solo puedes enviar el informe del mes actual. Si tienes alguna inquietud, contacta a tu supervisor.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Approval timeline ───────────────────────────────── */}
       <div className="bg-white rounded-2xl border p-5 mb-6">

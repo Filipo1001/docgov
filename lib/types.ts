@@ -151,6 +151,11 @@ export interface Periodo {
   // Pre-approvals (joined)
   preaprobaciones?: Preaprobacion[]
   historial?: HistorialPeriodo[]
+  // Historical immutability
+  es_historico: boolean
+  historico_marcado_por: string | null
+  historico_marcado_at: string | null
+  historico_nota: string | null
 }
 
 export interface Actividad {

@@ -48,12 +48,29 @@ async function getAuthContext() {
 async function getPeriodo(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, periodoId: string) {
   const { data, error } = await supabase
     .from('periodos')
-    .select('id, estado, contrato_id, mes, anio')
+    .select('id, estado, contrato_id, mes, anio, es_historico')
     .eq('id', periodoId)
     .single()
 
   if (error || !data) return null
-  return data as { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number }
+  return data as { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number; es_historico: boolean }
+}
+
+// ── Past-month lock ───────────────────────────────────────────
+const MES_INDEX: Record<string, number> = {
+  ENERO: 0, FEBRERO: 1, MARZO: 2, ABRIL: 3,
+  MAYO: 4, JUNIO: 5, JULIO: 6, AGOSTO: 7,
+  SEPTIEMBRE: 8, OCTUBRE: 9, NOVIEMBRE: 10, DICIEMBRE: 11,
+}
+
+function isPeriodoVencido(periodo: { mes: string; anio: number; estado: EstadoPeriodo }): boolean {
+  // rechazado periods must always remain editable
+  if (periodo.estado === 'rechazado') return false
+  const now = new Date()
+  const mesIdx = MES_INDEX[periodo.mes.toUpperCase()] ?? -1
+  if (periodo.anio < now.getFullYear()) return true
+  if (periodo.anio === now.getFullYear() && mesIdx < now.getMonth()) return true
+  return false
 }
 
 async function getContratoIds(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, contratoId: string) {
@@ -111,6 +128,10 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
 
+    if (periodo.es_historico) {
+      return { error: 'No se puede modificar un periodo histórico' }
+    }
+
     if (!ESTADOS_EDITABLES.includes(periodo.estado)) {
       return { error: `No se puede enviar un periodo en estado "${periodo.estado}"` }
     }
@@ -120,6 +141,10 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.contratista_id !== usuario.id) {
         return { error: 'No tienes permiso para enviar este periodo' }
+      }
+      // Block submission of past-month borrador periods
+      if (isPeriodoVencido(periodo)) {
+        return { error: 'El plazo para enviar este periodo ya venció. Solo puedes enviar el informe del mes actual.' }
       }
     }
 
@@ -205,6 +230,7 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'enviado' && periodo.estado !== 'rechazado') {
       return { error: 'Solo se pueden aprobar periodos en estado "enviado" o "rechazado"' }
@@ -264,6 +290,7 @@ export async function rechazarComoAsesor(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'enviado' && periodo.estado !== 'revision') {
       return { error: 'Solo se pueden rechazar periodos en estado "enviado" o "revision"' }
@@ -325,6 +352,7 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'revision') {
       return { error: 'Solo se puede revocar la revisión de periodos en estado "revision"' }
@@ -375,12 +403,13 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
     // Secretary can approve from either state — asesor review is optional
     const estadosPermitidos: EstadoPeriodo[] = ['revision', 'enviado']
 
-    // 1 query: fetch all periods + contract info together
+    // 1 query: fetch all periods + contract info together (exclude historical)
     const { data: periodos, error: fetchError } = await supabase
       .from('periodos')
       .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, contratista_id)')
       .in('id', periodoIds)
       .in('estado', estadosPermitidos)
+      .eq('es_historico', false)
 
     if (fetchError) return { error: fetchError.message }
     if (!periodos || periodos.length === 0) return { data: { aprobados: 0 } }
@@ -447,11 +476,12 @@ export async function rechazarPeriodos(
       return { error: 'Solo la secretaria puede rechazar informes' }
     }
 
-    // 1 query: fetch all periods + contract info together
+    // 1 query: fetch all periods + contract info together (exclude historical)
     const { data: periodos, error: fetchError } = await supabase
       .from('periodos')
       .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, dependencia_id)')
       .in('id', periodoIds)
+      .eq('es_historico', false)
 
     if (fetchError) return { error: fetchError.message }
     if (!periodos || periodos.length === 0) return { data: { rechazados: 0 } }
@@ -531,6 +561,7 @@ export async function marcarRadicado(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'aprobado') {
       return { error: 'Solo se pueden radicar los periodos aprobados' }
@@ -641,6 +672,7 @@ export async function subirPlanilla(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
       return { error: 'No se puede reemplazar la planilla de un periodo ya aprobado o radicado' }
@@ -700,6 +732,7 @@ export async function eliminarPlanilla(periodoId: string): Promise<ActionResult>
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
       return { error: 'No se puede eliminar la planilla de un periodo ya aprobado o radicado' }
@@ -736,6 +769,7 @@ export async function guardarNumeroPlanilla(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
       return { error: 'No se puede modificar la planilla de un periodo ya aprobado o radicado' }
@@ -848,6 +882,71 @@ export async function actualizarNumeroRadicado(
     )
 
     revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Admin: Historical period management ────────────────────
+
+/**
+ * Mark a period as historical (immutable). Admin-only.
+ */
+export async function marcarComoHistorico(
+  periodoId: string,
+  nota?: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'admin') return { error: 'Solo el administrador puede marcar periodos como históricos' }
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({
+        es_historico: true,
+        historico_marcado_por: usuario.id,
+        historico_marcado_at: new Date().toISOString(),
+        historico_nota: nota?.trim() || null,
+      })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al marcar como histórico: ${error.message}` }
+
+    await insertHistorial(supabase, periodoId, null, null, usuario.id, `Periodo marcado como histórico${nota ? ': ' + nota : ''}`)
+    revalidatePath('/dashboard/admin/historicos')
+    revalidatePath('/dashboard/informes')
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Remove historical flag from a period. Admin-only.
+ */
+export async function desmarcarHistorico(periodoId: string): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'admin') return { error: 'Solo el administrador puede desmarcar periodos históricos' }
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({
+        es_historico: false,
+        historico_marcado_por: null,
+        historico_marcado_at: null,
+        historico_nota: null,
+      })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al desmarcar histórico: ${error.message}` }
+
+    await insertHistorial(supabase, periodoId, null, null, usuario.id, 'Periodo desmarcado como histórico')
+    revalidatePath('/dashboard/admin/historicos')
+    revalidatePath('/dashboard/informes')
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
