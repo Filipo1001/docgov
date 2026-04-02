@@ -119,6 +119,12 @@ export async function generarPeriodos(contrato: Contrato): Promise<{ error?: str
         ? contrato.fecha_fin
         : `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${ultimoDia}`
 
+    // Auto-mark as historical if the period is before the current month
+    const now = new Date()
+    const esPasado =
+      anio < now.getFullYear() ||
+      (anio === now.getFullYear() && mesIndex < now.getMonth())
+
     periodosNuevos.push({
       contrato_id: contrato.id,
       numero_periodo: i + 1,
@@ -128,6 +134,11 @@ export async function generarPeriodos(contrato: Contrato): Promise<{ error?: str
       fecha_fin: finP,
       valor_cobro: contrato.valor_mensual,
       estado: 'borrador',
+      es_historico: esPasado,
+      ...(esPasado && {
+        historico_marcado_at: new Date().toISOString(),
+        historico_nota: 'Periodo anterior a la digitalización del sistema — marcado automáticamente',
+      }),
     })
   }
 
