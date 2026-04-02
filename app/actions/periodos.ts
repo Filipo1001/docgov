@@ -396,7 +396,7 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
       ...periodos.map(p => insertHistorial(supabase, p.id, p.estado as EstadoPeriodo, 'aprobado', usuario.id)),
       Promise.allSettled(
         periodos.map(async (p) => {
-          const contrato = p.contrato as { numero: string; contratista_id: string } | null
+          const contrato = p.contrato as unknown as { numero: string; contratista_id: string } | null
           if (!contrato?.contratista_id) return
           await enviarNotificacion({
             destinatarioId: contrato.contratista_id,
@@ -467,7 +467,7 @@ export async function rechazarPeriodos(
 
     // 1 query: fetch all asesores for all affected dependencias at once
     const dependenciaIds = [...new Set(
-      periodos.map(p => (p.contrato as { numero: string; dependencia_id: string } | null)?.dependencia_id).filter(Boolean)
+      periodos.map(p => (p.contrato as unknown as { numero: string; dependencia_id: string } | null)?.dependencia_id).filter(Boolean)
     )] as string[]
 
     if (dependenciaIds.length > 0) {
@@ -481,7 +481,7 @@ export async function rechazarPeriodos(
       if (asesores && asesores.length > 0) {
         await Promise.allSettled(
           periodos.map(async (p) => {
-            const contrato = p.contrato as { numero: string; dependencia_id: string } | null
+            const contrato = p.contrato as unknown as { numero: string; dependencia_id: string } | null
             if (!contrato?.dependencia_id) return
             const asesorIds = asesores
               .filter(a => a.dependencia_id === contrato.dependencia_id)
