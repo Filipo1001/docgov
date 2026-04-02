@@ -155,15 +155,21 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         {/* Usuario */}
         <div className="p-4 border-t border-gray-100">
           {usuario && (
-            <div className="flex items-center gap-3 mb-3">
+            <Link
+              href="/dashboard/perfil"
+              className="flex items-center gap-3 mb-3 rounded-xl p-1.5 -mx-1.5 hover:bg-gray-50 transition-colors group"
+            >
               <UserAvatar nombre={usuario.nombre_completo} fotoUrl={usuario.foto_url} size={9} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
                   {usuario.nombre_completo.split(' ')[0]}
                 </p>
                 <p className="text-xs text-gray-400 capitalize">{usuario.rol}</p>
               </div>
-            </div>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 group-hover:text-blue-400 shrink-0 transition-colors">
+                <path d="M5 3l4 4-4 4" />
+              </svg>
+            </Link>
           )}
           <button
             onClick={cerrarSesion}
