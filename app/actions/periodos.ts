@@ -821,11 +821,16 @@ export async function subirFirma(
     const file = formData.get('file') as File
     if (!file) return { error: 'No se recibió el archivo' }
 
-    if (file.size > 5 * 1024 * 1024) {
-      return { error: 'La firma no puede superar 5 MB' }
+    const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED_MIME.includes(file.type)) {
+      return { error: 'Solo se permiten imágenes (JPG, PNG, WEBP)' }
     }
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+    if (file.size > 3 * 1024 * 1024) {
+      return { error: 'La firma no puede superar 3 MB' }
+    }
+
+    const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/jpeg' ? 'jpg' : 'png'
     const path = `firmas/${uploadForId}/${Date.now()}.${ext}`
 
     const buffer = Buffer.from(await file.arrayBuffer())

@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/lib/user-context'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import type { Contrato } from '@/lib/types'
 import { formatCedula } from '@/lib/format'
+import { subirFirma } from '@/app/actions/periodos'
 
 // ─── Display maps ──────────────────────────────────────────────
 
@@ -122,6 +123,12 @@ export default function PerfilPage() {
   const [memberSince,      setMemberSince]      = useState<string | null>(null)
   const [loading,          setLoading]          = useState(true)
 
+  // Firma upload state — local override after successful upload
+  const [firmaUrl,       setFirmaUrl]       = useState<string | null>(null)
+  const [subiendoFirma,  setSubiendoFirma]  = useState(false)
+  const [firmaError,     setFirmaError]     = useState<string | null>(null)
+  const firmaInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (!usuario) return
 
@@ -183,6 +190,67 @@ export default function PerfilPage() {
   }, [usuario])
 
   if (loading || !usuario) return <Skeleton />
+
+  // Normalize image client-side: white background + resize to max 600×200, export PNG
+  async function normalizarFirma(file: File): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const objUrl = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl)
+        const MAX_W = 600, MAX_H = 200
+        let w = img.naturalWidth, h = img.naturalHeight
+        const ratio = Math.min(MAX_W / w, MAX_H / h, 1) // never upscale
+        w = Math.round(w * ratio)
+        h = Math.round(h * ratio)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(
+          (blob) => { if (blob) resolve(blob); else reject(new Error('Error al procesar imagen')) },
+          'image/png', 0.95
+        )
+      }
+      img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('Imagen inválida')) }
+      img.src = objUrl
+    })
+  }
+
+  async function handleSubirFirma(file: File) {
+    setFirmaError(null)
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED.includes(file.type)) {
+      setFirmaError('Solo se permiten imágenes JPG, PNG o WEBP')
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setFirmaError('El archivo no puede superar 3 MB')
+      return
+    }
+    setSubiendoFirma(true)
+    try {
+      const blob = await normalizarFirma(file)
+      const formData = new FormData()
+      formData.append('file', new File([blob], 'firma.png', { type: 'image/png' }))
+      const result = await subirFirma(formData)
+      if (result.error) {
+        setFirmaError(result.error)
+      } else {
+        setFirmaUrl(result.data?.url ?? null)
+      }
+    } catch {
+      setFirmaError('Error al procesar la imagen')
+    } finally {
+      setSubiendoFirma(false)
+    }
+  }
+
+  // Effective firma URL: local override takes precedence after upload
+  const firmaActual = firmaUrl ?? usuario.firma_url ?? null
 
   const rol          = usuario.rol
   const rolLabel     = ROL_LABEL[rol]     ?? rol
@@ -397,59 +465,111 @@ export default function PerfilPage() {
 
       {/* ── Signature ────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionHeading>Firma</SectionHeading>
+        <div className="flex items-center justify-between mb-3">
+          <SectionHeading>Firma</SectionHeading>
+          {firmaActual && (
+            <button
+              onClick={() => firmaInputRef.current?.click()}
+              disabled={subiendoFirma}
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+            >
+              {subiendoFirma ? 'Subiendo...' : 'Reemplazar'}
+            </button>
+          )}
+        </div>
 
-        {usuario.firma_url ? (
-          /* Registered signature */
+        {/* Recommendation banner — shown when no firma */}
+        {!firmaActual && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+            <span className="text-base shrink-0 mt-0.5">💡</span>
+            <p className="text-xs text-amber-700 leading-relaxed">
+              <strong>Recomendado:</strong> Registra tu firma para completar correctamente tus informes.
+              La firma se adjuntará automáticamente a los documentos generados.
+            </p>
+          </div>
+        )}
+
+        {firmaActual ? (
+          /* Firma registrada */
           <div className="flex flex-col items-start gap-3">
-            <div className="inline-block border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 inline-block">
               <img
-                src={usuario.firma_url}
+                src={firmaActual}
                 alt="Firma del usuario"
                 className="max-h-24 max-w-xs object-contain"
               />
             </div>
-            <p className="text-xs text-gray-400">Firma registrada</p>
+            <p className="text-xs text-gray-400">
+              Firma registrada — se incluirá en los documentos del sistema
+            </p>
           </div>
         ) : (
-          /* Placeholder */
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 border-2 border-dashed border-gray-200 rounded-2xl p-6 bg-gray-50/50">
-            {/* Signature icon */}
+          /* Upload area */
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => !subiendoFirma && firmaInputRef.current?.click()}
+            onKeyDown={(e) => e.key === 'Enter' && !subiendoFirma && firmaInputRef.current?.click()}
+            className={`flex flex-col sm:flex-row items-center sm:items-start gap-5 border-2 border-dashed rounded-2xl p-6 transition-colors ${
+              subiendoFirma
+                ? 'border-blue-200 bg-blue-50/50 cursor-wait'
+                : 'border-gray-200 bg-gray-50/50 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'
+            }`}
+          >
+            {/* Icon */}
             <div className="shrink-0 w-14 h-14 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-gray-300">
-                <path
-                  d="M4 20 C6 13, 9 11, 11 15 C13 19, 11 22, 14 20 C17 18, 19 12, 22 16"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-                <line
-                  x1="3" y1="23" x2="25" y2="23"
-                  stroke="currentColor"
-                  strokeWidth="1.25"
-                  strokeLinecap="round"
-                />
-              </svg>
+              {subiendoFirma ? (
+                <svg className="w-6 h-6 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              ) : (
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-gray-300">
+                  <path
+                    d="M4 20 C6 13, 9 11, 11 15 C13 19, 11 22, 14 20 C17 18, 19 12, 22 16"
+                    stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" fill="none"
+                  />
+                  <line x1="3" y1="23" x2="25" y2="23" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                </svg>
+              )}
             </div>
 
             <div>
               <p className="text-sm font-semibold text-gray-600 mb-1">
-                Sin firma registrada
+                {subiendoFirma ? 'Procesando firma...' : 'Subir firma'}
               </p>
               <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
-                La carga de firma digital estará disponible próximamente. Esta
-                funcionalidad permitirá firmar documentos directamente desde el
-                sistema sin necesidad de imprimirlos.
+                {subiendoFirma
+                  ? 'Normalizando imagen y guardando...'
+                  : 'JPG, PNG o WEBP · máx. 3 MB. La imagen se normalizará automáticamente (fondo blanco, tamaño estándar).'}
               </p>
-              <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 bg-white border border-gray-200 px-3 py-1.5 rounded-full shadow-sm">
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
-                Próximamente
-              </span>
+              {!subiendoFirma && (
+                <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
+                  Seleccionar imagen
+                </span>
+              )}
             </div>
           </div>
         )}
+
+        {/* Error message */}
+        {firmaError && (
+          <p className="mt-2 text-xs text-red-500">{firmaError}</p>
+        )}
+
+        {/* Single hidden file input */}
+        <input
+          ref={firmaInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          disabled={subiendoFirma}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleSubirFirma(file)
+            e.target.value = ''
+          }}
+        />
       </div>
 
     </div>

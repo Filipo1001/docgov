@@ -461,6 +461,24 @@ export default function PeriodoDetallePage() {
         <span className="text-gray-900 font-medium">{periodo.mes} {periodo.anio}</span>
       </div>
 
+      {/* ── Firma suggestion banner (contratista, editable, no firma) ── */}
+      {esEditable && esContratista && !usuario?.firma_url && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-base shrink-0">✍️</span>
+            <p className="text-xs text-amber-700">
+              <strong>Recomendado:</strong> Registra tu firma para completar correctamente tus informes.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/perfil"
+            className="text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900 shrink-0"
+          >
+            Ir a mi perfil
+          </Link>
+        </div>
+      )}
+
       {/* ── Historical lock banner ──────────────────────────── */}
       {esHistorico && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
