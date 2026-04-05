@@ -80,6 +80,10 @@ export default function PeriodoDetallePage() {
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
   const [subiendoPlanilla, setSubiendoPlanilla] = useState(false)
 
+  // Inline planilla validation (submit section)
+  const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
+  const seccionEnvioRef = useRef<HTMLDivElement>(null)
+
   const cargarDatos = useCallback(async (silencioso = false) => {
     const datos = await getPeriodoConContrato(periodoId, contratoId)
     setContrato(datos.contrato)
@@ -174,11 +178,17 @@ export default function PeriodoDetallePage() {
   // ── Handlers ────────────────────────────────────────────────
 
   async function handleEnviar() {
-    // Planilla de seguridad social obligatoria antes de enviar
-    if (!periodo?.planilla_ss_url || !numPlanilla.trim()) {
+    const faltaPlanilla = !periodo?.planilla_ss_url
+    const faltaNumero = !numPlanilla.trim()
+
+    if (faltaPlanilla || faltaNumero) {
+      setErroresCampos({ planilla: faltaPlanilla, numero: faltaNumero })
       toast.error('Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida')
+      seccionEnvioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
+
+    setErroresCampos({ planilla: false, numero: false })
     setEnviando(true)
     const result = await enviarPeriodo(periodoId)
     if (result.error) toast.error(result.error)
@@ -947,20 +957,85 @@ export default function PeriodoDetallePage() {
         })}
       </div>
 
-      {/* Submit button (contratista) */}
+      {/* Submit section (contratista) */}
       {esEditable && (
-        <div className="bg-white rounded-2xl border p-6 mb-6">
-          <div className="flex items-center justify-between">
+        <div ref={seccionEnvioRef} className="bg-white rounded-2xl border p-6 mb-6">
+          <h3 className="font-medium text-gray-900 mb-1">¿Listo para enviar?</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            {/* Planilla file upload */}
             <div>
-              <h3 className="font-medium text-gray-900">¿Listo para enviar?</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Al enviar, los asesores y la secretaria recibirán este informe para revisión.
-              </p>
+              <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                erroresCampos.planilla
+                  ? 'bg-red-50 border-red-400'
+                  : periodo.planilla_ss_url
+                    ? 'bg-green-50 border-green-200 hover:bg-green-100'
+                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+              }`}>
+                <span className="text-lg">🏥</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900">Planilla Seguridad Social</p>
+                  <p className={`text-xs truncate ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                    {subiendoPlanilla
+                      ? 'Subiendo...'
+                      : periodo.planilla_ss_url
+                        ? '✓ Cargada — clic para reemplazar'
+                        : erroresCampos.planilla
+                          ? 'Requerida — adjunta el archivo'
+                          : 'Subir PDF o imagen'}
+                  </p>
+                </div>
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  className="hidden"
+                  disabled={subiendoPlanilla}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      handleSubirPlanilla(file)
+                      setErroresCampos(prev => ({ ...prev, planilla: false }))
+                    }
+                    e.target.value = ''
+                  }}
+                />
+              </label>
             </div>
+
+            {/* Número de planilla */}
+            <div className="flex flex-col justify-center">
+              <label className="block text-xs text-gray-500 mb-1">N.° de planilla</label>
+              <input
+                value={numPlanilla}
+                onChange={(e) => {
+                  setNumPlanilla(e.target.value)
+                  if (e.target.value.trim()) setErroresCampos(prev => ({ ...prev, numero: false }))
+                }}
+                onBlur={handleGuardarNumeroPlanilla}
+                placeholder="Ej. 202504-12345"
+                className={`w-full px-3 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 transition-colors ${
+                  erroresCampos.numero
+                    ? 'bg-red-50 border-red-400 focus:ring-red-300 placeholder-red-300'
+                    : 'bg-gray-50 border-gray-200 focus:ring-blue-400 focus:border-blue-500'
+                }`}
+              />
+              {erroresCampos.numero && (
+                <p className="text-xs text-red-500 mt-1">Ingresa el número de planilla</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+            <p className="text-sm text-gray-400">
+              Los asesores y la secretaria recibirán este informe para revisión.
+            </p>
             <button
               onClick={handleEnviar}
-              disabled={enviando || actividades.length === 0 || !periodo.planilla_ss_url || !numPlanilla.trim()}
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex-shrink-0"
+              disabled={enviando || actividades.length === 0}
+              className="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex-shrink-0 ml-4"
             >
               {enviando ? 'Enviando...' : 'Enviar a revisión'}
             </button>
@@ -1153,7 +1228,8 @@ export default function PeriodoDetallePage() {
             </a>
 
             {/* ── Planilla de Seguridad Social — dropdown ── */}
-            {(esPlanillaGestionable || periodo.planilla_ss_url || esAsesor) && (
+            {/* Hidden in editable mode: contratista uses the inline fields in the submit card above */}
+            {(esPlanillaGestionable || periodo.planilla_ss_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && (
               <div className="relative col-span-1 sm:col-span-2">
                 {/* Trigger button */}
                 <button
