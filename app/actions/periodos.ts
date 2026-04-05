@@ -158,6 +158,17 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       return { error: 'Debes registrar al menos una actividad antes de enviar' }
     }
 
+    // Planilla de seguridad social obligatoria
+    const { data: planillaData } = await supabase
+      .from('periodos')
+      .select('planilla_ss_url, numero_planilla')
+      .eq('id', periodoId)
+      .single()
+
+    if (!planillaData?.planilla_ss_url || !planillaData?.numero_planilla?.trim()) {
+      return { error: 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida' }
+    }
+
     const estadoAnterior = periodo.estado
     const { error } = await supabase
       .from('periodos')

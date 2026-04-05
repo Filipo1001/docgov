@@ -174,6 +174,11 @@ export default function PeriodoDetallePage() {
   // ── Handlers ────────────────────────────────────────────────
 
   async function handleEnviar() {
+    // Planilla de seguridad social obligatoria antes de enviar
+    if (!periodo?.planilla_ss_url || !numPlanilla.trim()) {
+      toast.error('Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida')
+      return
+    }
     setEnviando(true)
     const result = await enviarPeriodo(periodoId)
     if (result.error) toast.error(result.error)
@@ -954,7 +959,7 @@ export default function PeriodoDetallePage() {
             </div>
             <button
               onClick={handleEnviar}
-              disabled={enviando || actividades.length === 0}
+              disabled={enviando || actividades.length === 0 || !periodo.planilla_ss_url || !numPlanilla.trim()}
               className="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex-shrink-0"
             >
               {enviando ? 'Enviando...' : 'Enviar a revisión'}
