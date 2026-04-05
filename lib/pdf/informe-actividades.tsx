@@ -317,17 +317,18 @@ const s = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 1,
   },
+  // Fixed-width label column — sized for the widest label ("Nombre:")
   sigTag: {
     fontSize: 9.5,
-    width: 38,
+    width: 52,
   },
 
   // "Firma: ___" row in supervisor block
   sigFirmaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
-    marginTop: 8,
+    marginBottom: 8,
+    marginTop: 20,   // breathing room between receipt text and firma line
   },
   sigFirmaLine: {
     flex: 1,
@@ -335,7 +336,7 @@ const s = StyleSheet.create({
     borderBottomColor: '#000',
     borderBottomStyle: 'solid',
     height: 14,
-    marginLeft: 4,
+    marginLeft: 2,
   },
 
   sigNombreRow: {
@@ -347,7 +348,7 @@ const s = StyleSheet.create({
   receiptParagraph: {
     fontSize: 9.5,
     lineHeight: 1.65,
-    marginBottom: 0,
+    marginBottom: 4,
     textAlign: 'justify',
   },
   receiptBold: {
@@ -667,14 +668,14 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
               {/* Cargo — indented */}
               {contrato.supervisor.cargo && (
                 <View style={s.sigNombreRow}>
-                  <Text style={{ width: 55 }} />
+                  <Text style={{ width: 52 }} />
                   <Text style={s.sigDetail}>{contrato.supervisor.cargo}.</Text>
                 </View>
               )}
 
               {/* "Supervisor contrato No ..." — indented */}
               <View style={s.sigNombreRow}>
-                <Text style={{ width: 55 }} />
+                <Text style={{ width: 52 }} />
                 <Text style={s.sigDetail}>
                   Supervisor contrato No {contrato.numero}-{contrato.anio}
                 </Text>
