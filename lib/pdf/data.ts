@@ -169,6 +169,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_inicio: periodo.fecha_inicio,
       fecha_fin: periodo.fecha_fin,
       valor_cobro: periodo.valor_cobro,
+      estado: (periodo as any).estado ?? 'borrador',
       valor_letras: undefined,
       numero_planilla: (periodo as any).numero_planilla ?? undefined,
     },

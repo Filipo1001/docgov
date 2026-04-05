@@ -25,6 +25,7 @@ export interface PDFPeriodo {
   fecha_inicio: string
   fecha_fin: string
   valor_cobro: number
+  estado: string          // e.g. 'borrador' | 'enviado' | 'aprobado' | 'radicado' …
   valor_letras?: string
   numero_planilla?: string
 }
