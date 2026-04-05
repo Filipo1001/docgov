@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [enviando, setEnviando] = useState(false)
-  const [modo, setModo] = useState<'login' | 'magic' | 'registro' | 'recuperar'>('login')
+  const [modo, setModo] = useState<'login' | 'magic' | 'recuperar'>('login')
   const [magicEnviado, setMagicEnviado] = useState(false)
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const router = useRouter()
@@ -20,10 +20,7 @@ export default function LoginPage() {
     setEnviando(true)
     const supabase = createClient()
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
@@ -39,39 +36,6 @@ export default function LoginPage() {
     router.push('/dashboard')
   }
 
-  // Registro con email + contraseña
-  async function handleRegistro(e: React.FormEvent) {
-    e.preventDefault()
-    if (password.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres')
-      return
-    }
-    setEnviando(true)
-    const supabase = createClient()
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-
-    if (error) {
-      toast.error('Error al crear cuenta: ' + error.message)
-      setEnviando(false)
-      return
-    }
-
-    toast.success('Cuenta creada. Ingresando...')
-    // Auto-login después del registro
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    if (!loginError) {
-      router.push('/dashboard')
-    }
-    setEnviando(false)
-  }
-
   // Magic link
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault()
@@ -80,9 +44,7 @@ export default function LoginPage() {
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
 
     if (error) {
@@ -134,33 +96,8 @@ export default function LoginPage() {
         {/* Card principal */}
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
 
-          {/* Tabs de modo */}
-          {(modo === 'login' || modo === 'registro') && !magicEnviado && (
-            <div className="flex border-b border-gray-100">
-              <button
-                onClick={() => setModo('login')}
-                className={`flex-1 py-3.5 text-sm font-medium transition-colors ${
-                  modo === 'login'
-                    ? 'text-gray-900 border-b-2 border-gray-900'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Iniciar sesión
-              </button>
-              <button
-                onClick={() => setModo('registro')}
-                className={`flex-1 py-3.5 text-sm font-medium transition-colors ${
-                  modo === 'registro'
-                    ? 'text-gray-900 border-b-2 border-gray-900'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Crear cuenta
-              </button>
-            </div>
-          )}
-
           <div className="p-8">
+
             {/* === MODO LOGIN === */}
             {modo === 'login' && (
               <form onSubmit={handleLogin}>
@@ -246,52 +183,6 @@ export default function LoginPage() {
               </form>
             )}
 
-            {/* === MODO REGISTRO === */}
-            {modo === 'registro' && (
-              <form onSubmit={handleRegistro}>
-                <p className="text-sm text-gray-500 mb-4">
-                  Crea tu cuenta para acceder al sistema. El administrador te asignará un rol después.
-                </p>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Correo electrónico
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="tu.correo@ejemplo.com"
-                      required
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Contraseña
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
-                      required
-                      minLength={6}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-400"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={enviando}
-                  className="w-full mt-6 bg-gray-900 text-white py-3 px-4 rounded-xl font-medium hover:bg-gray-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {enviando ? 'Creando cuenta...' : 'Crear cuenta'}
-                </button>
-              </form>
-            )}
-
             {/* === MODO MAGIC LINK === */}
             {modo === 'magic' && !magicEnviado && (
               <form onSubmit={handleMagicLink}>
@@ -344,7 +235,7 @@ export default function LoginPage() {
                 <p className="text-sm font-medium text-gray-900 bg-gray-50 py-2 px-4 rounded-lg inline-block">{email}</p>
                 <p className="text-xs text-gray-400 mt-4">Si no lo ves, revisa tu carpeta de spam.</p>
                 <button
-                  onClick={() => { setMagicEnviado(false); setModo('login'); setEmail(''); }}
+                  onClick={() => { setMagicEnviado(false); setModo('login'); setEmail('') }}
                   className="mt-6 text-sm text-blue-600 hover:text-blue-700 font-medium"
                 >
                   Volver al login
@@ -390,6 +281,7 @@ export default function LoginPage() {
                 </button>
               </form>
             )}
+
           </div>
         </div>
 
