@@ -253,54 +253,52 @@ const s = StyleSheet.create({
     lineHeight: 1.8,
   },
 
-  // ── Signature section — 2 columns inside the main table
-  sigSectionRow: {
-    flexDirection: 'row',
+  // ── Signature section — stacked vertically inside the main table
+
+  // Block 1: Contratista (full width)
+  sigContratistaBlock: {
     borderTopWidth: 1,
     borderTopColor: '#000',
     borderTopStyle: 'solid',
-    minHeight: 160,
+    padding: '12 14 10 14',
   },
-  sigLeft: {
-    flex: 1,
-    borderRightWidth: 1,
-    borderRightColor: '#000',
-    borderRightStyle: 'solid',
-    padding: '12 14',
-  },
-  sigRight: {
-    flex: 1,
-    padding: '12 14',
+
+  // Block 2: Supervisor receipt (full width, thick top border)
+  sigSupervisorBlock: {
+    borderTopWidth: 1.5,
+    borderTopColor: '#000',
+    borderTopStyle: 'solid',
+    padding: '10 14 12 14',
   },
 
   // Blank space when no firma image is available
   sigSpace: {
-    height: 60,
+    height: 65,
   },
 
-  // Signature image — contratista (left column)
+  // Contratista firma image
   firmaImgContratista: {
-    width: '80%',
-    height: 60,
+    width: '55%',
+    height: 65,
     objectFit: 'contain',
     marginBottom: 0,
   },
 
-  // Signature image — supervisor (right column, inline after "Firma:")
+  // Supervisor firma image — inline after "Firma:"
   firmaImgSupervisor: {
-    height: 44,
-    width: 120,
+    height: 46,
+    width: 130,
     objectFit: 'contain',
     marginLeft: 4,
   },
 
-  // Underline below signature space
+  // Underline below firma space / image
   sigUnderline: {
     borderTopWidth: 1,
     borderTopColor: '#000',
     borderTopStyle: 'solid',
-    width: '80%',
-    marginBottom: 6,
+    width: '55%',
+    marginBottom: 5,
   },
 
   sigName: {
@@ -324,12 +322,12 @@ const s = StyleSheet.create({
     width: 38,
   },
 
-  // "Firma: ___" row in right column
+  // "Firma: ___" row in supervisor block
   sigFirmaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 6,
+    marginBottom: 6,
+    marginTop: 8,
   },
   sigFirmaLine: {
     flex: 1,
@@ -604,94 +602,89 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
               </Text>
             </View>
 
-            {/* Signature row — 2 columns */}
-            <View style={s.sigSectionRow}>
-
-              {/* LEFT — Contratista */}
-              <View style={s.sigLeft}>
-                {/* Firma image or blank space */}
-                {mostrarFirmaContratista ? (
-                  <Image src={contrato.contratista.firma_url!} style={s.firmaImgContratista} />
-                ) : (
-                  <View style={s.sigSpace} />
-                )}
-                {/* Underline */}
-                <View style={s.sigUnderline} />
-                {/* Name */}
-                <Text style={s.sigName}>{contrato.contratista.nombre_completo}</Text>
-                {/* Role */}
-                <Text style={s.sigDetail}>
-                  CONTRATISTA{contrato.contratista.cargo ? ` ${contrato.contratista.cargo.toUpperCase()}` : ''}
-                </Text>
-                {/* C.C. */}
+            {/* ── Block 1: Contratista — full width ── */}
+            <View style={s.sigContratistaBlock}>
+              {/* Firma image or blank space */}
+              {mostrarFirmaContratista ? (
+                <Image src={contrato.contratista.firma_url!} style={s.firmaImgContratista} />
+              ) : (
+                <View style={s.sigSpace} />
+              )}
+              {/* Underline */}
+              <View style={s.sigUnderline} />
+              {/* Bold name */}
+              <Text style={s.sigName}>{contrato.contratista.nombre_completo}</Text>
+              {/* Role */}
+              <Text style={s.sigDetail}>
+                CONTRATISTA{contrato.contratista.cargo ? ` ${contrato.contratista.cargo.toUpperCase()}` : ''}
+              </Text>
+              {/* C.C. */}
+              <View style={s.sigLabelRow}>
+                <Text style={s.sigTag}>C.C.</Text>
+                <Text style={s.sigDetail}>No. {contrato.contratista.cedula}</Text>
+              </View>
+              {/* Cel. */}
+              {contrato.contratista.telefono && (
                 <View style={s.sigLabelRow}>
-                  <Text style={s.sigTag}>C.C.</Text>
-                  <Text style={s.sigDetail}>No. {contrato.contratista.cedula}</Text>
+                  <Text style={s.sigTag}>Cel.</Text>
+                  <Text style={s.sigDetail}>{contrato.contratista.telefono}</Text>
                 </View>
-                {/* Cel. */}
-                {contrato.contratista.telefono && (
-                  <View style={s.sigLabelRow}>
-                    <Text style={s.sigTag}>Cel.</Text>
-                    <Text style={s.sigDetail}>{contrato.contratista.telefono}</Text>
-                  </View>
+              )}
+            </View>
+
+            {/* ── Block 2: Supervisor receipt — full width, thick top border ── */}
+            <View style={s.sigSupervisorBlock}>
+              {/* Receipt paragraph */}
+              <Text style={s.receiptParagraph}>
+                <Text style={s.receiptBold}>Constancia de recibido del informe</Text>
+                {': La Alcaldía municipal de '}
+                {municipio.nombre}
+                {', recibió el presente informe presentado por el contratista '}
+                <Text style={s.receiptBold}>
+                  {contrato.contratista.nombre_completo
+                    .toLowerCase()
+                    .replace(/\b\w/g, (c) => c.toUpperCase())}
+                </Text>
+                {', en constancia:'}
+              </Text>
+
+              {/* Firma — image when approved, blank line otherwise */}
+              <View style={s.sigFirmaRow}>
+                <Text style={s.sigTag}>Firma:</Text>
+                {mostrarFirmaSupervisor ? (
+                  <Image src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} />
+                ) : (
+                  <View style={s.sigFirmaLine} />
                 )}
               </View>
 
-              {/* RIGHT — Supervisor receipt */}
-              <View style={s.sigRight}>
-                {/* Receipt paragraph */}
-                <Text style={s.receiptParagraph}>
-                  <Text style={s.receiptBold}>Constancia de recibido del informe</Text>
-                  {': La Alcaldía municipal de '}
-                  {municipio.nombre}
-                  {', recibió el presente informe presentado por el contratista '}
-                  <Text style={s.receiptBold}>
-                    {contrato.contratista.nombre_completo
-                      .toLowerCase()
-                      .replace(/\b\w/g, (c) => c.toUpperCase())}
-                  </Text>
-                  {', en constancia:'}
-                </Text>
+              {/* Nombre: SUPERVISOR NAME */}
+              <View style={s.sigNombreRow}>
+                <Text style={s.sigTag}>Nombre:</Text>
+                <Text style={s.sigName}>{contrato.supervisor.nombre_completo}</Text>
+              </View>
 
-                {/* Firma row — image when approved, blank line otherwise */}
-                <View style={s.sigFirmaRow}>
-                  <Text style={s.sigTag}>Firma:</Text>
-                  {mostrarFirmaSupervisor ? (
-                    <Image src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} />
-                  ) : (
-                    <View style={s.sigFirmaLine} />
-                  )}
-                </View>
-
-                {/* Supervisor name */}
-                <View style={s.sigNombreRow}>
-                  <Text style={s.sigTag}>Nombre:</Text>
-                  <Text style={s.sigName}>{contrato.supervisor.nombre_completo}</Text>
-                </View>
-
-                {/* Cargo — indented under name */}
-                {contrato.supervisor.cargo && (
-                  <View style={s.sigNombreRow}>
-                    <Text style={{ width: 55 }} />
-                    <Text style={s.sigDetail}>{contrato.supervisor.cargo}.</Text>
-                  </View>
-                )}
-
-                {/* "Supervisor contrato No ..." */}
+              {/* Cargo — indented */}
+              {contrato.supervisor.cargo && (
                 <View style={s.sigNombreRow}>
                   <Text style={{ width: 55 }} />
-                  <Text style={s.sigDetail}>
-                    Supervisor contrato No {contrato.numero}-{contrato.anio}
-                  </Text>
+                  <Text style={s.sigDetail}>{contrato.supervisor.cargo}.</Text>
                 </View>
+              )}
 
-                {/* C.C. */}
-                <View style={s.sigLabelRow}>
-                  <Text style={s.sigTag}>C.C.</Text>
-                  <Text style={s.sigDetail}>No. {contrato.supervisor.cedula}</Text>
-                </View>
+              {/* "Supervisor contrato No ..." — indented */}
+              <View style={s.sigNombreRow}>
+                <Text style={{ width: 55 }} />
+                <Text style={s.sigDetail}>
+                  Supervisor contrato No {contrato.numero}-{contrato.anio}
+                </Text>
               </View>
 
+              {/* C.C. */}
+              <View style={s.sigLabelRow}>
+                <Text style={s.sigTag}>C.C.</Text>
+                <Text style={s.sigDetail}>No. {contrato.supervisor.cedula}</Text>
+              </View>
             </View>
           </View>{/* end wrap={false} closing+signature */}
 
