@@ -54,12 +54,33 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const contrato = periodo.contrato as any
   if (!contrato) return null
 
-  // Fetch all periods for this contract (for payment history table)
-  const { data: allPeriodos } = await supabase
-    .from('periodos')
-    .select('numero_periodo, valor_cobro, estado')
-    .eq('contrato_id', contrato.id)
-    .order('numero_periodo')
+  // Queries 2, 3, 4 — run in parallel (independent of each other)
+  const [
+    { data: allPeriodos },
+    { data: obligacionesRaw },
+    { data: actividadesDelPeriodo },
+  ] = await Promise.all([
+    // All periods for payment history
+    supabase
+      .from('periodos')
+      .select('numero_periodo, valor_cobro, estado')
+      .eq('contrato_id', contrato.id)
+      .order('numero_periodo'),
+
+    // Obligations for this contract
+    supabase
+      .from('obligaciones')
+      .select('id, descripcion, es_permanente')
+      .eq('contrato_id', contrato.id ?? '')
+      .order('orden'),
+
+    // Activities + evidence for this period
+    supabase
+      .from('actividades')
+      .select('id, obligacion_id, descripcion, cantidad, evidencias(id, url, nombre_archivo)')
+      .eq('periodo_id', periodoId)
+      .order('orden'),
+  ])
 
   // Build payment history (up to current period)
   const pagosHistorial: PDFPagoHistorial[] = []
@@ -75,20 +96,6 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       saldo_pendiente: contrato.valor_total - acumulado,
     })
   }
-
-  // Fetch obligations
-  const { data: obligacionesRaw } = await supabase
-    .from('obligaciones')
-    .select('id, descripcion, es_permanente')
-    .eq('contrato_id', contrato.id ?? '')
-    .order('orden')
-
-  // Fetch activities with evidence for this period
-  const { data: actividadesDelPeriodo } = await supabase
-    .from('actividades')
-    .select('id, obligacion_id, descripcion, cantidad, evidencias(id, url, nombre_archivo)')
-    .eq('periodo_id', periodoId)
-    .order('orden')
 
   type ActRow = {
     id: string

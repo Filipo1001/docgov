@@ -18,6 +18,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { ESTADOS_EDITABLES } from '@/lib/constants'
+import { invalidarCachePDF } from '@/lib/pdf/cache'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
 import { enviarNotificacion, enviarNotificacionMultiple } from '@/lib/notifications'
@@ -218,6 +219,7 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       }
     }
 
+    invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
@@ -273,6 +275,7 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
       })
     }
 
+    invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
@@ -334,6 +337,7 @@ export async function rechazarComoAsesor(
       })
     }
 
+    invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
@@ -457,6 +461,7 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
       ),
     ])
 
+    validIds.forEach(id => invalidarCachePDF(createAdminSupabaseClient(), id).catch(() => {}))
     revalidar()
     return { data: { aprobados: validIds.length } }
   } catch (e: unknown) {
@@ -548,6 +553,7 @@ export async function rechazarPeriodos(
       }
     }
 
+    periodos.forEach(p => invalidarCachePDF(createAdminSupabaseClient(), p.id).catch(() => {}))
     revalidar()
     return { data: { rechazados: periodos.length } }
   } catch (e: unknown) {
@@ -624,6 +630,7 @@ export async function marcarRadicado(
       })
     }
 
+    invalidarCachePDF(adminClient, periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {

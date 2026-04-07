@@ -297,16 +297,55 @@ export default function PeriodoDetallePage() {
     else { toast.success('Actividad eliminada'); cargarDatos() }
   }
 
+  // Compress evidence image before upload: max 1200×900, JPEG 75%
+  // Only processes images; PDFs are passed through unchanged.
+  async function comprimirEvidencia(file: File): Promise<File> {
+    if (!file.type.startsWith('image/')) return file
+    return new Promise((resolve) => {
+      const img = new Image()
+      const objUrl = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl)
+        const MAX_W = 1200, MAX_H = 900
+        let w = img.naturalWidth, h = img.naturalHeight
+        const ratio = Math.min(MAX_W / w, MAX_H / h, 1) // never upscale
+        w = Math.round(w * ratio)
+        h = Math.round(h * ratio)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const name = file.name.replace(/\.[^.]+$/, '.jpg')
+              resolve(new File([blob], name, { type: 'image/jpeg' }))
+            } else {
+              resolve(file) // fallback: send original if canvas fails
+            }
+          },
+          'image/jpeg',
+          0.75
+        )
+      }
+      img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(file) }
+      img.src = objUrl
+    })
+  }
+
   async function handleSubirEvidencia(actividadId: string, file: File) {
+    // ── Step 0: compress image client-side ────────────────────
+    const fileToUpload = await comprimirEvidencia(file)
+
     // ── Step 1: server-side validation + get presigned URL ────
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 0 }))
 
     const prep = await prepararUploadEvidencia(
       actividadId,
       periodoId,
-      file.name,
-      file.size,
-      file.type,
+      fileToUpload.name,
+      fileToUpload.size,
+      fileToUpload.type,
     )
 
     if (prep.error || !prep.data) {
@@ -319,7 +358,7 @@ export default function PeriodoDetallePage() {
 
     // ── Step 2: upload DIRECTLY to Supabase (browser → Supabase, no Vercel) ──
     // Using XHR so we get real upload.onprogress events (0→95%).
-    const mime = file.type || 'image/jpeg'
+    const mime = fileToUpload.type || 'image/jpeg'
     try {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
@@ -336,7 +375,7 @@ export default function PeriodoDetallePage() {
         xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
         xhr.open('PUT', signedUrl)
         xhr.setRequestHeader('Content-Type', mime)
-        xhr.send(file)
+        xhr.send(fileToUpload)
       })
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error al subir la imagen')
@@ -348,7 +387,7 @@ export default function PeriodoDetallePage() {
     // The file is already in Supabase Storage. If this step fails (network drop,
     // transient error), we store the pending registration so the user can retry
     // without re-uploading the entire file.
-    const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, file.name)
+    const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, fileToUpload.name)
 
     if (reg.error) {
       setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre: file.name } }))

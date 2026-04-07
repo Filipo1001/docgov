@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { renderToBuffer } from '@react-pdf/renderer'
-import React from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { buildPDFData } from '@/lib/pdf/data'
-import { InformeActividadesPDF } from '@/lib/pdf/informe-actividades'
+import { getOrGeneratePDF } from '@/lib/pdf/cache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,7 +12,6 @@ export async function GET(
 ) {
   const { periodoId } = await params
 
-  // Auth check
   const supabase = await createServerSupabaseClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) {
@@ -26,14 +23,22 @@ export async function GET(
     return NextResponse.json({ error: 'Periodo no encontrado' }, { status: 404 })
   }
 
-  const buffer = await renderToBuffer(React.createElement(InformeActividadesPDF, { data }) as any)
-
   const filename = `informe-actividades-${data.contrato.numero}-${data.contrato.anio}-periodo-${data.periodo.numero}.pdf`
 
-  return new NextResponse(buffer as unknown as BodyInit, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="${filename}"`,
+  return getOrGeneratePDF({
+    supabase,
+    tipo: 'informe',
+    periodoId,
+    estado: data.periodo.estado,
+    filename,
+    generate: async () => {
+      // Dynamic imports — only loaded when a PDF actually needs to be generated
+      const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('react'),
+        import('@/lib/pdf/informe-actividades'),
+      ])
+      return renderToBuffer(React.createElement(InformeActividadesPDF, { data }) as any) as unknown as Buffer
     },
   })
 }
