@@ -105,11 +105,11 @@ const s = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     fontSize: 9,
     textAlign: 'center',
-    padding: '4 8',
+    padding: '3 8',
     backgroundColor: '#e8e8e8',
   },
   responsabilidadBody: {
-    padding: '5 8 6 8',
+    padding: '4 8 4 8',
   },
   responsabilidadText: {
     fontSize: 8.5,
@@ -135,14 +135,14 @@ const s = StyleSheet.create({
     width: '30%',
     borderRightWidth: 1,
     borderRightColor: '#000',
-    padding: '4 6',
+    padding: '3 5',
     fontFamily: 'Helvetica-Bold',
     fontSize: 8.5,
     backgroundColor: '#f5f5f5',
   },
   val: {
     flex: 1,
-    padding: '4 6',
+    padding: '3 5',
     fontSize: 9,
     lineHeight: 1.4,
   },
@@ -234,7 +234,7 @@ const s = StyleSheet.create({
   },
   periodoLabel: {
     width: '30%',
-    padding: '4 6',
+    padding: '3 5',
     fontFamily: 'Helvetica-Bold',
     fontSize: 8.5,
     backgroundColor: '#f5f5f5',
@@ -244,12 +244,12 @@ const s = StyleSheet.create({
   periodoDesde: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 8.5,
-    padding: '4 6',
+    padding: '3 5',
     borderRightWidth: 1,
     borderRightColor: '#000',
   },
   periodoVal: {
-    padding: '4 6',
+    padding: '3 5',
     fontSize: 9,
     borderRightWidth: 1,
     borderRightColor: '#000',
@@ -262,7 +262,7 @@ const s = StyleSheet.create({
   },
   payLabel: {
     width: '30%',
-    padding: '4 6',
+    padding: '3 5',
     fontFamily: 'Helvetica-Bold',
     fontSize: 8.5,
     backgroundColor: '#f5f5f5',
@@ -271,7 +271,7 @@ const s = StyleSheet.create({
   },
   paySubLabel: {
     width: '35%',
-    padding: '4 6',
+    padding: '3 5',
     fontFamily: 'Helvetica-Bold',
     fontSize: 8.5,
     textAlign: 'right',
@@ -280,7 +280,7 @@ const s = StyleSheet.create({
   },
   paySubVal: {
     width: '35%',
-    padding: '4 6',
+    padding: '3 5',
     fontSize: 9,
     textAlign: 'right',
   },
@@ -500,10 +500,10 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           <View style={s.row}>
             <View style={s.lbl}><Text>Aceptación de las actividades realizadas</Text></View>
             <View style={s.val}>
-              <Text style={{ lineHeight: 1.5 }}>
+              <Text style={{ lineHeight: 1.3 }}>
                 El/La contratista cumplió satisfactoriamente con todas las responsabilidades asignadas y dedicó toda su capacidad en la realización de las actividades en el periodo, por lo cual su aporte en el componente de gestión del talento humano permitió que la entidad generara capacidades para el desarrollo de las acciones misionales.
               </Text>
-              <Text style={{ marginTop: 6, lineHeight: 1.5 }}>
+              <Text style={{ marginTop: 3, lineHeight: 1.3 }}>
                 Además acreditó el pago de la seguridad social
               </Text>
             </View>
@@ -545,7 +545,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                       key={i}
                       style={{
                         flex: 1,
-                        minHeight: 16,
+                        minHeight: 10,
                         borderTopWidth: 1,
                         borderTopColor: '#000',
                         borderRightWidth: i < 3 ? 1 : 0,
@@ -561,7 +561,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Dificultades técnicas</Text></View>
-            <View style={s.val}><Text>Ninguna</Text></View>
+            <View style={{ ...s.val, justifyContent: 'center' } as any}><Text style={{ textAlign: 'center' }}>Ninguna</Text></View>
           </View>
 
           <View style={s.row}>
@@ -583,21 +583,22 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             </View>
           </View>
 
-          {/* Payments */}
-          <View style={s.payRow}>
-            <View style={s.payLabel}><Text>Pagos realizados en virtud del contrato</Text></View>
-            <View style={s.paySubLabel}><Text>Valor total contrato</Text></View>
-            <View style={s.paySubVal}><Text>{formatCOP(contrato.valor_total)}</Text></View>
-          </View>
-          <View style={s.payRow}>
-            <View style={s.payLabel}><Text> </Text></View>
-            <View style={s.paySubLabel}><Text>Saldo por ejecutar</Text></View>
-            <View style={s.paySubVal}><Text>{formatCOP(Math.max(0, saldo))}</Text></View>
-          </View>
-
-          <View style={s.rowLast}>
-            <View style={s.lbl}><Text>Conclusiones y recomendaciones por parte del supervisor</Text></View>
-            <View style={s.val}><Text>Ninguna</Text></View>
+          {/* Payments + Conclusiones — keep together on same page */}
+          <View wrap={false}>
+            <View style={s.payRow}>
+              <View style={s.payLabel}><Text>Pagos realizados en virtud del contrato</Text></View>
+              <View style={s.paySubLabel}><Text>Valor total contrato</Text></View>
+              <View style={s.paySubVal}><Text>{formatCOP(contrato.valor_total)}</Text></View>
+            </View>
+            <View style={s.payRow}>
+              <View style={s.payLabel}><Text> </Text></View>
+              <View style={s.paySubLabel}><Text>Saldo por ejecutar</Text></View>
+              <View style={s.paySubVal}><Text>{formatCOP(Math.max(0, saldo))}</Text></View>
+            </View>
+            <View style={s.rowLast}>
+              <View style={s.lbl}><Text>Conclusiones y recomendaciones por parte del supervisor</Text></View>
+              <View style={s.val}><Text>Ninguna</Text></View>
+            </View>
           </View>
         </View>
 
