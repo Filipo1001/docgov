@@ -210,11 +210,22 @@ const s = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     lineHeight: 1.5,
   },
+  actRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  actNumber: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#333',
+    width: 16,
+    lineHeight: 1.6,
+  },
   actText: {
+    flex: 1,
     fontSize: 9,
     lineHeight: 1.6,
     color: '#111',
-    marginBottom: 6,
   },
   actTextPermanente: {
     fontSize: 9,
@@ -405,7 +416,7 @@ interface ActivityRowProps {
   rowStyle: any
 }
 
-function ActivityRow({ obl, oblIndex, act, showOblInfo, totalAcciones, rowStyle }: ActivityRowProps) {
+function ActivityRow({ obl, oblIndex, act, actIndex, showOblInfo, totalAcciones, rowStyle }: ActivityRowProps) {
   return (
     <View style={rowStyle}>
       <View style={s.col1}>
@@ -417,7 +428,11 @@ function ActivityRow({ obl, oblIndex, act, showOblInfo, totalAcciones, rowStyle 
         )}
       </View>
       <View style={s.col2}>
-        <Text style={s.actText}>{act.descripcion}</Text>
+        {/* Numbered activity description */}
+        <View style={s.actRow}>
+          <Text style={s.actNumber}>{actIndex + 1}.</Text>
+          <Text style={s.actText}>{act.descripcion}</Text>
+        </View>
         {act.evidencias.map((ev, ei) => (
           <View key={ei} wrap={false}>
             <Image src={ev.url} style={s.photo} />
