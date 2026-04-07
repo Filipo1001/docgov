@@ -13,9 +13,13 @@
  */
 
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData } from './types'
 import { formatCedula } from '@/lib/format'
+
+// Mismas reglas que el Informe de Actividades
+const ESTADOS_FIRMA_CONTRATISTA = new Set(['enviado', 'revision', 'aprobado', 'radicado'])
+const ESTADOS_FIRMA_SUPERVISOR  = new Set(['aprobado', 'radicado'])
 
 // ─── Date helpers ─────────────────────────────────────────────
 
@@ -196,11 +200,27 @@ const s = StyleSheet.create({
     marginBottom: 3,
   },
 
-  // ── VoBo line
+  // ── Firma images
+  firmaImgContratista: {
+    width: '55%',
+    height: 60,
+    objectFit: 'contain',
+    marginBottom: 0,
+  },
+  firmaImgSupervisor: {
+    height: 46,
+    width: 130,
+    objectFit: 'contain',
+    marginBottom: 4,
+  },
+
+  // ── VoBo / supervisor block
+  voBoSection: {
+    marginTop: 24,
+  },
   voBoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
   },
   voBoLbl: {
     fontSize: 11,
@@ -213,12 +233,36 @@ const s = StyleSheet.create({
     borderBottomColor: '#000',
     borderBottomStyle: 'solid',
   },
+  voBoUnderline: {
+    borderTopWidth: 1,
+    borderTopColor: '#000',
+    borderTopStyle: 'solid',
+    width: '65%',
+    marginTop: 6,
+    marginBottom: 5,
+  },
+  voBoName: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 10.5,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  voBoDetail: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 10,
+    marginBottom: 2,
+  },
 })
 
 // ─── Component ────────────────────────────────────────────────
 
 export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
   const { municipio, contrato, periodo } = data
+
+  const mostrarFirmaContratista =
+    ESTADOS_FIRMA_CONTRATISTA.has(periodo.estado) && !!contrato.contratista.firma_url
+  const mostrarFirmaSupervisor =
+    ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
   // Period value — words + numeric in parentheses
   const valorLetras = periodo.valor_letras ?? contrato.valor_letras_mensual
@@ -340,20 +384,23 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
 
         </View>
 
-        {/* ── Signature block — entire block is indivisible.
-             wrap={false} ensures "Firma Contratista" label, space, underline,
-             name/CC/details, and VoBo line always appear on the same page.
-             If the block doesn't fit, it moves entirely to the next page. ── */}
+        {/* ── Signature block — indivisible, moves to next page if needed ── */}
         <View wrap={false}>
+
+          {/* ── Contratista ── */}
           <Text style={s.sigIntro}>Firma Contratista:</Text>
 
-          {/* Blank space for wet signature */}
-          <View style={s.sigSpace} />
+          {/* Firma image when estado lo permite, espacio en blanco si no */}
+          {mostrarFirmaContratista ? (
+            <Image src={contrato.contratista.firma_url!} style={s.firmaImgContratista} />
+          ) : (
+            <View style={s.sigSpace} />
+          )}
 
           {/* Underline */}
           <View style={s.sigLine} />
 
-          {/* Name, CC, address, phone — all BOLD (matching real document) */}
+          {/* Name, CC, address, phone — all BOLD */}
           <Text style={s.sigName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
           <Text style={s.sigDetail}>CC. {formatCedula(contrato.contratista.cedula)}</Text>
           {contrato.contratista.direccion && (
@@ -363,11 +410,28 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
             <Text style={s.sigDetail}>Teléfono: {contrato.contratista.telefono}</Text>
           )}
 
-          {/* VoBo. Supervisor — blank line, no name pre-printed */}
-          <View style={s.voBoRow}>
-            <Text style={s.voBoLbl}>VoBo. Supervisor:</Text>
-            <View style={s.voBoLine} />
+          {/* ── VoBo Supervisor ── */}
+          <View style={s.voBoSection}>
+            {mostrarFirmaSupervisor ? (
+              <>
+                {/* Firma image del supervisor */}
+                <Image src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} />
+                <View style={s.voBoUnderline} />
+                <Text style={s.voBoName}>{contrato.supervisor.nombre_completo.toUpperCase()}</Text>
+                {contrato.supervisor.cargo && (
+                  <Text style={s.voBoDetail}>{contrato.supervisor.cargo}</Text>
+                )}
+                <Text style={s.voBoDetail}>VoBo. Supervisor</Text>
+              </>
+            ) : (
+              /* Línea en blanco cuando no hay firma todavía */
+              <View style={s.voBoRow}>
+                <Text style={s.voBoLbl}>VoBo. Supervisor:</Text>
+                <View style={s.voBoLine} />
+              </View>
+            )}
           </View>
+
         </View>
 
       </Page>
