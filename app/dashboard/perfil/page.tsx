@@ -191,7 +191,7 @@ export default function PerfilPage() {
 
   if (loading || !usuario) return <Skeleton />
 
-  // Normalize image client-side: resize to max 600×200, remove light background, export PNG
+  // Normalize image client-side: resize to max 600×200, remove background, export PNG
   async function normalizarFirma(file: File): Promise<Blob> {
     return new Promise((resolve, reject) => {
       const img = new Image()
@@ -206,28 +206,54 @@ export default function PerfilPage() {
         w = Math.round(w * ratio)
         h = Math.round(h * ratio)
 
-        // 2. Draw onto canvas (transparent background — no fillRect)
+        // 2. Draw onto canvas (transparent background)
         const canvas = document.createElement('canvas')
-        canvas.width = w
+        canvas.width  = w
         canvas.height = h
-        const ctx = canvas.getContext('2d')!
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })!
         ctx.drawImage(img, 0, 0, w, h)
 
-        // 3. Remove light background via luminance threshold
-        //    Pixels with luminance > 240 → fully transparent
-        //    Pixels with luminance 200–240 → linearly fade alpha (smooth edges)
-        //    Pixels with luminance < 200 → keep as-is (ink strokes)
+        // 3. Adaptive background removal
+        //    a) Sample 8×8 patches from all 4 corners → estimate background color (R,G,B)
+        //    b) Each pixel: compute Euclidean distance from background color
+        //       distance < HARD  → fully transparent
+        //       distance < SOFT  → linearly fade alpha (smooth edges)
+        //       distance >= SOFT → fully opaque (ink stroke)
         const imageData = ctx.getImageData(0, 0, w, h)
-        const data = imageData.data
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i], g = data[i + 1], b = data[i + 2]
-          const luminance = 0.299 * r + 0.587 * g + 0.114 * b
-          if (luminance > 240) {
-            data[i + 3] = 0                                         // fully transparent
-          } else if (luminance > 200) {
-            data[i + 3] = Math.round(((240 - luminance) / 40) * 255) // gradual fade
+        const data      = imageData.data
+        const PATCH     = Math.min(8, Math.floor(w / 4), Math.floor(h / 4))
+        const HARD      = 40   // within 40 units of bg color → transparent
+        const SOFT      = 80   // 40–80 units → smooth fade
+
+        // Collect corner pixels
+        let rSum = 0, gSum = 0, bSum = 0, n = 0
+        for (let py = 0; py < PATCH; py++) {
+          for (let px = 0; px < PATCH; px++) {
+            const corners = [
+              (py * w + px) * 4,                         // top-left
+              (py * w + (w - 1 - px)) * 4,               // top-right
+              ((h - 1 - py) * w + px) * 4,               // bottom-left
+              ((h - 1 - py) * w + (w - 1 - px)) * 4,    // bottom-right
+            ]
+            for (const i of corners) {
+              rSum += data[i]; gSum += data[i + 1]; bSum += data[i + 2]; n++
+            }
           }
-          // else: keep original alpha (ink stroke)
+        }
+        const bgR = rSum / n, bgG = gSum / n, bgB = bSum / n
+
+        // Remove background
+        for (let i = 0; i < data.length; i += 4) {
+          const dr = data[i]     - bgR
+          const dg = data[i + 1] - bgG
+          const db = data[i + 2] - bgB
+          const dist = Math.sqrt(dr * dr + dg * dg + db * db)
+          if (dist < HARD) {
+            data[i + 3] = 0                                              // fully transparent
+          } else if (dist < SOFT) {
+            data[i + 3] = Math.round(((dist - HARD) / (SOFT - HARD)) * 255) // smooth fade
+          }
+          // else: keep original alpha
         }
         ctx.putImageData(imageData, 0, 0)
 
