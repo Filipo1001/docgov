@@ -602,8 +602,8 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           </View>
         </View>
 
-        {/* CONSIDERANDO — always starts on page 2 */}
-        <View style={s.considerando} break>
+        {/* CONSIDERANDO — flows naturally to page 2 */}
+        <View style={s.considerando}>
           <Text style={s.considerandoTitle}>CONSIDERANDO</Text>
 
           <Text style={s.considerandoText}>
