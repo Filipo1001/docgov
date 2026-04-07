@@ -191,25 +191,47 @@ export default function PerfilPage() {
 
   if (loading || !usuario) return <Skeleton />
 
-  // Normalize image client-side: white background + resize to max 600×200, export PNG
+  // Normalize image client-side: resize to max 600×200, remove light background, export PNG
   async function normalizarFirma(file: File): Promise<Blob> {
     return new Promise((resolve, reject) => {
       const img = new Image()
       const objUrl = URL.createObjectURL(file)
       img.onload = () => {
         URL.revokeObjectURL(objUrl)
+
+        // 1. Resize — never upscale
         const MAX_W = 600, MAX_H = 200
         let w = img.naturalWidth, h = img.naturalHeight
-        const ratio = Math.min(MAX_W / w, MAX_H / h, 1) // never upscale
+        const ratio = Math.min(MAX_W / w, MAX_H / h, 1)
         w = Math.round(w * ratio)
         h = Math.round(h * ratio)
+
+        // 2. Draw onto canvas (transparent background — no fillRect)
         const canvas = document.createElement('canvas')
         canvas.width = w
         canvas.height = h
         const ctx = canvas.getContext('2d')!
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, w, h)
         ctx.drawImage(img, 0, 0, w, h)
+
+        // 3. Remove light background via luminance threshold
+        //    Pixels with luminance > 240 → fully transparent
+        //    Pixels with luminance 200–240 → linearly fade alpha (smooth edges)
+        //    Pixels with luminance < 200 → keep as-is (ink strokes)
+        const imageData = ctx.getImageData(0, 0, w, h)
+        const data = imageData.data
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2]
+          const luminance = 0.299 * r + 0.587 * g + 0.114 * b
+          if (luminance > 240) {
+            data[i + 3] = 0                                         // fully transparent
+          } else if (luminance > 200) {
+            data[i + 3] = Math.round(((240 - luminance) / 40) * 255) // gradual fade
+          }
+          // else: keep original alpha (ink stroke)
+        }
+        ctx.putImageData(imageData, 0, 0)
+
+        // 4. Export as PNG (preserves transparency)
         canvas.toBlob(
           (blob) => { if (blob) resolve(blob); else reject(new Error('Error al procesar imagen')) },
           'image/png', 0.95
@@ -540,8 +562,8 @@ export default function PerfilPage() {
               </p>
               <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
                 {subiendoFirma
-                  ? 'Normalizando imagen y guardando...'
-                  : 'JPG, PNG o WEBP · máx. 3 MB. La imagen se normalizará automáticamente (fondo blanco, tamaño estándar).'}
+                  ? 'Eliminando fondo y guardando...'
+                  : 'JPG, PNG o WEBP · máx. 3 MB. El fondo se eliminará automáticamente y la imagen se ajustará al tamaño estándar.'}
               </p>
               {!subiendoFirma && (
                 <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
