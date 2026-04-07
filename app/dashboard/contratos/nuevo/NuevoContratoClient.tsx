@@ -250,7 +250,7 @@ export default function NuevoContratoPage() {
   const supervisores = usuarios.filter(u => u.rol === 'supervisor' || u.rol === 'admin')
 
   const inputClass =
-    'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
+    'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
   const autoClass = inputClass + ' bg-emerald-50 border-emerald-200'
 
   return (

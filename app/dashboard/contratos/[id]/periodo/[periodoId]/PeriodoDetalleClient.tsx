@@ -712,7 +712,7 @@ export default function PeriodoDetallePage() {
                 onChange={(e) => setMotivoRechazo(e.target.value)}
                 placeholder="Escribe el motivo del rechazo para el contratista..."
                 rows={3}
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
               />
               <div className="flex gap-3">
                 <button
@@ -780,7 +780,7 @@ export default function PeriodoDetallePage() {
                 onChange={(e) => setMotivoRechazo(e.target.value)}
                 placeholder="Escribe el motivo por el cual devuelves este informe a los asesores..."
                 rows={3}
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
               />
               <div className="flex gap-3">
                 <button
@@ -815,7 +815,7 @@ export default function PeriodoDetallePage() {
               value={numRadicado}
               onChange={e => setNumRadicado(e.target.value)}
               placeholder="No. de radicado (opcional)"
-              className="flex-1 min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-300"
+              className="flex-1 min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-emerald-300"
             />
             <button
               onClick={handleRadicado}
@@ -971,7 +971,7 @@ export default function PeriodoDetallePage() {
                         onChange={(e) => setNuevaActividad(e.target.value)}
                         placeholder="Describe la actividad realizada..."
                         rows={3}
-                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                       />
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-2">
@@ -979,7 +979,7 @@ export default function PeriodoDetallePage() {
                           <input
                             type="number" min={1} value={nuevaCantidad}
                             onChange={(e) => setNuevaCantidad(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center"
+                            className="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 text-center"
                           />
                         </div>
                         <div className="flex items-center gap-2">
@@ -1073,10 +1073,10 @@ export default function PeriodoDetallePage() {
                 }}
                 onBlur={handleGuardarNumeroPlanilla}
                 placeholder="Ej. 202504-12345"
-                className={`w-full px-3 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 transition-colors ${
+                className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-900 outline-none focus:ring-2 transition-colors ${
                   erroresCampos.numero
-                    ? 'bg-red-50 border-red-400 focus:ring-red-300 placeholder-red-300'
-                    : 'bg-gray-50 border-gray-200 focus:ring-blue-400 focus:border-blue-500'
+                    ? 'bg-red-50 border-red-400 focus:ring-red-300 placeholder-red-400'
+                    : 'bg-gray-50 border-gray-200 focus:ring-blue-400 focus:border-blue-500 placeholder-gray-400'
                 }`}
               />
               {erroresCampos.numero && (
@@ -1148,7 +1148,7 @@ export default function PeriodoDetallePage() {
                 value={numRadicadoEdit}
                 onChange={e => setNumRadicadoEdit(e.target.value)}
                 placeholder="Número de radicado"
-                className="flex-1 px-3 py-2 border border-emerald-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="flex-1 px-3 py-2 border border-emerald-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 autoFocus
               />
               <button

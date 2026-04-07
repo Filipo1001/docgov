@@ -86,7 +86,7 @@ function ActivarModal({
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="correo@ejemplo.com"
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400"
             />
           </div>
 
@@ -94,14 +94,14 @@ function ActivarModal({
             <label className="block text-xs font-medium text-gray-700 mb-1">Cédula</label>
             <input value={cedula} onChange={e => setCedula(e.target.value)}
               placeholder="Número de identificación"
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Cargo</label>
               <input value={cargo} onChange={e => setCargo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">RH</label>
@@ -127,12 +127,12 @@ function ActivarModal({
               <label className="block text-xs font-medium text-gray-700 mb-1">Teléfono</label>
               <input value={tel} onChange={e => setTel(e.target.value)}
                 placeholder="3XX XXX XXXX"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Dirección</label>
               <input value={dir} onChange={e => setDir(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
             </div>
           </div>
         </div>
@@ -231,12 +231,12 @@ export default function AdminUsuariosClient({
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre o cédula..."
-            className="flex-1 min-w-48 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none"
+            className="flex-1 min-w-48 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400"
           />
 
           {tab === 'activos' && (
             <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+              className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400">
               <option value="">Todos los roles</option>
               {['admin','supervisor','contratista','asesor','gobierno','hacienda'].map(r =>
                 <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}

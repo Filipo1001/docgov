@@ -83,7 +83,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             </label>
             <input
               type="email"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="usuario@fredonia.gov.co"
@@ -94,7 +94,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={rol}
               onChange={e => setRol(e.target.value)}
             >
@@ -118,7 +118,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
                 Nombre completo <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={nombre}
                 onChange={e => setNombre(e.target.value)}
                 placeholder="Apellidos y nombres"
@@ -129,7 +129,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de documento</label>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={tipoDoc}
                 onChange={e => setTipoDoc(e.target.value)}
               >
@@ -142,7 +142,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
                 Número de documento <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={cedula}
                 onChange={e => setCedula(e.target.value)}
                 required
@@ -152,7 +152,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Grupo sanguíneo (RH)</label>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={rh}
                 onChange={e => setRh(e.target.value)}
               >
@@ -170,7 +170,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
             <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={cargo}
               onChange={e => setCargo(e.target.value)}
               placeholder="Ej. Contratista de prestación de servicios"
@@ -180,7 +180,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Dependencia</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={depId}
               onChange={e => setDepId(e.target.value)}
             >
@@ -198,7 +198,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono / Celular</label>
               <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={telefono}
                 onChange={e => setTelefono(e.target.value)}
                 placeholder="3XX XXX XXXX"
@@ -207,7 +207,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
               <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={direccion}
                 onChange={e => setDireccion(e.target.value)}
                 placeholder="Calle XX # XX-XX"

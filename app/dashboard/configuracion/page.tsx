@@ -126,7 +126,7 @@ function CambiarPassword() {
                 placeholder="Mínimo 8 caracteres"
                 required
                 minLength={8}
-                className="w-full px-3 py-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white outline-none transition-all"
+                className="w-full px-3 py-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white outline-none transition-all"
               />
               <button
                 type="button"
@@ -155,7 +155,7 @@ function CambiarPassword() {
               placeholder="Repite la contraseña"
               required
               minLength={8}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white outline-none transition-all"
+              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white outline-none transition-all"
             />
           </div>
           {nueva && confirmar && nueva !== confirmar && (
