@@ -8,8 +8,11 @@
 
 import React from 'react'
 import path from 'path'
-import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
+
+// Disable automatic hyphenation — prevents words being split mid-line
+Font.registerHyphenationCallback(word => [word])
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-infor-super.png')
 
@@ -49,6 +52,38 @@ function baseCotizacion(valorMensual: number): { texto: string; valor: number } 
   }
 }
 
+// ── Número a letras (días, 0-999) ──────────────────────────────
+const _UNIT = [
+  '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
+  'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE',
+  'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE',
+  'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES', 'VEINTICUATRO',
+  'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE',
+]
+const _DEC  = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
+const _CENT = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
+
+function numerosALetras(n: number): string {
+  if (n === 0)   return 'CERO'
+  if (n < 30)    return _UNIT[n]
+  if (n < 100)   return n % 10 === 0 ? _DEC[Math.floor(n / 10)] : `${_DEC[Math.floor(n / 10)]} Y ${_UNIT[n % 10]}`
+  if (n === 100) return 'CIEN'
+  const c = Math.floor(n / 100)
+  const r = n % 100
+  return r === 0 ? _CENT[c] : `${_CENT[c]} ${numerosALetras(r)}`
+}
+
+function calcDias(inicio: string, fin: string): number {
+  const d1 = new Date(inicio + 'T00:00:00')
+  const d2 = new Date(fin   + 'T00:00:00')
+  return Math.round((d2.getTime() - d1.getTime()) / 86_400_000)
+}
+
+function pad5(val: string | number | null | undefined): string {
+  if (!val && val !== 0) return '—'
+  return String(val).padStart(5, '0')
+}
+
 // ─── Styles ───────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -64,14 +99,17 @@ const s = StyleSheet.create({
   responsabilidad: {
     borderWidth: 1,
     borderColor: '#000',
-    padding: '6 8',
     marginBottom: 4,
   },
   responsabilidadTitle: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 9,
     textAlign: 'center',
-    marginBottom: 4,
+    padding: '4 8',
+    backgroundColor: '#e8e8e8',
+  },
+  responsabilidadBody: {
+    padding: '5 8 6 8',
   },
   responsabilidadText: {
     fontSize: 8.5,
@@ -334,9 +372,14 @@ const s = StyleSheet.create({
 export function ActaSupervisionPDF({ data }: { data: PDFData }) {
   const { contrato, periodo, pagosHistorial } = data
 
-  const plazoTexto = contrato.plazo_meses
-    ? `${contrato.duracion_letras || contrato.plazo_meses} (${contrato.plazo_meses}) meses`
-    : '—'
+  // Plazo en días
+  let plazoTexto = '—'
+  if (contrato.fecha_inicio_contrato && contrato.fecha_fin_contrato) {
+    const dias = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
+    plazoTexto = `${numerosALetras(dias)} (${dias}) DIAS`
+  } else if (contrato.plazo_meses) {
+    plazoTexto = `${contrato.duracion_letras || contrato.plazo_meses} (${contrato.plazo_meses}) MESES`
+  }
 
   const valorContratoTexto = contrato.valor_letras_total
     ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
@@ -362,9 +405,11 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
         {/* Grado de Responsabilidad */}
         <View style={s.responsabilidad}>
           <Text style={s.responsabilidadTitle}>GRADO DE RESPONSABILIDAD</Text>
-          <Text style={s.responsabilidadText}>
-            Mediante la suscripción de la presente acta, el supervisor asume plena responsabilidad por la veracidad de la información en ella contenida
-          </Text>
+          <View style={s.responsabilidadBody}>
+            <Text style={s.responsabilidadText}>
+              Mediante la suscripción de la presente acta, el supervisor asume plena responsabilidad por la veracidad de la información en ella contenida
+            </Text>
+          </View>
         </View>
 
         {/* Info Header */}
@@ -387,8 +432,8 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <Text style={s.infoDataCell}>{periodoNum}</Text>
             <Text style={s.infoDataCell}>{formatDate(periodo.fecha_fin)}</Text>
             <Text style={s.infoDataCell}>{contrato.numero}-{contrato.anio}</Text>
-            <Text style={s.infoDataCell}>{contrato.cdp || '—'}</Text>
-            <Text style={s.infoDataCellLast}>{contrato.crp || '—'}</Text>
+            <Text style={s.infoDataCell}>{pad5(contrato.cdp)}</Text>
+            <Text style={s.infoDataCellLast}>{pad5(contrato.crp)}</Text>
           </View>
 
           {/* CONTRATISTA */}
@@ -468,16 +513,49 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           <View style={s.row}>
             <View style={s.lbl}><Text>Modificaciones o adiciones efectuadas al contrato</Text></View>
             <View style={s.val}>
-              <View style={{ flexDirection: 'row', marginBottom: 2 }}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, flex: 1, textAlign: 'center' }}>TIPO DE MODIFICACIÓN</Text>
+              {/* Header label */}
+              <View style={{ borderWidth: 1, borderColor: '#000', marginBottom: 3 }}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, textAlign: 'center', padding: '2 4', backgroundColor: '#e8e8e8' }}>
+                  TIPO DE MODIFICACIÓN
+                </Text>
+                {/* Option cells */}
+                <View style={{ flexDirection: 'row' }}>
+                  {(['Prórroga', 'Adición', 'Modificatorio', 'Aclaratorio'] as const).map((opt, i) => (
+                    <Text
+                      key={opt}
+                      style={{
+                        flex: 1,
+                        fontSize: 7.5,
+                        textAlign: 'center',
+                        padding: '3 2',
+                        borderTopWidth: 1,
+                        borderTopColor: '#000',
+                        borderRightWidth: i < 3 ? 1 : 0,
+                        borderRightColor: '#000',
+                      } as any}
+                    >
+                      {opt}
+                    </Text>
+                  ))}
+                </View>
+                {/* Empty value row */}
+                <View style={{ flexDirection: 'row' }}>
+                  {[0, 1, 2, 3].map(i => (
+                    <View
+                      key={i}
+                      style={{
+                        flex: 1,
+                        minHeight: 16,
+                        borderTopWidth: 1,
+                        borderTopColor: '#000',
+                        borderRightWidth: i < 3 ? 1 : 0,
+                        borderRightColor: '#000',
+                      } as any}
+                    />
+                  ))}
+                </View>
               </View>
-              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, flex: 1, textAlign: 'center' }}>Prórroga</Text>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, flex: 1, textAlign: 'center' }}>Adición</Text>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, flex: 1, textAlign: 'center' }}>Modificatorio</Text>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, flex: 1, textAlign: 'center' }}>Aclaratorio</Text>
-              </View>
-              <Text style={{ textAlign: 'center' }}>Ninguna</Text>
+              <Text style={{ textAlign: 'center', fontSize: 8.5 }}>Ninguna</Text>
             </View>
           </View>
 
@@ -488,7 +566,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Base de cotización a la Seguridad Social</Text></View>
-            <View style={s.val}><Text>{base.texto}</Text></View>
+            <View style={s.val}><Text>UN MILLON SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO PESOS M/L ($1.750.905)</Text></View>
           </View>
 
           {/* Planilla */}
@@ -523,11 +601,9 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           </View>
         </View>
 
-        {/* CONSIDERANDO */}
-        <View style={s.considerando}>
-          {/* minPresenceAhead: if less than 120pt remain on the page, break before
-              the title so it never appears stranded at the very bottom. */}
-          <Text style={s.considerandoTitle} minPresenceAhead={120}>CONSIDERANDO</Text>
+        {/* CONSIDERANDO — always starts on page 2 */}
+        <View style={s.considerando} break>
+          <Text style={s.considerandoTitle}>CONSIDERANDO</Text>
 
           <Text style={s.considerandoText}>
             Se firma la presente acta en virtud de que las actividades efectuadas como parte de las obligaciones contempladas en el contrato fueron recibidas a entera satisfacción por parte del supervisor.
