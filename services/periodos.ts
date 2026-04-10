@@ -107,11 +107,13 @@ export async function getInformesMensuales(
     `)
     .eq('mes', mes.toUpperCase())
     .eq('anio', anio)
-    .or('estado.neq.borrador,es_historico.eq.true') // Show submitted+ OR historical borradores
     .order('fecha_envio', { ascending: true })
 
   const { data } = await query
   let periodos = (data as Periodo[]) ?? []
+
+  // Show submitted+ periods OR historical ones (even if borrador)
+  periodos = periodos.filter(p => p.estado !== 'borrador' || p.es_historico === true)
 
   // Filter by dependencia if specified (for asesores)
   if (dependenciaId) {
