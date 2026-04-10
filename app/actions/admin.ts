@@ -175,6 +175,7 @@ export async function actualizarUsuario(
   data: {
     nombre_completo?: string
     cedula?: string
+    email?: string
     rol?: string
     cargo?: string
     telefono?: string
@@ -182,6 +183,9 @@ export async function actualizarUsuario(
     rh?: string
     tipo_documento?: string
     dependencia_id?: string
+    banco?: string
+    tipo_cuenta?: string
+    numero_cuenta?: string
   }
 ): Promise<ActionResult<void>> {
   const admin = await requireAdmin()
@@ -196,6 +200,10 @@ export async function actualizarUsuario(
       ...(data.cargo !== undefined && { cargo: data.cargo ? normalizeName(data.cargo) : null }),
       ...(data.direccion !== undefined && { direccion: data.direccion ? normalizeFreeText(data.direccion) : null }),
       telefono: data.telefono?.trim() || null,
+      email: data.email?.trim().toLowerCase() || null,
+      banco: data.banco?.trim() || null,
+      tipo_cuenta: data.tipo_cuenta || null,
+      numero_cuenta: data.numero_cuenta?.trim() || null,
       dependencia_id: data.dependencia_id || null,
     })
     .eq('id', id)

@@ -11,6 +11,7 @@ export interface UsuarioAdmin {
   id: string
   nombre_completo: string
   cedula: string
+  email?: string
   rol: Rol
   cargo?: string
   telefono?: string
@@ -20,6 +21,9 @@ export interface UsuarioAdmin {
   tipo_documento?: string
   dependencia_id?: string
   dependencia?: { id: string; nombre: string } | null
+  banco?: string
+  tipo_cuenta?: string
+  numero_cuenta?: string
 }
 
 export interface ContratistaPendiente {

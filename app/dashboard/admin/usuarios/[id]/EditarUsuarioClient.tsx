@@ -6,9 +6,16 @@ import { Toaster, toast } from 'sonner'
 import { actualizarUsuario, subirFotoUsuario } from '@/app/actions/admin'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 
-const ROLES     = ['admin', 'supervisor', 'contratista', 'asesor', 'gobierno', 'hacienda']
-const TIPOS_DOC = ['CC', 'CE', 'NIT', 'PAS']
-const GRUPOS_RH = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'gobierno', 'hacienda']
+const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
+const GRUPOS_RH  = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+const TIPOS_CUENTA = ['Ahorros', 'Corriente']
+const BANCOS = [
+  'Bancolombia', 'Davivienda', 'Banco de Bogotá', 'BBVA', 'Banco Popular',
+  'Banco Agrario', 'Nequi', 'Daviplata', 'Banco Caja Social', 'Banco de Occidente',
+  'Banco Falabella', 'Banco Pichincha', 'Banco Finandina', 'Banco Mundo Mujer',
+  'Coopcentral', 'Bancamía', 'Otro',
+]
 
 function Avatar({ foto, nombre, size = 'xl' }: { foto?: string; nombre: string; size?: 'xl' | 'lg' }) {
   const initials = nombre.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
@@ -34,15 +41,19 @@ export default function EditarUsuarioClient({
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving]       = useState(false)
 
-  const [nombre, setNombre]       = useState(usuario.nombre_completo)
-  const [cedula, setCedula]       = useState(usuario.cedula)
-  const [tipoDoc, setTipoDoc]     = useState(usuario.tipo_documento ?? 'CC')
-  const [rol, setRol]             = useState(usuario.rol)
-  const [cargo, setCargo]         = useState(usuario.cargo ?? '')
-  const [telefono, setTelefono]   = useState(usuario.telefono ?? '')
-  const [direccion, setDireccion] = useState(usuario.direccion ?? '')
-  const [rh, setRh]               = useState(usuario.rh ?? '')
-  const [depId, setDepId]         = useState(usuario.dependencia_id ?? '')
+  const [nombre, setNombre]             = useState(usuario.nombre_completo)
+  const [cedula, setCedula]             = useState(usuario.cedula)
+  const [email, setEmail]               = useState(usuario.email ?? '')
+  const [tipoDoc, setTipoDoc]           = useState(usuario.tipo_documento ?? 'CC')
+  const [rol, setRol]                   = useState(usuario.rol)
+  const [cargo, setCargo]               = useState(usuario.cargo ?? '')
+  const [telefono, setTelefono]         = useState(usuario.telefono ?? '')
+  const [direccion, setDireccion]       = useState(usuario.direccion ?? '')
+  const [rh, setRh]                     = useState(usuario.rh ?? '')
+  const [depId, setDepId]               = useState(usuario.dependencia_id ?? '')
+  const [banco, setBanco]               = useState(usuario.banco ?? '')
+  const [tipoCuenta, setTipoCuenta]     = useState(usuario.tipo_cuenta ?? '')
+  const [numeroCuenta, setNumeroCuenta] = useState(usuario.numero_cuenta ?? '')
 
   async function handleSave() {
     if (!nombre.trim() || !cedula.trim()) {
@@ -53,6 +64,7 @@ export default function EditarUsuarioClient({
     const result = await actualizarUsuario(usuario.id, {
       nombre_completo: nombre,
       cedula,
+      email,
       tipo_documento: tipoDoc,
       rol,
       cargo,
@@ -60,6 +72,9 @@ export default function EditarUsuarioClient({
       direccion,
       rh,
       dependencia_id: depId || undefined,
+      banco,
+      tipo_cuenta: tipoCuenta,
+      numero_cuenta: numeroCuenta,
     })
     setSaving(false)
     if (result.error) toast.error(result.error)
@@ -220,15 +235,63 @@ export default function EditarUsuarioClient({
               value={telefono}
               onChange={e => setTelefono(e.target.value)}
               placeholder="3XX XXX XXXX"
+              type="tel"
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+            <input
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
+              type="email"
+            />
+          </div>
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
             <input
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={direccion}
               onChange={e => setDireccion(e.target.value)}
               placeholder="Calle XX # XX-XX"
+            />
+          </div>
+        </div>
+
+        <hr className="border-gray-100" />
+        <h2 className="text-base font-semibold text-gray-900">Cuenta bancaria</h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={banco}
+              onChange={e => setBanco(e.target.value)}
+            >
+              <option value="">— Seleccionar banco —</option>
+              {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de cuenta</label>
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={tipoCuenta}
+              onChange={e => setTipoCuenta(e.target.value)}
+            >
+              <option value="">— Seleccionar tipo —</option>
+              {TIPOS_CUENTA.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuenta</label>
+            <input
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={numeroCuenta}
+              onChange={e => setNumeroCuenta(e.target.value)}
+              placeholder="XXXX XXXX XXXX"
             />
           </div>
         </div>
