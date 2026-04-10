@@ -34,6 +34,30 @@ function mesAnio(iso: string): string {
   return `${MESES[parseInt(m) - 1].toLowerCase()} de ${y}`
 }
 
+// ── Número a letras (días, 0-999) ─────────────────────────────
+const _UNIT = [
+  '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
+  'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE',
+  'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE',
+  'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES', 'VEINTICUATRO',
+  'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE',
+]
+const _DEC  = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
+const _CENT = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
+
+function numerosALetras(n: number): string {
+  if (n === 0)   return 'CERO'
+  if (n < 30)    return _UNIT[n]
+  if (n < 100)   return n % 10 === 0 ? _DEC[Math.floor(n / 10)] : `${_DEC[Math.floor(n / 10)]} Y ${_UNIT[n % 10]}`
+  if (n === 100) return 'CIEN'
+  const c = Math.floor(n / 100); const r = n % 100
+  return r === 0 ? _CENT[c] : `${_CENT[c]} ${numerosALetras(r)}`
+}
+
+function calcDias(inicio: string, fin: string): number {
+  return Math.round((new Date(fin + 'T00:00:00').getTime() - new Date(inicio + 'T00:00:00').getTime()) / 86_400_000)
+}
+
 // ─── Styles ───────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -257,9 +281,13 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
     ? `${contrato.valor_letras_mensual.toUpperCase()} (${formatCOP(contrato.valor_mensual)})`
     : formatCOP(contrato.valor_mensual)
 
-  const plazoTexto = contrato.plazo_meses
-    ? `${contrato.duracion_letras || contrato.plazo_meses} (${contrato.plazo_meses}) meses`
-    : '—'
+  let plazoTexto = '—'
+  if (contrato.fecha_inicio_contrato && contrato.fecha_fin_contrato) {
+    const dias = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
+    plazoTexto = `${numerosALetras(dias)} DÍAS (${dias})`
+  } else if (contrato.plazo_meses) {
+    plazoTexto = `${contrato.duracion_letras || contrato.plazo_meses} MESES (${contrato.plazo_meses})`
+  }
 
   const periodoNum = String(periodo.numero).padStart(2, '0')
 
