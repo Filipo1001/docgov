@@ -6,9 +6,9 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { PDFData, PDFPagoHistorial } from './types'
 
-/** Normaliza abreviatura de moneda → siempre M/CTE */
+/** Normaliza abreviatura de moneda → siempre M/L */
 function normalizaMoneda(texto: string): string {
-  return texto.replace(/\bM\/L\b/gi, 'M/CTE').trim()
+  return texto.replace(/\bM\/CTE\b/gi, 'M/L').trim()
 }
 
 export async function buildPDFData(periodoId: string): Promise<PDFData | null> {

@@ -566,7 +566,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Base de cotización a la Seguridad Social</Text></View>
-            <View style={s.val}><Text>UN MILLON SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO PESOS M/CTE ($1.750.905)</Text></View>
+            <View style={s.val}><Text>UN MILLON SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO PESOS M/L ($1.750.905)</Text></View>
           </View>
 
           {/* Planilla */}
