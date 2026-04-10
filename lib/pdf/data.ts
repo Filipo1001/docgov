@@ -6,6 +6,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { PDFData, PDFPagoHistorial } from './types'
 
+/** Normaliza abreviatura de moneda → siempre M/CTE */
+function normalizaMoneda(texto: string): string {
+  return texto.replace(/\bM\/L\b/gi, 'M/CTE').trim()
+}
+
 export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const supabase = await createServerSupabaseClient()
 
@@ -142,8 +147,8 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       modalidad_seleccion: contrato.modalidad_seleccion ?? 'Contratación Directa',
       valor_total: contrato.valor_total,
       valor_mensual: contrato.valor_mensual,
-      valor_letras_mensual: contrato.valor_letras_mensual ?? '',
-      valor_letras_total: contrato.valor_letras_total ?? undefined,
+      valor_letras_mensual: normalizaMoneda(contrato.valor_letras_mensual ?? ''),
+      valor_letras_total: contrato.valor_letras_total ? normalizaMoneda(contrato.valor_letras_total) : undefined,
       plazo_meses: contrato.plazo_meses ?? undefined,
       duracion_letras: contrato.duracion_letras ?? undefined,
       banco: contrato.banco,
