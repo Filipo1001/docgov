@@ -107,7 +107,7 @@ export async function getInformesMensuales(
     `)
     .eq('mes', mes.toUpperCase())
     .eq('anio', anio)
-    .neq('estado', 'borrador') // Only show submitted+ informes
+    .or('estado.neq.borrador,es_historico.eq.true') // Show submitted+ OR historical borradores
     .order('fecha_envio', { ascending: true })
 
   const { data } = await query
