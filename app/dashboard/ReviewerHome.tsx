@@ -197,27 +197,31 @@ function PendienteCard({ periodo }: { periodo: PeriodoPendienteRevisor }) {
     <Link
       href={`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`}
       className={`
-        block rounded-2xl border p-4 transition-all hover:shadow-sm
+        block rounded-2xl border p-3.5 sm:p-4 transition-all hover:shadow-sm
         ${isUrgent
           ? 'bg-red-50 border-red-200 hover:border-red-300'
           : 'bg-white border-gray-200 hover:border-gray-300'
         }
       `}
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-900 truncate">{periodo.contratista_nombre}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Contrato {periodo.contrato_numero}
-            {periodo.dependencia_nombre && ` · ${periodo.dependencia_nombre}`}
+          <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{periodo.contratista_nombre}</p>
+          <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">
+            Cto. {periodo.contrato_numero}
+            {periodo.dependencia_nombre && (
+              <span className="hidden sm:inline"> · {periodo.dependencia_nombre}</span>
+            )}
           </p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-gray-900">{fmt(periodo.valor_cobro)}</p>
-          <p className="text-xs text-gray-500">{periodo.mes} {periodo.anio}</p>
+          <p className="text-xs sm:text-sm font-bold text-gray-900">{fmt(periodo.valor_cobro)}</p>
+          <p className="text-[11px] sm:text-xs text-gray-500">
+            {periodo.mes.charAt(0) + periodo.mes.slice(1, 3).toLowerCase()}. {periodo.anio}
+          </p>
         </div>
       </div>
-      <div className="flex items-center gap-2 mt-2 text-xs">
+      <div className="flex items-center gap-2 mt-2 text-[11px] sm:text-xs">
         <span className={`px-2 py-0.5 rounded-full font-medium ${
           isUrgent
             ? 'bg-red-100 text-red-700'

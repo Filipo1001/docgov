@@ -343,7 +343,7 @@ export default function ContratistaHome({
           <PanelAccion periodoActual={periodoActual} contratoId={contrato.id} />
 
           {/* ── Stats row ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             <MiniStat label="Total periodos" value={stats.totalPeriodos} color="gray" />
             <MiniStat label="Aprobados" value={stats.aprobados} color="emerald" />
             <MiniStat label="En revision" value={stats.pendientes} color="blue" />
@@ -353,20 +353,22 @@ export default function ContratistaHome({
           {/* ── Contract progress ── */}
           {progreso && (
             <Card>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-start sm:items-center justify-between mb-3 gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900">Progreso del contrato</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">
                     Contrato N.o {contrato.numero}-{contrato.anio}
-                    {contrato.dependencia && ` · ${contrato.dependencia.nombre}`}
+                    {contrato.dependencia && (
+                      <span className="hidden sm:inline"> · {contrato.dependencia.nombre}</span>
+                    )}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{progreso.porcentaje}%</p>
-                  <p className="text-xs text-gray-500">
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">{progreso.porcentaje}%</p>
+                  <p className="text-[11px] sm:text-xs text-gray-500">
                     {progreso.diasRestantes > 0
-                      ? `${progreso.diasRestantes} dias restantes`
-                      : 'Contrato finalizado'}
+                      ? `${progreso.diasRestantes} dias`
+                      : 'Finalizado'}
                   </p>
                 </div>
               </div>
@@ -378,12 +380,14 @@ export default function ContratistaHome({
                 />
               </div>
 
-              <div className="flex items-center justify-between mt-3 text-xs text-gray-400">
-                <span>{contrato.fecha_inicio}</span>
+              <div className="flex items-center justify-between mt-3 text-[11px] sm:text-xs text-gray-400">
+                <span className="hidden sm:inline">{contrato.fecha_inicio}</span>
+                <span className="sm:hidden">{contrato.fecha_inicio.slice(5)}</span>
                 <span className="text-gray-600 font-medium">
-                  {progreso.diasTranscurridos} de {progreso.diasTotales} dias
+                  {progreso.diasTranscurridos}/{progreso.diasTotales} dias
                 </span>
-                <span>{contrato.fecha_fin}</span>
+                <span className="hidden sm:inline">{contrato.fecha_fin}</span>
+                <span className="sm:hidden">{contrato.fecha_fin.slice(5)}</span>
               </div>
             </Card>
           )}
@@ -392,7 +396,7 @@ export default function ContratistaHome({
           {periodos.length > 0 && (
             <Card>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Historial de periodos</h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
                 {periodos.map(p => {
                   const isActual = periodoActual?.id === p.id
                   return (
@@ -420,7 +424,7 @@ export default function ContratistaHome({
 
           {/* ── Contract info ── */}
           <Card className="bg-gray-50/60">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">Contrato activo</p>
                 <p className="text-sm font-semibold text-gray-900 mt-1">
@@ -428,7 +432,7 @@ export default function ContratistaHome({
                 </p>
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">{contrato.objeto}</p>
               </div>
-              <div className="text-right flex-shrink-0 ml-4">
+              <div className="sm:text-right flex-shrink-0">
                 <p className="text-[11px] text-gray-400">Valor mensual</p>
                 <p className="text-sm font-bold text-gray-900">{fmt(contrato.valor_mensual)}</p>
               </div>
@@ -464,9 +468,9 @@ function MiniStat({
   }
 
   return (
-    <div className={`rounded-2xl p-4 ${colors[color]}`}>
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    <div className={`rounded-2xl p-3 sm:p-4 ${colors[color]}`}>
+      <p className="text-xl sm:text-2xl font-bold">{value}</p>
+      <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">{label}</p>
     </div>
   )
 }

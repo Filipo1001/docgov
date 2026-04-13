@@ -92,8 +92,8 @@ function PeriodoCard({
           </div>
 
           {/* Meta row */}
-          <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-400 mb-4 flex-wrap">
-            <span>📋 {periodo.num_actividades} actividad{periodo.num_actividades !== 1 ? 'es' : ''}</span>
+          <div className="flex items-center gap-1.5 sm:gap-3 text-[11px] sm:text-xs text-gray-400 mb-3 sm:mb-4 flex-wrap">
+            <span>📋 {periodo.num_actividades} act.</span>
             <span className="hidden sm:inline">·</span>
             <span>📷 {periodo.num_evidencias} foto{periodo.num_evidencias !== 1 ? 's' : ''}</span>
             <span className="hidden sm:inline">·</span>
@@ -114,14 +114,14 @@ function PeriodoCard({
             <button
               onClick={() => onRechazar(periodo.id)}
               disabled={procesando === periodo.id}
-              className="text-xs px-4 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+              className="text-xs px-3 sm:px-4 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition disabled:opacity-50"
             >
               Rechazar
             </button>
             <button
               onClick={() => onAprobar(periodo.id)}
               disabled={procesando === periodo.id}
-              className="text-xs px-4 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 font-medium"
+              className="text-xs px-3 sm:px-4 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 font-medium"
             >
               {procesando === periodo.id ? '...' : '✓ Aprobar'}
             </button>

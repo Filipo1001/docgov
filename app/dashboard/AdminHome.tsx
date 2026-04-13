@@ -57,13 +57,13 @@ function PipelineStage({
   isLast?: boolean
 }) {
   return (
-    <div className="flex items-center gap-1">
-      <div className={`flex flex-col items-center rounded-xl px-3 py-2.5 min-w-[72px] ${color}`}>
-        <span className="text-xl font-bold">{value}</span>
-        <span className="text-[10px] font-medium mt-0.5 text-center leading-tight">{label}</span>
+    <div className="flex items-center gap-0.5 sm:gap-1">
+      <div className={`flex flex-col items-center rounded-xl px-2 sm:px-3 py-2 sm:py-2.5 min-w-[56px] sm:min-w-[72px] ${color}`}>
+        <span className="text-lg sm:text-xl font-bold">{value}</span>
+        <span className="text-[9px] sm:text-[10px] font-medium mt-0.5 text-center leading-tight">{label}</span>
       </div>
       {!isLast && (
-        <div className="text-gray-300 text-lg px-0.5">→</div>
+        <div className="text-gray-300 text-sm sm:text-lg px-0.5">→</div>
       )}
     </div>
   )
@@ -124,16 +124,16 @@ export default function AdminHome({
         title={`${saludo()}, ${firstName}`}
         subtitle={fechaHoy.charAt(0).toUpperCase() + fechaHoy.slice(1)}
         action={
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <Link
               href="/dashboard/contratos/nuevo"
-              className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-800 transition"
+              className="flex-1 sm:flex-none text-center bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-800 transition"
             >
               + Nuevo contrato
             </Link>
             <Link
               href="/dashboard/informes"
-              className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+              className="flex-1 sm:flex-none text-center bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
             >
               📅 {mesActualNombre()}
             </Link>
@@ -162,23 +162,23 @@ export default function AdminHome({
       </Card>
 
       {/* ── Quick stats row ── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Link href="/dashboard/contratos" className="block">
-          <div className="bg-gray-50 rounded-2xl p-4 hover:bg-gray-100 transition">
-            <p className="text-2xl font-bold text-gray-900">{pipeline.totalContratos}</p>
-            <p className="text-xs text-gray-500">Contratos</p>
+          <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 hover:bg-gray-100 transition">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900">{pipeline.totalContratos}</p>
+            <p className="text-[11px] sm:text-xs text-gray-500">Contratos</p>
           </div>
         </Link>
         <Link href="/dashboard/informes" className="block">
-          <div className="bg-amber-50 rounded-2xl p-4 hover:bg-amber-100 transition">
-            <p className="text-2xl font-bold text-amber-700">{totalEnProceso}</p>
-            <p className="text-xs text-gray-500">En proceso</p>
+          <div className="bg-amber-50 rounded-2xl p-3 sm:p-4 hover:bg-amber-100 transition">
+            <p className="text-xl sm:text-2xl font-bold text-amber-700">{totalEnProceso}</p>
+            <p className="text-[11px] sm:text-xs text-gray-500">En proceso</p>
           </div>
         </Link>
         <Link href="/dashboard/informes" className="block">
-          <div className="bg-emerald-50 rounded-2xl p-4 hover:bg-emerald-100 transition">
-            <p className="text-2xl font-bold text-emerald-700">{pipeline.aprobado + pipeline.radicado}</p>
-            <p className="text-xs text-gray-500">Completados</p>
+          <div className="bg-emerald-50 rounded-2xl p-3 sm:p-4 hover:bg-emerald-100 transition">
+            <p className="text-xl sm:text-2xl font-bold text-emerald-700">{pipeline.aprobado + pipeline.radicado}</p>
+            <p className="text-[11px] sm:text-xs text-gray-500">Completados</p>
           </div>
         </Link>
       </div>
@@ -196,20 +196,20 @@ export default function AdminHome({
                 <Link
                   key={a.id}
                   href={`/dashboard/contratos/${a.contrato_id}/periodo/${a.periodo_id}`}
-                  className="flex items-start gap-3 group hover:bg-gray-50 -mx-2 px-2 py-2 rounded-xl transition"
+                  className="flex items-start gap-2.5 sm:gap-3 group hover:bg-gray-50 -mx-2 px-2 py-2 rounded-xl transition"
                 >
-                  <span className="text-lg flex-shrink-0 mt-0.5">{cfg.icon}</span>
+                  <span className="text-base sm:text-lg flex-shrink-0 mt-0.5">{cfg.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900 group-hover:text-gray-700">
+                    <p className="text-xs sm:text-sm text-gray-900 group-hover:text-gray-700">
                       <span className="font-medium">{a.contratista_nombre.split(' ').slice(0, 2).join(' ')}</span>
                       {' — '}
                       <span className={cfg.color}>{cfg.label}</span>
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Contrato {a.contrato_numero} · {a.mes} {a.anio}
+                    <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
+                      Cto. {a.contrato_numero} · {a.mes} {a.anio}
                     </p>
                   </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0 mt-1">{timeAgo(a.fecha)}</span>
+                  <span className="text-[11px] sm:text-xs text-gray-400 flex-shrink-0 mt-1">{timeAgo(a.fecha)}</span>
                 </Link>
               )
             })}
