@@ -101,12 +101,12 @@ export async function getDashboardContratista(userId: string): Promise<Dashboard
 
   const periodos: PeriodoResumen[] = (periodosRaw ?? []) as any[]
 
-  // 3. Find current month's period
-  const mesActual = MESES[new Date().getMonth()]
+  // 3. Find current month's period (case-insensitive — DB stores 'ABRIL', MESES has 'Abril')
+  const mesActual = MESES[new Date().getMonth()].toUpperCase()
   const anioActual = new Date().getFullYear()
 
   const periodoActual = periodos.find(
-    p => p.mes === mesActual && p.anio === anioActual
+    p => p.mes.toUpperCase() === mesActual && p.anio === anioActual
   ) ?? null
 
   // 4. Calculate contract progress
