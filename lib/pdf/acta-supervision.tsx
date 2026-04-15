@@ -32,6 +32,17 @@ function formatDate(iso: string): string {
   return `${d}/${m}/${y}`
 }
 
+const MESES_LARGO = [
+  'enero','febrero','marzo','abril','mayo','junio',
+  'julio','agosto','septiembre','octubre','noviembre','diciembre',
+]
+
+/** '2026-02-02' → '02 de febrero de 2026' */
+function formatDateLargo(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d} de ${MESES_LARGO[parseInt(m, 10) - 1]} de ${y}`
+}
+
 function fechaFirmaTexto(iso: string): string {
   const [y, m, d] = iso.split('-')
   const dia = parseInt(d)
@@ -471,7 +482,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           {/* Contract details */}
           <View style={s.row}>
             <View style={s.lbl}><Text>Fecha de inicio contrato</Text></View>
-            <View style={s.val}><Text>{contrato.fecha_inicio_contrato ? formatDate(contrato.fecha_inicio_contrato).split('/').reverse().join(' de ') : '—'}</Text></View>
+            <View style={s.val}><Text>{contrato.fecha_inicio_contrato ? formatDateLargo(contrato.fecha_inicio_contrato) : '—'}</Text></View>
           </View>
 
           <View style={s.periodoRow}>
