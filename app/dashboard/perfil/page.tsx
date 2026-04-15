@@ -308,12 +308,19 @@ export default function PerfilPage() {
   const now              = new Date()
   const activeContratos  = contratos.filter(c => new Date(c.fecha_fin) >= now)
   const lastContrato     = contratos[0] ?? null
-  const hasBanking       = !!(lastContrato?.banco || lastContrato?.numero_cuenta)
+
+  // Banking info comes from the usuarios table (set by admin)
+  const bancariosBanco   = usuario.banco ?? null
+  const bancariosTipo    = usuario.tipo_cuenta ?? null
+  const bancariosNumero  = usuario.numero_cuenta ?? null
+  const hasBanking       = !!(bancariosBanco || bancariosNumero)
 
   const tipoCuentaLabel =
-    lastContrato?.tipo_cuenta === 'ahorros'   ? 'Cuenta de Ahorros' :
-    lastContrato?.tipo_cuenta === 'corriente' ? 'Cuenta Corriente'  :
-    lastContrato?.tipo_cuenta ?? null
+    bancariosTipo === 'ahorros'   ? 'Cuenta de Ahorros' :
+    bancariosTipo === 'Ahorros'   ? 'Cuenta de Ahorros' :
+    bancariosTipo === 'corriente' ? 'Cuenta Corriente'  :
+    bancariosTipo === 'Corriente' ? 'Cuenta Corriente'  :
+    bancariosTipo ?? null
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 p-4 md:p-8">
@@ -488,24 +495,26 @@ export default function PerfilPage() {
       </div>
 
       {/* ── Banking Information — contratista only ───────────────── */}
-      {rol === 'contratista' && lastContrato && (
+      {rol === 'contratista' && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <SectionHeading>Información bancaria</SectionHeading>
-            <span className="text-[10px] text-gray-400 shrink-0 -mt-0.5">
-              Del contrato {lastContrato.numero}
-            </span>
+            {!hasBanking && (
+              <span className="text-[10px] text-amber-500 shrink-0 -mt-0.5">
+                Pendiente de registro
+              </span>
+            )}
           </div>
 
           <div className="grid sm:grid-cols-3 gap-4">
             <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3">
-              <BankField label="Entidad bancaria" value={lastContrato.banco} />
+              <BankField label="Entidad bancaria" value={bancariosBanco} />
             </div>
             <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3">
               <BankField label="Tipo de cuenta" value={tipoCuentaLabel} />
             </div>
             <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3">
-              <BankField label="Número de cuenta" value={lastContrato.numero_cuenta} />
+              <BankField label="Número de cuenta" value={bancariosNumero} />
             </div>
           </div>
         </div>

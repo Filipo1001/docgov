@@ -33,6 +33,9 @@ export interface Usuario {
   foto_url?: string
   dependencia_id?: string
   dependencia?: Pick<Dependencia, 'nombre' | 'abreviatura'>
+  banco?: string | null
+  tipo_cuenta?: string | null
+  numero_cuenta?: string | null
 }
 
 export interface Preaprobacion {
