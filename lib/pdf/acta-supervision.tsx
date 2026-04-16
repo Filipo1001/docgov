@@ -595,20 +595,35 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <View style={s.val}><Text>UN MILLON SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO PESOS M/L ($1.750.905)</Text></View>
           </View>
 
-          {/* Planilla — una fila por periodo del contrato */}
-          {(pagosHistorial ?? []).map((pago, idx) => (
-            <View key={pago.acta_numero} style={s.row}>
-              <View style={s.lbl}>
-                {idx === 0 && <Text>Numero de planilla</Text>}
-              </View>
-              <View style={{ width: '22%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, backgroundColor: '#f5f5f5', borderRightWidth: 1, borderRightColor: '#000' }}>
-                <Text>{capitalizeMes(pago.mes)}</Text>
-              </View>
-              <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
-                <Text>{pago.numero_planilla ?? 'No Encontrada en la base de datos'}</Text>
-              </View>
+          {/* Planilla — label combinado + sub-filas a la derecha */}
+          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
+            {/* Columna izquierda: "Numero de planilla" centrado verticalmente */}
+            <View style={{ width: '30%', borderRightWidth: 1, borderRightColor: '#000', padding: '3 5', justifyContent: 'center', backgroundColor: '#f5f5f5' } as any}>
+              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Numero de planilla</Text>
             </View>
-          ))}
+            {/* Columna derecha: sub-filas apiladas */}
+            <View style={{ flex: 1 }}>
+              {(pagosHistorial ?? []).map((pago, idx, arr) => (
+                <View
+                  key={pago.acta_numero}
+                  style={{ flexDirection: 'row', borderBottomWidth: idx < arr.length - 1 ? 1 : 0, borderBottomColor: '#000', minHeight: 20 }}
+                >
+                  {/* Número de planilla */}
+                  <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
+                    <Text>{pago.numero_planilla ?? 'No Encontrada en la base de datos'}</Text>
+                  </View>
+                  {/* "Periodo de Cotización" — texto constante, fondo gris */}
+                  <View style={{ width: '32%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, backgroundColor: '#f5f5f5', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                    <Text>Periodo de Cotización</Text>
+                  </View>
+                  {/* Mes */}
+                  <View style={{ width: '18%', padding: '3 5', fontSize: 9, borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                    <Text>{capitalizeMes(pago.mes)}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
 
           {/* Pagos realizados en virtud del contrato */}
           <View style={s.payRow}>
