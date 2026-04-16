@@ -285,7 +285,7 @@ export async function cambiarContrasena(
 
   try {
     const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${serviceKey}`,
