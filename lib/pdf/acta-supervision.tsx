@@ -633,42 +633,38 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             </View>
             {/* Sub-filas derechas */}
             <View style={{ flex: 1 }}>
-              {/* Valor total contrato */}
+              {/* Valor total — descripción ocupa desc+fecha (64%), monto ocupa Valor+monto (36%) */}
               <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
-                <View style={{ flex: 1, padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>
+                <View style={{ width: '64%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, borderRightWidth: 1, borderRightColor: '#000' }}>
                   <Text>Valor total contrato</Text>
                 </View>
-                <View style={{ width: '22%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
-                <View style={{ width: '12%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
-                <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                <View style={{ width: '36%', padding: '3 5', fontSize: 9, textAlign: 'right' }}>
                   <Text>{formatCOP(contrato.valor_total)}</Text>
                 </View>
               </View>
-              {/* Fila por cada pago */}
+              {/* Filas de pago — 4 columnas: Pago N | fecha | Valor | monto */}
               {(pagosHistorial ?? []).map((pago) => (
                 <View key={pago.acta_numero} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
-                  <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
+                  <View style={{ width: '42%', padding: '3 5', fontSize: 9, borderRightWidth: 1, borderRightColor: '#000' }}>
                     <Text>Pago {pago.acta_numero}</Text>
                   </View>
-                  <View style={{ width: '22%', padding: '3 5', fontSize: 9, textAlign: 'center', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                  <View style={{ width: '22%', padding: '3 5', fontSize: 9, textAlign: 'center', borderRightWidth: 1, borderRightColor: '#000' }}>
                     <Text>{pago.fecha_pago}</Text>
                   </View>
-                  <View style={{ width: '12%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8, textAlign: 'center', borderLeftWidth: 1, borderLeftColor: '#000', backgroundColor: '#f5f5f5' }}>
+                  <View style={{ width: '12%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8, textAlign: 'center', borderRightWidth: 1, borderRightColor: '#000', backgroundColor: '#f5f5f5' }}>
                     <Text>Valor</Text>
                   </View>
-                  <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                  <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right' }}>
                     <Text>{formatCOP(pago.valor_acta)}</Text>
                   </View>
                 </View>
               ))}
-              {/* Saldo por ejecutar */}
+              {/* Saldo — descripción ocupa desc+fecha+Valor (76%), monto (24%) */}
               <View style={{ flexDirection: 'row', minHeight: 20 }}>
-                <View style={{ flex: 1, padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>
+                <View style={{ width: '76%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, borderRightWidth: 1, borderRightColor: '#000' }}>
                   <Text>Saldo por ejecutar</Text>
                 </View>
-                <View style={{ width: '22%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
-                <View style={{ width: '12%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
-                <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right' }}>
                   <Text>{formatCOP(Math.max(0, saldo))}</Text>
                 </View>
               </View>
