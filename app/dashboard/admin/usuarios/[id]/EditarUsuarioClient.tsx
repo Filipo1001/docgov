@@ -103,7 +103,7 @@ export default function EditarUsuarioClient({
     const result = await cambiarContrasena(usuario.id, nuevaPass)
     setSavingPass(false)
     if (result.error) toast.error(result.error)
-    else { toast.success('Contraseña actualizada'); setNuevaPass(''); setConfirmarPass('') }
+    else { toast.success(`Contraseña actualizada para ${result.data?.email}`); setNuevaPass(''); setConfirmarPass('') }
   }
 
   return (

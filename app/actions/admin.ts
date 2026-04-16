@@ -267,7 +267,7 @@ export async function subirFotoUsuario(
 export async function cambiarContrasena(
   userId: string,
   password: string
-): Promise<ActionResult<void>> {
+): Promise<ActionResult<{ email: string }>> {
   const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
 
@@ -294,12 +294,14 @@ export async function cambiarContrasena(
       body: JSON.stringify({ password: pw }),
     })
 
+    const body = await res.json().catch(() => ({}))
+
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
       return { error: body.message ?? body.msg ?? `Error ${res.status} al cambiar contraseña` }
     }
 
-    return {}
+    // body.email lets the caller confirm which auth user was updated
+    return { data: { email: body.email ?? userId } }
   } catch (err: any) {
     return { error: err?.message ?? 'Error inesperado al cambiar contraseña' }
   }
