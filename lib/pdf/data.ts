@@ -6,6 +6,13 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { PDFData, PDFPagoHistorial } from './types'
 
+/** Último día del periodo (fecha_fin) + 6 días calendario → 'DD/MM/YYYY' */
+function calcFechaPago(fechaFin: string): string {
+  const d = new Date(fechaFin + 'T00:00:00')
+  d.setDate(d.getDate() + 6)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
 export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const supabase = await createServerSupabaseClient()
 
@@ -54,10 +61,10 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const contrato = periodo.contrato as any
   if (!contrato) return null
 
-  // Fetch all periods for this contract (for payment history table)
+  // Fetch all periods for this contract (for payment history + planilla tables)
   const { data: allPeriodos } = await supabase
     .from('periodos')
-    .select('numero_periodo, valor_cobro, estado')
+    .select('numero_periodo, valor_cobro, estado, mes, fecha_fin, numero_planilla')
     .eq('contrato_id', contrato.id)
     .order('numero_periodo')
 
@@ -69,10 +76,13 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     acumulado += p.valor_cobro
     pagosHistorial.push({
       acta_numero: p.numero_periodo,
+      mes: p.mes,
+      fecha_pago: calcFechaPago(p.fecha_fin),
       valor_contrato: contrato.valor_total,
       valor_pagado_acumulado: acumulado - p.valor_cobro,
       valor_acta: p.valor_cobro,
       saldo_pendiente: contrato.valor_total - acumulado,
+      numero_planilla: p.numero_planilla ?? null,
     })
   }
 
