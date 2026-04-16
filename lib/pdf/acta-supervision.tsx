@@ -625,26 +625,54 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             </View>
           </View>
 
-          {/* Pagos realizados en virtud del contrato */}
-          <View style={s.payRow}>
-            <View style={s.payLabel}><Text>Pagos realizados en virtud del contrato</Text></View>
-            <View style={s.paySubLabel}><Text>Valor total contrato</Text></View>
-            <View style={s.payDateCol}><Text> </Text></View>
-            <View style={s.paySubVal}><Text>{formatCOP(contrato.valor_total)}</Text></View>
-          </View>
-          {(pagosHistorial ?? []).map((pago) => (
-            <View key={pago.acta_numero} style={s.payRow}>
-              <View style={s.payLabel}><Text> </Text></View>
-              <View style={s.paySubLabel}><Text>Pago {pago.acta_numero}</Text></View>
-              <View style={s.payDateCol}><Text>{pago.fecha_pago}</Text></View>
-              <View style={s.paySubVal}><Text>{formatCOP(pago.valor_acta)}</Text></View>
+          {/* Pagos realizados — celda izquierda combinada + sub-filas a la derecha */}
+          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
+            {/* Etiqueta izquierda combinada */}
+            <View style={{ width: '30%', borderRightWidth: 1, borderRightColor: '#000', padding: '3 5', justifyContent: 'center', backgroundColor: '#f5f5f5' } as any}>
+              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Pagos realizados en virtud del contrato</Text>
             </View>
-          ))}
-          <View style={s.payRow}>
-            <View style={s.payLabel}><Text> </Text></View>
-            <View style={s.paySubLabel}><Text>Saldo por ejecutar</Text></View>
-            <View style={s.payDateCol}><Text> </Text></View>
-            <View style={s.paySubVal}><Text>{formatCOP(Math.max(0, saldo))}</Text></View>
+            {/* Sub-filas derechas */}
+            <View style={{ flex: 1 }}>
+              {/* Valor total contrato */}
+              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
+                <View style={{ flex: 1, padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>
+                  <Text>Valor total contrato</Text>
+                </View>
+                <View style={{ width: '22%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
+                <View style={{ width: '12%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
+                <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                  <Text>{formatCOP(contrato.valor_total)}</Text>
+                </View>
+              </View>
+              {/* Fila por cada pago */}
+              {(pagosHistorial ?? []).map((pago) => (
+                <View key={pago.acta_numero} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
+                  <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
+                    <Text>Pago {pago.acta_numero}</Text>
+                  </View>
+                  <View style={{ width: '22%', padding: '3 5', fontSize: 9, textAlign: 'center', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                    <Text>{pago.fecha_pago}</Text>
+                  </View>
+                  <View style={{ width: '12%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8, textAlign: 'center', borderLeftWidth: 1, borderLeftColor: '#000', backgroundColor: '#f5f5f5' }}>
+                    <Text>Valor</Text>
+                  </View>
+                  <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                    <Text>{formatCOP(pago.valor_acta)}</Text>
+                  </View>
+                </View>
+              ))}
+              {/* Saldo por ejecutar */}
+              <View style={{ flexDirection: 'row', minHeight: 20 }}>
+                <View style={{ flex: 1, padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>
+                  <Text>Saldo por ejecutar</Text>
+                </View>
+                <View style={{ width: '22%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
+                <View style={{ width: '12%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000' }} />
+                <View style={{ width: '24%', padding: '3 5', fontSize: 9, textAlign: 'right', borderLeftWidth: 1, borderLeftColor: '#000' }}>
+                  <Text>{formatCOP(Math.max(0, saldo))}</Text>
+                </View>
+              </View>
+            </View>
           </View>
 
           <View style={s.rowLast}>
