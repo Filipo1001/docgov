@@ -271,15 +271,38 @@ export async function cambiarContrasena(
   const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
 
-  if (password.length < 8) {
+  const pw = password.trim()
+  if (pw.length < 8) {
     return { error: 'La contraseña debe tener al menos 8 caracteres' }
   }
 
-  const adminClient = createAdminSupabaseClient()
-  const { error } = await adminClient.auth.admin.updateUserById(userId, { password })
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (error) return { error: error.message }
-  return {}
+  if (!supabaseUrl || !serviceKey) {
+    return { error: 'Configuración de servidor incompleta (service key faltante)' }
+  }
+
+  try {
+    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+      },
+      body: JSON.stringify({ password: pw }),
+    })
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return { error: body.message ?? body.msg ?? `Error ${res.status} al cambiar contraseña` }
+    }
+
+    return {}
+  } catch (err: any) {
+    return { error: err?.message ?? 'Error inesperado al cambiar contraseña' }
+  }
 }
 
 // ─── Update municipality ──────────────────────────────────────
