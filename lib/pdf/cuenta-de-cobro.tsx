@@ -104,7 +104,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#000',
     borderStyle: 'solid',
-    marginBottom: 14,
+    marginBottom: 8,
   },
   row: {
     flexDirection: 'row',
@@ -214,9 +214,18 @@ const s = StyleSheet.create({
     marginBottom: 3,
   },
 
+  // ── Retención notice
+  retencionNotice: {
+    fontSize: 8.5,
+    lineHeight: 1.35,
+    textAlign: 'justify',
+    marginBottom: 10,
+    color: '#111',
+  },
+
   // ── VoBo / supervisor block
   voBoSection: {
-    marginTop: 12,
+    marginTop: 10,
   },
   voBoRow: {
     flexDirection: 'row',
@@ -383,6 +392,11 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
           </View>
 
         </View>
+
+        {/* ── Retención notice ────────────────────── */}
+        <Text style={s.retencionNotice}>
+          El contratista manifiesta que NO se acoge a la aplicación de costos y deducciones sobre las rentas de trabajo que no provienen de una relación laboral, legal o reglamentaria, para efectos de la retención en la fuente.
+        </Text>
 
         {/* ── Signature block — indivisible, moves to next page if needed ── */}
         <View wrap={false}>
