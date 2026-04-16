@@ -262,6 +262,26 @@ export async function subirFotoUsuario(
   return { data: { url } }
 }
 
+// ─── Change user password (admin only) ───────────────────────
+
+export async function cambiarContrasena(
+  userId: string,
+  password: string
+): Promise<ActionResult<void>> {
+  const admin = await requireAdmin()
+  if (!admin) return { error: 'No autorizado' }
+
+  if (password.length < 8) {
+    return { error: 'La contraseña debe tener al menos 8 caracteres' }
+  }
+
+  const adminClient = createAdminSupabaseClient()
+  const { error } = await adminClient.auth.admin.updateUserById(userId, { password })
+
+  if (error) return { error: error.message }
+  return {}
+}
+
 // ─── Update municipality ──────────────────────────────────────
 
 export async function actualizarMunicipio(

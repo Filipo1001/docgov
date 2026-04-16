@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
-import { actualizarUsuario, subirFotoUsuario } from '@/app/actions/admin'
+import { actualizarUsuario, subirFotoUsuario, cambiarContrasena } from '@/app/actions/admin'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'gobierno', 'hacienda']
@@ -40,6 +40,9 @@ export default function EditarUsuarioClient({
   const [fotoUrl, setFotoUrl]     = useState(usuario.foto_url)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving]       = useState(false)
+  const [nuevaPass, setNuevaPass]         = useState('')
+  const [confirmarPass, setConfirmarPass] = useState('')
+  const [savingPass, setSavingPass]       = useState(false)
 
   const [nombre, setNombre]             = useState(usuario.nombre_completo)
   const [cedula, setCedula]             = useState(usuario.cedula)
@@ -91,6 +94,16 @@ export default function EditarUsuarioClient({
     setUploading(false)
     if (result.error) toast.error(result.error)
     else if (result.data) { setFotoUrl(result.data.url); toast.success('Foto actualizada') }
+  }
+
+  async function handleCambiarContrasena() {
+    if (!nuevaPass) { toast.error('Ingresa la nueva contraseña'); return }
+    if (nuevaPass !== confirmarPass) { toast.error('Las contraseñas no coinciden'); return }
+    setSavingPass(true)
+    const result = await cambiarContrasena(usuario.id, nuevaPass)
+    setSavingPass(false)
+    if (result.error) toast.error(result.error)
+    else { toast.success('Contraseña actualizada'); setNuevaPass(''); setConfirmarPass('') }
   }
 
   return (
@@ -310,6 +323,44 @@ export default function EditarUsuarioClient({
             className="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition disabled:opacity-60"
           >
             {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
+      </div>
+      {/* Security card */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+        <h2 className="text-base font-semibold text-gray-900">Seguridad</h2>
+        <p className="text-sm text-gray-500">Establece una nueva contraseña para este usuario.</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
+            <input
+              type="password"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={nuevaPass}
+              onChange={e => setNuevaPass(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar contraseña</label>
+            <input
+              type="password"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={confirmarPass}
+              onChange={e => setConfirmarPass(e.target.value)}
+              placeholder="Repite la contraseña"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <button
+            onClick={handleCambiarContrasena}
+            disabled={savingPass}
+            className="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition disabled:opacity-60"
+          >
+            {savingPass ? 'Guardando…' : 'Cambiar contraseña'}
           </button>
         </div>
       </div>
