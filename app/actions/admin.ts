@@ -192,6 +192,14 @@ export async function actualizarUsuario(
   if (!admin) return { error: 'No autorizado' }
 
   const adminClient = createAdminSupabaseClient()
+
+  // Sync email to auth.users when it changes
+  if (data.email) {
+    const newEmail = data.email.trim().toLowerCase()
+    const { error: authError } = await adminClient.auth.admin.updateUserById(id, { email: newEmail })
+    if (authError) return { error: `Error actualizando email en auth: ${authError.message}` }
+  }
+
   const { error } = await adminClient
     .from('usuarios')
     .update({
