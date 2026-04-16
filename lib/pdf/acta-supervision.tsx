@@ -270,6 +270,21 @@ const s = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: '#000',
   },
+  // Celda izquierda combinada (planilla + pagos) — StyleSheet para que padding shorthand funcione
+  mergedLbl: {
+    width: '30%',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    padding: '3 5',
+    justifyContent: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  mergedRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
+    minHeight: 20,
+  },
   // Payment table
   payRow: {
     flexDirection: 'row',
@@ -596,9 +611,9 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           </View>
 
           {/* Planilla — label combinado + sub-filas a la derecha */}
-          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
-            {/* Columna izquierda: "Numero de planilla" centrado verticalmente */}
-            <View style={{ width: '30%', borderRightWidth: 1, borderRightColor: '#000', padding: '3 5', justifyContent: 'center', backgroundColor: '#f5f5f5' } as any}>
+          <View style={s.mergedRow}>
+            {/* Columna izquierda: "Numero de planilla" — usa StyleSheet para que justifyContent funcione */}
+            <View style={s.mergedLbl}>
               <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Numero de planilla</Text>
             </View>
             {/* Columna derecha: sub-filas apiladas */}
@@ -608,15 +623,12 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                   key={pago.acta_numero}
                   style={{ flexDirection: 'row', borderBottomWidth: idx < arr.length - 1 ? 1 : 0, borderBottomColor: '#000', minHeight: 20 }}
                 >
-                  {/* Número de planilla */}
                   <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
                     <Text>{pago.numero_planilla ?? 'No Encontrada en la base de datos'}</Text>
                   </View>
-                  {/* "Periodo de Cotización" — texto constante, fondo gris */}
                   <View style={{ width: '32%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, backgroundColor: '#f5f5f5', borderLeftWidth: 1, borderLeftColor: '#000' }}>
                     <Text>Periodo de Cotización</Text>
                   </View>
-                  {/* Mes */}
                   <View style={{ width: '18%', padding: '3 5', fontSize: 9, borderLeftWidth: 1, borderLeftColor: '#000' }}>
                     <Text>{capitalizeMes(pago.mes)}</Text>
                   </View>
@@ -625,15 +637,15 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             </View>
           </View>
 
-          {/* Pagos realizados — celda izquierda combinada + sub-filas a la derecha */}
-          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
-            {/* Etiqueta izquierda combinada */}
-            <View style={{ width: '30%', borderRightWidth: 1, borderRightColor: '#000', padding: '3 5', justifyContent: 'center', backgroundColor: '#f5f5f5' } as any}>
+          {/* Pagos realizados — wrap=false para no partir entre páginas */}
+          <View style={s.mergedRow} wrap={false}>
+            {/* Etiqueta izquierda — usa StyleSheet para que justifyContent funcione */}
+            <View style={s.mergedLbl}>
               <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Pagos realizados en virtud del contrato</Text>
             </View>
             {/* Sub-filas derechas */}
             <View style={{ flex: 1 }}>
-              {/* Valor total — descripción ocupa desc+fecha (64%), monto ocupa Valor+monto (36%) */}
+              {/* Valor total — desc+fecha fusionados (64%), Valor+monto fusionados (36%) */}
               <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
                 <View style={{ width: '64%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, borderRightWidth: 1, borderRightColor: '#000' }}>
                   <Text>Valor total contrato</Text>
@@ -642,7 +654,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                   <Text>{formatCOP(contrato.valor_total)}</Text>
                 </View>
               </View>
-              {/* Filas de pago — 4 columnas: Pago N | fecha | Valor | monto */}
+              {/* Pago N — 4 columnas: descripción | fecha | Valor | monto */}
               {(pagosHistorial ?? []).map((pago) => (
                 <View key={pago.acta_numero} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
                   <View style={{ width: '42%', padding: '3 5', fontSize: 9, borderRightWidth: 1, borderRightColor: '#000' }}>
@@ -659,7 +671,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                   </View>
                 </View>
               ))}
-              {/* Saldo — descripción ocupa desc+fecha+Valor (76%), monto (24%) */}
+              {/* Saldo — desc+fecha+Valor fusionados (76%), monto (24%) */}
               <View style={{ flexDirection: 'row', minHeight: 20 }}>
                 <View style={{ width: '76%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, borderRightWidth: 1, borderRightColor: '#000' }}>
                   <Text>Saldo por ejecutar</Text>
