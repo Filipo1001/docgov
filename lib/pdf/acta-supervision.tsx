@@ -55,6 +55,11 @@ function mesNombre(iso: string): string {
   return MESES[m - 1].charAt(0).toUpperCase() + MESES[m - 1].slice(1)
 }
 
+/** 'ENERO' → 'Enero' */
+function capitalizeMes(mes: string): string {
+  return mes.charAt(0).toUpperCase() + mes.slice(1).toLowerCase()
+}
+
 function baseCotizacion(valorMensual: number): { texto: string; valor: number } {
   const base = Math.round(valorMensual * 0.4)
   return {
@@ -281,7 +286,7 @@ const s = StyleSheet.create({
     borderRightColor: '#000',
   },
   paySubLabel: {
-    width: '35%',
+    width: '30%',
     padding: '3 5',
     fontFamily: 'Helvetica-Bold',
     fontSize: 8.5,
@@ -289,8 +294,16 @@ const s = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: '#000',
   },
+  payDateCol: {
+    width: '15%',
+    padding: '3 5',
+    fontSize: 9,
+    textAlign: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+  },
   paySubVal: {
-    width: '35%',
+    width: '25%',
     padding: '3 5',
     fontSize: 9,
     textAlign: 'right',
@@ -397,7 +410,9 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
     : formatCOP(contrato.valor_total)
 
   const base = baseCotizacion(contrato.valor_mensual)
-  const saldo = contrato.valor_total - (periodo.numero * contrato.valor_mensual)
+  const saldo = (pagosHistorial ?? []).length > 0
+    ? pagosHistorial![pagosHistorial!.length - 1].saldo_pendiente
+    : contrato.valor_total - (periodo.numero * contrato.valor_mensual)
 
   const periodoNum = String(periodo.numero).padStart(2, '0')
 
@@ -580,36 +595,46 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <View style={s.val}><Text>UN MILLON SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO PESOS M/L ($1.750.905)</Text></View>
           </View>
 
-          {/* Planilla */}
-          <View style={s.row}>
-            <View style={s.lbl}><Text>Numero de planilla</Text></View>
-            <View style={{ width: '35%', padding: '4 6', borderRightWidth: 1, borderRightColor: '#000', fontSize: 9 }}>
-              <Text>{periodo.numero_planilla || '—'}</Text>
+          {/* Planilla — una fila por periodo del contrato */}
+          {(pagosHistorial ?? []).map((pago, idx) => (
+            <View key={pago.acta_numero} style={s.row}>
+              <View style={s.lbl}>
+                {idx === 0 && <Text>Numero de planilla</Text>}
+              </View>
+              <View style={{ width: '22%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, backgroundColor: '#f5f5f5', borderRightWidth: 1, borderRightColor: '#000' }}>
+                <Text>{capitalizeMes(pago.mes)}</Text>
+              </View>
+              <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
+                <Text>{pago.numero_planilla ?? 'No Encontrada en la base de datos'}</Text>
+              </View>
             </View>
-            <View style={{ padding: '4 6', fontFamily: 'Helvetica-Bold', fontSize: 8.5, borderRightWidth: 1, borderRightColor: '#000', backgroundColor: '#f5f5f5' }}>
-              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Periodo de cotización</Text>
+          ))}
+
+          {/* Pagos realizados en virtud del contrato */}
+          <View style={s.payRow}>
+            <View style={s.payLabel}><Text>Pagos realizados en virtud del contrato</Text></View>
+            <View style={s.paySubLabel}><Text>Valor total contrato</Text></View>
+            <View style={s.payDateCol}><Text> </Text></View>
+            <View style={s.paySubVal}><Text>{formatCOP(contrato.valor_total)}</Text></View>
+          </View>
+          {(pagosHistorial ?? []).map((pago) => (
+            <View key={pago.acta_numero} style={s.payRow}>
+              <View style={s.payLabel}><Text> </Text></View>
+              <View style={s.paySubLabel}><Text>Pago {pago.acta_numero}</Text></View>
+              <View style={s.payDateCol}><Text>{pago.fecha_pago}</Text></View>
+              <View style={s.paySubVal}><Text>{formatCOP(pago.valor_acta)}</Text></View>
             </View>
-            <View style={{ padding: '4 6', fontSize: 9, flex: 1 }}>
-              <Text>{mesNombre(periodo.fecha_inicio)}</Text>
-            </View>
+          ))}
+          <View style={s.payRow}>
+            <View style={s.payLabel}><Text> </Text></View>
+            <View style={s.paySubLabel}><Text>Saldo por ejecutar</Text></View>
+            <View style={s.payDateCol}><Text> </Text></View>
+            <View style={s.paySubVal}><Text>{formatCOP(Math.max(0, saldo))}</Text></View>
           </View>
 
-          {/* Payments + Conclusiones — keep together on same page */}
-          <View wrap={false}>
-            <View style={s.payRow}>
-              <View style={s.payLabel}><Text>Pagos realizados en virtud del contrato</Text></View>
-              <View style={s.paySubLabel}><Text>Valor total contrato</Text></View>
-              <View style={s.paySubVal}><Text>{formatCOP(contrato.valor_total)}</Text></View>
-            </View>
-            <View style={s.payRow}>
-              <View style={s.payLabel}><Text> </Text></View>
-              <View style={s.paySubLabel}><Text>Saldo por ejecutar</Text></View>
-              <View style={s.paySubVal}><Text>{formatCOP(Math.max(0, saldo))}</Text></View>
-            </View>
-            <View style={s.rowLast}>
-              <View style={s.lbl}><Text>Conclusiones y recomendaciones por parte del supervisor</Text></View>
-              <View style={s.val}><Text>Ninguna</Text></View>
-            </View>
+          <View style={s.rowLast}>
+            <View style={s.lbl}><Text>Conclusiones y recomendaciones por parte del supervisor</Text></View>
+            <View style={s.val}><Text>Ninguna</Text></View>
           </View>
         </View>
 

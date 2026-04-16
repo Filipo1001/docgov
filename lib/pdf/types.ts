@@ -70,13 +70,16 @@ export interface PDFObligacion {
   actividades: PDFActividad[]
 }
 
-/** Payment history row for Acta de Pago */
+/** Payment history row for Acta de Pago / Acta de Supervisión */
 export interface PDFPagoHistorial {
   acta_numero: number
+  mes: string              // 'ENERO', 'FEBRERO', etc. (uppercase from DB)
+  fecha_pago: string       // 'DD/MM/YYYY' — último día del mes + 6 días calendario
   valor_contrato: number
   valor_pagado_acumulado: number
   valor_acta: number
   saldo_pendiente: number
+  numero_planilla?: string | null
 }
 
 export interface PDFData {
