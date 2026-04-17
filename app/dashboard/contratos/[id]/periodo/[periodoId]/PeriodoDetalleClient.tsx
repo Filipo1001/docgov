@@ -298,9 +298,16 @@ export default function PeriodoDetallePage() {
   }
 
   // Compress evidence image before upload: max 1200×900, JPEG 75%
-  // Only processes images; PDFs are passed through unchanged.
+  // PDFs are passed through unchanged. Images are always converted to JPEG
+  // so react-pdf and browsers can render them reliably.
+  // Android devices often send images with type="" or "application/octet-stream"
+  // so we also check the file extension before deciding to skip compression.
   async function comprimirEvidencia(file: File): Promise<File> {
-    if (!file.type.startsWith('image/')) return file
+    const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif', 'bmp', 'tiff']
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const looksLikeImage = file.type.startsWith('image/') || IMAGE_EXTS.includes(ext)
+    if (!looksLikeImage) return file   // PDF or unknown — pass through unchanged
+
     return new Promise((resolve) => {
       const img = new Image()
       const objUrl = URL.createObjectURL(file)
@@ -328,6 +335,7 @@ export default function PeriodoDetallePage() {
           0.75
         )
       }
+      // Canvas couldn't decode it (e.g. HEIC on Android WebView) — send as-is
       img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(file) }
       img.src = objUrl
     })
@@ -358,7 +366,9 @@ export default function PeriodoDetallePage() {
 
     // ── Step 2: upload DIRECTLY to Supabase (browser → Supabase, no Vercel) ──
     // Using XHR so we get real upload.onprogress events (0→95%).
-    const mime = fileToUpload.type || 'image/jpeg'
+    // Normalize MIME: Android devices sometimes set type="" or "application/octet-stream"
+    // for images. Always upload as image/jpeg when the type is not a recognized image type.
+    const mime = fileToUpload.type.startsWith('image/') ? fileToUpload.type : 'image/jpeg'
     try {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
