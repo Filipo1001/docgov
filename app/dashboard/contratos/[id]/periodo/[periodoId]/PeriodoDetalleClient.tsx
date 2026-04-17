@@ -298,19 +298,35 @@ export default function PeriodoDetallePage() {
   }
 
   // Compress evidence image before upload: max 1200×900, JPEG 75%
-  // PDFs are passed through unchanged. Images are always converted to JPEG
-  // so react-pdf and browsers can render them reliably.
-  // Android devices often send images with type="" or "application/octet-stream"
-  // so we also check the file extension before deciding to skip compression.
+  // PDFs are passed through unchanged. All images (including HEIC/HEIF from iPhone
+  // and files with missing MIME types from Android) are converted to JPEG so that
+  // browsers and react-pdf can render them reliably.
   async function comprimirEvidencia(file: File): Promise<File> {
     const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif', 'bmp', 'tiff']
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const isHeic = ext === 'heic' || ext === 'heif'
+      || file.type === 'image/heic' || file.type === 'image/heif'
     const looksLikeImage = file.type.startsWith('image/') || IMAGE_EXTS.includes(ext)
     if (!looksLikeImage) return file   // PDF or unknown — pass through unchanged
 
+    // HEIC/HEIF: convert to JPEG blob first using heic2any, then compress via canvas
+    let sourceFile: File = file
+    if (isHeic) {
+      try {
+        const heic2any = (await import('heic2any')).default
+        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
+        const blob = Array.isArray(converted) ? converted[0] : converted
+        const name = file.name.replace(/\.[^.]+$/, '.jpg')
+        sourceFile = new File([blob], name, { type: 'image/jpeg' })
+      } catch {
+        // heic2any failed — fall through and let canvas try (Safari handles HEIC natively)
+        sourceFile = file
+      }
+    }
+
     return new Promise((resolve) => {
       const img = new Image()
-      const objUrl = URL.createObjectURL(file)
+      const objUrl = URL.createObjectURL(sourceFile)
       img.onload = () => {
         URL.revokeObjectURL(objUrl)
         const MAX_W = 1200, MAX_H = 900
@@ -325,18 +341,17 @@ export default function PeriodoDetallePage() {
         canvas.toBlob(
           (blob) => {
             if (blob) {
-              const name = file.name.replace(/\.[^.]+$/, '.jpg')
+              const name = sourceFile.name.replace(/\.[^.]+$/, '.jpg')
               resolve(new File([blob], name, { type: 'image/jpeg' }))
             } else {
-              resolve(file) // fallback: send original if canvas fails
+              resolve(sourceFile)
             }
           },
           'image/jpeg',
           0.75
         )
       }
-      // Canvas couldn't decode it (e.g. HEIC on Android WebView) — send as-is
-      img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(file) }
+      img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(sourceFile) }
       img.src = objUrl
     })
   }
