@@ -1067,12 +1067,12 @@ export default function PeriodoDetallePage() {
                         ? '✓ Cargada — clic para reemplazar'
                         : erroresCampos.planilla
                           ? 'Requerida — adjunta el archivo'
-                          : 'Subir PDF o imagen'}
+                          : 'Subir PDF'}
                   </p>
                 </div>
                 <input
                   type="file"
-                  accept="application/pdf,image/jpeg,image/png"
+                  accept="application/pdf"
                   className="hidden"
                   disabled={subiendoPlanilla}
                   onChange={(e) => {
@@ -1406,11 +1406,11 @@ export default function PeriodoDetallePage() {
                             ? 'Subiendo...'
                             : periodo.planilla_ss_url
                               ? 'Reemplazar planilla'
-                              : 'Subir planilla (PDF o imagen)'}
+                              : 'Subir planilla (PDF)'}
                         </span>
                         <input
                           type="file"
-                          accept="application/pdf,image/jpeg,image/png"
+                          accept="application/pdf"
                           className="hidden"
                           disabled={subiendoPlanilla}
                           onChange={(e) => {

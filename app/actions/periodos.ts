@@ -699,12 +699,15 @@ export async function subirPlanilla(
     const file = formData.get('file') as File
     if (!file) return { error: 'No se recibió el archivo' }
 
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+    if (file.type !== 'application/pdf' && ext !== 'pdf') {
+      return { error: 'Solo se aceptan archivos PDF para la planilla de seguridad social' }
+    }
+
     if (file.size > 10 * 1024 * 1024) {
       return { error: 'El archivo no puede superar 10 MB' }
     }
-
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
-    const path = `planillas/${periodoId}/${Date.now()}.${ext}`
+    const path = `planillas/${periodoId}/${Date.now()}.pdf`
 
     const buffer = Buffer.from(await file.arrayBuffer())
     const { error: uploadError } = await supabase.storage
