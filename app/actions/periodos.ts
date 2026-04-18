@@ -713,18 +713,18 @@ export async function subirPlanilla(
     const path = `planillas/${periodoId}/${Date.now()}.pdf`
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const { error: uploadError } = await supabase.storage
+    // Always use adminClient for storage upload — bypasses bucket RLS regardless of uploader role.
+    const adminClient = createAdminSupabaseClient()
+    const { error: uploadError } = await adminClient.storage
       .from('documentos')
-      .upload(path, buffer, { contentType: file.type, upsert: true })
+      .upload(path, buffer, { contentType: 'application/pdf', upsert: true })
 
     if (uploadError) return { error: `Error al subir: ${uploadError.message}` }
 
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = adminClient.storage
       .from('documentos')
       .getPublicUrl(path)
 
-    // Use admin client to bypass RLS (planilla is editable across multiple states)
-    const adminClient = createAdminSupabaseClient()
     const { error: updateError } = await adminClient
       .from('periodos')
       .update({ planilla_ss_url: publicUrl })

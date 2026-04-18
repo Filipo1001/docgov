@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { toast } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla } from '@/app/actions/periodos'
@@ -265,6 +265,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
   return (
     <div className="max-w-5xl space-y-6">
+      <Toaster position="top-center" richColors />
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
