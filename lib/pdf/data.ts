@@ -4,6 +4,7 @@
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { numeroALetras } from '@/lib/format'
 import type { PDFData, PDFPagoHistorial } from './types'
 
 /** Normaliza abreviatura de moneda → siempre M/L */
@@ -192,7 +193,9 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_fin: periodo.fecha_fin,
       valor_cobro: periodo.valor_cobro,
       estado: (periodo as any).estado ?? 'borrador',
-      valor_letras: undefined,
+      // Letras calculadas por periodo: si el valor es proporcional (primer/último mes),
+      // las letras del contrato no aplican — se deriva directo de valor_cobro.
+      valor_letras: numeroALetras(periodo.valor_cobro),
       numero_planilla: (periodo as any).numero_planilla ?? undefined,
     },
     obligaciones: (obligacionesRaw ?? []).map((obl: any) => ({

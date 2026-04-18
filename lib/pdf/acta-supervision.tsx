@@ -624,7 +624,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                   style={{ flexDirection: 'row', borderBottomWidth: idx < arr.length - 1 ? 1 : 0, borderBottomColor: '#000', minHeight: 20 }}
                 >
                   <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
-                    <Text>{pago.numero_planilla ?? 'No Encontrada en la base de datos'}</Text>
+                    <Text>{pago.numero_planilla ?? '—'}</Text>
                   </View>
                   <View style={{ width: '32%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, backgroundColor: '#f5f5f5', borderLeftWidth: 1, borderLeftColor: '#000' }}>
                     <Text>Periodo de Cotización</Text>

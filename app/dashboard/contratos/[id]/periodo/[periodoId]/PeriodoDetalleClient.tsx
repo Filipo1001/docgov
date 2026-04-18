@@ -55,6 +55,7 @@ export default function PeriodoDetallePage() {
   const [numPlanilla, setNumPlanilla] = useState('')
   const [guardandoPlanilla, setGuardandoPlanilla] = useState(false)
 
+
   // Radicado state
   const [numRadicado, setNumRadicado] = useState('')
   const [radicando, setRadicando] = useState(false)
@@ -1502,6 +1503,7 @@ export default function PeriodoDetallePage() {
           </div>
         </div>
       )}
+
 
       {/*
         Shared file inputs — rendered once, outside the activity list.

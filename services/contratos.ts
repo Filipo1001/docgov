@@ -86,61 +86,121 @@ export async function eliminarObligacion(oblId: string): Promise<{ error?: strin
 
 // ─── Period generation ────────────────────────────────────────
 
-export async function generarPeriodos(contrato: Contrato): Promise<{ error?: string }> {
-  const supabase = createClient()
+/**
+ * Calcula la distribución mensual de pagos para un contrato.
+ *
+ * Reglas:
+ *  - Meses intermedios (completos): se pagan por `valor_mensual`.
+ *  - Primer mes si inicia después del día 1: proporcional por días activos.
+ *      valor = round(valor_mensual * diasActivos / diasDelMes)
+ *  - Último mes si termina antes del último día: proporcional por días activos.
+ *  - Residuo: el último periodo absorbe la diferencia con `valor_total`
+ *    para garantizar sum(valor_cobro) === valor_total sin drift por redondeo.
+ *
+ * Exportada para permitir previsualización en la UI de creación de contrato.
+ */
+export function calcularDistribucionPeriodos(params: {
+  fechaInicio: string
+  fechaFin: string
+  valorTotal: number
+  valorMensual: number
+}): Array<{
+  numero: number
+  mes: string
+  mesIndex: number // 0-11 (para auto-marcar histórico sin lookup)
+  anio: number
+  fechaInicio: string
+  fechaFin: string
+  valorCobro: number
+  diasActivos: number
+  diasDelMes: number
+}> {
+  const fechaInicio = new Date(params.fechaInicio + 'T00:00:00')
+  const fechaFin    = new Date(params.fechaFin    + 'T00:00:00')
 
-  const fechaInicio = new Date(contrato.fecha_inicio + 'T00:00:00')
-  const fechaFin    = new Date(contrato.fecha_fin    + 'T00:00:00')
-
-  // Derive number of monthly periods from the actual date range
   const startMonthIdx = fechaInicio.getFullYear() * 12 + fechaInicio.getMonth()
   const endMonthIdx   = fechaFin.getFullYear()    * 12 + fechaFin.getMonth()
   const numMeses      = endMonthIdx - startMonthIdx + 1
+  if (numMeses <= 0) return []
 
-  if (numMeses <= 0) return { error: 'Rango de fechas inválido' }
-
-  const periodosNuevos = []
+  const resultado: ReturnType<typeof calcularDistribucionPeriodos> = []
 
   for (let i = 0; i < numMeses; i++) {
     const fechaMes = new Date(fechaInicio)
     fechaMes.setMonth(fechaInicio.getMonth() + i)
-
     const mesIndex = fechaMes.getMonth()
     const anio     = fechaMes.getFullYear()
 
-    const inicioP =
-      i === 0
-        ? contrato.fecha_inicio
-        : `${anio}-${String(mesIndex + 1).padStart(2, '0')}-01`
-
     const ultimoDia = new Date(anio, mesIndex + 1, 0).getDate()
-    const finP =
-      i === numMeses - 1
-        ? contrato.fecha_fin
-        : `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${ultimoDia}`
+    const diaInicio = i === 0 ? fechaInicio.getDate() : 1
+    const diaFin    = i === numMeses - 1 ? fechaFin.getDate() : ultimoDia
+    const diasActivos = diaFin - diaInicio + 1
 
-    // Auto-mark as historical if the period is before the current month
-    const now = new Date()
-    const esPasado =
-      anio < now.getFullYear() ||
-      (anio === now.getFullYear() && mesIndex < now.getMonth())
+    const inicioP = `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${String(diaInicio).padStart(2, '0')}`
+    const finP    = `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${String(diaFin).padStart(2, '0')}`
 
-    periodosNuevos.push({
-      contrato_id: contrato.id,
-      numero_periodo: i + 1,
+    const esCompleto = diasActivos === ultimoDia
+    const valorBruto = esCompleto
+      ? params.valorMensual
+      : Math.round((params.valorMensual * diasActivos) / ultimoDia)
+
+    resultado.push({
+      numero: i + 1,
       mes: MESES[mesIndex],
+      mesIndex,
       anio,
-      fecha_inicio: inicioP,
-      fecha_fin: finP,
-      valor_cobro: contrato.valor_mensual,
+      fechaInicio: inicioP,
+      fechaFin: finP,
+      valorCobro: valorBruto,
+      diasActivos,
+      diasDelMes: ultimoDia,
+    })
+  }
+
+  // Ajuste de residuo en el último periodo para que la suma = valor_total
+  const suma = resultado.reduce((acc, p) => acc + p.valorCobro, 0)
+  const delta = params.valorTotal - suma
+  if (delta !== 0 && resultado.length > 0) {
+    resultado[resultado.length - 1].valorCobro += delta
+  }
+
+  return resultado
+}
+
+export async function generarPeriodos(contrato: Contrato): Promise<{ error?: string }> {
+  const supabase = createClient()
+
+  const distribucion = calcularDistribucionPeriodos({
+    fechaInicio: contrato.fecha_inicio,
+    fechaFin: contrato.fecha_fin,
+    valorTotal: contrato.valor_total,
+    valorMensual: contrato.valor_mensual,
+  })
+
+  if (distribucion.length === 0) return { error: 'Rango de fechas inválido' }
+
+  const now = new Date()
+  const periodosNuevos = distribucion.map((p) => {
+    const esPasado =
+      p.anio < now.getFullYear() ||
+      (p.anio === now.getFullYear() && p.mesIndex < now.getMonth())
+
+    return {
+      contrato_id: contrato.id,
+      numero_periodo: p.numero,
+      mes: p.mes,
+      anio: p.anio,
+      fecha_inicio: p.fechaInicio,
+      fecha_fin: p.fechaFin,
+      valor_cobro: p.valorCobro,
       estado: 'borrador',
       es_historico: esPasado,
       ...(esPasado && {
         historico_marcado_at: new Date().toISOString(),
         historico_nota: 'Periodo anterior a la digitalización del sistema — marcado automáticamente',
       }),
-    })
-  }
+    }
+  })
 
   const { error } = await supabase.from('periodos').insert(periodosNuevos)
   return error ? { error: error.message } : {}

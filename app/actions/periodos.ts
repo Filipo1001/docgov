@@ -812,6 +812,133 @@ export async function guardarNumeroPlanilla(
 }
 
 /**
+ * Admin-only: editar valor_cobro de un periodo.
+ * Permitido solo mientras el periodo esté en 'borrador' o 'rechazado'.
+ * NO se permite en periodos históricos, ni en estados posteriores
+ * (enviado/revision/aprobado_asesor/aprobado/radicado).
+ */
+export async function actualizarValorCobroPeriodo(
+  periodoId: string,
+  nuevoValor: number
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'admin') {
+      return { error: 'Solo administradores pueden editar el valor mensual de un periodo' }
+    }
+
+    if (!Number.isFinite(nuevoValor) || nuevoValor < 0) {
+      return { error: 'El valor debe ser un número mayor o igual a 0' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (periodo.es_historico) {
+      return { error: 'No se puede modificar el valor de un periodo histórico' }
+    }
+
+    const estadosEditablesValor: EstadoPeriodo[] = ['borrador', 'rechazado']
+    if (!estadosEditablesValor.includes(periodo.estado)) {
+      return {
+        error: `El valor no puede modificarse en estado "${periodo.estado}". Solo en borrador o rechazado.`,
+      }
+    }
+
+    // Obtener valor anterior para auditoría
+    const { data: prev } = await supabase
+      .from('periodos')
+      .select('valor_cobro')
+      .eq('id', periodoId)
+      .single()
+
+    const adminClient = createAdminSupabaseClient()
+    const valorRedondeado = Math.round(nuevoValor)
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ valor_cobro: valorRedondeado })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al guardar: ${error.message}` }
+
+    await insertHistorial(
+      supabase,
+      periodoId,
+      periodo.estado,
+      periodo.estado,
+      usuario.id,
+      `Valor de cobro actualizado: ${prev?.valor_cobro ?? '?'} → ${valorRedondeado}`
+    )
+
+    invalidarCachePDF(adminClient, periodoId)
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Backfill historical planilla data (admin + supervisor).
+ * Unlike guardarNumeroPlanilla, this bypasses es_historico and estado guards
+ * because it's used to complete data for periods that predate digitalization
+ * or were already approved/radicado before the field existed.
+ *
+ * Logs to historial_periodos with the editing user for audit.
+ */
+export async function actualizarPlanillaHistorica(
+  periodoId: string,
+  numeroPlanilla: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'admin' && usuario.rol !== 'supervisor') {
+      return { error: 'Solo administradores o supervisores pueden editar datos históricos de planilla' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    const valor = numeroPlanilla.trim()
+
+    // If supervisor, verify they supervise this contract
+    if (usuario.rol === 'supervisor') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.supervisor_id !== usuario.id) {
+        return { error: 'No tienes permiso para editar este periodo' }
+      }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ numero_planilla: valor || null })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al guardar: ${error.message}` }
+
+    await insertHistorial(
+      supabase,
+      periodoId,
+      periodo.estado,
+      periodo.estado,
+      usuario.id,
+      valor
+        ? `Backfill de numero_planilla: ${valor}`
+        : 'Borrado de numero_planilla (backfill)'
+    )
+
+    invalidarCachePDF(adminClient, periodoId)
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
  * Upload user signature image.
  * Contratista can upload their own, admin can upload anyone's.
  */

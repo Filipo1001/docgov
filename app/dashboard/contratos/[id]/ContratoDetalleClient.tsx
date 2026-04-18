@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula } from '@/lib/format'
+import { calcularDistribucionPeriodos } from '@/services/contratos'
 
 export default function ContratoDetallePage() {
   const { id } = useParams()
@@ -24,6 +25,7 @@ export default function ContratoDetallePage() {
 
   // Form para generar periodos
   const [generandoPeriodos, setGenerandoPeriodos] = useState(false)
+
 
   async function cargarDatos() {
     const supabase = createClient()
@@ -105,50 +107,42 @@ export default function ContratoDetallePage() {
     setGenerandoPeriodos(true)
     const supabase = createClient()
 
-    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
-      'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+    // Distribución automática con primer/último mes proporcional y residuo ajustado
+    // al último periodo para que sum(valor_cobro) === valor_total.
+    const distribucion = calcularDistribucionPeriodos({
+      fechaInicio: contrato.fecha_inicio,
+      fechaFin: contrato.fecha_fin,
+      valorTotal: contrato.valor_total,
+      valorMensual: contrato.valor_mensual,
+    })
 
-    const fechaInicio = new Date(contrato.fecha_inicio + 'T00:00:00')
-    const periodosNuevos = []
+    if (distribucion.length === 0) {
+      toast.error('Rango de fechas inválido')
+      setGenerandoPeriodos(false)
+      return
+    }
 
-    for (let i = 0; i < contrato.plazo_meses; i++) {
-      const fechaMes = new Date(fechaInicio)
-      fechaMes.setMonth(fechaInicio.getMonth() + i)
-
-      const mesIndex = fechaMes.getMonth()
-      const anio = fechaMes.getFullYear()
-
-      const inicioP = i === 0
-        ? contrato.fecha_inicio
-        : `${anio}-${String(mesIndex + 1).padStart(2, '0')}-01`
-
-      const ultimoDia = new Date(anio, mesIndex + 1, 0).getDate()
-      const finP = i === contrato.plazo_meses - 1
-        ? contrato.fecha_fin
-        : `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${ultimoDia}`
-
-      // Auto-mark as historical if the period is before the current month
-      const now = new Date()
+    const now = new Date()
+    const periodosNuevos = distribucion.map((p) => {
       const esPasado =
-        anio < now.getFullYear() ||
-        (anio === now.getFullYear() && mesIndex < now.getMonth())
-
-      periodosNuevos.push({
+        p.anio < now.getFullYear() ||
+        (p.anio === now.getFullYear() && p.mesIndex < now.getMonth())
+      return {
         contrato_id: id,
-        numero_periodo: i + 1,
-        mes: meses[mesIndex],
-        anio,
-        fecha_inicio: inicioP,
-        fecha_fin: finP,
-        valor_cobro: contrato.valor_mensual,
+        numero_periodo: p.numero,
+        mes: p.mes,
+        anio: p.anio,
+        fecha_inicio: p.fechaInicio,
+        fecha_fin: p.fechaFin,
+        valor_cobro: p.valorCobro,
         estado: 'borrador',
         es_historico: esPasado,
         ...(esPasado && {
           historico_marcado_at: new Date().toISOString(),
           historico_nota: 'Periodo anterior a la digitalización del sistema — marcado automáticamente',
         }),
-      })
-    }
+      }
+    })
 
     const { error } = await supabase.from('periodos').insert(periodosNuevos)
 
@@ -212,11 +206,21 @@ export default function ContratoDetallePage() {
               {contrato.dependencia?.nombre}
             </span>
           </div>
-          <div className="text-right">
-            <p className="text-lg font-bold text-gray-900">
-              ${contrato.valor_total?.toLocaleString('es-CO')}
-            </p>
-            <p className="text-xs text-gray-400">{contrato.valor_letras_total}</p>
+          <div className="flex flex-col items-end gap-2">
+            <div className="text-right">
+              <p className="text-lg font-bold text-gray-900">
+                ${contrato.valor_total?.toLocaleString('es-CO')}
+              </p>
+              <p className="text-xs text-gray-400">{contrato.valor_letras_total}</p>
+            </div>
+            {esAdmin && (
+              <Link
+                href={`/dashboard/contratos/${id}/avanzado`}
+                className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
+              >
+                ⚙️ Opciones avanzadas
+              </Link>
+            )}
           </div>
         </div>
 
@@ -365,7 +369,7 @@ export default function ContratoDetallePage() {
 
         {periodos.length > 0 && (
           <div className="space-y-2">
-            {periodos.map((periodo) => (
+            {periodos.map((periodo: any) => (
               <Link
                 key={periodo.id}
                 href={`/dashboard/contratos/${id}/periodo/${periodo.id}`}
@@ -376,12 +380,8 @@ export default function ContratoDetallePage() {
                     <span className="text-sm font-bold text-gray-600">{periodo.numero_periodo}</span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {periodo.mes} {periodo.anio}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {periodo.fecha_inicio} al {periodo.fecha_fin}
-                    </p>
+                    <p className="text-sm font-medium text-gray-900">{periodo.mes} {periodo.anio}</p>
+                    <p className="text-xs text-gray-400">{periodo.fecha_inicio} al {periodo.fecha_fin}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
