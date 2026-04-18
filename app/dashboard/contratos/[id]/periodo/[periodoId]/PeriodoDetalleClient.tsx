@@ -28,6 +28,7 @@ import {
   revisarPlanilla,
 } from '@/app/actions/periodos'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
+import { mejorarDescripcion } from '@/app/actions/ia'
 
 export default function PeriodoDetallePage() {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
@@ -50,6 +51,10 @@ export default function PeriodoDetallePage() {
   const [nuevaActividad, setNuevaActividad] = useState('')
   const [nuevaCantidad, setNuevaCantidad] = useState(1)
   const [guardando, setGuardando] = useState(false)
+
+  // IA — redacción
+  const [mejorando, setMejorando] = useState(false)
+  const [sugerenciaIA, setSugerenciaIA] = useState<string | null>(null)
 
   // Planilla state
   const [numPlanilla, setNumPlanilla] = useState('')
@@ -288,8 +293,32 @@ export default function PeriodoDetallePage() {
       orden: actividadesPorObligacion(obligacionId).length + 1,
     })
     if (result.error) toast.error(result.error)
-    else { toast.success('Actividad registrada'); setNuevaActividad(''); setNuevaCantidad(1); setFormActivo(null); cargarDatos() }
+    else {
+      toast.success('Actividad registrada')
+      setNuevaActividad('')
+      setNuevaCantidad(1)
+      setFormActivo(null)
+      setSugerenciaIA(null)
+      cargarDatos()
+    }
     setGuardando(false)
+  }
+
+  async function handleMejorarDescripcion() {
+    if (!nuevaActividad.trim()) return
+    setMejorando(true)
+    setSugerenciaIA(null)
+    const result = await mejorarDescripcion(nuevaActividad)
+    if (result.error) toast.error(result.error)
+    else setSugerenciaIA(result.texto ?? null)
+    setMejorando(false)
+  }
+
+  function handleAplicarSugerencia() {
+    if (sugerenciaIA) {
+      setNuevaActividad(sugerenciaIA)
+      setSugerenciaIA(null)
+    }
   }
 
   async function handleEliminarActividad(actId: string) {
@@ -994,11 +1023,63 @@ export default function PeriodoDetallePage() {
                     <div className="bg-blue-50 rounded-xl p-4">
                       <textarea
                         value={nuevaActividad}
-                        onChange={(e) => setNuevaActividad(e.target.value)}
+                        onChange={(e) => { setNuevaActividad(e.target.value); setSugerenciaIA(null) }}
                         placeholder="Describe la actividad realizada..."
                         rows={3}
                         className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                       />
+
+                      {/* ── Botón IA ── */}
+                      {nuevaActividad.trim().length > 10 && !sugerenciaIA && (
+                        <div className="flex justify-end mt-1.5">
+                          <button
+                            type="button"
+                            onClick={handleMejorarDescripcion}
+                            disabled={mejorando}
+                            className="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                          >
+                            {mejorando ? (
+                              <>
+                                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                                Analizando...
+                              </>
+                            ) : (
+                              <>✨ Mejorar redacción</>
+                            )}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ── Panel de sugerencia ── */}
+                      {sugerenciaIA && (
+                        <div className="mt-3 bg-white border border-purple-200 rounded-xl p-3 space-y-2">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-purple-500 text-sm">✨</span>
+                            <p className="text-xs font-semibold text-purple-700">Sugerencia de redacción</p>
+                          </div>
+                          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{sugerenciaIA}</p>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={handleAplicarSugerencia}
+                              className="flex-1 bg-purple-600 text-white text-xs font-medium py-1.5 rounded-lg hover:bg-purple-700 transition-colors"
+                            >
+                              Aplicar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSugerenciaIA(null)}
+                              className="flex-1 text-xs text-gray-500 border border-gray-200 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              Ignorar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-2">
                           <label className="text-xs text-gray-500">Cantidad:</label>
@@ -1010,7 +1091,7 @@ export default function PeriodoDetallePage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => { setFormActivo(null); setNuevaActividad(''); setNuevaCantidad(1) }}
+                            onClick={() => { setFormActivo(null); setNuevaActividad(''); setNuevaCantidad(1); setSugerenciaIA(null) }}
                             className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5"
                           >
                             Cancelar
