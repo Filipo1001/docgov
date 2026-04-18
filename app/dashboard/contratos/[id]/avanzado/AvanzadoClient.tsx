@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
-import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica } from '@/app/actions/periodos'
+import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla } from '@/app/actions/periodos'
 import type { EstadoPeriodo } from '@/lib/types'
 
 // ─── Types ────────────────────────────────────────────────────
@@ -62,13 +62,9 @@ const PLANILLA_ESTADO_COLOR: Record<string, string> = {
   rechazada: 'bg-red-100 text-red-700',
 }
 
-function esPeriodoEditableValor(p: PeriodoRow): boolean {
-  return !p.es_historico && (p.estado === 'borrador' || p.estado === 'rechazado')
-}
-
-function esPeriodoEditablePlanilla(p: PeriodoRow): boolean {
-  return p.es_historico || p.estado === 'aprobado' || p.estado === 'radicado'
-}
+// Admin has full power — all periods editable regardless of state or historico flag.
+function esPeriodoEditableValor(_p: PeriodoRow): boolean { return true }
+function esPeriodoEditablePlanilla(_p: PeriodoRow): boolean { return true }
 
 function exportarCSV(nombre: string, filas: string[][], cabeceras: string[]) {
   const contenido = [cabeceras, ...filas]
@@ -102,6 +98,11 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   // Plan de Planillas — edición inline de numero_planilla
   const [planillasEdit, setPlanillasEdit] = useState<Record<string, string>>({})
   const [guardandoPlanillaId, setGuardandoPlanillaId] = useState<string | null>(null)
+
+  // PDF upload per period
+  const pdfInputRef = useRef<HTMLInputElement>(null)
+  const uploadTargetId = useRef<string>('')
+  const [subiendoPdfId, setSubiendoPdfId] = useState<string | null>(null)
 
   const cargarDatos = useCallback(async () => {
     const supabase = createClient()
@@ -213,6 +214,19 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
     setGuardandoPlanillaId(null)
     if (res.error) { toast.error(res.error); return }
     toast.success(planillasEdit[periodoId]?.trim() ? 'Planilla actualizada' : 'Planilla borrada')
+    await cargarDatos()
+  }
+
+  async function handlePdfUpload(file: File) {
+    const periodoId = uploadTargetId.current
+    if (!periodoId) return
+    setSubiendoPdfId(periodoId)
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await subirPlanilla(periodoId, fd)
+    setSubiendoPdfId(null)
+    if (res.error) { toast.error(res.error); return }
+    toast.success('PDF subido correctamente')
     await cargarDatos()
   }
 
@@ -527,18 +541,31 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {p.planilla_ss_url ? (
-                          <a
-                            href={p.planilla_ss_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline"
+                        <div className="flex items-center gap-2">
+                          {p.planilla_ss_url ? (
+                            <a
+                              href={p.planilla_ss_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              Ver PDF
+                            </a>
+                          ) : (
+                            <span className="text-xs text-gray-400">Sin PDF</span>
+                          )}
+                          <button
+                            onClick={() => {
+                              uploadTargetId.current = p.id
+                              pdfInputRef.current?.click()
+                            }}
+                            disabled={subiendoPdfId === p.id}
+                            className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5 hover:border-gray-300 disabled:opacity-40"
+                            title={p.planilla_ss_url ? 'Reemplazar PDF' : 'Subir PDF'}
                           >
-                            Ver PDF
-                          </a>
-                        ) : (
-                          <span className="text-xs text-gray-400">Sin PDF</span>
-                        )}
+                            {subiendoPdfId === p.id ? '…' : p.planilla_ss_url ? '↑ Reemplazar' : '↑ Subir'}
+                          </button>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {p.planilla_estado ? (
@@ -571,6 +598,19 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
           </div>
         </div>
       )}
+
+      {/* Input oculto para subida de PDFs — un solo input compartido por todos los periodos */}
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept="application/pdf"
+        style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) handlePdfUpload(file)
+          e.target.value = ''
+        }}
+      />
     </div>
   )
 }

@@ -690,10 +690,13 @@ export async function subirPlanilla(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
-    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
-
-    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-      return { error: 'No se puede reemplazar la planilla de un periodo ya aprobado o radicado' }
+    // Admin bypass: can upload planilla to any period regardless of state or historico flag.
+    // Non-admin (contratista) is still restricted to editable states.
+    if (usuario.rol !== 'admin') {
+      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+        return { error: 'No se puede reemplazar la planilla de un periodo ya aprobado o radicado' }
+      }
     }
 
     const file = formData.get('file') as File
@@ -834,17 +837,6 @@ export async function actualizarValorCobroPeriodo(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
-
-    if (periodo.es_historico) {
-      return { error: 'No se puede modificar el valor de un periodo histórico' }
-    }
-
-    const estadosEditablesValor: EstadoPeriodo[] = ['borrador', 'rechazado']
-    if (!estadosEditablesValor.includes(periodo.estado)) {
-      return {
-        error: `El valor no puede modificarse en estado "${periodo.estado}". Solo en borrador o rechazado.`,
-      }
-    }
 
     // Obtener valor anterior para auditoría
     const { data: prev } = await supabase
