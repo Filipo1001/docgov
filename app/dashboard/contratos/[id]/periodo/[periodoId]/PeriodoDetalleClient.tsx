@@ -87,6 +87,9 @@ export default function PeriodoDetallePage() {
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
 
+  // Scroll anchors for rejection guidance
+  const seccionActividadesRef = useRef<HTMLDivElement>(null)
+
   const cargarDatos = useCallback(async (silencioso = false) => {
     const datos = await getPeriodoConContrato(periodoId, contratoId)
     setContrato(datos.contrato)
@@ -585,16 +588,17 @@ export default function PeriodoDetallePage() {
       <div className="bg-white rounded-2xl border p-5 mb-6">
         {rechazado ? (
           <div className="flex items-center gap-3">
-            <span className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
+            <span className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 shrink-0">
               <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </span>
             <div>
-              <p className="text-sm font-semibold text-red-700">Informe rechazado</p>
-              {periodo.motivo_rechazo && (
-                <p className="text-xs text-red-500 mt-0.5">{periodo.motivo_rechazo}</p>
-              )}
+              <p className="text-sm font-semibold text-red-700">Informe devuelto para corrección</p>
+              {periodo.motivo_rechazo
+                ? <p className="text-xs text-red-500 mt-0.5">{periodo.motivo_rechazo}</p>
+                : <p className="text-xs text-gray-400 mt-0.5">Sin motivo especificado</p>
+              }
             </div>
           </div>
         ) : (
@@ -646,6 +650,56 @@ export default function PeriodoDetallePage() {
           </div>
         )}
       </div>
+
+      {/* ── Rejection guidance card (contratista only) ─────────── */}
+      {rechazado && esContratista && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
+          {/* Header */}
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">↩️</div>
+            <div>
+              <p className="text-sm font-bold text-red-800">Tu informe fue devuelto — necesita corrección</p>
+              {periodo.motivo_rechazo ? (
+                <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
+                  <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
+                  <p className="text-sm text-red-700 italic">"{periodo.motivo_rechazo}"</p>
+                </div>
+              ) : (
+                <p className="text-xs text-red-600 mt-1">Revisa tus actividades y vuelve a enviar el informe.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Steps */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
+              <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">Corrige tus actividades</p>
+                <p className="text-xs text-gray-500 mt-0.5">Edita, elimina o agrega actividades teniendo en cuenta el motivo.</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
+              <span className="w-6 h-6 bg-gray-300 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">Reenvía el informe</p>
+                <p className="text-xs text-gray-500 mt-0.5">Cuando hayas corregido, usa el botón al final de la página.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <button
+            onClick={() => seccionActividadesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            Ir a mis actividades
+          </button>
+        </div>
+      )}
 
       {/* Period header */}
       <div className="bg-white rounded-2xl border p-6 mb-6">
@@ -865,7 +919,16 @@ export default function PeriodoDetallePage() {
 
 
       {/* Obligations and activities */}
-      <div className="space-y-4 mb-6">
+      <div ref={seccionActividadesRef} className="space-y-4 mb-6">
+
+        {/* Paso 1 header — only when contractor is in rejected state */}
+        {rechazado && esContratista && (
+          <div className="flex items-center gap-3 pt-1">
+            <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+            <p className="text-sm font-semibold text-gray-800">Corrige tus actividades</p>
+          </div>
+        )}
+
         {obligaciones.map((obl, oblIndex) => {
           const actsDeObl = actividadesPorObligacion(obl.id)
           return (
@@ -1059,10 +1122,24 @@ export default function PeriodoDetallePage() {
 
       {/* Submit section (contratista) */}
       {esEditable && (
-        <div ref={seccionEnvioRef} className="bg-white rounded-2xl border p-6 mb-6">
-          <h3 className="font-medium text-gray-900 mb-1">¿Listo para enviar?</h3>
+        <div ref={seccionEnvioRef} className={`rounded-2xl border p-6 mb-6 ${rechazado ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
+
+          {/* Step 2 indicator — only for rejected */}
+          {rechazado && (
+            <div className="flex items-center gap-3 mb-3">
+              <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+              <p className="text-sm font-semibold text-gray-800">Reenvía tu informe</p>
+            </div>
+          )}
+
+          <h3 className="font-medium text-gray-900 mb-1">
+            {rechazado ? '¿Ya corregiste todo?' : '¿Listo para enviar?'}
+          </h3>
           <p className="text-sm text-gray-500 mb-4">
-            Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.
+            {rechazado
+              ? 'Verifica que la planilla esté adjunta y reenvía el informe a revisión.'
+              : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
+            }
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -1130,14 +1207,21 @@ export default function PeriodoDetallePage() {
 
           <div className="flex items-center justify-between pt-3 border-t border-gray-100">
             <p className="text-sm text-gray-400">
-              Los asesores y la secretaria recibirán este informe para revisión.
+              {rechazado
+                ? 'El asesor recibirá el informe corregido para revisión.'
+                : 'Los asesores y la secretaria recibirán este informe para revisión.'
+              }
             </p>
             <button
               onClick={handleEnviar}
               disabled={enviando || actividades.length === 0}
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex-shrink-0 ml-4"
+              className={`text-white px-6 py-3 rounded-xl font-medium active:scale-[0.98] transition-all disabled:opacity-50 flex-shrink-0 ml-4 ${
+                rechazado
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
-              {enviando ? 'Enviando...' : 'Enviar a revisión'}
+              {enviando ? 'Enviando...' : rechazado ? '↩ Reenviar a revisión' : 'Enviar a revisión'}
             </button>
           </div>
         </div>
