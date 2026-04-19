@@ -674,9 +674,6 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
                 )}
               </View>
 
-              {/* Underline above name */}
-              <View style={s.sigUnderline} />
-
               {/* Nombre: SUPERVISOR NAME */}
               <View style={s.sigNombreRow}>
                 <Text style={s.sigTag}>Nombre:</Text>
