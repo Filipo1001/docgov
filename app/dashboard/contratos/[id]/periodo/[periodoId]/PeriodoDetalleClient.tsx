@@ -26,6 +26,7 @@ import {
   eliminarPlanilla,
   guardarNumeroPlanilla,
   revisarPlanilla,
+  validarNumeroPlanilla,
 } from '@/app/actions/periodos'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
@@ -85,6 +86,7 @@ export default function PeriodoDetallePage() {
 
   // Inline planilla validation (submit section)
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
+  const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
 
   // Scroll anchors for rejection guidance
@@ -494,7 +496,9 @@ export default function PeriodoDetallePage() {
   }
 
   async function handleGuardarNumeroPlanilla() {
-    if (!numPlanilla.trim()) return
+    const errorFormato = validarNumeroPlanilla(numPlanilla)
+    if (errorFormato) { setErrorFormatoPlanilla(errorFormato); return }
+    setErrorFormatoPlanilla(null)
     setGuardandoPlanilla(true)
     const result = await guardarNumeroPlanilla(periodoId, numPlanilla)
     if (result.error) toast.error(result.error)
@@ -1189,17 +1193,22 @@ export default function PeriodoDetallePage() {
                 value={numPlanilla}
                 onChange={(e) => {
                   setNumPlanilla(e.target.value)
+                  setErrorFormatoPlanilla(null)
                   if (e.target.value.trim()) setErroresCampos(prev => ({ ...prev, numero: false }))
                 }}
                 onBlur={handleGuardarNumeroPlanilla}
-                placeholder="Ej. 202504-12345"
+                placeholder="Ej. 6016087440"
+                inputMode="numeric"
                 className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-900 outline-none focus:ring-2 transition-colors ${
-                  erroresCampos.numero
+                  erroresCampos.numero || errorFormatoPlanilla
                     ? 'bg-red-50 border-red-400 focus:ring-red-300 placeholder-red-400'
                     : 'bg-gray-50 border-gray-200 focus:ring-blue-400 focus:border-blue-500 placeholder-gray-400'
                 }`}
               />
-              {erroresCampos.numero && (
+              {errorFormatoPlanilla && (
+                <p className="text-xs text-red-500 mt-1">{errorFormatoPlanilla}</p>
+              )}
+              {erroresCampos.numero && !errorFormatoPlanilla && (
                 <p className="text-xs text-red-500 mt-1">Ingresa el número de planilla</p>
               )}
             </div>
@@ -1526,21 +1535,27 @@ export default function PeriodoDetallePage() {
 
                     {/* N.° planilla (contratista, hasta aprobado) */}
                     {esPlanillaGestionable && (
-                      <div className="px-4 py-3 flex items-center gap-2">
-                        <span className="text-base">🔢</span>
-                        <input
-                          value={numPlanilla}
-                          onChange={(e) => setNumPlanilla(e.target.value)}
-                          placeholder="N.° de planilla"
-                          className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400"
-                        />
-                        <button
-                          onClick={handleGuardarNumeroPlanilla}
-                          disabled={guardandoPlanilla || !numPlanilla.trim()}
-                          className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg hover:bg-gray-800 disabled:opacity-50"
-                        >
-                          {guardandoPlanilla ? '...' : 'Guardar'}
-                        </button>
+                      <div className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🔢</span>
+                          <input
+                            value={numPlanilla}
+                            onChange={(e) => { setNumPlanilla(e.target.value); setErrorFormatoPlanilla(null) }}
+                            placeholder="Ej. 6016087440"
+                            inputMode="numeric"
+                            className={`flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400 ${errorFormatoPlanilla ? 'bg-red-50 border-red-400' : 'bg-gray-50 border-gray-200'}`}
+                          />
+                          <button
+                            onClick={handleGuardarNumeroPlanilla}
+                            disabled={guardandoPlanilla || !numPlanilla.trim()}
+                            className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg hover:bg-gray-800 disabled:opacity-50"
+                          >
+                            {guardandoPlanilla ? '...' : 'Guardar'}
+                          </button>
+                        </div>
+                        {errorFormatoPlanilla && (
+                          <p className="text-xs text-red-500 mt-1.5 ml-7">{errorFormatoPlanilla}</p>
+                        )}
                       </div>
                     )}
 
