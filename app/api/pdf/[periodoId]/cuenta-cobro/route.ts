@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDF } from '@/lib/pdf/cache'
 
@@ -13,9 +14,10 @@ export async function GET(
   const { periodoId } = await params
 
   const supabase = await createServerSupabaseClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  const acceso = await verificarAccesoPeriodo(supabase, periodoId)
+  if (!acceso.ok) {
+    return NextResponse.json({ error: acceso.message }, { status: acceso.status })
   }
 
   const data = await buildPDFData(periodoId)

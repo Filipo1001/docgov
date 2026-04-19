@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
 
 export const runtime = 'nodejs'
@@ -38,22 +39,17 @@ export async function GET(
 ) {
   const { periodoId } = await params
 
-  // ── Auth ─────────────────────────────────────────────────────
+  // ── Auth + ownership check ───────────────────────────────────
   const supabase = await createServerSupabaseClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  const acceso = await verificarAccesoPeriodo(supabase, periodoId)
+  if (!acceso.ok) {
+    return NextResponse.json({ error: acceso.message }, { status: acceso.status })
   }
 
-  // ── Role check ───────────────────────────────────────────────
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('rol')
-    .eq('id', session.user.id)
-    .single()
-
-  if (!usuario || !['asesor', 'supervisor', 'admin'].includes(usuario.rol)) {
-    return NextResponse.json({ error: 'No tienes permiso para descargar el paquete' }, { status: 403 })
+  // Paquete completo solo para roles administrativos (no contratista)
+  if (acceso.rol === 'contratista') {
+    return NextResponse.json({ error: 'No tienes permiso para descargar el paquete completo' }, { status: 403 })
   }
 
   // ── Build PDF data ───────────────────────────────────────────
