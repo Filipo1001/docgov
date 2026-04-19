@@ -84,6 +84,11 @@ export default function PeriodoDetallePage() {
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
   const [subiendoPlanilla, setSubiendoPlanilla] = useState(false)
 
+  // Inline planilla rejection form (replaces window.prompt)
+  const [mostrarFormRechazo, setMostrarFormRechazo] = useState(false)
+  const [motivoRechazoInline, setMotivoRechazoInline] = useState('')
+  const [rechazandoPlanilla, setRechazandoPlanilla] = useState(false)
+
   // Inline planilla validation (submit section)
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
   const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
@@ -705,6 +710,29 @@ export default function PeriodoDetallePage() {
         </div>
       )}
 
+      {/* ── Planilla rejection banner (contratista only) ─────────── */}
+      {periodo.planilla_estado === 'rechazada' && esContratista && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">🏥</div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-800">Tu planilla de seguridad social fue rechazada</p>
+              {periodo.planilla_comentario ? (
+                <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
+                  <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
+                  <p className="text-sm text-red-700 italic">"{periodo.planilla_comentario}"</p>
+                </div>
+              ) : (
+                <p className="text-xs text-red-600 mt-1">Debes subir una nueva planilla correcta para continuar.</p>
+              )}
+              <p className="text-xs text-gray-500 mt-2">
+                Ve a la sección <strong>Documentos del periodo</strong> → <em>Planilla de Seguridad Social</em> → <em>Reemplazar planilla</em>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Period header */}
       <div className="bg-white rounded-2xl border p-6 mb-6">
         <div className="flex items-start justify-between">
@@ -766,6 +794,16 @@ export default function PeriodoDetallePage() {
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
               <p className="text-xs text-red-600">
                 <strong>Nota de la secretaria:</strong> {periodo.motivo_rechazo}
+              </p>
+            </div>
+          )}
+
+          {/* Planilla pending review notice for asesor */}
+          {periodo.planilla_ss_url && periodo.planilla_estado === 'pendiente' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-4 flex items-center gap-2">
+              <span className="text-base flex-shrink-0">🏥</span>
+              <p className="text-xs text-amber-800">
+                <strong>Planilla pendiente:</strong> el contratista ha subido la planilla de seguridad social — recuerda revisarla en la sección de documentos.
               </p>
             </div>
           )}
@@ -1568,28 +1606,64 @@ export default function PeriodoDetallePage() {
                         <span className="text-base">✅</span>
                         <div>
                           <p className="text-sm font-medium text-green-700">Aprobar planilla</p>
-                          <p className="text-xs text-gray-400">Confirmar que la planilla está correcta</p>
+                          <p className="text-xs text-gray-400">
+                            {periodo.planilla_estado === 'pendiente'
+                              ? 'Pendiente tu revisión — confirma que la planilla es correcta'
+                              : 'Confirmar que la planilla está correcta'}
+                          </p>
                         </div>
                       </button>
                     )}
 
-                    {/* Asesor: Rechazar */}
+                    {/* Asesor: Rechazar — inline form (replaces window.prompt) */}
                     {esAsesor && !esSecretaria && periodo.planilla_ss_url && (
-                      <button
-                        onClick={() => {
-                          const motivo = window.prompt('Motivo del rechazo (opcional):')
-                          if (motivo !== null) handleRevisarPlanilla('rechazada', motivo || undefined)
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left"
-                      >
-                        <span className="text-base">❌</span>
-                        <div>
-                          <p className="text-sm font-medium text-red-600">Rechazar planilla</p>
-                          {periodo.planilla_comentario
-                            ? <p className="text-xs text-gray-400">Motivo anterior: {periodo.planilla_comentario}</p>
-                            : <p className="text-xs text-gray-400">Solicitar corrección al contratista</p>}
+                      mostrarFormRechazo ? (
+                        <div className="px-4 py-3 space-y-2 bg-red-50 rounded-b-xl">
+                          <p className="text-sm font-semibold text-red-700">Motivo del rechazo</p>
+                          <textarea
+                            value={motivoRechazoInline}
+                            onChange={(e) => setMotivoRechazoInline(e.target.value)}
+                            placeholder="Explica al contratista qué debe corregir..."
+                            rows={3}
+                            autoFocus
+                            className="w-full px-3 py-2 bg-white border border-red-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-400 outline-none resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                setRechazandoPlanilla(true)
+                                await handleRevisarPlanilla('rechazada', motivoRechazoInline.trim() || undefined)
+                                setMostrarFormRechazo(false)
+                                setMotivoRechazoInline('')
+                                setRechazandoPlanilla(false)
+                              }}
+                              disabled={rechazandoPlanilla}
+                              className="flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            >
+                              {rechazandoPlanilla ? 'Rechazando...' : 'Confirmar rechazo'}
+                            </button>
+                            <button
+                              onClick={() => { setMostrarFormRechazo(false); setMotivoRechazoInline('') }}
+                              className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
                         </div>
-                      </button>
+                      ) : (
+                        <button
+                          onClick={() => setMostrarFormRechazo(true)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left"
+                        >
+                          <span className="text-base">❌</span>
+                          <div>
+                            <p className="text-sm font-medium text-red-600">Rechazar planilla</p>
+                            {periodo.planilla_comentario
+                              ? <p className="text-xs text-gray-400">Motivo anterior: {periodo.planilla_comentario}</p>
+                              : <p className="text-xs text-gray-400">Solicitar corrección al contratista</p>}
+                          </div>
+                        </button>
+                      )
                     )}
 
                     {/* Eliminar (contratista, hasta aprobado) */}

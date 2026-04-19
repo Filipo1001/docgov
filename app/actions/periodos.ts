@@ -655,17 +655,41 @@ export async function revisarPlanilla(
       return { error: 'Solo los asesores pueden revisar la planilla' }
     }
 
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
     const { error } = await supabase
       .from('periodos')
       .update({
         planilla_estado: estado,
-        planilla_comentario: comentario?.trim() ?? null,
+        planilla_comentario: estado === 'rechazada' ? (comentario?.trim() ?? null) : null,
       })
       .eq('id', periodoId)
 
     if (error) return { error: `Error al revisar planilla: ${error.message}` }
 
-    revalidar(undefined, periodoId)
+    // Notify contratista when planilla is rejected
+    if (estado === 'rechazada') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.contratista_id) {
+        const motivo = comentario?.trim()
+        await enviarNotificacion({
+          destinatarioId: contrato.contratista_id,
+          tipo: 'rechazado',
+          titulo: 'Tu planilla de seguridad social fue rechazada',
+          mensaje: motivo
+            ? `La planilla de ${periodo.mes} ${periodo.anio} fue rechazada. Motivo: ${motivo}`
+            : `La planilla de ${periodo.mes} ${periodo.anio} requiere corrección. Sube una nueva planilla.`,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          nombreRemitente: usuario.nombre_completo,
+        })
+      }
+    }
+
+    revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
@@ -727,7 +751,12 @@ export async function subirPlanilla(
 
     const { error: updateError } = await adminClient
       .from('periodos')
-      .update({ planilla_ss_url: publicUrl })
+      .update({
+        planilla_ss_url: publicUrl,
+        // Reset review status so asesor must re-review the new file
+        planilla_estado: 'pendiente',
+        planilla_comentario: null,
+      })
       .eq('id', periodoId)
 
     if (updateError) return { error: `Error al guardar: ${updateError.message}` }
