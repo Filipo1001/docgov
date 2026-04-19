@@ -26,8 +26,8 @@ import {
   eliminarPlanilla,
   guardarNumeroPlanilla,
   revisarPlanilla,
-  validarNumeroPlanilla,
 } from '@/app/actions/periodos'
+import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 

@@ -781,16 +781,7 @@ export async function eliminarPlanilla(periodoId: string): Promise<ActionResult>
  * Save numero_planilla for a period.
  * Format: digits only, 6–20 characters (matches real PILA numbers in Colombia).
  */
-
-/** Validates a PILA planilla number: digits only, 6–20 characters. */
-export function validarNumeroPlanilla(valor: string): string | null {
-  const v = valor.trim()
-  if (!v) return 'Ingresa el número de planilla'
-  if (!/^\d+$/.test(v)) return 'El número de planilla solo puede contener dígitos (ej: 6016087440)'
-  if (v.length < 6) return 'El número de planilla debe tener al menos 6 dígitos'
-  if (v.length > 20) return 'El número de planilla no puede superar 20 dígitos'
-  return null
-}
+import { validarNumeroPlanilla } from '@/lib/validaciones'
 
 export async function guardarNumeroPlanilla(
   periodoId: string,
