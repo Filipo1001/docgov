@@ -28,6 +28,7 @@ export interface PDFPeriodo {
   estado: string          // e.g. 'borrador' | 'enviado' | 'aprobado' | 'radicado' …
   valor_letras?: string
   numero_planilla?: string
+  observacion_supervisor?: string | null
 }
 
 export interface PDFContrato {

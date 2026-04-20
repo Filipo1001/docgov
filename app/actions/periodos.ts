@@ -965,6 +965,74 @@ export async function actualizarPlanillaHistorica(
   }
 }
 
+// ─── Supervisor observation ───────────────────────────────────
+
+/**
+ * Supervisor (or admin) saves/clears the optional observation on the acta.
+ * The observation appears in "Aceptación de las actividades realizadas" and
+ * "Conclusiones y recomendaciones" in the Acta de Supervisión PDF.
+ *
+ * Allowed states: any except 'borrador' (no acta yet) and 'radicado'
+ * (document already closed). Admin bypasses the state check.
+ */
+export async function actualizarObservacionSupervisor(
+  periodoId: string,
+  texto: string | null
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo el supervisor o un administrador pueden agregar observaciones al acta' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+
+    // State guard (admin bypasses)
+    const ESTADOS_BLOQUEADOS = ['borrador', 'radicado']
+    if (usuario.rol !== 'admin' && ESTADOS_BLOQUEADOS.includes(periodo.estado)) {
+      return { error: 'No se puede agregar una observación en el estado actual del periodo' }
+    }
+
+    // Supervisor must own the contract
+    if (usuario.rol === 'supervisor') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.supervisor_id !== usuario.id) {
+        return { error: 'No eres el supervisor de este contrato' }
+      }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const valor = texto?.trim() || null
+
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ observacion_supervisor: valor })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al guardar la observación: ${error.message}` }
+
+    await insertHistorial(
+      supabase,
+      periodoId,
+      periodo.estado,
+      periodo.estado,
+      usuario.id,
+      valor
+        ? `Observación del supervisor actualizada`
+        : 'Observación del supervisor eliminada'
+    )
+
+    invalidarCachePDF(adminClient, periodoId)
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
 /**
  * Upload user signature image.
  * Contratista can upload their own, admin can upload anyone's.

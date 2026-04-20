@@ -35,6 +35,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       estado,
       planilla_ss_url,
       numero_planilla,
+      observacion_supervisor,
       contrato:contratos(
         id,
         numero,
@@ -197,6 +198,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       // las letras del contrato no aplican — se deriva directo de valor_cobro.
       valor_letras: numeroALetras(periodo.valor_cobro),
       numero_planilla: (periodo as any).numero_planilla ?? undefined,
+      observacion_supervisor: (periodo as any).observacion_supervisor ?? null,
     },
     obligaciones: (obligacionesRaw ?? []).map((obl: any) => ({
       descripcion: obl.descripcion,

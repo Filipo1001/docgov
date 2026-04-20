@@ -551,6 +551,16 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
               <Text style={{ marginTop: 3, lineHeight: 1.3 }}>
                 Además acreditó el pago de la seguridad social
               </Text>
+              {periodo.observacion_supervisor ? (
+                <View style={{ marginTop: 6, borderTopWidth: 0.5, borderTopColor: '#bbb', paddingTop: 5 }}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#444', marginBottom: 2 }}>
+                    Observación del supervisor:
+                  </Text>
+                  <Text style={{ fontSize: 8.5, fontStyle: 'italic', lineHeight: 1.4, color: '#222' }}>
+                    {periodo.observacion_supervisor}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -689,7 +699,11 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
           <View style={s.rowLast}>
             <View style={s.lbl}><Text>Conclusiones y recomendaciones por parte del supervisor</Text></View>
-            <View style={s.val}><Text>Ninguna</Text></View>
+            <View style={s.val}>
+              <Text style={{ fontStyle: periodo.observacion_supervisor ? 'italic' : 'normal', lineHeight: 1.4 }}>
+                {periodo.observacion_supervisor ?? 'Ninguna'}
+              </Text>
+            </View>
           </View>
         </View>
 

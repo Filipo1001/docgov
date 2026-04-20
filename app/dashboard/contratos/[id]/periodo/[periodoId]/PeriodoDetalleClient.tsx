@@ -26,6 +26,7 @@ import {
   eliminarPlanilla,
   guardarNumeroPlanilla,
   revisarPlanilla,
+  actualizarObservacionSupervisor,
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
@@ -88,6 +89,11 @@ export default function PeriodoDetallePage() {
   const [mostrarFormRechazo, setMostrarFormRechazo] = useState(false)
   const [motivoRechazoInline, setMotivoRechazoInline] = useState('')
   const [rechazandoPlanilla, setRechazandoPlanilla] = useState(false)
+
+  // Supervisor observation on the acta
+  const [editandoObservacion, setEditandoObservacion] = useState(false)
+  const [textoObservacion, setTextoObservacion] = useState('')
+  const [guardandoObservacion, setGuardandoObservacion] = useState(false)
 
   // Inline planilla validation (submit section)
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
@@ -288,6 +294,18 @@ export default function PeriodoDetallePage() {
       cargarDatos()
     }
     setGuardandoRadicado(false)
+  }
+
+  async function handleGuardarObservacion(texto: string | null) {
+    setGuardandoObservacion(true)
+    const result = await actualizarObservacionSupervisor(periodoId, texto)
+    if (result.error) toast.error(result.error)
+    else {
+      toast.success(texto?.trim() ? 'Observación guardada ✓' : 'Observación eliminada')
+      setEditandoObservacion(false)
+      cargarDatos()
+    }
+    setGuardandoObservacion(false)
   }
 
   async function handleAgregarActividad(obligacionId: string) {
@@ -1459,18 +1477,90 @@ export default function PeriodoDetallePage() {
               </div>
             </a>
 
-            <a href={`/api/pdf/${periodoId}/acta-supervision`} target="_blank" rel="noopener noreferrer"
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                puedeDescargarPaquete ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
-              }`}>
-              <span className="text-lg">📋</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Acta de Supervisión</p>
-                <p className="text-xs text-gray-400">
-                  {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
-                </p>
-              </div>
-            </a>
+            {/* Acta de Supervisión + observación del supervisor */}
+            <div className="flex flex-col gap-2">
+              <a href={`/api/pdf/${periodoId}/acta-supervision`} target="_blank" rel="noopener noreferrer"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                  puedeDescargarPaquete ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
+                }`}>
+                <span className="text-lg">📋</span>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Acta de Supervisión</p>
+                  <p className="text-xs text-gray-400">
+                    {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
+                  </p>
+                </div>
+              </a>
+
+              {/* Observación del supervisor — solo visible para supervisor/admin */}
+              {esSecretaria && (
+                <div className="px-1">
+                  {editandoObservacion ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-2">
+                      <p className="text-xs font-semibold text-amber-800">Observación para el acta</p>
+                      <textarea
+                        value={textoObservacion}
+                        onChange={(e) => setTextoObservacion(e.target.value)}
+                        placeholder="Escribe una observación adicional para este periodo..."
+                        rows={3}
+                        autoFocus
+                        className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-400 outline-none resize-none"
+                      />
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          onClick={() => handleGuardarObservacion(textoObservacion)}
+                          disabled={guardandoObservacion}
+                          className="flex-1 bg-amber-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                        >
+                          {guardandoObservacion ? 'Guardando...' : 'Guardar'}
+                        </button>
+                        {periodo.observacion_supervisor && (
+                          <button
+                            onClick={() => handleGuardarObservacion(null)}
+                            disabled={guardandoObservacion}
+                            className="px-3 py-2 text-xs text-red-500 border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setEditandoObservacion(false); setTextoObservacion(periodo.observacion_supervisor ?? '') }}
+                          disabled={guardandoObservacion}
+                          className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : periodo.observacion_supervisor ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-amber-700 mb-1">Observación registrada</p>
+                          <p className="text-xs text-gray-700 italic leading-relaxed">{periodo.observacion_supervisor}</p>
+                        </div>
+                        <button
+                          onClick={() => { setTextoObservacion(periodo.observacion_supervisor ?? ''); setEditandoObservacion(true) }}
+                          className="flex-shrink-0 text-xs text-amber-600 font-medium hover:text-amber-800 transition-colors"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setTextoObservacion(''); setEditandoObservacion(true) }}
+                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-amber-600 transition-colors px-2 py-1"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Agregar observación al acta
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
             <a href={`/api/pdf/${periodoId}/acta-pago`} target="_blank" rel="noopener noreferrer"
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${

@@ -151,6 +151,7 @@ export interface Periodo {
   }
   planilla_estado?: 'pendiente' | 'aprobada' | 'rechazada' | null
   planilla_comentario?: string | null
+  observacion_supervisor?: string | null  // Optional supervisor note on the acta
   // Pre-approvals (joined)
   preaprobaciones?: Preaprobacion[]
   historial?: HistorialPeriodo[]
