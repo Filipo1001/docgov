@@ -425,9 +425,13 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
     : formatCOP(contrato.valor_total)
 
   const base = baseCotizacion(contrato.valor_mensual)
-  const saldo = (pagosHistorial ?? []).length > 0
-    ? pagosHistorial![pagosHistorial!.length - 1].saldo_pendiente
-    : contrato.valor_total - (periodo.numero * contrato.valor_mensual)
+
+  // Solo los pagos ANTERIORES al informe actual (el pago del periodo corriente aún no se ha realizado)
+  const pagosAnteriores = (pagosHistorial ?? []).filter(p => p.acta_numero < periodo.numero)
+
+  const saldo = pagosAnteriores.length > 0
+    ? pagosAnteriores[pagosAnteriores.length - 1].saldo_pendiente
+    : contrato.valor_total - ((periodo.numero - 1) * contrato.valor_mensual)
 
   const periodoNum = String(periodo.numero).padStart(2, '0')
 
@@ -654,8 +658,8 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                   <Text>{formatCOP(contrato.valor_total)}</Text>
                 </View>
               </View>
-              {/* Pago N — 4 columnas: descripción | fecha | Valor | monto */}
-              {(pagosHistorial ?? []).map((pago) => (
+              {/* Pago N — solo pagos anteriores al informe actual */}
+              {pagosAnteriores.map((pago) => (
                 <View key={pago.acta_numero} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 20 }}>
                   <View style={{ width: '42%', padding: '3 5', fontSize: 9, borderRightWidth: 1, borderRightColor: '#000' }}>
                     <Text>Pago {pago.acta_numero}</Text>
