@@ -275,10 +275,6 @@ export default function PerfilPage() {
       setFirmaError('Solo se permiten imágenes JPG, PNG o WEBP')
       return
     }
-    if (file.size > 3 * 1024 * 1024) {
-      setFirmaError('El archivo no puede superar 3 MB')
-      return
-    }
     setSubiendoFirma(true)
     try {
       const blob = await normalizarFirma(file)
@@ -598,7 +594,7 @@ export default function PerfilPage() {
               <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
                 {subiendoFirma
                   ? 'Eliminando fondo y guardando...'
-                  : 'JPG, PNG o WEBP · máx. 3 MB. El fondo se eliminará automáticamente y la imagen se ajustará al tamaño estándar.'}
+                  : 'JPG, PNG o WEBP. El fondo se eliminará automáticamente y la imagen se ajustará al tamaño estándar.'}
               </p>
               {!subiendoFirma && (
                 <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">

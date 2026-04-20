@@ -1058,8 +1058,8 @@ export async function subirFirma(
       return { error: 'Solo se permiten imágenes (JPG, PNG, WEBP)' }
     }
 
-    if (file.size > 3 * 1024 * 1024) {
-      return { error: 'La firma no puede superar 3 MB' }
+    if (file.size > 50 * 1024 * 1024) {
+      return { error: 'La firma no puede superar 50 MB' }
     }
 
     const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/jpeg' ? 'jpg' : 'png'
