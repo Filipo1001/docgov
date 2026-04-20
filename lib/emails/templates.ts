@@ -13,6 +13,8 @@ interface TemplateData {
   nombreRemitente?: string
 }
 
+const APP_URL = 'https://docgov-black.vercel.app/'
+
 function baseHtml(titulo: string, contenido: string, color: string): string {
   return `
 <!DOCTYPE html>
@@ -25,6 +27,11 @@ function baseHtml(titulo: string, contenido: string, color: string): string {
     </div>
     <div style="padding:32px;">
       ${contenido}
+      <div style="margin-top:28px;text-align:center;">
+        <a href="${APP_URL}" style="display:inline-block;background:#1a1a1a;color:#fff;padding:13px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;letter-spacing:0.3px;">
+          Abrir DocGov
+        </a>
+      </div>
     </div>
     <div style="padding:16px 32px;border-top:1px solid #eee;text-align:center;">
       <p style="color:#999;font-size:12px;margin:0;">DocGov — Sistema de Gestion Documental</p>
@@ -43,11 +50,6 @@ export function emailPeriodoEnviado(data: TemplateData) {
        <p style="color:#333;font-size:14px;line-height:1.6;">
          <strong>${data.nombreRemitente}</strong> envio su informe de <strong>${data.mes} ${data.anio}</strong>
          del contrato <strong>${data.contrato}</strong> para tu revision.
-       </p>
-       <p style="margin-top:24px;">
-         <a href="#" style="background:#1a1a1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">
-           Revisar informe
-         </a>
        </p>`,
       '#2563eb'
     ),
