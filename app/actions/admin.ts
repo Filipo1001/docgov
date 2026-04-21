@@ -348,3 +348,25 @@ export async function actualizarMunicipio(
   revalidatePath('/dashboard/admin/municipio')
   return {}
 }
+
+// ─── Firma management ─────────────────────────────────────────
+
+/**
+ * Admin: clear the firma_url for a user.
+ */
+export async function eliminarFirmaAdmin(userId: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  if (!admin) return { error: 'No autorizado' }
+
+  const adminClient = createAdminSupabaseClient()
+  const { error } = await adminClient
+    .from('usuarios')
+    .update({ firma_url: null })
+    .eq('id', userId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/admin/firmas')
+  revalidatePath('/dashboard')
+  return {}
+}

@@ -218,7 +218,7 @@ export default function AdminHome({
       </Card>
 
       {/* ── Quick access ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Link href="/dashboard/contratos/nuevo" className="block">
           <Card className="hover:border-gray-300 transition-colors group h-full">
             <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-gray-200 transition-colors">
@@ -235,6 +235,15 @@ export default function AdminHome({
             </div>
             <h3 className="font-medium text-gray-900 text-sm">Usuarios</h3>
             <p className="text-xs text-gray-500 mt-1">Gestionar usuarios del sistema</p>
+          </Card>
+        </Link>
+        <Link href="/dashboard/admin/firmas" className="block">
+          <Card className="hover:border-gray-300 transition-colors group h-full">
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-gray-200 transition-colors">
+              <span className="text-xl">✍️</span>
+            </div>
+            <h3 className="font-medium text-gray-900 text-sm">Firmas</h3>
+            <p className="text-xs text-gray-500 mt-1">Gestionar firmas de contratistas</p>
           </Card>
         </Link>
         <Link href="/dashboard/admin/historicos" className="block">
