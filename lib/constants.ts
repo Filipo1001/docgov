@@ -105,6 +105,7 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
     admin: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: '👥' },
+      { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
       { href: '/dashboard/admin/municipio', label: 'Municipio', icon: '🏛️' },
