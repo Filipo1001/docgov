@@ -1,14 +1,16 @@
 /**
  * Informe de Actividades PDF
  *
- * Layout:
- * - Single 3-column table spanning all pages
- * - COL1: obligation text (shown only on first activity of each obligation)
- * - COL2: activity description + evidence photos stacked vertically
- * - COL3: total action count (shown only on first activity of each obligation)
- * - One table row per activity — clean page breaks
- * - Thick bottom border separates obligation groups
- * - Closing + signature block kept together (wrap={false})
+ * Layout (refactored):
+ * - Flat list of sub-rows:  text sub-row (obligation label + activity text + count)
+ *   followed by one photo sub-row per evidence image.
+ * - Every sub-row carries its own left/right border → no border loss on page breaks.
+ * - Every sub-row is wrap={false} → no sub-row is split across pages.
+ * - Obligation label appears on the first text row of each obligation (full) and as a
+ *   small compact tag on every following sub-row (photo rows) of that obligation.
+ * - Photos use objectFit:'contain' + maxHeight → no cropping, proportional scaling.
+ * - Closing + signature block lives *outside* the main table so it paginates cleanly.
+ * - Footer (page number) is fixed on every page.
  *
  * Signature rules:
  * - Contratista firma: shown when periodo.estado is enviado/revision/aprobado/radicado
@@ -16,8 +18,6 @@
  * - Supervisor firma: shown only when estado is aprobado/radicado
  *   AND contrato.supervisor.firma_url is set
  * - If firma_url is absent → blank space, never fails
- *
- * Footer: page number only (centered)
  */
 
 import React from 'react'
@@ -51,9 +51,9 @@ function fechaFirmaMinusc(iso: string): string {
   return `${d} de ${MESES_MINUS[parseInt(m) - 1]} de ${y}`
 }
 
-// Estados en los que el contratista ya firmó digitalmente (envío = acto de firma)
+// Estados en los que el contratista ya firmó digitalmente
 const ESTADOS_FIRMA_CONTRATISTA = new Set(['enviado', 'revision', 'aprobado', 'radicado'])
-// Estados en los que la secretaria ya aprobó (firma del supervisor visible)
+// Estados en los que la secretaria ya aprobó
 const ESTADOS_FIRMA_SUPERVISOR  = new Set(['aprobado', 'radicado'])
 
 // ─── Styles ───────────────────────────────────────────────────
@@ -140,35 +140,45 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 
-  // ── Main 3-column table
-  mainTable: {
-    borderWidth: 1,
-    borderColor: '#000',
-    borderStyle: 'solid',
-  },
+  // ── Main table container — no outer border; rows own their side borders
+  mainTable: {},
+
+  // ── Table header row — full border (top + sides + bottom)
   mainHeaderRow: {
     flexDirection: 'row',
     backgroundColor: '#d0d0d0',
+    borderTopWidth: 1,
+    borderTopColor: '#000',
+    borderTopStyle: 'solid',
     borderBottomWidth: 1,
     borderBottomColor: '#000',
     borderBottomStyle: 'solid',
-  },
-  mainRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#aaa',
-    borderBottomStyle: 'solid',
-  },
-  mainRowObligEnd: {
-    flexDirection: 'row',
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#000',
-    borderBottomStyle: 'solid',
-  },
-  mainRowLast: {
-    flexDirection: 'row',
+    borderLeftWidth: 1,
+    borderLeftColor: '#000',
+    borderLeftStyle: 'solid',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    borderRightStyle: 'solid',
   },
 
+  // ── Base for all data rows: left + right outer border
+  tableRow: {
+    flexDirection: 'row',
+    borderLeftWidth: 1,
+    borderLeftColor: '#000',
+    borderLeftStyle: 'solid',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    borderRightStyle: 'solid',
+  },
+
+  // Row bottom-border variants
+  rowBorderNone:   {},
+  rowBorderLight:  { borderBottomWidth: 0.5, borderBottomColor: '#eee', borderBottomStyle: 'solid' },
+  rowBorderMedium: { borderBottomWidth: 0.5, borderBottomColor: '#aaa', borderBottomStyle: 'solid' },
+  rowBorderHeavy:  { borderBottomWidth: 1.5, borderBottomColor: '#000', borderBottomStyle: 'solid' },
+
+  // ── Column definitions
   col1: {
     width: '32%',
     borderRightWidth: 1,
@@ -182,6 +192,14 @@ const s = StyleSheet.create({
     borderRightColor: '#000',
     borderRightStyle: 'solid',
     padding: '6 7',
+  },
+  // col2 variant for photo rows — reduced vertical padding
+  col2Photo: {
+    flex: 1,
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+    borderRightStyle: 'solid',
+    padding: '4 7',
   },
   col3: {
     width: '13%',
@@ -197,6 +215,7 @@ const s = StyleSheet.create({
     lineHeight: 1.4,
   },
 
+  // ── Obligation label — full (first activity of obligation)
   oblIndex: {
     fontSize: 7.5,
     fontFamily: 'Helvetica-Bold',
@@ -210,9 +229,17 @@ const s = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     lineHeight: 1.5,
   },
+  // ── Obligation label — compact (photo continuation rows)
+  oblContinuacion: {
+    fontSize: 7,
+    fontFamily: 'Helvetica',
+    fontStyle: 'italic',
+    color: '#bbb',
+  },
+
+  // ── Activity text inside col2
   actRow: {
     flexDirection: 'row',
-    marginBottom: 6,
   },
   actNumber: {
     fontSize: 9,
@@ -233,12 +260,15 @@ const s = StyleSheet.create({
     fontStyle: 'italic',
     color: '#444',
   },
+
+  // ── Evidence photo — contain (no cropping), proportional scaling
   photo: {
     width: '100%',
-    height: 190,
-    objectFit: 'cover',
-    marginBottom: 4,
+    maxHeight: 210,
+    objectFit: 'contain',
   },
+
+  // ── Count in col3
   countText: {
     fontSize: 13,
     fontFamily: 'Helvetica-Bold',
@@ -252,11 +282,19 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // ── Closing row
-  closingRow: {
+  // ── Closing + Signature block — outside main table
+  closingAndSig: {
     borderTopWidth: 1.5,
-    borderTopColor: '#000',
-    borderTopStyle: 'solid',
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#000',
+    borderStyle: 'solid',
+  },
+  closingRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
+    borderBottomStyle: 'solid',
     padding: '12 10',
   },
   closingText: {
@@ -264,46 +302,31 @@ const s = StyleSheet.create({
     lineHeight: 1.8,
   },
 
-  // ── Signature section — stacked vertically inside the main table
-
-  // Block 1: Contratista (full width)
+  // Block 1: Contratista
   sigContratistaBlock: {
-    borderTopWidth: 1,
-    borderTopColor: '#000',
-    borderTopStyle: 'solid',
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
+    borderBottomStyle: 'solid',
     padding: '12 14 10 14',
   },
-
-  // Block 2: Supervisor receipt (full width, thick top border)
+  // Block 2: Supervisor
   sigSupervisorBlock: {
-    borderTopWidth: 1.5,
-    borderTopColor: '#000',
-    borderTopStyle: 'solid',
     padding: '10 14 12 14',
   },
 
-  // Blank space when no firma image is available
-  sigSpace: {
-    height: 65,
-  },
+  sigSpace: { height: 65 },
 
-  // Contratista firma image
   firmaImgContratista: {
     width: '55%',
     height: 65,
     objectFit: 'contain',
-    marginBottom: 0,
   },
-
-  // Supervisor firma image — inline after "Firma:"
   firmaImgSupervisor: {
     height: 46,
     width: 130,
     objectFit: 'contain',
     marginLeft: 4,
   },
-
-  // Underline below firma space / image
   sigUnderline: {
     borderTopWidth: 1,
     borderTopColor: '#000',
@@ -311,7 +334,6 @@ const s = StyleSheet.create({
     width: '55%',
     marginBottom: 5,
   },
-
   sigName: {
     fontSize: 9.5,
     fontFamily: 'Helvetica-Bold',
@@ -328,18 +350,15 @@ const s = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 1,
   },
-  // Fixed-width label column — sized for the widest label ("Nombre:")
   sigTag: {
     fontSize: 9.5,
     width: 52,
   },
-
-  // "Firma: ___" row in supervisor block
   sigFirmaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-    marginTop: 20,   // breathing room between receipt text and firma line
+    marginTop: 20,
   },
   sigFirmaLine: {
     flex: 1,
@@ -349,13 +368,11 @@ const s = StyleSheet.create({
     height: 14,
     marginLeft: 2,
   },
-
   sigNombreRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 2,
   },
-
   receiptParagraph: {
     fontSize: 9.5,
     lineHeight: 1.65,
@@ -367,7 +384,7 @@ const s = StyleSheet.create({
     fontSize: 9.5,
   },
 
-  // ── Footer — page number only, centered
+  // ── Footer
   footer: {
     position: 'absolute',
     bottom: 18,
@@ -404,65 +421,39 @@ function InfoSectionHeader({ children }: { children: string }) {
   )
 }
 
-// ─── Activity row ─────────────────────────────────────────────
+// ─── Sub-row types ────────────────────────────────────────────
 
-interface ActivityRowProps {
-  obl: PDFObligacion
-  oblIndex: number
-  act: PDFActividad
-  actIndex: number
-  showOblInfo: boolean
-  totalAcciones: number
-  rowStyle: any
-}
+type BorderType = 'none' | 'light' | 'medium' | 'heavy'
 
-function ActivityRow({ obl, oblIndex, act, actIndex, showOblInfo, totalAcciones, rowStyle }: ActivityRowProps) {
-  return (
-    <View style={rowStyle}>
-      <View style={s.col1}>
-        {showOblInfo && (
-          <>
-            <Text style={s.oblIndex}>Obligación {oblIndex + 1}</Text>
-            <Text style={s.oblText}>{obl.descripcion}</Text>
-          </>
-        )}
-      </View>
-      <View style={s.col2}>
-        {/* Numbered activity description */}
-        <View style={s.actRow}>
-          <Text style={s.actNumber}>{actIndex + 1}.</Text>
-          <Text style={s.actText}>{act.descripcion}</Text>
-        </View>
-        {act.evidencias.map((ev, ei) => (
-          <View key={ei} wrap={false}>
-            <Image src={ev.url} style={s.photo} />
-          </View>
-        ))}
-      </View>
-      <View style={s.col3}>
-        {showOblInfo && <Text style={s.countText}>{totalAcciones}</Text>}
-      </View>
-    </View>
-  )
-}
+type SubRow =
+  | {
+      type: 'text'
+      obl: PDFObligacion
+      oblIndex: number
+      act: PDFActividad
+      actIndex: number
+      isFirstOfObl: boolean
+      totalAcciones: number
+      border: BorderType
+    }
+  | {
+      type: 'photo'
+      oblIndex: number
+      ev: { url: string; nombre_archivo: string }
+      border: BorderType
+    }
+  | {
+      type: 'permanent'
+      obl: PDFObligacion
+      oblIndex: number
+      border: BorderType
+    }
 
-// ─── Permanent obligation row ─────────────────────────────────
-
-function PermanentRow({ obl, oblIndex, rowStyle }: { obl: PDFObligacion; oblIndex: number; rowStyle: any }) {
-  return (
-    <View style={rowStyle}>
-      <View style={s.col1}>
-        <Text style={s.oblIndex}>Obligación {oblIndex + 1}</Text>
-        <Text style={s.oblText}>{obl.descripcion}</Text>
-      </View>
-      <View style={s.col2}>
-        <Text style={s.actTextPermanente}>Permanente</Text>
-      </View>
-      <View style={s.col3}>
-        <Text style={s.permanenteText}>Perm.</Text>
-      </View>
-    </View>
-  )
+function rowBorderStyle(b: BorderType) {
+  if (b === 'light')  return s.rowBorderLight
+  if (b === 'medium') return s.rowBorderMedium
+  if (b === 'heavy')  return s.rowBorderHeavy
+  return s.rowBorderNone
 }
 
 // ─── Main component ───────────────────────────────────────────
@@ -470,53 +461,64 @@ function PermanentRow({ obl, oblIndex, rowStyle }: { obl: PDFObligacion; oblInde
 export function InformeActividadesPDF({ data }: { data: PDFData }) {
   const { municipio, contrato, periodo, obligaciones } = data
 
-  // Signature visibility based on workflow state
   const mostrarFirmaContratista =
-    ESTADOS_FIRMA_CONTRATISTA.has(periodo.estado) &&
-    !!contrato.contratista.firma_url
+    ESTADOS_FIRMA_CONTRATISTA.has(periodo.estado) && !!contrato.contratista.firma_url
 
   const mostrarFirmaSupervisor =
-    ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) &&
-    !!contrato.supervisor.firma_url
+    ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
-  // Build flat row list
-  type RowDef =
-    | { type: 'activity'; obl: PDFObligacion; oblIndex: number; act: PDFActividad; actIndex: number; showOblInfo: boolean; totalAcciones: number; isObligEnd: boolean; isLast: boolean }
-    | { type: 'permanent'; obl: PDFObligacion; oblIndex: number; isLast: boolean }
+  // ── Build flat sub-row list ──────────────────────────────────
 
-  const rows: RowDef[] = []
+  const subRows: SubRow[] = []
 
   obligaciones.forEach((obl, oi) => {
     const isLastObl = oi === obligaciones.length - 1
 
     if (obl.es_permanente || obl.actividades.length === 0) {
-      rows.push({ type: 'permanent', obl, oblIndex: oi, isLast: isLastObl })
+      subRows.push({
+        type: 'permanent',
+        obl,
+        oblIndex: oi,
+        border: isLastObl ? 'none' : 'heavy',
+      })
       return
     }
 
     const totalAcciones = obl.actividades.reduce((sum, a) => sum + a.cantidad, 0)
+
     obl.actividades.forEach((act, ai) => {
-      const isLastAct = ai === obl.actividades.length - 1
-      rows.push({
-        type: 'activity',
+      const isLastAct   = ai === obl.actividades.length - 1
+      const isAbsLast   = isLastAct && isLastObl
+      // Border that terminates this activity group
+      const actEndBorder: BorderType = isAbsLast ? 'none' : isLastAct ? 'heavy' : 'medium'
+      const hasPhotos   = act.evidencias.length > 0
+
+      // Text sub-row — no bottom border when photos follow (they continue the cell)
+      subRows.push({
+        type:        'text',
         obl,
-        oblIndex: oi,
+        oblIndex:    oi,
         act,
-        actIndex: ai,
-        showOblInfo: ai === 0,
+        actIndex:    ai,
+        isFirstOfObl: ai === 0,
         totalAcciones,
-        isObligEnd: isLastAct,
-        isLast: isLastAct && isLastObl,
+        border:      hasPhotos ? 'none' : actEndBorder,
+      })
+
+      // One photo sub-row per evidence image
+      act.evidencias.forEach((ev, ei) => {
+        const isLastPhoto = ei === act.evidencias.length - 1
+        subRows.push({
+          type:     'photo',
+          oblIndex: oi,
+          ev,
+          border:   isLastPhoto ? actEndBorder : 'light',
+        })
       })
     })
   })
 
-  function rowStyle(row: RowDef): object {
-    if (row.isLast) return s.mainRowLast
-    if (row.type === 'permanent') return s.mainRowObligEnd
-    if (row.type === 'activity' && row.isObligEnd) return s.mainRowObligEnd
-    return s.mainRow
-  }
+  // ─────────────────────────────────────────────────────────────
 
   return (
     <Document
@@ -573,7 +575,7 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
         {/* ── Main 3-column table ────────────────────────── */}
         <View style={s.mainTable}>
 
-          {/* Table header */}
+          {/* Table header — full border on all sides */}
           <View style={s.mainHeaderRow}>
             <View style={s.col1}>
               <Text style={s.colHeaderText}>OBLIGACIONES{'\n'}ESPECIFICAS</Text>
@@ -590,26 +592,79 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
             </View>
           </View>
 
-          {/* Activity rows */}
-          {rows.map((row, ri) =>
-            row.type === 'permanent' ? (
-              <PermanentRow key={ri} obl={row.obl} oblIndex={row.oblIndex} rowStyle={rowStyle(row)} />
-            ) : (
-              <ActivityRow
-                key={ri}
-                obl={row.obl}
-                oblIndex={row.oblIndex}
-                act={row.act}
-                actIndex={row.actIndex}
-                showOblInfo={row.showOblInfo}
-                totalAcciones={row.totalAcciones}
-                rowStyle={rowStyle(row)}
-              />
-            )
-          )}
+          {/* Sub-rows — each is wrap={false} so it never splits across pages */}
+          {subRows.map((row, ri) => {
+            // ── Permanent obligation row
+            if (row.type === 'permanent') {
+              return (
+                <View key={ri} wrap={false} style={[s.tableRow, rowBorderStyle(row.border)]}>
+                  <View style={s.col1}>
+                    <Text style={s.oblIndex}>Obligación {row.oblIndex + 1}</Text>
+                    <Text style={s.oblText}>{row.obl.descripcion}</Text>
+                  </View>
+                  <View style={s.col2}>
+                    <Text style={s.actTextPermanente}>Permanente</Text>
+                  </View>
+                  <View style={s.col3}>
+                    <Text style={s.permanenteText}>Perm.</Text>
+                  </View>
+                </View>
+              )
+            }
 
-          {/* ── Closing + Signature — indivisible block ── */}
-          <View wrap={false}>
+            // ── Photo sub-row
+            if (row.type === 'photo') {
+              return (
+                <View key={ri} wrap={false} style={[s.tableRow, rowBorderStyle(row.border)]}>
+                  {/* col1: compact obligation tag so context is always visible */}
+                  <View style={s.col1}>
+                    <Text style={s.oblContinuacion}>Obl. {row.oblIndex + 1}</Text>
+                  </View>
+                  {/* col2: single photo, scaled proportionally */}
+                  <View style={s.col2Photo}>
+                    <Image src={row.ev.url} style={s.photo} />
+                  </View>
+                  <View style={s.col3} />
+                </View>
+              )
+            }
+
+            // ── Activity text sub-row
+            return (
+              <View key={ri} wrap={false} style={[s.tableRow, rowBorderStyle(row.border)]}>
+                {/* col1: full label on first activity, compact tag on subsequent */}
+                <View style={s.col1}>
+                  {row.isFirstOfObl ? (
+                    <>
+                      <Text style={s.oblIndex}>Obligación {row.oblIndex + 1}</Text>
+                      <Text style={s.oblText}>{row.obl.descripcion}</Text>
+                    </>
+                  ) : (
+                    <Text style={s.oblContinuacion}>Obl. {row.oblIndex + 1}</Text>
+                  )}
+                </View>
+                {/* col2: numbered activity description */}
+                <View style={s.col2}>
+                  <View style={s.actRow}>
+                    <Text style={s.actNumber}>{row.actIndex + 1}.</Text>
+                    <Text style={s.actText}>{row.act.descripcion}</Text>
+                  </View>
+                </View>
+                {/* col3: total actions — shown only once, on first activity */}
+                <View style={s.col3}>
+                  {row.isFirstOfObl && (
+                    <Text style={s.countText}>{row.totalAcciones}</Text>
+                  )}
+                </View>
+              </View>
+            )
+          })}
+
+        </View>{/* end mainTable */}
+
+        {/* ── Closing + Signature — outside mainTable, indivisible ── */}
+        <View wrap={false}>
+          <View style={s.closingAndSig}>
 
             {/* "En constancia..." closing line */}
             <View style={s.closingRow}>
@@ -618,28 +673,22 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
               </Text>
             </View>
 
-            {/* ── Block 1: Contratista — full width ── */}
+            {/* Block 1: Contratista */}
             <View style={s.sigContratistaBlock}>
-              {/* Firma image or blank space */}
               {mostrarFirmaContratista ? (
                 <Image src={contrato.contratista.firma_url!} style={s.firmaImgContratista} />
               ) : (
                 <View style={s.sigSpace} />
               )}
-              {/* Underline */}
               <View style={s.sigUnderline} />
-              {/* Bold name */}
               <Text style={s.sigName}>{contrato.contratista.nombre_completo}</Text>
-              {/* Role */}
               <Text style={s.sigDetail}>
                 CONTRATISTA{contrato.contratista.cargo ? ` ${contrato.contratista.cargo.toUpperCase()}` : ''}
               </Text>
-              {/* C.C. */}
               <View style={s.sigLabelRow}>
                 <Text style={s.sigTag}>C.C.</Text>
                 <Text style={s.sigDetail}>No. {contrato.contratista.cedula}</Text>
               </View>
-              {/* Cel. */}
               {contrato.contratista.telefono && (
                 <View style={s.sigLabelRow}>
                   <Text style={s.sigTag}>Cel.</Text>
@@ -648,9 +697,8 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
               )}
             </View>
 
-            {/* ── Block 2: Supervisor receipt — full width, thick top border ── */}
+            {/* Block 2: Supervisor receipt */}
             <View style={s.sigSupervisorBlock}>
-              {/* Receipt paragraph */}
               <Text style={s.receiptParagraph}>
                 <Text style={s.receiptBold}>Constancia de recibido del informe</Text>
                 {': La Alcaldía municipal de '}
@@ -664,7 +712,6 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
                 {', en constancia:'}
               </Text>
 
-              {/* Firma — image when approved, blank line otherwise */}
               <View style={s.sigFirmaRow}>
                 <Text style={s.sigTag}>Firma:</Text>
                 {mostrarFirmaSupervisor ? (
@@ -674,13 +721,11 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
                 )}
               </View>
 
-              {/* Nombre: SUPERVISOR NAME */}
               <View style={s.sigNombreRow}>
                 <Text style={s.sigTag}>Nombre:</Text>
                 <Text style={s.sigName}>{contrato.supervisor.nombre_completo}</Text>
               </View>
 
-              {/* Cargo — indented */}
               {contrato.supervisor.cargo && (
                 <View style={s.sigNombreRow}>
                   <Text style={{ width: 52 }} />
@@ -688,7 +733,6 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
                 </View>
               )}
 
-              {/* "Supervisor contrato No ..." — indented */}
               <View style={s.sigNombreRow}>
                 <Text style={{ width: 52 }} />
                 <Text style={s.sigDetail}>
@@ -696,15 +740,14 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
                 </Text>
               </View>
 
-              {/* C.C. */}
               <View style={s.sigLabelRow}>
                 <Text style={s.sigTag}>C.C.</Text>
                 <Text style={s.sigDetail}>No. {contrato.supervisor.cedula}</Text>
               </View>
             </View>
-          </View>{/* end wrap={false} closing+signature */}
 
-        </View>{/* end mainTable */}
+          </View>
+        </View>{/* end wrap={false} closing+signature */}
 
         {/* ── Footer — page number only (centered) ──────── */}
         <View style={s.footer} fixed>
