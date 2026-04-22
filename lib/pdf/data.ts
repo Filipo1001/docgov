@@ -54,7 +54,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
         fecha_fin,
         cdp,
         crp,
-        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, cargo, telefono, direccion, firma_url),
+        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, cargo, telefono, direccion, firma_url, banco, tipo_cuenta, numero_cuenta),
         supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula, cargo, firma_url),
         dependencia:dependencias(nombre),
         municipio:municipios(nombre, departamento, nit, representante_legal, cedula_representante)
@@ -163,9 +163,11 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       valor_letras_total: contrato.valor_letras_total ? normalizaMoneda(contrato.valor_letras_total) : undefined,
       plazo_meses: contrato.plazo_meses ?? undefined,
       duracion_letras: contrato.duracion_letras ?? undefined,
-      banco: contrato.banco,
-      tipo_cuenta: contrato.tipo_cuenta,
-      numero_cuenta: contrato.numero_cuenta,
+      // Prefer contratista's bank data (single source of truth).
+      // Fall back to contract-level data for backwards compatibility.
+      banco: contrato.contratista?.banco || contrato.banco,
+      tipo_cuenta: contrato.contratista?.tipo_cuenta || contrato.tipo_cuenta,
+      numero_cuenta: contrato.contratista?.numero_cuenta || contrato.numero_cuenta,
       dependencia: contrato.dependencia?.nombre ?? '',
       fecha_inicio_contrato: contrato.fecha_inicio ?? undefined,
       fecha_fin_contrato: contrato.fecha_fin ?? undefined,

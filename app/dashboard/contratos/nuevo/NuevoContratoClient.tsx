@@ -85,9 +85,6 @@ export default function NuevoContratoPage() {
     plazo_dias: '',
     fecha_inicio: '',
     fecha_fin: '',
-    banco: '',
-    tipo_cuenta: 'AHORROS',
-    numero_cuenta: '',
     cdp: '',
     crp: '',
   })
@@ -231,9 +228,6 @@ export default function NuevoContratoPage() {
         plazo_meses: meses,
         fecha_inicio: form.fecha_inicio,
         fecha_fin: form.fecha_fin,
-        banco: form.banco || null,
-        tipo_cuenta: form.tipo_cuenta,
-        numero_cuenta: form.numero_cuenta || null,
         cdp: form.cdp || null,
         crp: form.crp || null,
       })
@@ -428,33 +422,6 @@ export default function NuevoContratoPage() {
               </label>
               <input name="crp" value={form.crp} onChange={handleChange}
                 placeholder="1" className={excelEncontrado && form.crp ? autoClass : inputClass} />
-            </div>
-          </div>
-        </div>
-
-        {/* Datos bancarios */}
-        <div className="bg-white rounded-2xl border p-6">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
-            Datos bancarios del contratista
-          </h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
-              <input name="banco" value={form.banco} onChange={handleChange}
-                placeholder="BANCOLOMBIA" className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de cuenta</label>
-              <select name="tipo_cuenta" value={form.tipo_cuenta} onChange={handleChange}
-                className={inputClass}>
-                <option value="AHORROS">Ahorros</option>
-                <option value="CORRIENTE">Corriente</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuenta</label>
-              <input name="numero_cuenta" value={form.numero_cuenta} onChange={handleChange}
-                placeholder="37678690075" className={inputClass} />
             </div>
           </div>
         </div>
