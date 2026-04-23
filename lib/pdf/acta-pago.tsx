@@ -58,6 +58,11 @@ function calcDias(inicio: string, fin: string): number {
   return Math.round((new Date(fin + 'T00:00:00').getTime() - new Date(inicio + 'T00:00:00').getTime()) / 86_400_000)
 }
 
+/** Elimina sufijos de moneda ya incluidos (e.g. "M/L", "PESOS M/CTE") antes de aplicar el estándar. */
+function sinSufijoMoneda(texto: string): string {
+  return texto.replace(/\s+(DE\s+)?PESOS\s+M\/[A-Z]+/gi, '').trim()
+}
+
 // ─── Styles ───────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -274,11 +279,11 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
   const { contrato, periodo, pagosHistorial = [] } = data
 
   const valorContratoTexto = contrato.valor_letras_total
-    ? `${contrato.valor_letras_total} (${formatCOP(contrato.valor_total)})`
+    ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
     : formatCOP(contrato.valor_total)
 
   const valorMensualTexto = contrato.valor_letras_mensual
-    ? `${contrato.valor_letras_mensual.toUpperCase()} (${formatCOP(contrato.valor_mensual)})`
+    ? `${sinSufijoMoneda(contrato.valor_letras_mensual.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_mensual)})`
     : formatCOP(contrato.valor_mensual)
 
   let plazoTexto = '—'
@@ -415,7 +420,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
         <View wrap={false}>
           <Text style={s.acuerdanTitle}>ACUERDAN</Text>
           <Text style={s.acuerdanText}>
-            Pagar al Contratista la suma de {valorMensualTexto} correspondientes al acta de pago No. {periodoNum} del contrato No. {contrato.numero}-{contrato.anio}. Periodo de actividades del mes de {mesAnio(periodo.fecha_inicio)}.
+            Pagar al Contratista la suma de {valorMensualTexto}, correspondientes al Acta de Pago No. {periodoNum} del Contrato No. {contrato.numero}-{contrato.anio}, periodo de actividades del mes de {mesAnio(periodo.fecha_inicio)}.
           </Text>
 
           {/* Signature */}
