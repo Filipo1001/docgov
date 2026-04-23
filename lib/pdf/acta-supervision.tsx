@@ -390,7 +390,16 @@ const s = StyleSheet.create({
     right: 44,
     borderTopWidth: 0.5,
     borderTopColor: '#aaa',
+    borderTopStyle: 'solid',
     paddingTop: 3,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  footerLeft: {
+    flex: 1,
   },
   footerText: {
     fontSize: 7,
@@ -398,11 +407,10 @@ const s = StyleSheet.create({
     lineHeight: 1.4,
   },
   footerPage: {
-    position: 'absolute',
-    bottom: 14,
-    right: 44,
     fontSize: 7.5,
     color: '#000',
+    textAlign: 'right',
+    marginLeft: 8,
   },
 })
 
@@ -761,23 +769,26 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           </View>
         </View>
 
-        {/* Footer */}
+        {/* Footer — único elemento fixed para garantizar repetición en todas las páginas */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>
-            Municipio de Fredonia – Centro Administrativo Municipal "Rodrigo Arenas Betancourt"
-          </Text>
-          <Text style={s.footerText}>
-            Teléfono: 8401264 / Dirección: Calle 50 N°50-58 / Código Postal: 055070
-          </Text>
-          <Text style={s.footerText}>
-            Email: contactenos@fredonia-antioquia.gov.co / Sitio web: www.fredonia-antioquia.gov.co
-          </Text>
+          <View style={s.footerRow}>
+            <View style={s.footerLeft}>
+              <Text style={s.footerText}>
+                Municipio de Fredonia – Centro Administrativo Municipal "Rodrigo Arenas Betancourt"
+              </Text>
+              <Text style={s.footerText}>
+                Teléfono: 8401264 / Dirección: Calle 50 N°50-58 / Código Postal: 055070
+              </Text>
+              <Text style={s.footerText}>
+                Email: contactenos@fredonia-antioquia.gov.co / Sitio web: www.fredonia-antioquia.gov.co
+              </Text>
+            </View>
+            <Text
+              style={s.footerPage}
+              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            />
+          </View>
         </View>
-        <Text
-          style={s.footerPage}
-          render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-          fixed
-        />
 
       </Page>
     </Document>
