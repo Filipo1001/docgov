@@ -58,9 +58,9 @@ function calcDias(inicio: string, fin: string): number {
   return Math.round((new Date(fin + 'T00:00:00').getTime() - new Date(inicio + 'T00:00:00').getTime()) / 86_400_000)
 }
 
-/** Elimina sufijos de moneda ya incluidos (e.g. "M/L", "PESOS M/CTE") antes de aplicar el estándar. */
+/** Elimina sufijos de moneda ya incluidos (e.g. "M/L", "PESOS M/CTE", "DE PESOS M/L") antes de aplicar el estándar. */
 function sinSufijoMoneda(texto: string): string {
-  return texto.replace(/\s+(DE\s+)?PESOS\s+M\/[A-Z]+/gi, '').trim()
+  return texto.replace(/\s+(DE\s+PESOS\s+|PESOS\s+)?M\/[A-Z]+/gi, '').trim()
 }
 
 // ─── Styles ───────────────────────────────────────────────────

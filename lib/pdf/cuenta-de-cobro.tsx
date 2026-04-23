@@ -63,10 +63,10 @@ function formatCOP(n: number): string {
 
 /**
  * Elimina cualquier sufijo de moneda que ya venga en el texto
- * (e.g. "DE PESOS M/L", "PESOS M/CTE") antes de aplicar el estándar.
+ * (e.g. "M/L", "M/CTE", "PESOS M/L", "DE PESOS M/CTE") antes de aplicar el estándar.
  */
 function sinSufijoMoneda(texto: string): string {
-  return texto.replace(/\s+(DE\s+)?PESOS\s+M\/[A-Z]+/gi, '').trim()
+  return texto.replace(/\s+(DE\s+PESOS\s+|PESOS\s+)?M\/[A-Z]+/gi, '').trim()
 }
 
 // ─── Styles ───────────────────────────────────────────────────
