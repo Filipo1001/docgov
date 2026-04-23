@@ -61,6 +61,14 @@ function formatCOP(n: number): string {
   }).format(n)
 }
 
+/**
+ * Elimina cualquier sufijo de moneda que ya venga en el texto
+ * (e.g. "DE PESOS M/L", "PESOS M/CTE") antes de aplicar el estándar.
+ */
+function sinSufijoMoneda(texto: string): string {
+  return texto.replace(/\s+(DE\s+)?PESOS\s+M\/[A-Z]+/gi, '').trim()
+}
+
 // ─── Styles ───────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -273,15 +281,15 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
   const mostrarFirmaSupervisor =
     ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
-  // Period value — words + numeric in parentheses
+  // Period value — "TRES MILLONES DE PESOS M/L ($ 3.000.000)"
   const valorLetras = periodo.valor_letras ?? contrato.valor_letras_mensual
   const valorPeriodo = valorLetras
-    ? `${valorLetras.toUpperCase()} (${formatCOP(periodo.valor_cobro)})`
+    ? `${sinSufijoMoneda(valorLetras.toUpperCase())} DE PESOS M/L (${formatCOP(periodo.valor_cobro)})`
     : formatCOP(periodo.valor_cobro)
 
-  // Total contract value — words + numeric in parentheses
+  // Total contract value — same standard
   const valorTotal = contrato.valor_letras_total
-    ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
+    ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
     : formatCOP(contrato.valor_total)
 
   // Plazo — calendar days between contract start and end
