@@ -454,8 +454,8 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
     >
       <Page size="A4" style={s.page}>
 
-        {/* Header */}
-        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 8 }} />
+        {/* Header — fixed para que aparezca en todas las páginas */}
+        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 8 }} fixed />
 
         {/* Grado de Responsabilidad */}
         <View style={s.responsabilidad}>
