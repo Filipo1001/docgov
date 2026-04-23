@@ -426,12 +426,14 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
   const base = baseCotizacion(contrato.valor_mensual)
 
-  // Solo los pagos ANTERIORES al informe actual (el pago del periodo corriente aún no se ha realizado)
+  // Pagos anteriores al mes actual → filas de la tabla de pagos
   const pagosAnteriores = (pagosHistorial ?? []).filter(p => p.acta_numero < periodo.numero)
 
-  const saldo = pagosAnteriores.length > 0
-    ? pagosAnteriores[pagosAnteriores.length - 1].saldo_pendiente
-    : contrato.valor_total - ((periodo.numero - 1) * contrato.valor_mensual)
+  // Saldo por ejecutar: incluye el mes actual para descontarlo del total
+  const pagosHastaAhora = (pagosHistorial ?? []).filter(p => p.acta_numero <= periodo.numero)
+  const saldo = pagosHastaAhora.length > 0
+    ? pagosHastaAhora[pagosHastaAhora.length - 1].saldo_pendiente
+    : contrato.valor_total - (periodo.numero * contrato.valor_mensual)
 
   const periodoNum = String(periodo.numero).padStart(2, '0')
 
