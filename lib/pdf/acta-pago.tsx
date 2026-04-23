@@ -71,7 +71,7 @@ const s = StyleSheet.create({
     fontSize: 10,
     color: '#000',
     paddingTop: 36,
-    paddingBottom: 40,
+    paddingBottom: 52,
     paddingHorizontal: 50,
   },
   // Title
@@ -271,6 +271,37 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
+
+  // ── Footer
+  footer: {
+    position: 'absolute',
+    bottom: 14,
+    left: 50,
+    right: 50,
+    borderTopWidth: 0.5,
+    borderTopColor: '#aaa',
+    borderTopStyle: 'solid',
+    paddingTop: 3,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  footerLeft: {
+    flex: 1,
+  },
+  footerText: {
+    fontSize: 7,
+    color: '#666',
+    lineHeight: 1.4,
+  },
+  footerPage: {
+    fontSize: 7.5,
+    color: '#000',
+    textAlign: 'right',
+    marginLeft: 8,
+  },
 })
 
 // ─── Component ────────────────────────────────────────────────
@@ -305,8 +336,8 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
     >
       <Page size="A4" style={s.page}>
 
-        {/* Header */}
-        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 12 }} />
+        {/* Header — fixed para repetir en todas las páginas */}
+        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 12 }} fixed />
 
         {/* Title + Date */}
         <Text style={s.actaTitle}>ACTA DE PAGO No. {periodoNum}</Text>
@@ -439,6 +470,27 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
           </View>
         </View>
 
+
+        {/* Footer — único elemento fixed, aparece en todas las páginas */}
+        <View style={s.footer} fixed>
+          <View style={s.footerRow}>
+            <View style={s.footerLeft}>
+              <Text style={s.footerText}>
+                Municipio de Fredonia – Centro Administrativo Municipal "Rodrigo Arenas Betancourt"
+              </Text>
+              <Text style={s.footerText}>
+                Teléfono: 8401264 / Dirección: Calle 50 N°50-58 / Código Postal: 055070
+              </Text>
+              <Text style={s.footerText}>
+                Email: contactenos@fredonia-antioquia.gov.co / Sitio web: www.fredonia-antioquia.gov.co
+              </Text>
+            </View>
+            <Text
+              style={s.footerPage}
+              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            />
+          </View>
+        </View>
 
       </Page>
     </Document>
