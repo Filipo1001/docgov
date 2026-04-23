@@ -95,6 +95,9 @@ export default function PeriodoDetallePage() {
   const [textoObservacion, setTextoObservacion] = useState('')
   const [guardandoObservacion, setGuardandoObservacion] = useState(false)
 
+  // Lightbox — ampliar imagen de evidencia
+  const [lightbox, setLightbox] = useState<{ url: string; alt: string } | null>(null)
+
   // Inline planilla validation (submit section)
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
   const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
@@ -120,6 +123,14 @@ export default function PeriodoDetallePage() {
     const timer = setInterval(() => cargarDatos(true), 30_000)
     return () => clearInterval(timer)
   }, [cargarDatos])
+
+  // Cerrar lightbox con tecla Escape
+  useEffect(() => {
+    if (!lightbox) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [lightbox])
 
   // Toast de radicado para contratista (una sola vez al cargar)
   const radicadoToastMostrado = useRef(false)
@@ -1037,11 +1048,31 @@ export default function PeriodoDetallePage() {
                           <div className="flex flex-wrap gap-2 mb-2">
                             {act.evidencias.map((ev) => (
                               <div key={ev.id} className="relative group">
-                                <img src={ev.url} alt={ev.nombre_archivo} className="w-20 h-20 object-cover rounded-lg border" />
+                                {/* Thumbnail — clicable para abrir lightbox */}
+                                <button
+                                  type="button"
+                                  onClick={() => setLightbox({ url: ev.url, alt: ev.nombre_archivo })}
+                                  className="block focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
+                                  title="Ver imagen ampliada"
+                                >
+                                  <img
+                                    src={ev.url}
+                                    alt={ev.nombre_archivo}
+                                    className="w-20 h-20 object-cover rounded-lg border transition-opacity group-hover:opacity-85"
+                                  />
+                                  {/* Ícono lupa — indicador visual de zoom */}
+                                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    <svg className="w-6 h-6 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0zm0 0l.01.01" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 8v6M8 11h6" />
+                                    </svg>
+                                  </span>
+                                </button>
+                                {/* Botón eliminar — stopPropagation para no abrir el lightbox */}
                                 {esEditable && (
                                   <button
-                                    onClick={() => handleEliminarEvidencia(ev.id)}
-                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity flex items-center justify-center"
+                                    onClick={(e) => { e.stopPropagation(); handleEliminarEvidencia(ev.id) }}
+                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity flex items-center justify-center z-10"
                                   >
                                     ✕
                                   </button>
@@ -1784,6 +1815,45 @@ export default function PeriodoDetallePage() {
         </div>
       )}
 
+
+      {/* ── Lightbox ──────────────────────────────────────────── */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Imagen ampliada"
+        >
+          <div
+            className="relative max-w-4xl w-full flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Botón cerrar */}
+            <button
+              onClick={() => setLightbox(null)}
+              className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors p-1"
+              aria-label="Cerrar"
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Imagen ampliada */}
+            <img
+              src={lightbox.url}
+              alt={lightbox.alt}
+              className="max-w-full max-h-[82vh] object-contain rounded-lg shadow-2xl"
+            />
+
+            {/* Nombre del archivo */}
+            <p className="mt-2 text-white/50 text-xs text-center truncate max-w-full px-2">
+              {lightbox.alt}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/*
         Shared file inputs — rendered once, outside the activity list.
