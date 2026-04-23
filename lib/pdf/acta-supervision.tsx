@@ -548,7 +548,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <View style={s.lbl}><Text>Aceptación de las actividades realizadas</Text></View>
             <View style={s.val}>
               <Text style={{ lineHeight: 1.3 }}>
-                El/La contratista cumplió satisfactoriamente con todas las responsabilidades asignadas y dedicó toda su capacidad en la realización de las actividades en el periodo, por lo cual su aporte en el componente de gestión del talento humano permitió que la entidad generara capacidades para el desarrollo de las acciones misionales.
+                Cumplió satisfactoriamente con todas las responsabilidades asignadas y dedicó toda su capacidad en la realización de las actividades en el periodo, por lo cual su aporte en el componente de gestión del talento humano permitió que la entidad generara capacidades para el desarrollo de las acciones misionales.
               </Text>
               <Text style={{ marginTop: 3, lineHeight: 1.3 }}>
                 Además acreditó el pago de la seguridad social
