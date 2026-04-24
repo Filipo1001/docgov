@@ -1,13 +1,25 @@
 'use client'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useUsuario } from '@/lib/user-context'
 import SupervisorHome from './SupervisorHome'
 import ContratistaHome from './ContratistaHome'
 import AdminHome from './AdminHome'
 import ReviewerHome from './ReviewerHome'
 
+// Roles que deben ir directamente a /dashboard/informes al entrar al dashboard
+const ROLES_INFORMES = new Set(['asesor'])
+
 export default function DashboardPage() {
   const { usuario, cargando } = useUsuario()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (usuario && ROLES_INFORMES.has(usuario.rol)) {
+      router.replace('/dashboard/informes')
+    }
+  }, [usuario, router])
 
   if (cargando) {
     return (
@@ -23,6 +35,9 @@ export default function DashboardPage() {
 
   if (!usuario) return null
 
+  // Roles redirigidos — no renderizar nada mientras ocurre la navegación
+  if (ROLES_INFORMES.has(usuario.rol)) return null
+
   switch (usuario.rol) {
     case 'supervisor':
       return <SupervisorHome userId={usuario.id} nombre={usuario.nombre_completo} />
@@ -32,9 +47,6 @@ export default function DashboardPage() {
 
     case 'admin':
       return <AdminHome nombre={usuario.nombre_completo} />
-
-    case 'asesor':
-      return <ReviewerHome nombre={usuario.nombre_completo} rol="asesor" />
 
     default:
       // gobierno, hacienda, or any future reviewer role
