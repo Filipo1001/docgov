@@ -126,6 +126,24 @@ export function emailPeriodoRadicado(data: TemplateData) {
   }
 }
 
+export function emailRecordatorioInforme(data: TemplateData) {
+  return {
+    subject: `Recuerda enviar tu informe — ${data.mes} ${data.anio}`,
+    html: baseHtml(
+      'Informe pendiente de envío',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Te recordamos que aún no has enviado tu informe de actividades de
+         <strong>${data.mes} ${data.anio}</strong> para el contrato <strong>${data.contrato}</strong>.
+       </p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Ingresa a DocGov, registra tus actividades y envía tu informe a tiempo.
+       </p>`,
+      '#d97706'
+    ),
+  }
+}
+
 export type EmailTemplate = (data: TemplateData) => { subject: string; html: string }
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
@@ -134,4 +152,5 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   aprobado: emailPeriodoAprobado,
   rechazado: emailPeriodoRechazado,
   radicado: emailPeriodoRadicado,
+  recordatorio: emailRecordatorioInforme,
 }

@@ -11,6 +11,8 @@ import {
   rechazarComoAsesor,
   aprobarPeriodos,
   rechazarPeriodos,
+  enviarRecordatorioInforme,
+  enviarRecordatoriosMasivos,
 } from '@/app/actions/periodos'
 import type { Periodo } from '@/lib/types'
 
@@ -275,6 +277,90 @@ function InformeCard({
   )
 }
 
+// ─── Sin Enviar Card ──────────────────────────────────────────
+
+type RecordatorioEstado = 'idle' | 'enviando' | 'enviado' | 'error'
+
+function SinEnviarCard({
+  periodo,
+}: {
+  periodo: Periodo
+}) {
+  const [estado, setEstado] = useState<RecordatorioEstado>('idle')
+
+  const contrato = periodo.contrato
+  const nombre = contrato?.contratista?.nombre_completo ?? 'Sin nombre'
+
+  async function handleRecordar() {
+    setEstado('enviando')
+    const res = await enviarRecordatorioInforme(periodo.id)
+    if (res.error) {
+      toast.error(res.error)
+      setEstado('error')
+    } else {
+      toast.success(`Recordatorio enviado a ${nombre.split(' ')[0]}`)
+      setEstado('enviado')
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 transition-all">
+      <div className="flex items-start gap-3">
+        <Avatar nombre={nombre} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div>
+              <p className="font-semibold text-gray-900 text-sm leading-tight">{nombre}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Contrato N.° {contrato?.numero} — {contrato?.dependencia?.abreviatura}
+              </p>
+            </div>
+            <Badge size="xs" variant="amber">Sin enviar</Badge>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={handleRecordar}
+              disabled={estado === 'enviando' || estado === 'enviado'}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
+                estado === 'enviado'
+                  ? 'bg-green-100 text-green-700 cursor-default'
+                  : estado === 'error'
+                    ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                    : 'bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50'
+              }`}
+            >
+              {estado === 'enviando' ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Enviando...
+                </>
+              ) : estado === 'enviado' ? (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Recordatorio enviado
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  {estado === 'error' ? 'Reintentar' : 'Recordar'}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function InformesPage() {
@@ -296,6 +382,10 @@ export default function InformesPage() {
   const [mostrarRechazoMasivo, setMostrarRechazoMasivo] = useState(false)
   const [motivoMasivo, setMotivoMasivo] = useState('')
 
+  // Reminder state
+  const [enviandoRecordatorios, setEnviandoRecordatorios] = useState(false)
+  const [recordatoriosEnviados, setRecordatoriosEnviados] = useState(false)
+
   const mesNombre = MESES[mesIdx]
 
   const cargar = useCallback(async (silencioso = false) => {
@@ -312,6 +402,9 @@ export default function InformesPage() {
     setPeriodosBorrador(borradores)
     if (!silencioso) setCargando(false)
   }, [usuario, mesNombre, anio])
+
+  // Reset reminder sent state when month changes
+  useEffect(() => { setRecordatoriosEnviados(false) }, [mesIdx, anio])
 
   // Initial load
   useEffect(() => { cargar() }, [cargar])
@@ -400,6 +493,20 @@ export default function InformesPage() {
     setProcesandoMasivo(false)
   }
 
+  async function handleRecordatoriosMasivos() {
+    if (!periodosBorrador.length) return
+    setEnviandoRecordatorios(true)
+    const ids = periodosBorrador.map(p => p.id)
+    const res = await enviarRecordatoriosMasivos(ids)
+    if (res.error) {
+      toast.error(res.error)
+    } else {
+      toast.success(`Recordatorios enviados a ${res.data?.enviados ?? 0} contratistas`)
+      setRecordatoriosEnviados(true)
+    }
+    setEnviandoRecordatorios(false)
+  }
+
   if (cargandoUser) return <p className="text-gray-500">Cargando...</p>
   if (!usuario) return null
 
@@ -468,6 +575,45 @@ export default function InformesPage() {
           value={filtro}
           onChange={setFiltro}
         />
+
+        {/* Reminder bulk button — only on Sin Enviar tab, for asesor/admin */}
+        {filtro === 'sin_enviar' && (esAsesor || esAdmin) && periodosBorrador.length > 0 && (
+          <div className="sm:ml-auto">
+            <button
+              onClick={handleRecordatoriosMasivos}
+              disabled={enviandoRecordatorios || recordatoriosEnviados}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 ${
+                recordatoriosEnviados
+                  ? 'bg-green-100 text-green-700 cursor-default'
+                  : 'bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50'
+              }`}
+            >
+              {enviandoRecordatorios ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Enviando...
+                </>
+              ) : recordatoriosEnviados ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Recordatorios enviados
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Recordar a todos ({periodosBorrador.length})
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Secretary mass action button */}
         {(esSecretaria || esAdmin) && idsParaAprobar.length > 0 && (
@@ -573,12 +719,9 @@ export default function InformesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {periodosVisibles.map(p => (
-            <InformeCard
-              key={p.id}
-              periodo={p}
-              rol={usuario.rol}
-              onUpdate={cargar}
-            />
+            filtro === 'sin_enviar'
+              ? <SinEnviarCard key={p.id} periodo={p} />
+              : <InformeCard key={p.id} periodo={p} rol={usuario.rol} onUpdate={cargar} />
           ))}
         </div>
       )}

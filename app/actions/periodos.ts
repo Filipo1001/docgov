@@ -1171,6 +1171,101 @@ export async function marcarComoHistorico(
   }
 }
 
+// ─── Reminder actions ────────────────────────────────────────
+
+/**
+ * Send a reminder email + in-app notification to a contractor
+ * who hasn't submitted their informe yet (estado = 'borrador').
+ * Asesor and admin only.
+ */
+export async function enviarRecordatorioInforme(periodoId: string): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
+      return { error: 'Solo los asesores pueden enviar recordatorios' }
+    }
+
+    const { data: periodo } = await supabase
+      .from('periodos')
+      .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, contratista_id)')
+      .eq('id', periodoId)
+      .single()
+
+    if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.estado !== 'borrador') {
+      return { error: 'Solo se puede recordar a contratistas con informes pendientes de envío' }
+    }
+
+    const contrato = periodo.contrato as unknown as { numero: string; contratista_id: string } | null
+    if (!contrato?.contratista_id) return { error: 'No se encontró el contratista' }
+
+    await enviarNotificacion({
+      destinatarioId: contrato.contratista_id,
+      tipo: 'recordatorio',
+      titulo: `Recuerda enviar tu informe de ${periodo.mes} ${periodo.anio}`,
+      mensaje: `Aún no has enviado tu informe de ${periodo.mes} ${periodo.anio} para el contrato ${contrato.numero}. Ingresa a DocGov para enviarlo.`,
+      periodoId,
+      mes: periodo.mes,
+      anio: periodo.anio,
+      contrato: contrato.numero || '',
+      nombreRemitente: usuario.nombre_completo,
+    })
+
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Send reminder emails + in-app notifications to multiple contractors at once.
+ * Asesor and admin only.
+ */
+export async function enviarRecordatoriosMasivos(
+  periodoIds: string[]
+): Promise<ActionResult<{ enviados: number }>> {
+  try {
+    if (!periodoIds.length) return { data: { enviados: 0 } }
+
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
+      return { error: 'Solo los asesores pueden enviar recordatorios' }
+    }
+
+    const { data: periodos } = await supabase
+      .from('periodos')
+      .select('id, mes, anio, contrato:contratos(numero, contratista_id)')
+      .in('id', periodoIds)
+      .eq('estado', 'borrador')
+
+    if (!periodos?.length) return { data: { enviados: 0 } }
+
+    await Promise.allSettled(
+      periodos.map(async (p) => {
+        const contrato = p.contrato as unknown as { numero: string; contratista_id: string } | null
+        if (!contrato?.contratista_id) return
+        await enviarNotificacion({
+          destinatarioId: contrato.contratista_id,
+          tipo: 'recordatorio',
+          titulo: `Recuerda enviar tu informe de ${p.mes} ${p.anio}`,
+          mensaje: `Aún no has enviado tu informe de ${p.mes} ${p.anio} para el contrato ${contrato.numero}. Ingresa a DocGov para enviarlo.`,
+          periodoId: p.id,
+          mes: p.mes,
+          anio: p.anio,
+          contrato: contrato.numero || '',
+          nombreRemitente: usuario.nombre_completo,
+        })
+      })
+    )
+
+    return { data: { enviados: periodos.length } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
 /**
  * Remove historical flag from a period. Admin-only.
  */
