@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
 import { MESES, ESTADO_COLOR, ESTADO_LABEL } from '@/lib/constants'
-import { getInformesMensuales } from '@/services/periodos'
+import { getInformesMensuales, getInformesBorrador } from '@/services/periodos'
 import {
   aprobarComoAsesor,
   rechazarComoAsesor,
@@ -28,7 +28,7 @@ function fmt(n: number) {
   return '$' + n.toLocaleString('es-CO')
 }
 
-type Filtro = 'todos' | 'sin_revisar' | 'revision' | 'aprobados'
+type Filtro = 'todos' | 'sin_revisar' | 'revision' | 'aprobados' | 'sin_enviar'
 
 // ─── Informe Card ─────────────────────────────────────────────
 
@@ -286,6 +286,7 @@ export default function InformesPage() {
   const [anio, setAnio] = useState(now.getFullYear())
 
   const [periodos, setPeriodos] = useState<Periodo[]>([])
+  const [periodosBorrador, setPeriodosBorrador] = useState<Periodo[]>([])
   const [cargando, setCargando] = useState(true)
   const [filtro, setFiltro] = useState<Filtro>('todos')
 
@@ -303,8 +304,12 @@ export default function InformesPage() {
 
     // Asesor only sees their dependencia
     const depId = usuario.rol === 'asesor' ? usuario.dependencia_id ?? undefined : undefined
-    const data = await getInformesMensuales(mesNombre, anio, depId)
+    const [data, borradores] = await Promise.all([
+      getInformesMensuales(mesNombre, anio, depId),
+      getInformesBorrador(mesNombre, anio, depId),
+    ])
     setPeriodos(data)
+    setPeriodosBorrador(borradores)
     if (!silencioso) setCargando(false)
   }, [usuario, mesNombre, anio])
 
@@ -343,6 +348,7 @@ export default function InformesPage() {
       case 'sin_revisar': return sinRevisar
       case 'revision': return aprobadosAsesor
       case 'aprobados': return aprobados
+      case 'sin_enviar': return periodosBorrador
       default: return periodos
     }
   })()
@@ -457,6 +463,7 @@ export default function InformesPage() {
             { key: 'sin_revisar', label: 'Sin revisar', count: sinRevisar.length },
             { key: 'revision', label: 'En revisión', count: aprobadosAsesor.length },
             { key: 'aprobados', label: 'Aprobados', count: aprobados.length },
+            { key: 'sin_enviar', label: 'Sin enviar', count: periodosBorrador.length },
           ]}
           value={filtro}
           onChange={setFiltro}

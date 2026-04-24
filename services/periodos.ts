@@ -124,6 +124,45 @@ export async function getInformesMensuales(
 }
 
 /**
+ * Get borrador periods for a given month/year — "Sin Enviar" view for asesores/secretarias.
+ * Returns only active contracts whose period for that month is still in borrador state.
+ */
+export async function getInformesBorrador(
+  mes: string,
+  anio: number,
+  dependenciaId?: string
+): Promise<Periodo[]> {
+  const supabase = createClient()
+
+  let query = supabase
+    .from('periodos')
+    .select(`
+      *,
+      contrato:contratos(
+        id, numero, objeto, contratista_id, supervisor_id, dependencia_id,
+        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula),
+        supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
+        dependencia:dependencias(nombre, abreviatura)
+      ),
+      preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo))
+    `)
+    .eq('mes', mes.toUpperCase())
+    .eq('anio', anio)
+    .eq('estado', 'borrador')
+    .eq('es_historico', false)
+    .order('contrato_id')
+
+  const { data } = await query
+  let periodos = (data as Periodo[]) ?? []
+
+  if (dependenciaId) {
+    periodos = periodos.filter(p => p.contrato?.dependencia_id === dependenciaId)
+  }
+
+  return periodos
+}
+
+/**
  * Get all periods for a given month/year including borradores (for contratista view).
  */
 export async function getMisInformesMensuales(
