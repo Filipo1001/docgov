@@ -6,8 +6,9 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
-import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla } from '@/app/actions/periodos'
+import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion } from '@/app/actions/periodos'
 import type { EstadoPeriodo } from '@/lib/types'
+import { DEFAULT_BASE_COTIZACION_SS } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ type PeriodoRow = {
   planilla_ss_url: string | null
   numero_planilla: string | null
   planilla_estado: 'pendiente' | 'aprobada' | 'rechazada' | null
+  base_cotizacion_ss: number | null
 }
 
 type ContratoRow = {
@@ -87,7 +89,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [periodos, setPeriodos] = useState<PeriodoRow[]>([])
   const [distribucion, setDistribucion] = useState<DistribucionItem[]>([])
   const [cargando, setCargando] = useState(true)
-  const [tab, setTab] = useState<'pagos' | 'planillas'>('pagos')
+  const [tab, setTab] = useState<'pagos' | 'planillas' | 'base_ss'>('pagos')
 
   // Plan de Pagos — edición inline por periodo
   const [valoresEdit, setValoresEdit] = useState<Record<string, string>>({})
@@ -98,6 +100,10 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   // Plan de Planillas — edición inline de numero_planilla
   const [planillasEdit, setPlanillasEdit] = useState<Record<string, string>>({})
   const [guardandoPlanillaId, setGuardandoPlanillaId] = useState<string | null>(null)
+
+  // Base cotización SS — edición inline por periodo
+  const [baseEdit, setBaseEdit] = useState<Record<string, string>>({})
+  const [guardandoBaseId, setGuardandoBaseId] = useState<string | null>(null)
 
   // PDF upload per period
   const pdfInputRef = useRef<HTMLInputElement>(null)
@@ -114,7 +120,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
         .single(),
       supabase
         .from('periodos')
-        .select('id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, es_historico, planilla_ss_url, numero_planilla, planilla_estado')
+        .select('id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, es_historico, planilla_ss_url, numero_planilla, planilla_estado, base_cotizacion_ss')
         .eq('contrato_id', contratoId)
         .order('numero_periodo'),
     ])
@@ -136,12 +142,15 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
       // Pre-poblar edits con valores actuales
       const vals: Record<string, string> = {}
       const plans: Record<string, string> = {}
+      const bases: Record<string, string> = {}
       rows.forEach((p) => {
         vals[p.id] = String(p.valor_cobro)
         plans[p.id] = p.numero_planilla ?? ''
+        bases[p.id] = p.base_cotizacion_ss != null ? String(p.base_cotizacion_ss) : ''
       })
       setValoresEdit(vals)
       setPlanillasEdit(plans)
+      setBaseEdit(bases)
     }
 
     setCargando(false)
@@ -217,6 +226,21 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
     await cargarDatos()
   }
 
+  async function guardarBase(periodoId: string) {
+    const raw = baseEdit[periodoId]?.trim()
+    const valor = raw ? parseInt(raw.replace(/\D/g, ''), 10) : null
+    if (raw && (!Number.isFinite(valor) || (valor as number) <= 0)) {
+      toast.error('Valor inválido')
+      return
+    }
+    setGuardandoBaseId(periodoId)
+    const res = await actualizarBaseCotizacion(periodoId, valor ?? null)
+    setGuardandoBaseId(null)
+    if (res.error) { toast.error(res.error); return }
+    toast.success(valor ? 'Base de cotización actualizada' : 'Base restablecida al valor por defecto')
+    await cargarDatos()
+  }
+
   async function handlePdfUpload(file: File) {
     const periodoId = uploadTargetId.current
     if (!periodoId) return
@@ -284,7 +308,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {(['pagos', 'planillas'] as const).map((t) => (
+        {(['pagos', 'planillas', 'base_ss'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -292,7 +316,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
               tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {t === 'pagos' ? '💰 Plan de Pagos' : '📋 Plan de Planillas'}
+            {t === 'pagos' ? '💰 Plan de Pagos' : t === 'planillas' ? '📋 Plan de Planillas' : '🏥 Base SS'}
           </button>
         ))}
       </div>
@@ -596,6 +620,87 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             >
               Exportar CSV
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══ BASE COTIZACIÓN SS ════════════════════════════════ */}
+      {tab === 'base_ss' && (
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500">
+            Base de cotización a la Seguridad Social que aparece en el Acta de Supervisión de cada periodo.
+            Déjalo en blanco para usar el valor por defecto ($ {DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')}).
+          </p>
+
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Base cotización SS</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {periodos.map((p) => {
+                  const guardando = guardandoBaseId === p.id
+                  const valorEdit = baseEdit[p.id] ?? ''
+                  const valorActual = p.base_cotizacion_ss ?? DEFAULT_BASE_COTIZACION_SS
+                  const esCambiado = valorEdit.trim() !== (p.base_cotizacion_ss != null ? String(p.base_cotizacion_ss) : '')
+
+                  return (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-400 text-xs">{p.numero_periodo}</td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">{p.mes} {p.anio}</p>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          {p.es_historico ? '🔒 Histórico' : (ESTADO_LABEL[p.estado] ?? p.estado)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={valorEdit}
+                            onChange={(e) =>
+                              setBaseEdit((prev) => ({ ...prev, [p.id]: e.target.value.replace(/\D/g, '') }))
+                            }
+                            placeholder={`${DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')}`}
+                            className="w-40 px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:bg-gray-100"
+                            disabled={guardando}
+                          />
+                          {esCambiado && (
+                            <button
+                              onClick={() => guardarBase(p.id)}
+                              disabled={guardando}
+                              className="text-xs px-2 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:bg-gray-300"
+                            >
+                              {guardando ? '…' : 'Guardar'}
+                            </button>
+                          )}
+                          {p.base_cotizacion_ss != null && !esCambiado && (
+                            <span className="text-xs text-violet-600 font-medium">✎ Personalizado</span>
+                          )}
+                        </div>
+                        {!esCambiado && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            En acta: $ {valorActual.toLocaleString('es-CO')}
+                            {p.base_cotizacion_ss == null && ' (por defecto)'}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          {ESTADO_LABEL[p.estado] ?? p.estado}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
