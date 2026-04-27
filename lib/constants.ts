@@ -134,6 +134,15 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
   return menus[rol] ?? menus.contratista
 }
 
+// ─── Seguridad Social ────────────────────────
+
+/**
+ * Default base de cotización a la Seguridad Social.
+ * Equivale al 40% del SMMLV aplicable al contrato.
+ * El admin puede sobreescribir este valor por periodo en periodos.base_cotizacion_ss.
+ */
+export const DEFAULT_BASE_COTIZACION_SS = 1_750_905
+
 // ─── Pending review state per role ──────────
 
 /** The estado a role sees in their pending queue */

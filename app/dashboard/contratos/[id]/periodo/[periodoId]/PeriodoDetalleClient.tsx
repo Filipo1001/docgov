@@ -9,6 +9,7 @@ import {
   ESTADO_LABEL,
   ESTADO_COLOR,
   ESTADOS_EDITABLES,
+  DEFAULT_BASE_COTIZACION_SS,
 } from '@/lib/constants'
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo } from '@/lib/types'
 import { getPeriodoConContrato } from '@/services/periodos'
@@ -27,6 +28,7 @@ import {
   guardarNumeroPlanilla,
   revisarPlanilla,
   actualizarObservacionSupervisor,
+  actualizarBaseCotizacion,
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
@@ -101,6 +103,11 @@ export default function PeriodoDetallePage() {
   // Inline planilla validation (submit section)
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
   const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
+
+  // Admin: base cotización SS
+  const [editandoBase, setEditandoBase] = useState(false)
+  const [valorBaseInput, setValorBaseInput] = useState('')
+  const [guardandoBase, setGuardandoBase] = useState(false)
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
 
   // Scroll anchors for rejection guidance
@@ -317,6 +324,35 @@ export default function PeriodoDetallePage() {
       cargarDatos()
     }
     setGuardandoObservacion(false)
+  }
+
+  async function handleGuardarBase() {
+    const valor = parseInt(valorBaseInput.replace(/\D/g, ''), 10)
+    if (!valorBaseInput.trim() || isNaN(valor) || valor <= 0) {
+      toast.error('Ingresa un valor numérico válido')
+      return
+    }
+    setGuardandoBase(true)
+    const result = await actualizarBaseCotizacion(periodoId, valor)
+    if (result.error) toast.error(result.error)
+    else {
+      toast.success('Base de cotización actualizada ✓')
+      setEditandoBase(false)
+      cargarDatos()
+    }
+    setGuardandoBase(false)
+  }
+
+  async function handleRestablecerBase() {
+    setGuardandoBase(true)
+    const result = await actualizarBaseCotizacion(periodoId, null)
+    if (result.error) toast.error(result.error)
+    else {
+      toast.success('Base restablecida al valor por defecto')
+      setEditandoBase(false)
+      cargarDatos()
+    }
+    setGuardandoBase(false)
   }
 
   async function handleAgregarActividad(obligacionId: string) {
@@ -800,6 +836,73 @@ export default function PeriodoDetallePage() {
           )}
         </div>
       </div>
+
+      {/* ── Admin: Base cotización SS ── */}
+      {usuario?.rol === 'admin' && (
+        <div className="bg-white rounded-2xl border border-violet-100 p-4 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm">🏥</span>
+            <span className="text-sm font-medium text-gray-800">Base de cotización — Seguridad Social</span>
+            <span className="text-xs text-gray-400">(Acta de Supervisión)</span>
+          </div>
+
+          {!editandoBase ? (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-700 font-mono">
+                $ {(periodo.base_cotizacion_ss ?? DEFAULT_BASE_COTIZACION_SS).toLocaleString('es-CO')}
+                {!periodo.base_cotizacion_ss && (
+                  <span className="ml-2 text-xs text-gray-400 font-sans">(valor por defecto)</span>
+                )}
+              </span>
+              <button
+                onClick={() => {
+                  setValorBaseInput(String(periodo.base_cotizacion_ss ?? DEFAULT_BASE_COTIZACION_SS))
+                  setEditandoBase(true)
+                }}
+                className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+              >
+                Editar
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">$</span>
+                <input
+                  type="text"
+                  value={valorBaseInput}
+                  onChange={e => setValorBaseInput(e.target.value.replace(/\D/g, ''))}
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  placeholder="1750905"
+                  inputMode="numeric"
+                />
+                <button
+                  onClick={handleGuardarBase}
+                  disabled={guardandoBase}
+                  className="text-xs bg-violet-600 text-white px-3 py-1.5 rounded-lg hover:bg-violet-700 disabled:opacity-50 font-medium"
+                >
+                  {guardandoBase ? 'Guardando...' : 'Guardar'}
+                </button>
+                <button
+                  onClick={() => setEditandoBase(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  Cancelar
+                </button>
+              </div>
+              {periodo.base_cotizacion_ss && (
+                <button
+                  onClick={handleRestablecerBase}
+                  disabled={guardandoBase}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Restablecer al valor por defecto ($ {DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')})
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Asesor panel (approve / reject) ── */}
       {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (

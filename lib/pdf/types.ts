@@ -29,6 +29,7 @@ export interface PDFPeriodo {
   valor_letras?: string
   numero_planilla?: string
   observacion_supervisor?: string | null
+  base_cotizacion_ss?: number | null   // Admin-overridable; falls back to DEFAULT_BASE_COTIZACION_SS
 }
 
 export interface PDFContrato {

@@ -10,6 +10,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
+import { DEFAULT_BASE_COTIZACION_SS } from '@/lib/constants'
 
 // Disable automatic hyphenation — prevents words being split mid-line
 Font.registerHyphenationCallback(word => [word])
@@ -60,14 +61,6 @@ function capitalizeMes(mes: string): string {
   return mes.charAt(0).toUpperCase() + mes.slice(1).toLowerCase()
 }
 
-function baseCotizacion(valorMensual: number): { texto: string; valor: number } {
-  const base = Math.round(valorMensual * 0.4)
-  return {
-    valor: base,
-    texto: formatCOP(base),
-  }
-}
-
 // ── Número a letras (días, 0-999) ──────────────────────────────
 const _UNIT = [
   '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
@@ -87,6 +80,27 @@ function numerosALetras(n: number): string {
   const c = Math.floor(n / 100)
   const r = n % 100
   return r === 0 ? _CENT[c] : `${_CENT[c]} ${numerosALetras(r)}`
+}
+
+/**
+ * Convierte un número entero (hasta 9.999.999) a texto en español en mayúsculas.
+ * Usado para expresar la base de cotización a la seguridad social.
+ * Ejemplos:
+ *   1_800_000 → "UN MILLÓN OCHOCIENTOS MIL"
+ *   1_750_905 → "UN MILLÓN SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO"
+ */
+function numeroALetrasLargo(n: number): string {
+  if (n === 0) return 'CERO'
+  const millones = Math.floor(n / 1_000_000)
+  const resto    = n % 1_000_000
+  const miles    = Math.floor(resto / 1_000)
+  const centenas = resto % 1_000
+
+  const partes: string[] = []
+  if (millones > 0) partes.push(millones === 1 ? 'UN MILLÓN' : `${numerosALetras(millones)} MILLONES`)
+  if (miles    > 0) partes.push(miles    === 1 ? 'MIL'       : `${numerosALetras(miles)} MIL`)
+  if (centenas > 0) partes.push(numerosALetras(centenas))
+  return partes.join(' ')
 }
 
 function calcDias(inicio: string, fin: string): number {
@@ -432,7 +446,8 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
     ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
     : formatCOP(contrato.valor_total)
 
-  const base = baseCotizacion(contrato.valor_mensual)
+  const baseValor = periodo.base_cotizacion_ss ?? DEFAULT_BASE_COTIZACION_SS
+  const baseCotizacionTexto = `${numeroALetrasLargo(baseValor)} PESOS ($ ${baseValor.toLocaleString('es-CO')})`
 
   // Pagos anteriores al mes actual → filas de la tabla de pagos
   const pagosAnteriores = (pagosHistorial ?? []).filter(p => p.acta_numero < periodo.numero)
@@ -631,7 +646,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Base de cotización a la Seguridad Social</Text></View>
-            <View style={s.val}><Text>UN MILLON SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO PESOS M/L ($1.750.905)</Text></View>
+            <View style={s.val}><Text>{baseCotizacionTexto}</Text></View>
           </View>
 
           {/* Planilla — label combinado + sub-filas a la derecha */}

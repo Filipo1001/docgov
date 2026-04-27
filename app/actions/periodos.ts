@@ -1171,6 +1171,55 @@ export async function marcarComoHistorico(
   }
 }
 
+// ─── Admin: Base de cotización SS ────────────────────────────
+
+/**
+ * Admin override for the base de cotización a la seguridad social shown
+ * in the Acta de Supervisión. Pass null to reset to the system default.
+ */
+export async function actualizarBaseCotizacion(
+  periodoId: string,
+  valor: number | null
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'admin') {
+      return { error: 'Solo el administrador puede editar la base de cotización' }
+    }
+
+    if (valor !== null && (!Number.isFinite(valor) || valor <= 0)) {
+      return { error: 'El valor debe ser un número positivo' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ base_cotizacion_ss: valor })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al guardar: ${error.message}` }
+
+    await insertHistorial(
+      supabase, periodoId,
+      periodo.estado, periodo.estado,
+      usuario.id,
+      valor !== null
+        ? `Base cotización SS actualizada a ${valor.toLocaleString('es-CO')}`
+        : 'Base cotización SS restablecida al valor por defecto'
+    )
+
+    invalidarCachePDF(adminClient, periodoId).catch(() => {})
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
 // ─── Reminder actions ────────────────────────────────────────
 
 /**

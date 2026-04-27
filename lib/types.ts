@@ -152,6 +152,7 @@ export interface Periodo {
   planilla_estado?: 'pendiente' | 'aprobada' | 'rechazada' | null
   planilla_comentario?: string | null
   observacion_supervisor?: string | null  // Optional supervisor note on the acta
+  base_cotizacion_ss?: number | null      // Admin-overridable base de cotización SS
   // Pre-approvals (joined)
   preaprobaciones?: Preaprobacion[]
   historial?: HistorialPeriodo[]
