@@ -105,7 +105,7 @@ export async function getInformesMensuales(
       ),
       preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo))
     `)
-    .eq('mes', mes.toUpperCase())
+    .eq('mes', mes)
     .eq('anio', anio)
     .order('fecha_envio', { ascending: true })
 
@@ -146,7 +146,7 @@ export async function getInformesBorrador(
       ),
       preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo))
     `)
-    .eq('mes', mes.toUpperCase())
+    .eq('mes', mes)
     .eq('anio', anio)
     .eq('estado', 'borrador')
     .eq('es_historico', false)
@@ -193,7 +193,7 @@ export async function getMisInformesMensuales(
       preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo))
     `)
     .in('contrato_id', contratoIds)
-    .eq('mes', mes.toUpperCase())
+    .eq('mes', mes)
     .eq('anio', anio)
     .order('numero_periodo')
 
