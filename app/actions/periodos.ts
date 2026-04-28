@@ -1171,6 +1171,91 @@ export async function marcarComoHistorico(
   }
 }
 
+// ─── Admin: Devoluciones forzadas ────────────────────────────
+
+/**
+ * Admin-only: force-return a period to any earlier state, at any time.
+ *
+ * destino:
+ *   'asesores'   → enviado  (asesor reviews again)
+ *   'supervisor' → revision (secretary approves directly)
+ *   'contratista'→ rechazado (contractor must fix and resubmit)
+ */
+export async function adminDevolverPeriodo(
+  periodoId: string,
+  destino: 'asesores' | 'supervisor' | 'contratista',
+  motivo?: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'admin') {
+      return { error: 'Solo el administrador puede usar esta acción' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (periodo.estado === 'borrador') {
+      return { error: 'No se puede devolver un periodo en estado borrador' }
+    }
+
+    if (destino === 'contratista' && !motivo?.trim()) {
+      return { error: 'El motivo es obligatorio al devolver al contratista' }
+    }
+
+    const estadoNuevo: EstadoPeriodo =
+      destino === 'asesores'    ? 'enviado'   :
+      destino === 'supervisor'  ? 'revision'  :
+      /* contratista */           'rechazado'
+
+    const adminClient = createAdminSupabaseClient()
+    const { error } = await adminClient
+      .from('periodos')
+      .update({
+        estado: estadoNuevo,
+        ...(destino === 'contratista' ? { motivo_rechazo: motivo!.trim() } : { motivo_rechazo: null }),
+      })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al devolver: ${error.message}` }
+
+    const comentario = [
+      `Admin devolvió a ${destino === 'asesores' ? 'asesores' : destino === 'supervisor' ? 'supervisor/secretaria' : 'contratista'}`,
+      motivo?.trim() ? `Motivo: ${motivo.trim()}` : null,
+    ].filter(Boolean).join(' — ')
+
+    await insertHistorial(supabase, periodoId, periodo.estado, estadoNuevo, usuario.id, comentario)
+
+    // Notify the destination user(s)
+    const contrato = await getContratoIds(supabase, periodo.contrato_id)
+    if (contrato) {
+      if (destino === 'contratista' && contrato.contratista_id) {
+        await enviarNotificacion({
+          destinatarioId: contrato.contratista_id,
+          tipo: 'rechazado',
+          titulo: 'Tu informe requiere correcciones',
+          mensaje: motivo?.trim()
+            ? `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto. Motivo: ${motivo.trim()}`
+            : `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto para corrección.`,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          motivo: motivo?.trim(),
+          nombreRemitente: usuario.nombre_completo,
+        })
+      }
+    }
+
+    invalidarCachePDF(adminClient, periodoId).catch(() => {})
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
 // ─── Admin: Base de cotización SS ────────────────────────────
 
 /**

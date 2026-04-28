@@ -29,6 +29,7 @@ import {
   revisarPlanilla,
   actualizarObservacionSupervisor,
   actualizarBaseCotizacion,
+  adminDevolverPeriodo,
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
@@ -108,6 +109,11 @@ export default function PeriodoDetallePage() {
   const [editandoBase, setEditandoBase] = useState(false)
   const [valorBaseInput, setValorBaseInput] = useState('')
   const [guardandoBase, setGuardandoBase] = useState(false)
+
+  // Admin: devoluciones forzadas
+  const [destinoDevolver, setDestinoDevolver] = useState<'asesores' | 'supervisor' | 'contratista' | null>(null)
+  const [motivoDevolver, setMotivoDevolver] = useState('')
+  const [procesandoDevolver, setProcesandoDevolver] = useState(false)
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
 
   // Scroll anchors for rejection guidance
@@ -324,6 +330,26 @@ export default function PeriodoDetallePage() {
       cargarDatos()
     }
     setGuardandoObservacion(false)
+  }
+
+  async function handleAdminDevolver() {
+    if (!destinoDevolver) return
+    if (destinoDevolver === 'contratista' && !motivoDevolver.trim()) {
+      toast.error('El motivo es obligatorio al devolver al contratista')
+      return
+    }
+    setProcesandoDevolver(true)
+    const result = await adminDevolverPeriodo(periodoId, destinoDevolver, motivoDevolver.trim() || undefined)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      const label = destinoDevolver === 'asesores' ? 'asesores' : destinoDevolver === 'supervisor' ? 'supervisor' : 'contratista'
+      toast.success(`Periodo devuelto a ${label}`)
+      setDestinoDevolver(null)
+      setMotivoDevolver('')
+      cargarDatos()
+    }
+    setProcesandoDevolver(false)
   }
 
   async function handleGuardarBase() {
@@ -836,6 +862,70 @@ export default function PeriodoDetallePage() {
           )}
         </div>
       </div>
+
+      {/* ── Admin: Devoluciones forzadas ── */}
+      {usuario?.rol === 'admin' && periodo.estado !== 'borrador' && (
+        <div className="bg-white rounded-2xl border border-orange-100 p-4 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm">⚙️</span>
+            <h3 className="text-sm font-semibold text-gray-800">Devolución de periodo</h3>
+            <span className="text-xs text-gray-400">Solo admin</span>
+          </div>
+
+          {/* Botones de destino */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {([
+              { key: 'asesores',    label: 'Devolver a Asesores',    color: destinoDevolver === 'asesores'    ? 'bg-blue-600 text-white'    : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' },
+              { key: 'supervisor',  label: 'Devolver a Supervisor',  color: destinoDevolver === 'supervisor'  ? 'bg-purple-600 text-white'  : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100' },
+              { key: 'contratista', label: 'Devolver a Contratista', color: destinoDevolver === 'contratista' ? 'bg-orange-600 text-white'  : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100' },
+            ] as const).map(({ key, label, color }) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setDestinoDevolver(destinoDevolver === key ? null : key)
+                  setMotivoDevolver('')
+                }}
+                disabled={procesandoDevolver}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${color}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Formulario de confirmación */}
+          {destinoDevolver && (
+            <div className="space-y-2 pt-2 border-t border-gray-100">
+              <textarea
+                value={motivoDevolver}
+                onChange={e => setMotivoDevolver(e.target.value)}
+                placeholder={
+                  destinoDevolver === 'contratista'
+                    ? 'Motivo del rechazo (obligatorio)…'
+                    : 'Motivo o comentario (opcional)…'
+                }
+                rows={2}
+                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAdminDevolver}
+                  disabled={procesandoDevolver || (destinoDevolver === 'contratista' && !motivoDevolver.trim())}
+                  className="text-xs px-4 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-40 font-medium transition-colors"
+                >
+                  {procesandoDevolver ? 'Procesando...' : 'Confirmar devolución'}
+                </button>
+                <button
+                  onClick={() => { setDestinoDevolver(null); setMotivoDevolver('') }}
+                  className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Asesor panel (approve / reject) ── */}
       {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (
