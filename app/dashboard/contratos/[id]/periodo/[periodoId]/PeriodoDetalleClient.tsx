@@ -1580,37 +1580,70 @@ export default function PeriodoDetallePage() {
       {puedeVerDocumentos && (
         <div className="bg-white rounded-2xl border p-6 mt-4">
 
-          {/* Header + Descargar Paquete button */}
+          {/* Header + download buttons */}
           <div className="flex items-center justify-between mb-1 gap-3">
             <h3 className="text-sm font-semibold text-gray-900">Documentos del periodo</h3>
 
-            {/* Only asesores and secretaria see this button */}
-            {(esAsesor || esSecretaria) && (
-              puedeDescargarPaquete ? (
-                <a
-                  href={`/api/pdf/${periodoId}/paquete`}
-                  download
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
-                  Descargar Paquete
-                </a>
-              ) : (
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none" title="Disponible cuando la secretaria apruebe el periodo">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
-                  Descargar Paquete
-                </div>
-              )
-            )}
+            <div className="flex items-center gap-2">
+              {/* Descargar Para Secop — solo contratista */}
+              {esContratista && (
+                puedeDescargarPaquete ? (
+                  <a
+                    href={`/api/pdf/${periodoId}/secop`}
+                    download
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl hover:bg-emerald-700 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Descargar Para Secop
+                  </a>
+                ) : (
+                  <div
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
+                    title="Disponible cuando la secretaria apruebe el periodo"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Descargar Para Secop
+                  </div>
+                )
+              )}
+
+              {/* Descargar Paquete completo — solo asesor / secretaria */}
+              {(esAsesor || esSecretaria) && (
+                puedeDescargarPaquete ? (
+                  <a
+                    href={`/api/pdf/${periodoId}/paquete`}
+                    download
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Descargar Paquete
+                  </a>
+                ) : (
+                  <div
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
+                    title="Disponible cuando la secretaria apruebe el periodo"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Descargar Paquete
+                  </div>
+                )
+              )}
+            </div>
           </div>
 
           {!puedeDescargarPaquete && (
             <p className="text-xs text-amber-600 mb-4">
-              El paquete completo (documentos firmados) estará disponible cuando la secretaria apruebe.
+              {esContratista
+                ? 'Los documentos SECOP estarán disponibles cuando la secretaria apruebe tu informe.'
+                : 'El paquete completo (documentos firmados) estará disponible cuando la secretaria apruebe.'}
             </p>
           )}
 
