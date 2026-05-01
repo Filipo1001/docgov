@@ -33,6 +33,7 @@ import {
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
+import { actualizarActividad } from '@/app/actions/actividades'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
 export default function PeriodoDetallePage() {
@@ -56,6 +57,12 @@ export default function PeriodoDetallePage() {
   const [nuevaActividad, setNuevaActividad] = useState('')
   const [nuevaCantidad, setNuevaCantidad] = useState(1)
   const [guardando, setGuardando] = useState(false)
+
+  // Activity inline edit state
+  const [editandoActividad, setEditandoActividad] = useState<string | null>(null)
+  const [editDesc, setEditDesc] = useState('')
+  const [editCantidad, setEditCantidad] = useState(1)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
 
 
   // Planilla state
@@ -406,6 +413,32 @@ export default function PeriodoDetallePage() {
     const result = await eliminarActividad(actId)
     if (result.error) toast.error(result.error)
     else { toast.success('Actividad eliminada'); cargarDatos() }
+  }
+
+  function handleAbrirEdicion(actId: string, descripcion: string, cantidad: number) {
+    setEditandoActividad(actId)
+    setEditDesc(descripcion)
+    setEditCantidad(cantidad)
+  }
+
+  function handleCancelarEdicion() {
+    setEditandoActividad(null)
+    setEditDesc('')
+    setEditCantidad(1)
+  }
+
+  async function handleGuardarEdicion(actId: string) {
+    if (!editDesc.trim()) { toast.error('La descripción no puede estar vacía'); return }
+    setGuardandoEdicion(true)
+    const result = await actualizarActividad(actId, periodoId, editDesc, editCantidad)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success('Actividad actualizada ✓')
+      handleCancelarEdicion()
+      cargarDatos()
+    }
+    setGuardandoEdicion(false)
   }
 
   // Compress evidence image before upload: max 1200×900, JPEG 75%
@@ -1147,130 +1180,187 @@ export default function PeriodoDetallePage() {
                 <div className="space-y-3 mb-4 ml-10">
                   {actsDeObl.map((act, actIndex) => (
                     <div key={act.id} className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs text-gray-400">{actIndex + 1}.</span>
-                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                              {act.cantidad} {act.cantidad === 1 ? 'acción' : 'acciones'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-700">{act.descripcion}</p>
-                        </div>
-                        {esEditable && (
-                          <button
-                            onClick={() => handleEliminarActividad(act.id)}
-                            className="text-gray-300 hover:text-red-500 text-xs ml-2"
-                            title="Eliminar actividad"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Evidence */}
-                      <div className="mt-3">
-                        {act.evidencias && act.evidencias.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            {act.evidencias.map((ev) => (
-                              <div key={ev.id} className="relative group">
-                                {/* Thumbnail — clicable para abrir lightbox */}
-                                <button
-                                  type="button"
-                                  onClick={() => setLightbox({ url: ev.url, alt: ev.nombre_archivo })}
-                                  className="block focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
-                                  title="Ver imagen ampliada"
-                                >
-                                  <img
-                                    src={ev.url}
-                                    alt={ev.nombre_archivo}
-                                    className="w-20 h-20 object-cover rounded-lg border transition-opacity group-hover:opacity-85"
-                                  />
-                                  {/* Ícono lupa — indicador visual de zoom */}
-                                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                    <svg className="w-6 h-6 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0zm0 0l.01.01" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 8v6M8 11h6" />
-                                    </svg>
-                                  </span>
-                                </button>
-                                {/* Botón eliminar — stopPropagation para no abrir el lightbox */}
-                                {esEditable && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleEliminarEvidencia(ev.id) }}
-                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity flex items-center justify-center z-10"
-                                  >
-                                    ✕
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Retry banner — file uploaded but DB registration failed */}
-                        {pendienteRegistro[act.id] && subiendoEvidencia[act.id] == null && (
-                          <div className="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                            <span className="text-xs text-amber-700 flex-1">La imagen se subió pero no se registró.</span>
-                            <button
-                              onClick={() => handleReintentarRegistro(act.id)}
-                              className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
-                            >
-                              Reintentar
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Upload progress bar */}
-                        {subiendoEvidencia[act.id] !== null && subiendoEvidencia[act.id] !== undefined && (
-                          <div className="mb-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-blue-600 font-medium">Subiendo imagen...</span>
-                              <span className="text-xs text-blue-400">{subiendoEvidencia[act.id]}%</span>
-                            </div>
-                            <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className="bg-blue-500 h-1.5 rounded-full transition-all duration-150 ease-out"
-                                style={{ width: `${subiendoEvidencia[act.id]}%` }}
+                      {editandoActividad === act.id ? (
+                        /* ── Inline edit mode ── */
+                        <div>
+                          <textarea
+                            value={editDesc}
+                            onChange={(e) => setEditDesc(e.target.value)}
+                            rows={3}
+                            autoFocus
+                            className="w-full px-3 py-2.5 bg-white border border-blue-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                          />
+                          <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs text-gray-500">Cantidad:</label>
+                              <input
+                                type="number"
+                                min={1}
+                                value={editCantidad}
+                                onChange={(e) => setEditCantidad(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 text-center"
                               />
                             </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={handleCancelarEdicion}
+                                disabled={guardandoEdicion}
+                                className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 bg-white border border-gray-200 rounded-lg transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => handleGuardarEdicion(act.id)}
+                                disabled={guardandoEdicion || !editDesc.trim()}
+                                className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+                              >
+                                {guardandoEdicion ? 'Guardando...' : 'Guardar'}
+                              </button>
+                            </div>
                           </div>
-                        )}
+                        </div>
+                      ) : (
+                        /* ── Read / normal mode ── */
+                        <>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs text-gray-400">{actIndex + 1}.</span>
+                                <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                                  {act.cantidad} {act.cantidad === 1 ? 'acción' : 'acciones'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-700">{act.descripcion}</p>
+                            </div>
+                            {esEditable && (
+                              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                                {/* Edit button */}
+                                <button
+                                  onClick={() => handleAbrirEdicion(act.id, act.descripcion, act.cantidad ?? 1)}
+                                  className="text-gray-300 hover:text-blue-500 transition-colors p-0.5"
+                                  title="Editar actividad"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                {/* Delete button */}
+                                <button
+                                  onClick={() => handleEliminarActividad(act.id)}
+                                  className="text-gray-300 hover:text-red-500 transition-colors p-0.5 text-xs"
+                                  title="Eliminar actividad"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
+                          </div>
 
-                        {esEditable && subiendoEvidencia[act.id] == null && (
-                          <div className="flex flex-wrap items-center gap-3">
-                            {/* Gallery — opens the device photo library */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                uploadTargetId.current = act.id
-                                galleryInputRef.current?.click()
-                              }}
-                              className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 cursor-pointer bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              Subir imagen
-                            </button>
-                            {/* Camera — directly opens the rear camera */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                uploadTargetId.current = act.id
-                                cameraInputRef.current?.click()
-                              }}
-                              className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              Tomar foto
-                            </button>
+                          {/* Evidence */}
+                          <div className="mt-3">
+                            {act.evidencias && act.evidencias.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {act.evidencias.map((ev) => (
+                                  <div key={ev.id} className="relative group">
+                                    {/* Thumbnail — clicable para abrir lightbox */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setLightbox({ url: ev.url, alt: ev.nombre_archivo })}
+                                      className="block focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
+                                      title="Ver imagen ampliada"
+                                    >
+                                      <img
+                                        src={ev.url}
+                                        alt={ev.nombre_archivo}
+                                        className="w-20 h-20 object-cover rounded-lg border transition-opacity group-hover:opacity-85"
+                                      />
+                                      {/* Ícono lupa — indicador visual de zoom */}
+                                      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        <svg className="w-6 h-6 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0zm0 0l.01.01" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 8v6M8 11h6" />
+                                        </svg>
+                                      </span>
+                                    </button>
+                                    {/* Botón eliminar — stopPropagation para no abrir el lightbox */}
+                                    {esEditable && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleEliminarEvidencia(ev.id) }}
+                                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity flex items-center justify-center z-10"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Retry banner — file uploaded but DB registration failed */}
+                            {pendienteRegistro[act.id] && subiendoEvidencia[act.id] == null && (
+                              <div className="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                <span className="text-xs text-amber-700 flex-1">La imagen se subió pero no se registró.</span>
+                                <button
+                                  onClick={() => handleReintentarRegistro(act.id)}
+                                  className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
+                                >
+                                  Reintentar
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Upload progress bar */}
+                            {subiendoEvidencia[act.id] !== null && subiendoEvidencia[act.id] !== undefined && (
+                              <div className="mb-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-blue-600 font-medium">Subiendo imagen...</span>
+                                  <span className="text-xs text-blue-400">{subiendoEvidencia[act.id]}%</span>
+                                </div>
+                                <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
+                                  <div
+                                    className="bg-blue-500 h-1.5 rounded-full transition-all duration-150 ease-out"
+                                    style={{ width: `${subiendoEvidencia[act.id]}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {esEditable && subiendoEvidencia[act.id] == null && (
+                              <div className="flex flex-wrap items-center gap-3">
+                                {/* Gallery — opens the device photo library */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    uploadTargetId.current = act.id
+                                    galleryInputRef.current?.click()
+                                  }}
+                                  className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 cursor-pointer bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  Subir imagen
+                                </button>
+                                {/* Camera — directly opens the rear camera */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    uploadTargetId.current = act.id
+                                    cameraInputRef.current?.click()
+                                  }}
+                                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  Tomar foto
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
