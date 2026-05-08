@@ -11,6 +11,10 @@
  * Acceso: solo asesor / supervisor / admin
  * Condición: periodo debe estar en estado 'aprobado' o 'radicado'
  * Nombre ZIP: NOMBRE_CONTRATISTA_MES.zip  (ej. FELIPE_RESTREPO_ABRIL.zip)
+ *
+ * Optimización: los 4 PDFs se obtienen del caché de Supabase Storage cuando
+ * están disponibles (estados aprobado/radicado siempre lo están después de la
+ * primera descarga individual). Solo se regeneran en cache miss.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,16 +22,18 @@ import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
+import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 /** "Felipe Restrepo Ceballos" → "FELIPE_RESTREPO_CEBALLOS" */
 function normalizeNombre(nombre: string): string {
   return nombre
     .toUpperCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')   // strip accents
+    .replace(/[̀-ͯ]/g, '')   // strip accents
     .replace(/[^A-Z0-9\s]/g, '')       // keep letters, numbers, spaces
     .trim()
     .replace(/\s+/g, '_')
@@ -66,6 +72,8 @@ export async function GET(
     )
   }
 
+  const estado = data.periodo.estado
+
   // ── Fetch planilla URL in parallel with PDF generation ───────
   const planillaPromise = supabase
     .from('periodos')
@@ -73,29 +81,67 @@ export async function GET(
     .eq('id', periodoId)
     .single()
 
-  // ── Dynamic imports + generate all 4 PDFs in parallel ────────
-  const [
-    { renderToBuffer },
-    React,
-    { InformeActividadesPDF },
-    { CuentaDeCobroPDF },
-    { ActaSupervisionPDF },
-    { ActaPagoPDF },
-  ] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import('react'),
-    import('@/lib/pdf/informe-actividades'),
-    import('@/lib/pdf/cuenta-de-cobro'),
-    import('@/lib/pdf/acta-supervision'),
-    import('@/lib/pdf/acta-pago'),
-  ])
-
+  // ── Get all 4 PDFs in parallel (cache-first) ─────────────────
+  // Cache hits (common for aprobado/radicado) fetch from Supabase CDN — no CPU.
+  // Cache misses generate the PDF, upload to cache, and return the buffer.
   const [informeBuffer, cuentaBuffer, supervisionBuffer, pagoBuffer, planillaResult] =
     await Promise.all([
-      renderToBuffer(React.createElement(InformeActividadesPDF, { data }) as any) as unknown as Promise<Buffer>,
-      renderToBuffer(React.createElement(CuentaDeCobroPDF,      { data }) as any) as unknown as Promise<Buffer>,
-      renderToBuffer(React.createElement(ActaSupervisionPDF,    { data }) as any) as unknown as Promise<Buffer>,
-      renderToBuffer(React.createElement(ActaPagoPDF,           { data }) as any) as unknown as Promise<Buffer>,
+      getOrGeneratePDFBuffer({
+        supabase,
+        tipo: 'informe',
+        periodoId,
+        estado,
+        generate: async () => {
+          const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
+            import('@react-pdf/renderer'),
+            import('react'),
+            import('@/lib/pdf/informe-actividades'),
+          ])
+          return renderToBuffer(React.createElement(InformeActividadesPDF, { data }) as any) as unknown as Promise<Buffer>
+        },
+      }),
+      getOrGeneratePDFBuffer({
+        supabase,
+        tipo: 'cuenta-cobro',
+        periodoId,
+        estado,
+        generate: async () => {
+          const [{ renderToBuffer }, React, { CuentaDeCobroPDF }] = await Promise.all([
+            import('@react-pdf/renderer'),
+            import('react'),
+            import('@/lib/pdf/cuenta-de-cobro'),
+          ])
+          return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data }) as any) as unknown as Promise<Buffer>
+        },
+      }),
+      getOrGeneratePDFBuffer({
+        supabase,
+        tipo: 'acta-supervision',
+        periodoId,
+        estado,
+        generate: async () => {
+          const [{ renderToBuffer }, React, { ActaSupervisionPDF }] = await Promise.all([
+            import('@react-pdf/renderer'),
+            import('react'),
+            import('@/lib/pdf/acta-supervision'),
+          ])
+          return renderToBuffer(React.createElement(ActaSupervisionPDF, { data }) as any) as unknown as Promise<Buffer>
+        },
+      }),
+      getOrGeneratePDFBuffer({
+        supabase,
+        tipo: 'acta-pago',
+        periodoId,
+        estado,
+        generate: async () => {
+          const [{ renderToBuffer }, React, { ActaPagoPDF }] = await Promise.all([
+            import('@react-pdf/renderer'),
+            import('react'),
+            import('@/lib/pdf/acta-pago'),
+          ])
+          return renderToBuffer(React.createElement(ActaPagoPDF, { data }) as any) as unknown as Promise<Buffer>
+        },
+      }),
       planillaPromise,
     ])
 

@@ -80,6 +80,57 @@ export async function getOrGeneratePDF({
 }
 
 /**
+ * Same cache logic as getOrGeneratePDF but returns a raw Buffer instead of a
+ * NextResponse. Used by the ZIP/paquete route so it can assemble multiple PDFs
+ * without spawning separate HTTP responses.
+ * Cache hits are fetched directly from the Supabase CDN public URL.
+ */
+export async function getOrGeneratePDFBuffer({
+  supabase,
+  tipo,
+  periodoId,
+  estado,
+  generate,
+}: {
+  supabase: any
+  tipo: string
+  periodoId: string
+  estado: string
+  generate: () => Promise<Buffer>
+}): Promise<Buffer> {
+  const cacheKey = `${tipo}/${periodoId}.pdf`
+  const shouldCache = ESTADOS_CACHEABLES.has(estado)
+
+  if (shouldCache) {
+    const { data: files } = await supabase.storage
+      .from(BUCKET)
+      .list(tipo, { search: `${periodoId}.pdf`, limit: 1 })
+
+    const hit = (files ?? []).find((f: any) => f.name === `${periodoId}.pdf`)
+    if (hit) {
+      const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
+      try {
+        const res = await fetch(publicUrl)
+        if (res.ok) return Buffer.from(await res.arrayBuffer())
+      } catch {
+        // Cache fetch failed — fall through to regenerate
+      }
+    }
+  }
+
+  const buffer = await generate()
+
+  if (shouldCache) {
+    supabase.storage
+      .from(BUCKET)
+      .upload(cacheKey, buffer, { contentType: 'application/pdf', upsert: true })
+      .catch(() => { /* non-critical */ })
+  }
+
+  return buffer
+}
+
+/**
  * Invalidate all cached PDFs for a given periodo.
  * Call this (fire-and-forget) whenever periodo estado changes.
  * Uses the admin client to bypass RLS on storage.
