@@ -315,7 +315,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
       title={`Cuenta de Cobro N.º ${ccNum} — Contrato ${contrato.numero}-${contrato.anio}`}
       author={contrato.contratista.nombre_completo}
       subject="Cuenta de Cobro"
-      creator="DocGov"
+      creator="Contratista Digital"
     >
       <Page size="A4" style={s.page}>
 

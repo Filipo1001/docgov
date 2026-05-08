@@ -11,7 +11,7 @@
 function requireEnv(name: string, value: string | undefined): string {
   if (!value || value.trim() === '') {
     throw new Error(
-      `[DocGov] Missing required environment variable: ${name}\n` +
+      `[Contratista Digital] Missing required environment variable: ${name}\n` +
       `Make sure it is defined in your .env.local file.\n` +
       `See: https://supabase.com/dashboard/project/_/settings/api`
     )

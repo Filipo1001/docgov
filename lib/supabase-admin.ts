@@ -11,7 +11,7 @@ export function createAdminSupabaseClient() {
 
   if (!url || !key) {
     throw new Error(
-      '[DocGov] SUPABASE_SERVICE_ROLE_KEY is required for admin operations.\n' +
+      '[Contratista Digital] SUPABASE_SERVICE_ROLE_KEY is required for admin operations.\n' +
       'Add it to your .env.local file. Find it in:\n' +
       'Supabase Dashboard → Project Settings → API → service_role key'
     )

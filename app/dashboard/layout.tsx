@@ -110,10 +110,10 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center">
-              <span className="text-sm font-bold text-white">DG</span>
+              <span className="text-sm font-bold text-white">CD</span>
             </div>
             <div>
-              <h1 className="text-base font-bold text-gray-900">DocGov</h1>
+              <h1 className="text-base font-bold text-gray-900">Contratista Digital</h1>
               {municipio && <p className="text-xs text-gray-400">{municipio.nombre}</p>}
             </div>
           </div>
@@ -201,10 +201,10 @@ function MobileHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
       </button>
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
-          <span className="text-xs font-bold text-white">DG</span>
+          <span className="text-xs font-bold text-white">CD</span>
         </div>
         <div>
-          <h1 className="text-sm font-bold text-gray-900">DocGov</h1>
+          <h1 className="text-sm font-bold text-gray-900">Contratista Digital</h1>
           {municipio && <p className="text-[10px] text-gray-400 -mt-0.5">{municipio.nombre}</p>}
         </div>
       </div>

@@ -12,4 +12,4 @@ export function getResendClient(): Resend | null {
   return resendClient
 }
 
-export const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'DocGov <notificaciones@docgov.co>'
+export const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'Contratista Digital <notificaciones@contratistadigital.com>'

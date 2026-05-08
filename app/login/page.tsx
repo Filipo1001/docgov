@@ -86,9 +86,9 @@ export default function LoginPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 rounded-2xl mb-4">
-            <span className="text-2xl font-bold text-white">DG</span>
+            <span className="text-2xl font-bold text-white">CD</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">DocGov</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Contratista Digital</h1>
           <p className="text-gray-500 mt-1">Gestión documental contractual</p>
           <p className="text-sm text-gray-400">Alcaldía Municipal de Fredonia</p>
         </div>
@@ -286,7 +286,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          DocGov v0.1 — Piloto Fredonia, Antioquia
+          Contratista Digital — Piloto Fredonia, Antioquia
         </p>
       </div>
     </div>

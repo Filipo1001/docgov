@@ -28,7 +28,7 @@ const ROL_BADGE: Record<string, 'blue' | 'indigo' | 'emerald' | 'amber'> = {
 }
 
 const CANALES: { canal: Canal; label: string; desc: string }[] = [
-  { canal: 'app',      label: 'Notificaciones en la app',  desc: 'Campana dentro de DocGov' },
+  { canal: 'app',      label: 'Notificaciones en la app',  desc: 'Campana dentro de Contratista Digital' },
   { canal: 'email',    label: 'Correo electrónico',        desc: 'Actualizaciones de tus informes' },
   { canal: 'whatsapp', label: 'WhatsApp',                  desc: 'Mensajes con cambios importantes' },
 ]

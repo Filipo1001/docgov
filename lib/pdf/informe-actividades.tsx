@@ -525,7 +525,7 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
       title={`Informe de Actividades — Contrato ${contrato.numero}-${contrato.anio} — Periodo ${periodo.numero}`}
       author={contrato.contratista.nombre_completo}
       subject="Reporte de Actividades del Contratista"
-      creator="DocGov"
+      creator="Contratista Digital"
     >
       <Page size="A4" style={s.page}>
 

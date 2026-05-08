@@ -1,5 +1,5 @@
 /**
- * Email templates for DocGov notifications.
+ * Email templates for Contratista Digital notifications.
  * Returns { subject, html } for each notification type.
  */
 
@@ -13,7 +13,7 @@ interface TemplateData {
   nombreRemitente?: string
 }
 
-const APP_URL = 'https://docgov-black.vercel.app/'
+const APP_URL = 'https://contratistadigital.com/'
 
 function baseHtml(titulo: string, contenido: string, color: string): string {
   return `
@@ -29,12 +29,12 @@ function baseHtml(titulo: string, contenido: string, color: string): string {
       ${contenido}
       <div style="margin-top:28px;text-align:center;">
         <a href="${APP_URL}" style="display:inline-block;background:#1a1a1a;color:#fff;padding:13px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;letter-spacing:0.3px;">
-          Abrir DocGov
+          Abrir Contratista Digital
         </a>
       </div>
     </div>
     <div style="padding:16px 32px;border-top:1px solid #eee;text-align:center;">
-      <p style="color:#999;font-size:12px;margin:0;">DocGov — Sistema de Gestion Documental</p>
+      <p style="color:#999;font-size:12px;margin:0;">Contratista Digital — Sistema de Gestión Documental</p>
     </div>
   </div>
 </body>
@@ -137,7 +137,7 @@ export function emailRecordatorioInforme(data: TemplateData) {
          <strong>${data.mes} ${data.anio}</strong> para el contrato <strong>${data.contrato}</strong>.
        </p>
        <p style="color:#333;font-size:14px;line-height:1.6;">
-         Ingresa a DocGov, registra tus actividades y envía tu informe a tiempo.
+         Ingresa a Contratista Digital, registra tus actividades y envía tu informe a tiempo.
        </p>`,
       '#d97706'
     ),

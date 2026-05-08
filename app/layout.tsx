@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DocGov",
+  title: "Contratista Digital",
   description: "Gestión documental contractual — Alcaldía Municipal de Fredonia",
 };
 

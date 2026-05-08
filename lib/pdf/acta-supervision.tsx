@@ -465,7 +465,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
       title={`Acta de Supervisión — Contrato ${contrato.numero}-${contrato.anio} — Periodo ${periodo.numero}`}
       author={contrato.supervisor.nombre_completo}
       subject="Informe de Supervisión"
-      creator="DocGov"
+      creator="Contratista Digital"
     >
       <Page size="A4" style={s.page}>
 

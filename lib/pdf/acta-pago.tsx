@@ -332,7 +332,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
       title={`Acta de Pago No. ${periodoNum} — Contrato ${contrato.numero}-${contrato.anio}`}
       author={contrato.supervisor.nombre_completo}
       subject="Acta de Pago"
-      creator="DocGov"
+      creator="Contratista Digital"
     >
       <Page size="A4" style={s.page}>
 

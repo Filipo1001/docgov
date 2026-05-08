@@ -1,5 +1,5 @@
 /**
- * Centralized constants for DocGov.
+ * Centralized constants for Contratista Digital.
  *
  * Single source of truth for:
  * - Period state labels and colors

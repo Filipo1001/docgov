@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-// Core domain types for DocGov
+// Core domain types for Contratista Digital
 // ─────────────────────────────────────────────
 
 export type Rol =
