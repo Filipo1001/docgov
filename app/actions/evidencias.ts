@@ -217,12 +217,14 @@ export async function eliminarEvidencia(evidenciaId: string): Promise<ActionResu
 
     if (!evidencia) return { error: 'Evidencia no encontrada' }
 
-    const { error } = await supabase
+    const { data: deleted, error } = await supabase
       .from('evidencias')
       .delete()
       .eq('id', evidenciaId)
+      .select('id')
 
     if (error) return { error: `Error al eliminar: ${error.message}` }
+    if (!deleted?.length) return { error: 'No se pudo eliminar la evidencia. No fue encontrada o no tienes permiso.' }
 
     return {}
   } catch (e: unknown) {

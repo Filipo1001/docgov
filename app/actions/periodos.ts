@@ -171,12 +171,14 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
     }
 
     const estadoAnterior = periodo.estado
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('periodos')
       .update({ estado: 'enviado', fecha_envio: new Date().toISOString(), motivo_rechazo: null })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al enviar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo enviar el informe. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id)
 
@@ -250,12 +252,14 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
     }
 
     const estadoAnterior = periodo.estado
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('periodos')
       .update({ estado: 'revision', motivo_rechazo: null })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al aprobar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo aprobar el informe. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'revision', usuario.id)
 
@@ -311,12 +315,14 @@ export async function rechazarComoAsesor(
     }
 
     const estadoAnterior = periodo.estado
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('periodos')
       .update({ estado: 'rechazado', motivo_rechazo: motivo.trim() })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al rechazar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo rechazar el informe. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivo.trim())
 
@@ -374,12 +380,14 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
     }
 
     const estadoAnterior = periodo.estado
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('periodos')
       .update({ estado: 'enviado' })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al revocar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo revocar la aprobación. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id, 'Aprobación revocada por asesor')
 
@@ -432,12 +440,14 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
     const validIds = periodos.map(p => p.id)
 
     // 1 query: batch update all valid periods
-    const { error: updateError } = await supabase
+    const { data: updatedBatch, error: updateError } = await supabase
       .from('periodos')
       .update({ estado: 'aprobado', motivo_rechazo: null })
       .in('id', validIds)
+      .select('id')
 
     if (updateError) return { error: updateError.message }
+    if (!updatedBatch?.length) return { error: 'No se pudo aprobar ningún informe. Verifica el estado de los periodos e intenta de nuevo.' }
 
     // Parallel: historial inserts + notifications (don't block each other)
     await Promise.all([
@@ -503,12 +513,14 @@ export async function rechazarPeriodos(
     if (!periodos || periodos.length === 0) return { data: { rechazados: 0 } }
 
     // 1 query: batch update
-    const { error: updateError } = await supabase
+    const { data: updatedBatch, error: updateError } = await supabase
       .from('periodos')
       .update({ estado: 'enviado', motivo_rechazo: motivo.trim() })
       .in('id', periodos.map(p => p.id))
+      .select('id')
 
     if (updateError) return { error: updateError.message }
+    if (!updatedBatch?.length) return { error: 'No se pudo rechazar ningún informe. Verifica el estado de los periodos e intenta de nuevo.' }
 
     // Parallel historial inserts
     await Promise.all(
@@ -658,15 +670,17 @@ export async function revisarPlanilla(
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
 
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('periodos')
       .update({
         planilla_estado: estado,
         planilla_comentario: estado === 'rechazada' ? (comentario?.trim() ?? null) : null,
       })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al revisar planilla: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo guardar la revisión. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
     // Notify contratista when planilla is rejected
     if (estado === 'rechazada') {
@@ -749,7 +763,7 @@ export async function subirPlanilla(
       .from('documentos')
       .getPublicUrl(path)
 
-    const { error: updateError } = await adminClient
+    const { data: updatedPlanilla, error: updateError } = await adminClient
       .from('periodos')
       .update({
         planilla_ss_url: publicUrl,
@@ -758,8 +772,10 @@ export async function subirPlanilla(
         planilla_comentario: null,
       })
       .eq('id', periodoId)
+      .select('id')
 
     if (updateError) return { error: `Error al guardar: ${updateError.message}` }
+    if (!updatedPlanilla?.length) return { error: 'No se pudo guardar la planilla. El periodo no fue encontrado.' }
 
     revalidar(periodo.contrato_id, periodoId)
     return { data: { url: publicUrl } }
@@ -792,12 +808,14 @@ export async function eliminarPlanilla(periodoId: string): Promise<ActionResult>
     }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({ planilla_ss_url: null, numero_planilla: null, planilla_estado: 'pendiente' })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al eliminar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo eliminar la planilla. El periodo no fue encontrado.' }
 
     revalidar(periodo.contrato_id, periodoId)
     return {}
@@ -835,12 +853,14 @@ export async function guardarNumeroPlanilla(
     }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({ numero_planilla: numeroPlanilla.trim() })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al guardar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo guardar el número de planilla. El periodo no fue encontrado.' }
 
     revalidar(periodo.contrato_id, periodoId)
     return {}
@@ -882,12 +902,14 @@ export async function actualizarValorCobroPeriodo(
 
     const adminClient = createAdminSupabaseClient()
     const valorRedondeado = Math.round(nuevoValor)
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({ valor_cobro: valorRedondeado })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al guardar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo actualizar el valor. El periodo no fue encontrado.' }
 
     await insertHistorial(
       supabase,
@@ -939,12 +961,14 @@ export async function actualizarPlanillaHistorica(
     }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({ numero_planilla: valor || null })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al guardar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo actualizar la planilla histórica. El periodo no fue encontrado.' }
 
     await insertHistorial(
       supabase,
@@ -1007,12 +1031,14 @@ export async function actualizarObservacionSupervisor(
     const adminClient = createAdminSupabaseClient()
     const valor = texto?.trim() || null
 
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({ observacion_supervisor: valor })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al guardar la observación: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo guardar la observación. El periodo no fue encontrado.' }
 
     await insertHistorial(
       supabase,
@@ -1077,12 +1103,14 @@ export async function subirFirma(
       .getPublicUrl(path)
 
     const adminClient = createAdminSupabaseClient()
-    const { error: updateError } = await adminClient
+    const { data: updatedUser, error: updateError } = await adminClient
       .from('usuarios')
       .update({ firma_url: publicUrl })
       .eq('id', uploadForId)
+      .select('id')
 
     if (updateError) return { error: `Error al guardar firma: ${updateError.message}` }
+    if (!updatedUser?.length) return { error: 'No se pudo guardar la firma. El usuario no fue encontrado.' }
 
     revalidatePath('/dashboard')
     return { data: { url: publicUrl } }
@@ -1115,12 +1143,14 @@ export async function actualizarNumeroRadicado(
     }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({ numero_radicado: numeroRadicado.trim() || null })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al actualizar radicado: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo actualizar el número de radicado. El periodo no fue encontrado.' }
 
     await insertHistorial(
       supabase, periodoId,
@@ -1150,7 +1180,7 @@ export async function marcarComoHistorico(
     if (usuario.rol !== 'admin') return { error: 'Solo el administrador puede marcar periodos como históricos' }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({
         es_historico: true,
@@ -1159,8 +1189,10 @@ export async function marcarComoHistorico(
         historico_nota: nota?.trim() || null,
       })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al marcar como histórico: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo marcar como histórico. El periodo no fue encontrado.' }
 
     await insertHistorial(supabase, periodoId, null, null, usuario.id, `Periodo marcado como histórico${nota ? ': ' + nota : ''}`)
     revalidatePath('/dashboard/admin/historicos')
@@ -1210,15 +1242,17 @@ export async function adminDevolverPeriodo(
       /* contratista */           'rechazado'
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({
         estado: estadoNuevo,
         ...(destino === 'contratista' ? { motivo_rechazo: motivo!.trim() } : { motivo_rechazo: null }),
       })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al devolver: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo devolver el periodo. El periodo no fue encontrado.' }
 
     const comentario = [
       `Admin devolvió a ${destino === 'asesores' ? 'asesores' : destino === 'supervisor' ? 'supervisor/secretaria' : 'contratista'}`,
@@ -1281,12 +1315,14 @@ export async function actualizarBaseCotizacion(
     if (!periodo) return { error: 'Periodo no encontrado' }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({ base_cotizacion_ss: valor })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al guardar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo actualizar la base de cotización. El periodo no fue encontrado.' }
 
     await insertHistorial(
       supabase, periodoId,
@@ -1409,7 +1445,7 @@ export async function desmarcarHistorico(periodoId: string): Promise<ActionResul
     if (usuario.rol !== 'admin') return { error: 'Solo el administrador puede desmarcar periodos históricos' }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient
+    const { data: updated, error } = await adminClient
       .from('periodos')
       .update({
         es_historico: false,
@@ -1418,8 +1454,10 @@ export async function desmarcarHistorico(periodoId: string): Promise<ActionResul
         historico_nota: null,
       })
       .eq('id', periodoId)
+      .select('id')
 
     if (error) return { error: `Error al desmarcar histórico: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo desmarcar el histórico. El periodo no fue encontrado.' }
 
     await insertHistorial(supabase, periodoId, null, null, usuario.id, 'Periodo desmarcado como histórico')
     revalidatePath('/dashboard/admin/historicos')

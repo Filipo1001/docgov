@@ -78,12 +78,14 @@ export async function actualizarActividad(
     if (!actividad) return { error: 'La actividad no pertenece a este periodo' }
 
     // ── Update ────────────────────────────────────────────────────
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from('actividades')
       .update({ descripcion: trimmed, cantidad })
       .eq('id', actividadId)
+      .select('id')
 
     if (updateError) return { error: `Error al guardar: ${updateError.message}` }
+    if (!updated?.length) return { error: 'No se pudo guardar. La actividad no fue encontrada o no tienes permiso para editarla.' }
 
     return {}
   } catch (e: unknown) {
