@@ -18,6 +18,7 @@ import { buildPDFData } from '@/lib/pdf/data'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 function normalizeNombre(nombre: string): string {
   return nombre

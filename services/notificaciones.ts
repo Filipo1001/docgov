@@ -26,6 +26,21 @@ export async function getNotificaciones(userId: string): Promise<Notificacion[]>
 }
 
 /**
+ * Count total unread notifications for a user.
+ * Separate from getNotificaciones so the badge is always accurate
+ * even when there are more than 50 unread items.
+ */
+export async function getConteoNoLeidas(userId: string): Promise<number> {
+  const supabase = createClient()
+  const { count } = await supabase
+    .from('notificaciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('usuario_id', userId)
+    .eq('leida', false)
+  return count ?? 0
+}
+
+/**
  * Mark a single notification as read.
  */
 export async function marcarLeida(notificacionId: string): Promise<void> {

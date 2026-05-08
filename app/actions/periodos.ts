@@ -182,44 +182,46 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id)
 
-    // Notify asesor(es) and supervisor about the submission
-    const contrato = await getContratoIds(supabase, periodo.contrato_id)
-    if (contrato) {
-      const titulo = `Nuevo informe enviado — ${periodo.mes} ${periodo.anio}`
-      const mensaje = `${usuario.nombre_completo} envió su informe de ${periodo.mes} ${periodo.anio} para revisión.`
+    // Notify asesor(es) and supervisor about the submission (non-blocking)
+    try {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato) {
+        const titulo = `Nuevo informe enviado — ${periodo.mes} ${periodo.anio}`
+        const mensaje = `${usuario.nombre_completo} envió su informe de ${periodo.mes} ${periodo.anio} para revisión.`
 
-      const notifBase = {
-        tipo: 'enviado',
-        titulo,
-        mensaje,
-        periodoId,
-        mes: periodo.mes,
-        anio: periodo.anio,
-        contrato: contrato.numero || '',
-        nombreRemitente: usuario.nombre_completo,
-      }
+        const notifBase = {
+          tipo: 'enviado',
+          titulo,
+          mensaje,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          nombreRemitente: usuario.nombre_completo,
+        }
 
-      // Notify supervisor
-      if (contrato.supervisor_id) {
-        await enviarNotificacion({ ...notifBase, destinatarioId: contrato.supervisor_id })
-      }
+        // Notify supervisor
+        if (contrato.supervisor_id) {
+          await enviarNotificacion({ ...notifBase, destinatarioId: contrato.supervisor_id })
+        }
 
-      // Notify asesores in the same dependencia
-      if (contrato.dependencia_id) {
-        const adminClient = createAdminSupabaseClient()
-        const { data: asesores } = await adminClient
-          .from('usuarios')
-          .select('id')
-          .eq('rol', 'asesor')
-          .eq('dependencia_id', contrato.dependencia_id)
-        if (asesores) {
-          await enviarNotificacionMultiple(
-            asesores.map(a => a.id),
-            notifBase
-          )
+        // Notify asesores in the same dependencia
+        if (contrato.dependencia_id) {
+          const adminClient = createAdminSupabaseClient()
+          const { data: asesores } = await adminClient
+            .from('usuarios')
+            .select('id')
+            .eq('rol', 'asesor')
+            .eq('dependencia_id', contrato.dependencia_id)
+          if (asesores) {
+            await enviarNotificacionMultiple(
+              asesores.map(a => a.id),
+              notifBase
+            )
+          }
         }
       }
-    }
+    } catch { /* notification failure must not block a successful submit */ }
 
     invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
@@ -263,21 +265,23 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'revision', usuario.id)
 
-    // Notify contratista
-    const contrato = await getContratoIds(supabase, periodo.contrato_id)
-    if (contrato?.contratista_id) {
-      await enviarNotificacion({
-        destinatarioId: contrato.contratista_id,
-        tipo: 'revision',
-        titulo: 'Tu informe está en revisión',
-        mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue revisado por el asesor y está en revisión por la secretaria.`,
-        periodoId,
-        mes: periodo.mes,
-        anio: periodo.anio,
-        contrato: contrato.numero || '',
-        nombreRemitente: usuario.nombre_completo,
-      })
-    }
+    // Notify contratista (non-blocking)
+    try {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.contratista_id) {
+        await enviarNotificacion({
+          destinatarioId: contrato.contratista_id,
+          tipo: 'revision',
+          titulo: 'Tu informe está en revisión',
+          mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue revisado por el asesor y está en revisión por la secretaria.`,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          nombreRemitente: usuario.nombre_completo,
+        })
+      }
+    } catch { /* notification failure must not block a successful review */ }
 
     invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
@@ -326,22 +330,24 @@ export async function rechazarComoAsesor(
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivo.trim())
 
-    // Notify contratista
-    const contrato = await getContratoIds(supabase, periodo.contrato_id)
-    if (contrato?.contratista_id) {
-      await enviarNotificacion({
-        destinatarioId: contrato.contratista_id,
-        tipo: 'rechazado',
-        titulo: 'Tu informe requiere correcciones',
-        mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue rechazado. Motivo: ${motivo.trim()}`,
-        periodoId,
-        mes: periodo.mes,
-        anio: periodo.anio,
-        contrato: contrato.numero || '',
-        motivo: motivo.trim(),
-        nombreRemitente: usuario.nombre_completo,
-      })
-    }
+    // Notify contratista (non-blocking)
+    try {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.contratista_id) {
+        await enviarNotificacion({
+          destinatarioId: contrato.contratista_id,
+          tipo: 'rechazado',
+          titulo: 'Tu informe requiere correcciones',
+          mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue rechazado. Motivo: ${motivo.trim()}`,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          motivo: motivo.trim(),
+          nombreRemitente: usuario.nombre_completo,
+        })
+      }
+    } catch { /* notification failure must not block a successful rejection */ }
 
     invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
@@ -622,25 +628,27 @@ export async function marcarRadicado(
       : undefined
     await insertHistorial(supabase, periodoId, estadoAnterior, 'radicado', usuario.id, comentario)
 
-    // Notify contratista
-    const contrato = await getContratoIds(supabase, periodo.contrato_id)
-    if (contrato?.contratista_id) {
-      const mensaje = numeroRadicado?.trim()
-        ? `Tu informe ha sido radicado con el No. ${numeroRadicado.trim()}.`
-        : `Tu informe de ${periodo.mes} ${periodo.anio} ha sido radicado exitosamente.`
-      await enviarNotificacion({
-        destinatarioId: contrato.contratista_id,
-        tipo: 'radicado',
-        titulo: 'Informe radicado',
-        mensaje,
-        periodoId,
-        mes: periodo.mes,
-        anio: periodo.anio,
-        contrato: contrato.numero || '',
-        numeroRadicado: numeroRadicado?.trim(),
-        nombreRemitente: usuario.nombre_completo,
-      })
-    }
+    // Notify contratista (non-blocking)
+    try {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.contratista_id) {
+        const mensaje = numeroRadicado?.trim()
+          ? `Tu informe ha sido radicado con el No. ${numeroRadicado.trim()}.`
+          : `Tu informe de ${periodo.mes} ${periodo.anio} ha sido radicado exitosamente.`
+        await enviarNotificacion({
+          destinatarioId: contrato.contratista_id,
+          tipo: 'radicado',
+          titulo: 'Informe radicado',
+          mensaje,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          numeroRadicado: numeroRadicado?.trim(),
+          nombreRemitente: usuario.nombre_completo,
+        })
+      }
+    } catch { /* notification failure must not block a successful radicado */ }
 
     invalidarCachePDF(adminClient, periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
@@ -669,6 +677,10 @@ export async function revisarPlanilla(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+    if (!['enviado', 'revision', 'aprobado'].includes(periodo.estado)) {
+      return { error: 'La planilla solo puede revisarse cuando el periodo ha sido enviado' }
+    }
 
     const { data: updated, error } = await supabase
       .from('periodos')
@@ -682,25 +694,27 @@ export async function revisarPlanilla(
     if (error) return { error: `Error al revisar planilla: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo guardar la revisión. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
-    // Notify contratista when planilla is rejected
+    // Notify contratista when planilla is rejected (non-blocking)
     if (estado === 'rechazada') {
-      const contrato = await getContratoIds(supabase, periodo.contrato_id)
-      if (contrato?.contratista_id) {
-        const motivo = comentario?.trim()
-        await enviarNotificacion({
-          destinatarioId: contrato.contratista_id,
-          tipo: 'rechazado',
-          titulo: 'Tu planilla de seguridad social fue rechazada',
-          mensaje: motivo
-            ? `La planilla de ${periodo.mes} ${periodo.anio} fue rechazada. Motivo: ${motivo}`
-            : `La planilla de ${periodo.mes} ${periodo.anio} requiere corrección. Sube una nueva planilla.`,
-          periodoId,
-          mes: periodo.mes,
-          anio: periodo.anio,
-          contrato: contrato.numero || '',
-          nombreRemitente: usuario.nombre_completo,
-        })
-      }
+      try {
+        const contrato = await getContratoIds(supabase, periodo.contrato_id)
+        if (contrato?.contratista_id) {
+          const motivo = comentario?.trim()
+          await enviarNotificacion({
+            destinatarioId: contrato.contratista_id,
+            tipo: 'rechazado',
+            titulo: 'Tu planilla de seguridad social fue rechazada',
+            mensaje: motivo
+              ? `La planilla de ${periodo.mes} ${periodo.anio} fue rechazada. Motivo: ${motivo}`
+              : `La planilla de ${periodo.mes} ${periodo.anio} requiere corrección. Sube una nueva planilla.`,
+            periodoId,
+            mes: periodo.mes,
+            anio: periodo.anio,
+            contrato: contrato.numero || '',
+            nombreRemitente: usuario.nombre_completo,
+          })
+        }
+      } catch { /* notification failure must not block a successful planilla review */ }
     }
 
     revalidar(periodo.contrato_id, periodoId)
@@ -892,6 +906,10 @@ export async function actualizarValorCobroPeriodo(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+    if (periodo.estado === 'radicado') {
+      return { error: 'No se puede editar el valor de un periodo ya radicado' }
+    }
 
     // Obtener valor anterior para auditoría
     const { data: prev } = await supabase
@@ -1261,26 +1279,28 @@ export async function adminDevolverPeriodo(
 
     await insertHistorial(supabase, periodoId, periodo.estado, estadoNuevo, usuario.id, comentario)
 
-    // Notify the destination user(s)
-    const contrato = await getContratoIds(supabase, periodo.contrato_id)
-    if (contrato) {
-      if (destino === 'contratista' && contrato.contratista_id) {
-        await enviarNotificacion({
-          destinatarioId: contrato.contratista_id,
-          tipo: 'rechazado',
-          titulo: 'Tu informe requiere correcciones',
-          mensaje: motivo?.trim()
-            ? `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto. Motivo: ${motivo.trim()}`
-            : `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto para corrección.`,
-          periodoId,
-          mes: periodo.mes,
-          anio: periodo.anio,
-          contrato: contrato.numero || '',
-          motivo: motivo?.trim(),
-          nombreRemitente: usuario.nombre_completo,
-        })
+    // Notify the destination user(s) (non-blocking)
+    try {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato) {
+        if (destino === 'contratista' && contrato.contratista_id) {
+          await enviarNotificacion({
+            destinatarioId: contrato.contratista_id,
+            tipo: 'rechazado',
+            titulo: 'Tu informe requiere correcciones',
+            mensaje: motivo?.trim()
+              ? `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto. Motivo: ${motivo.trim()}`
+              : `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto para corrección.`,
+            periodoId,
+            mes: periodo.mes,
+            anio: periodo.anio,
+            contrato: contrato.numero || '',
+            motivo: motivo?.trim(),
+            nombreRemitente: usuario.nombre_completo,
+          })
+        }
       }
-    }
+    } catch { /* notification failure must not block a successful devolution */ }
 
     invalidarCachePDF(adminClient, periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)

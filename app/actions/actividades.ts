@@ -21,6 +21,7 @@ export async function actualizarActividad(
   try {
     const trimmed = descripcion.trim()
     if (!trimmed) return { error: 'La descripción no puede estar vacía' }
+    if (trimmed.length > 500) return { error: 'La descripción no puede superar los 500 caracteres' }
     if (cantidad < 1 || !Number.isInteger(cantidad)) return { error: 'La cantidad debe ser un número entero mayor a 0' }
 
     const supabase = await createServerSupabaseClient()

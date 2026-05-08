@@ -1188,6 +1188,7 @@ export default function PeriodoDetallePage() {
                             onChange={(e) => setEditDesc(e.target.value)}
                             rows={3}
                             autoFocus
+                            maxLength={500}
                             className="w-full px-3 py-2.5 bg-white border border-blue-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                           />
                           <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
@@ -1376,6 +1377,7 @@ export default function PeriodoDetallePage() {
                         onChange={(e) => setNuevaActividad(e.target.value)}
                         placeholder="Describe la actividad realizada..."
                         rows={3}
+                        maxLength={500}
                         className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                       />
 

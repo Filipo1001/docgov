@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUsuario } from '@/lib/user-context'
-import { getNotificaciones, marcarLeida, marcarTodasLeidas } from '@/services/notificaciones'
+import { getNotificaciones, getConteoNoLeidas, marcarLeida, marcarTodasLeidas } from '@/services/notificaciones'
 import type { Notificacion } from '@/lib/types'
 
 function tiempoRelativo(fechaISO: string): string {
@@ -33,13 +33,18 @@ export default function NotificacionesBell() {
   const { usuario } = useUsuario()
   const router = useRouter()
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([])
+  const [totalNoLeidas, setTotalNoLeidas] = useState(0)
   const [abierto, setAbierto] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const cargar = useCallback(async () => {
     if (!usuario) return
-    const data = await getNotificaciones(usuario.id)
+    const [data, conteo] = await Promise.all([
+      getNotificaciones(usuario.id),
+      getConteoNoLeidas(usuario.id),
+    ])
     setNotificaciones(data)
+    setTotalNoLeidas(conteo)
   }, [usuario])
 
   useEffect(() => {
@@ -59,12 +64,14 @@ export default function NotificacionesBell() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  // noLeidas drives blue-dot indicators in the visible list
   const noLeidas = notificaciones.filter(n => !n.leida).length
 
   async function handleClickNotificacion(n: Notificacion) {
     if (!n.leida) {
       await marcarLeida(n.id)
       setNotificaciones(prev => prev.map(x => x.id === n.id ? { ...x, leida: true } : x))
+      setTotalNoLeidas(prev => Math.max(0, prev - 1))
     }
     if (n.periodo_id) {
       const contratoId = (n.periodo as any)?.contrato_id
@@ -81,6 +88,7 @@ export default function NotificacionesBell() {
     if (!usuario) return
     await marcarTodasLeidas(usuario.id)
     setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })))
+    setTotalNoLeidas(0)
   }
 
   if (!usuario) return null
@@ -93,9 +101,9 @@ export default function NotificacionesBell() {
       >
         <span>🔔</span>
         <span className="flex-1 text-left">Notificaciones</span>
-        {noLeidas > 0 && (
+        {totalNoLeidas > 0 && (
           <span className="min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none">
-            {noLeidas > 99 ? '99+' : noLeidas}
+            {totalNoLeidas > 99 ? '99+' : totalNoLeidas}
           </span>
         )}
       </button>
@@ -105,7 +113,7 @@ export default function NotificacionesBell() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900">Notificaciones</h3>
-            {noLeidas > 0 && (
+            {totalNoLeidas > 0 && (
               <button
                 onClick={handleMarcarTodas}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
