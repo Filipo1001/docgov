@@ -33,6 +33,7 @@ import {
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
+import { comprimirEvidencia } from '@/lib/compress'
 import { actualizarActividad } from '@/app/actions/actividades'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
@@ -445,61 +446,6 @@ export default function PeriodoDetallePage() {
   // PDFs are passed through unchanged. All images (including HEIC/HEIF from iPhone
   // and files with missing MIME types from Android) are converted to JPEG so that
   // browsers and react-pdf can render them reliably.
-  async function comprimirEvidencia(file: File): Promise<File> {
-    const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif', 'bmp', 'tiff']
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-    const isHeic = ext === 'heic' || ext === 'heif'
-      || file.type === 'image/heic' || file.type === 'image/heif'
-    const looksLikeImage = file.type.startsWith('image/') || IMAGE_EXTS.includes(ext)
-    if (!looksLikeImage) return file   // PDF or unknown — pass through unchanged
-
-    // HEIC/HEIF: convert to JPEG blob first using heic2any, then compress via canvas
-    let sourceFile: File = file
-    if (isHeic) {
-      try {
-        const heic2any = (await import('heic2any')).default
-        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
-        const blob = Array.isArray(converted) ? converted[0] : converted
-        const name = file.name.replace(/\.[^.]+$/, '.jpg')
-        sourceFile = new File([blob], name, { type: 'image/jpeg' })
-      } catch {
-        // heic2any failed — fall through and let canvas try (Safari handles HEIC natively)
-        sourceFile = file
-      }
-    }
-
-    return new Promise((resolve) => {
-      const img = new Image()
-      const objUrl = URL.createObjectURL(sourceFile)
-      img.onload = () => {
-        URL.revokeObjectURL(objUrl)
-        const MAX_W = 1200, MAX_H = 900
-        let w = img.naturalWidth, h = img.naturalHeight
-        const ratio = Math.min(MAX_W / w, MAX_H / h, 1) // never upscale
-        w = Math.round(w * ratio)
-        h = Math.round(h * ratio)
-        const canvas = document.createElement('canvas')
-        canvas.width = w
-        canvas.height = h
-        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const name = sourceFile.name.replace(/\.[^.]+$/, '.jpg')
-              resolve(new File([blob], name, { type: 'image/jpeg' }))
-            } else {
-              resolve(sourceFile)
-            }
-          },
-          'image/jpeg',
-          0.75
-        )
-      }
-      img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(sourceFile) }
-      img.src = objUrl
-    })
-  }
-
   async function handleSubirEvidencia(actividadId: string, file: File) {
     // ── Step 0: compress image client-side ────────────────────
     const fileToUpload = await comprimirEvidencia(file)

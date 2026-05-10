@@ -8,6 +8,7 @@ import Badge from '@/components/ui/Badge'
 import type { Contrato } from '@/lib/types'
 import { formatCedula } from '@/lib/format'
 import { subirFirma } from '@/app/actions/periodos'
+import { normalizarFirma } from '@/lib/compress'
 
 // ─── Display maps ──────────────────────────────────────────────
 
@@ -190,83 +191,6 @@ export default function PerfilPage() {
   }, [usuario])
 
   if (loading || !usuario) return <Skeleton />
-
-  // Normalize image client-side: resize to max 600×200, remove background, export PNG
-  async function normalizarFirma(file: File): Promise<Blob> {
-    return new Promise((resolve, reject) => {
-      const img = new Image()
-      const objUrl = URL.createObjectURL(file)
-      img.onload = () => {
-        URL.revokeObjectURL(objUrl)
-
-        // 1. Resize — never upscale
-        const MAX_W = 600, MAX_H = 200
-        let w = img.naturalWidth, h = img.naturalHeight
-        const ratio = Math.min(MAX_W / w, MAX_H / h, 1)
-        w = Math.round(w * ratio)
-        h = Math.round(h * ratio)
-
-        // 2. Draw onto canvas (transparent background)
-        const canvas = document.createElement('canvas')
-        canvas.width  = w
-        canvas.height = h
-        const ctx = canvas.getContext('2d', { willReadFrequently: true })!
-        ctx.drawImage(img, 0, 0, w, h)
-
-        // 3. Adaptive background removal
-        //    a) Sample 8×8 patches from all 4 corners → estimate background color (R,G,B)
-        //    b) Each pixel: compute Euclidean distance from background color
-        //       distance < HARD  → fully transparent
-        //       distance < SOFT  → linearly fade alpha (smooth edges)
-        //       distance >= SOFT → fully opaque (ink stroke)
-        const imageData = ctx.getImageData(0, 0, w, h)
-        const data      = imageData.data
-        const PATCH     = Math.min(8, Math.floor(w / 4), Math.floor(h / 4))
-        const HARD      = 40   // within 40 units of bg color → transparent
-        const SOFT      = 80   // 40–80 units → smooth fade
-
-        // Collect corner pixels
-        let rSum = 0, gSum = 0, bSum = 0, n = 0
-        for (let py = 0; py < PATCH; py++) {
-          for (let px = 0; px < PATCH; px++) {
-            const corners = [
-              (py * w + px) * 4,                         // top-left
-              (py * w + (w - 1 - px)) * 4,               // top-right
-              ((h - 1 - py) * w + px) * 4,               // bottom-left
-              ((h - 1 - py) * w + (w - 1 - px)) * 4,    // bottom-right
-            ]
-            for (const i of corners) {
-              rSum += data[i]; gSum += data[i + 1]; bSum += data[i + 2]; n++
-            }
-          }
-        }
-        const bgR = rSum / n, bgG = gSum / n, bgB = bSum / n
-
-        // Remove background
-        for (let i = 0; i < data.length; i += 4) {
-          const dr = data[i]     - bgR
-          const dg = data[i + 1] - bgG
-          const db = data[i + 2] - bgB
-          const dist = Math.sqrt(dr * dr + dg * dg + db * db)
-          if (dist < HARD) {
-            data[i + 3] = 0                                              // fully transparent
-          } else if (dist < SOFT) {
-            data[i + 3] = Math.round(((dist - HARD) / (SOFT - HARD)) * 255) // smooth fade
-          }
-          // else: keep original alpha
-        }
-        ctx.putImageData(imageData, 0, 0)
-
-        // 4. Export as PNG (preserves transparency)
-        canvas.toBlob(
-          (blob) => { if (blob) resolve(blob); else reject(new Error('Error al procesar imagen')) },
-          'image/png', 0.95
-        )
-      }
-      img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('Imagen inválida')) }
-      img.src = objUrl
-    })
-  }
 
   async function handleSubirFirma(file: File) {
     setFirmaError(null)

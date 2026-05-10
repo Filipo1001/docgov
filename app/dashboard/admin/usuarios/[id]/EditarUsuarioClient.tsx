@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
-import { actualizarUsuario, subirFotoUsuario, cambiarContrasena } from '@/app/actions/admin'
+import { actualizarUsuario, prepararUploadFoto, confirmarFotoUsuario, cambiarContrasena } from '@/app/actions/admin'
+import { comprimirFoto } from '@/lib/compress'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'gobierno', 'hacienda']
@@ -39,6 +40,7 @@ export default function EditarUsuarioClient({
   const fileRef = useRef<HTMLInputElement>(null)
   const [fotoUrl, setFotoUrl]     = useState(usuario.foto_url)
   const [uploading, setUploading] = useState(false)
+  const [uploadPct, setUploadPct] = useState(0)
   const [saving, setSaving]       = useState(false)
   const [nuevaPass, setNuevaPass]         = useState('')
   const [confirmarPass, setConfirmarPass] = useState('')
@@ -87,13 +89,49 @@ export default function EditarUsuarioClient({
   async function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    e.target.value = ''           // allow re-selecting the same file later
     setUploading(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    const result = await subirFotoUsuario(usuario.id, fd)
-    setUploading(false)
-    if (result.error) toast.error(result.error)
-    else if (result.data) { setFotoUrl(result.data.url); toast.success('Foto actualizada') }
+    setUploadPct(0)
+
+    try {
+      // 1 — Client-side compression: 400×400 px WebP (~20–40 KB vs ~550 KB raw)
+      const compressed = await comprimirFoto(file)
+
+      // 2 — Get a short-lived signed upload URL from the server
+      const prep = await prepararUploadFoto(
+        usuario.id,
+        compressed.name,
+        compressed.size,
+        compressed.type,
+      )
+      if (prep.error) { toast.error(prep.error); return }
+      const { signedUrl, publicUrl } = prep.data!
+
+      // 3 — PUT directly to Supabase Storage (bypasses Vercel, shows real progress)
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', signedUrl)
+        xhr.setRequestHeader('Content-Type', compressed.type)
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100))
+        }
+        xhr.onload  = () => xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`))
+        xhr.onerror = () => reject(new Error('Error de red'))
+        xhr.send(compressed)
+      })
+
+      // 4 — Tell the server to persist the public URL in the DB
+      const confirm = await confirmarFotoUsuario(usuario.id, publicUrl)
+      if (confirm.error) { toast.error(confirm.error); return }
+
+      setFotoUrl(confirm.data!.url)
+      toast.success('Foto actualizada')
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al subir la foto')
+    } finally {
+      setUploading(false)
+      setUploadPct(0)
+    }
   }
 
   async function handleCambiarContrasena() {
@@ -122,8 +160,13 @@ export default function EditarUsuarioClient({
         <div className="relative">
           <Avatar foto={fotoUrl} nombre={nombre} />
           {uploading && (
-            <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
-              <span className="text-white text-xs">…</span>
+            <div className="absolute inset-0 rounded-full bg-black/50 flex flex-col items-center justify-center gap-1">
+              <span className="text-white text-xs font-semibold">{uploadPct > 0 ? `${uploadPct}%` : '…'}</span>
+              {uploadPct > 0 && (
+                <div className="w-12 h-1 bg-white/30 rounded-full overflow-hidden">
+                  <div className="h-full bg-white rounded-full transition-all duration-150" style={{ width: `${uploadPct}%` }} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -135,7 +178,9 @@ export default function EditarUsuarioClient({
             disabled={uploading}
             className="mt-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50"
           >
-            {uploading ? 'Subiendo…' : 'Cambiar foto'}
+            {uploading
+              ? uploadPct === 0 ? 'Procesando…' : `Subiendo ${uploadPct}%`
+              : 'Cambiar foto'}
           </button>
           <p className="text-xs text-gray-400">JPEG, PNG, WEBP o HEIC · máx 5 MB</p>
           <input

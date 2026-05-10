@@ -226,51 +226,76 @@ export async function actualizarUsuario(
   return {}
 }
 
-// ─── Upload profile photo ─────────────────────────────────────
+// ─── Upload profile photo (presigned URL pattern) ─────────────
+//
+// Why presigned URLs instead of FormData through the Server Action:
+// - Vercel payload limit is 4.5 MB; raw phone photos can exceed this.
+// - Going Client → Vercel → Supabase doubles the upload time.
+// - New flow: validate server-side → sign URL → Client PUTs directly
+//   to Supabase → confirm with DB update. Same security, twice as fast.
 
-export async function subirFotoUsuario(
+const FOTO_ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+
+/**
+ * Step 1 — Validate the request and return a short-lived signed upload URL.
+ * The client uploads the (already-compressed) file directly to Supabase Storage.
+ */
+export async function prepararUploadFoto(
   userId: string,
-  formData: FormData
+  fileName: string,
+  fileSize: number,
+  fileMime: string,
+): Promise<ActionResult<{ signedUrl: string; path: string; publicUrl: string }>> {
+  const admin = await requireAdmin()
+  if (!admin) return { error: 'No autorizado' }
+
+  const mime = fileMime?.toLowerCase() || ''
+  if (!FOTO_ALLOWED.includes(mime)) {
+    return { error: 'Solo se permiten imágenes JPEG, PNG, WEBP o HEIC' }
+  }
+  // After client-side compression the file should be well under 1 MB
+  if (fileSize > 5 * 1024 * 1024) {
+    return { error: 'La imagen no puede superar 5 MB' }
+  }
+
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? mime.split('/')[1].replace('jpeg', 'jpg')
+  const path = `${userId}/foto.${ext}`
+
+  const adminClient = createAdminSupabaseClient()
+  const { data: signedData, error: signedError } = await adminClient.storage
+    .from('avatars')
+    .createSignedUploadUrl(path, { upsert: true })
+
+  if (signedError || !signedData) {
+    return { error: signedError?.message ?? 'No se pudo generar URL de subida' }
+  }
+
+  const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(path)
+
+  return { data: { signedUrl: signedData.signedUrl, path, publicUrl } }
+}
+
+/**
+ * Step 2 — After the client has PUT the file, update the usuarios record.
+ */
+export async function confirmarFotoUsuario(
+  userId: string,
+  publicUrl: string,
 ): Promise<ActionResult<{ url: string }>> {
   const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
 
-  const file = formData.get('file') as File | null
-  if (!file) return { error: 'No se adjuntó ningún archivo' }
-
-  const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
-  if (!ALLOWED.includes(file.type)) {
-    return { error: 'Solo se permiten imágenes JPEG, PNG, WEBP o HEIC' }
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    return { error: 'La imagen no puede superar 5 MB' }
-  }
-
-  const ext = file.type.split('/')[1].replace('jpeg', 'jpg')
-  const path = `${userId}/foto.${ext}`
-  const bytes = await file.arrayBuffer()
-
   const adminClient = createAdminSupabaseClient()
-  const { error: uploadError } = await adminClient.storage
-    .from('avatars')
-    .upload(path, bytes, { contentType: file.type, upsert: true })
-
-  if (uploadError) return { error: uploadError.message }
-
-  const { data: { publicUrl } } = adminClient.storage
-    .from('avatars')
-    .getPublicUrl(path)
-
-  // Append cache-buster so browsers reload after update
-  const url = `${publicUrl}?t=${Date.now()}`
-
-  await adminClient
+  const { error } = await adminClient
     .from('usuarios')
     .update({ foto_url: publicUrl })
     .eq('id', userId)
 
+  if (error) return { error: error.message }
+
   revalidatePath(`/dashboard/admin/usuarios/${userId}`)
-  return { data: { url } }
+  // Cache-buster so the browser reloads the new image
+  return { data: { url: `${publicUrl}?t=${Date.now()}` } }
 }
 
 // ─── Change user password (admin only) ───────────────────────

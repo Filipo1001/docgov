@@ -5,73 +5,8 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { subirFirma } from '@/app/actions/periodos'
 import { eliminarFirmaAdmin } from '@/app/actions/admin'
+import { normalizarFirma } from '@/lib/compress'
 import type { ContratistaFirma } from './page'
-
-// ─── Background removal + resize (same algorithm as perfil/page.tsx) ──────────
-
-async function normalizarFirma(file: File): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const objUrl = URL.createObjectURL(file)
-    img.onload = () => {
-      URL.revokeObjectURL(objUrl)
-
-      const MAX_W = 600, MAX_H = 200
-      let w = img.naturalWidth, h = img.naturalHeight
-      const ratio = Math.min(MAX_W / w, MAX_H / h, 1)
-      w = Math.round(w * ratio)
-      h = Math.round(h * ratio)
-
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })!
-      ctx.drawImage(img, 0, 0, w, h)
-
-      const imageData = ctx.getImageData(0, 0, w, h)
-      const data = imageData.data
-      const PATCH = Math.min(8, Math.floor(w / 4), Math.floor(h / 4))
-      const HARD = 40
-      const SOFT = 80
-
-      let rSum = 0, gSum = 0, bSum = 0, n = 0
-      for (let py = 0; py < PATCH; py++) {
-        for (let px = 0; px < PATCH; px++) {
-          const corners = [
-            (py * w + px) * 4,
-            (py * w + (w - 1 - px)) * 4,
-            ((h - 1 - py) * w + px) * 4,
-            ((h - 1 - py) * w + (w - 1 - px)) * 4,
-          ]
-          for (const i of corners) {
-            rSum += data[i]; gSum += data[i + 1]; bSum += data[i + 2]; n++
-          }
-        }
-      }
-      const bgR = rSum / n, bgG = gSum / n, bgB = bSum / n
-
-      for (let i = 0; i < data.length; i += 4) {
-        const dr = data[i] - bgR
-        const dg = data[i + 1] - bgG
-        const db = data[i + 2] - bgB
-        const dist = Math.sqrt(dr * dr + dg * dg + db * db)
-        if (dist < HARD) {
-          data[i + 3] = 0
-        } else if (dist < SOFT) {
-          data[i + 3] = Math.round(((dist - HARD) / (SOFT - HARD)) * 255)
-        }
-      }
-      ctx.putImageData(imageData, 0, 0)
-
-      canvas.toBlob(
-        (blob) => { if (blob) resolve(blob); else reject(new Error('Error al procesar')) },
-        'image/png', 0.95
-      )
-    }
-    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('Imagen inválida')) }
-    img.src = objUrl
-  })
-}
 
 // ─── Card component ───────────────────────────────────────────────────────────
 
