@@ -20,7 +20,10 @@ export default function ContratosPage() {
         .from('contratos')
         .select(`
           *,
-          contratista:usuarios!contratos_contratista_id_fkey(nombre_completo),
+          contratista:usuarios!contratos_contratista_id_fkey(
+            nombre_completo, email, telefono, foto_url, firma_url,
+            cargo, banco, tipo_cuenta, numero_cuenta
+          ),
           supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo),
           dependencia:dependencias(nombre, abreviatura)
         `)
@@ -48,6 +51,20 @@ export default function ContratosPage() {
 
   const esAdmin = usuario?.rol === 'admin'
   const titulo = esAdmin ? 'Contratos' : 'Mis contratos'
+
+  function datosFaltantes(contrato: any): string[] {
+    if (!esAdmin) return []
+    const c = contrato.contratista
+    if (!c) return ['Contratista no encontrado']
+    const faltantes: string[] = []
+    if (!c.email || c.email.endsWith('@pendiente.local')) faltantes.push('Email')
+    if (!c.telefono)      faltantes.push('Celular')
+    if (!c.cargo)         faltantes.push('Cargo')
+    if (!c.foto_url)      faltantes.push('Foto')
+    if (!c.firma_url)     faltantes.push('Firma')
+    if (!c.banco || !c.tipo_cuenta || !c.numero_cuenta) faltantes.push('Cuenta bancaria')
+    return faltantes
+  }
 
   return (
     <div>
@@ -87,38 +104,51 @@ export default function ContratosPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {contratos.map((contrato) => (
-            <Link
-              key={contrato.id}
-              href={`/dashboard/contratos/${contrato.id}`}
-              className="block bg-white rounded-2xl border p-6 hover:border-gray-300 transition-colors"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-sm font-bold text-gray-900">
-                      Contrato N.º {contrato.numero}
-                    </span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                      {contrato.dependencia?.abreviatura}
-                    </span>
+          {contratos.map((contrato) => {
+            const faltantes = datosFaltantes(contrato)
+            const incompleto = faltantes.length > 0
+            return (
+              <Link
+                key={contrato.id}
+                href={`/dashboard/contratos/${contrato.id}`}
+                className={`block rounded-2xl border p-6 transition-colors ${
+                  incompleto
+                    ? 'bg-red-50 border-red-200 hover:border-red-300'
+                    : 'bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-sm font-bold text-gray-900">
+                        Contrato N.º {contrato.numero}
+                      </span>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                        {contrato.dependencia?.abreviatura}
+                      </span>
+                      {incompleto && (
+                        <span className="text-[10px] font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                          Faltan: {faltantes.join(' · ')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">{contrato.objeto}</p>
+                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                      <span>Contratista: {contrato.contratista?.nombre_completo}</span>
+                      <span>•</span>
+                      <span>Supervisor: {contrato.supervisor?.nombre_completo}</span>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600 line-clamp-2 mb-3">{contrato.objeto}</p>
-                  <div className="flex items-center gap-4 text-xs text-gray-400">
-                    <span>Contratista: {contrato.contratista?.nombre_completo}</span>
-                    <span>•</span>
-                    <span>Supervisor: {contrato.supervisor?.nombre_completo}</span>
+                  <div className="text-right ml-4">
+                    <p className="text-sm font-semibold text-gray-900">
+                      ${contrato.valor_total?.toLocaleString('es-CO')}
+                    </p>
+                    <p className="text-xs text-gray-400">{contrato.plazo_meses} meses</p>
                   </div>
                 </div>
-                <div className="text-right ml-4">
-                  <p className="text-sm font-semibold text-gray-900">
-                    ${contrato.valor_total?.toLocaleString('es-CO')}
-                  </p>
-                  <p className="text-xs text-gray-400">{contrato.plazo_meses} meses</p>
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>
