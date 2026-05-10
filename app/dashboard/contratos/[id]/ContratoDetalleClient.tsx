@@ -261,6 +261,20 @@ export default function ContratoDetallePage() {
             </div>
           </div>
         )}
+
+        {contrato.secop_url && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <span className="text-gray-400 text-xs">Enlace SECOP II</span>
+            <a
+              href={contrato.secop_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 mt-1 text-sm text-blue-600 hover:text-blue-800 hover:underline truncate"
+            >
+              🔗 Ver contrato en SECOP II
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Obligaciones */}

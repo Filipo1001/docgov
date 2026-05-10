@@ -20,6 +20,7 @@ interface ExcelData {
   plazo_dias: number
   cdp: string | null
   crp: string | null
+  secop_url: string | null
 }
 
 export default function NuevoContratoPage() {
@@ -49,6 +50,7 @@ export default function NuevoContratoPage() {
     fecha_fin: '',
     cdp: '',
     crp: '',
+    secop_url: '',
   })
 
   // ── Load dropdowns ──────────────────────────────────────────
@@ -139,6 +141,7 @@ export default function NuevoContratoPage() {
         plazo_dias: excel.plazo_dias ? String(excel.plazo_dias) : f.plazo_dias,
         cdp: excel.cdp || f.cdp,
         crp: excel.crp || f.crp,
+        secop_url: (excel as any).secop_url || f.secop_url,
       }))
       setExcelEncontrado(true)
     } catch {
@@ -192,6 +195,7 @@ export default function NuevoContratoPage() {
         fecha_fin: form.fecha_fin,
         cdp: form.cdp || null,
         crp: form.crp || null,
+        secop_url: form.secop_url?.trim() || null,
       })
       .select()
       .single()
@@ -385,6 +389,27 @@ export default function NuevoContratoPage() {
               <input name="crp" value={form.crp} onChange={handleChange}
                 placeholder="1" className={excelEncontrado && form.crp ? autoClass : inputClass} />
             </div>
+          </div>
+        </div>
+
+        {/* SECOP URL */}
+        <div className="bg-white rounded-2xl border p-6">
+          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+            Enlace SECOP II
+          </h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              URL del contrato en SECOP II
+              <span className="text-xs text-gray-400 font-normal ml-1">(opcional)</span>
+            </label>
+            <input
+              name="secop_url"
+              type="url"
+              value={form.secop_url ?? ''}
+              onChange={handleChange}
+              placeholder="https://www.secop.gov.co/..."
+              className={inputClass}
+            />
           </div>
         </div>
 

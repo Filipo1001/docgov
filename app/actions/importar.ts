@@ -25,6 +25,7 @@ export type FilaImport = {
   valor_total: number
   cdp: string
   crp: string
+  secop_url: string | null
   // Matching
   dependencia_nombre_excel: string
   supervisor_nombre_excel: string
@@ -163,6 +164,14 @@ export async function parsearExcel(
     const cdp = readCell(row, 'No. CDP')
     const crp = readCell(row, 'No. CRP')
 
+    // ── SECOP link ───────────────────────────────────────
+    const secopRaw = readCell(
+      row,
+      'LINK SECOP', 'Link SECOP', 'ENLACE SECOP', 'Enlace SECOP',
+      'URL SECOP', 'URL SECOP II', 'LINK SECOP II', 'ENLACE', 'LINK',
+    )
+    const secop_url = secopRaw.startsWith('http') ? secopRaw : secopRaw ? `https://${secopRaw}` : null
+
     // ── Dependencia matching ─────────────────────────────
     const dep_excel = readCell(row, 'DEPENDENCIA')
     let dependencia_id: string | null = null
@@ -217,6 +226,7 @@ export async function parsearExcel(
       valor_total,
       cdp,
       crp,
+      secop_url,
       dependencia_nombre_excel: dep_excel,
       supervisor_nombre_excel: sup_excel,
       dependencia_id,
@@ -331,6 +341,7 @@ export async function confirmarImportacion(
         fecha_fin: fila.fecha_fin,
         cdp: fila.cdp || null,
         crp: fila.crp || null,
+        secop_url: fila.secop_url || null,
       })
 
       if (contratoError) {
