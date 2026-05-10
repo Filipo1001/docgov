@@ -906,10 +906,7 @@ export async function actualizarValorCobroPeriodo(
 
     const periodo = await getPeriodo(supabase, periodoId)
     if (!periodo) return { error: 'Periodo no encontrado' }
-    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
-    if (periodo.estado === 'radicado') {
-      return { error: 'No se puede editar el valor de un periodo ya radicado' }
-    }
+    // Admin puede modificar cualquier periodo, incluyendo históricos y radicados.
 
     // Obtener valor anterior para auditoría
     const { data: prev } = await supabase

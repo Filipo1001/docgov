@@ -340,7 +340,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
           {/* Nota */}
           <p className="text-xs text-gray-500">
-            Solo puedes editar periodos en estado <strong>Borrador</strong> o <strong>Rechazado</strong> que no sean históricos.
+            Como administrador puedes editar el valor de <strong>cualquier periodo</strong>, incluyendo históricos y radicados.
             El valor sugerido se calcula automáticamente con distribución proporcional.
           </p>
 
