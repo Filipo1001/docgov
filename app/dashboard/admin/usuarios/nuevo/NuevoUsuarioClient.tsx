@@ -16,7 +16,6 @@ const ROLES = [
   { value: 'admin',       label: 'Administrador' },
 ]
 const TIPOS_DOC = ['CC', 'CE', 'NIT', 'PAS']
-const GRUPOS_RH = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dependencia[] }) {
   const router = useRouter()
@@ -30,7 +29,6 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
   const [cargo, setCargo]         = useState('')
   const [telefono, setTelefono]   = useState('')
   const [direccion, setDireccion] = useState('')
-  const [rh, setRh]               = useState('')
   const [depId, setDepId]         = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
@@ -49,14 +47,13 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
       cargo,
       telefono,
       direccion,
-      rh,
       dependencia_id: depId || undefined,
     })
     setLoading(false)
     if (result.error) {
       toast.error(result.error)
     } else {
-      toast.success('Usuario creado. Contraseña temporal: Fredonia2026*')
+      toast.success(`Usuario creado. Contraseña inicial: ${cedula.trim()}`)
       setTimeout(() => router.push('/dashboard/admin/usuarios'), 1500)
     }
   }
@@ -103,8 +100,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
-            <span className="font-semibold">Contraseña temporal:</span> Fredonia2026* — el usuario
-            podrá cambiarla al iniciar sesión.
+            <span className="font-semibold">Contraseña inicial:</span> el número de documento del usuario.
           </div>
         </div>
 
@@ -149,17 +145,6 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Grupo sanguíneo (RH)</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                value={rh}
-                onChange={e => setRh(e.target.value)}
-              >
-                <option value="">— Sin especificar —</option>
-                {GRUPOS_RH.map(g => <option key={g}>{g}</option>)}
-              </select>
-            </div>
           </div>
         </div>
 

@@ -9,7 +9,6 @@ import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'gobierno', 'hacienda']
 const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
-const GRUPOS_RH  = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const TIPOS_CUENTA = ['Ahorros', 'Corriente']
 const BANCOS = [
   'Bancolombia', 'Davivienda', 'Banco de Bogotá', 'BBVA', 'Banco Popular',
@@ -54,7 +53,6 @@ export default function EditarUsuarioClient({
   const [cargo, setCargo]               = useState(usuario.cargo ?? '')
   const [telefono, setTelefono]         = useState(usuario.telefono ?? '')
   const [direccion, setDireccion]       = useState(usuario.direccion ?? '')
-  const [rh, setRh]                     = useState(usuario.rh ?? '')
   const [depId, setDepId]               = useState(usuario.dependencia_id ?? '')
   const [banco, setBanco]               = useState(usuario.banco ?? '')
   const [tipoCuenta, setTipoCuenta]     = useState(usuario.tipo_cuenta ?? '')
@@ -75,7 +73,6 @@ export default function EditarUsuarioClient({
       cargo,
       telefono,
       direccion,
-      rh,
       dependencia_id: depId || undefined,
       banco,
       tipo_cuenta: tipoCuenta,
@@ -242,17 +239,6 @@ export default function EditarUsuarioClient({
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Grupo sanguíneo (RH)</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={rh}
-              onChange={e => setRh(e.target.value)}
-            >
-              <option value="">— Sin especificar —</option>
-              {GRUPOS_RH.map(g => <option key={g}>{g}</option>)}
-            </select>
-          </div>
         </div>
 
         <hr className="border-gray-100" />

@@ -46,10 +46,10 @@ export async function crearUsuario(formData: {
   const cargo         = formData.cargo ? normalizeName(formData.cargo) : null
   const direccion     = formData.direccion ? normalizeFreeText(formData.direccion) : null
 
-  // 1. Create auth user (email confirmed immediately, temp password)
+  // 1. Create auth user (email confirmed immediately, password = document number)
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
-    password: 'Fredonia2026*',
+    password: formData.cedula.trim(),
     email_confirm: true,
     user_metadata: { nombre_completo: nombreCompleto },
   })
@@ -123,10 +123,11 @@ export async function activarContratista(
     : null
   const direccionNorm = extraData.direccion ? normalizeFreeText(extraData.direccion) : null
 
-  // Create auth user
+  // Create auth user (password = document number)
+  const passwordInicial = (extraData.cedula?.trim() || imp.cedula || '').trim()
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email: emailNorm,
-    password: 'Fredonia2026*',
+    password: passwordInicial || emailNorm, // fallback to email if cedula somehow empty
     email_confirm: true,
     user_metadata: { nombre_completo: nombreNorm },
   })

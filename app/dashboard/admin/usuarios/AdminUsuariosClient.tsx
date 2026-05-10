@@ -48,7 +48,6 @@ function ActivarModal({
   const [cedula, setCedula] = useState(contratista.cedula ?? '')
   const [tel, setTel]     = useState('')
   const [dir, setDir]     = useState('')
-  const [rh, setRh]       = useState('')
   const [depId, setDepId] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -56,7 +55,7 @@ function ActivarModal({
     if (!email.trim()) { toast.error('El email es requerido'); return }
     setLoading(true)
     const res = await activarContratista(contratista.id, email, {
-      cargo, cedula, telefono: tel, direccion: dir, rh, dependencia_id: depId || undefined,
+      cargo, cedula, telefono: tel, direccion: dir, dependencia_id: depId || undefined,
     })
     if (res.error) { toast.error(res.error); setLoading(false); return }
     toast.success(`Cuenta creada para ${contratista.nombre_completo}`)
@@ -97,20 +96,10 @@ function ActivarModal({
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Cargo</label>
-              <input value={cargo} onChange={e => setCargo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">RH</label>
-              <select value={rh} onChange={e => setRh(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
-                <option value="">—</option>
-                {['O+','O-','A+','A-','B+','B-','AB+','AB-'].map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Cargo</label>
+            <input value={cargo} onChange={e => setCargo(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
           </div>
 
           <div>
@@ -138,7 +127,7 @@ function ActivarModal({
         </div>
 
         <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mt-4">
-          Contraseña temporal: <strong>Fredonia2026*</strong> — el contratista debe cambiarla al primer ingreso.
+          <strong>Contraseña inicial:</strong> el número de documento del contratista.
         </p>
 
         <div className="flex gap-3 mt-5">
@@ -259,7 +248,6 @@ export default function AdminUsuariosClient({
                   <th className="px-5 py-3 text-xs font-semibold text-gray-500">Rol</th>
                   <th className="px-5 py-3 text-xs font-semibold text-gray-500">Cargo</th>
                   <th className="px-5 py-3 text-xs font-semibold text-gray-500">Dependencia</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">RH</th>
                   <th className="px-5 py-3" />
                 </tr>
               </thead>
@@ -283,11 +271,6 @@ export default function AdminUsuariosClient({
                     </td>
                     <td className="px-5 py-3.5 text-sm text-gray-600">{u.cargo ?? '—'}</td>
                     <td className="px-5 py-3.5 text-sm text-gray-600">{u.dependencia?.nombre ?? '—'}</td>
-                    <td className="px-5 py-3.5">
-                      {u.rh
-                        ? <span className="text-xs font-bold bg-red-50 text-red-700 px-2 py-0.5 rounded-full">{u.rh}</span>
-                        : <span className="text-xs text-gray-300">—</span>}
-                    </td>
                     <td className="px-5 py-3.5 text-right">
                       <Link href={`/dashboard/admin/usuarios/${u.id}`}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium">
