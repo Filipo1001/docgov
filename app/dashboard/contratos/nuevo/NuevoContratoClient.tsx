@@ -5,45 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
 import { formatCedula } from '@/lib/format'
-
-// ── Spanish number-to-words (Colombian peso format) ──────────
-function numerosALetras(n: number): string {
-  if (!n || n === 0) return ''
-  const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
-    'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE']
-  const decenas = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
-  const centenas = ['', 'CIEN', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS',
-    'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
-
-  function menorMil(n: number): string {
-    if (n === 0) return ''
-    if (n < 20) return unidades[n]
-    if (n < 30) return n === 20 ? 'VEINTE' : 'VEINTI' + unidades[n - 20]
-    if (n < 100) {
-      const d = Math.floor(n / 10), u = n % 10
-      return decenas[d] + (u > 0 ? ' Y ' + unidades[u] : '')
-    }
-    const c = Math.floor(n / 100), r = n % 100
-    const cStr = (c === 1 && r > 0) ? 'CIENTO' : centenas[c]
-    return cStr + (r > 0 ? ' ' + menorMil(r) : '')
-  }
-
-  function convertir(n: number): string {
-    if (n === 0) return ''
-    if (n < 1000) return menorMil(n)
-    if (n < 1_000_000) {
-      const miles = Math.floor(n / 1000), r = n % 1000
-      return (miles === 1 ? 'MIL' : menorMil(miles) + ' MIL') + (r > 0 ? ' ' + menorMil(r) : '')
-    }
-    if (n < 1_000_000_000) {
-      const mill = Math.floor(n / 1_000_000), r = n % 1_000_000
-      return (mill === 1 ? 'UN MILLÓN' : menorMil(mill) + ' MILLONES') + (r > 0 ? ' ' + convertir(r) : '')
-    }
-    return n.toString()
-  }
-
-  return convertir(Math.round(n)) + ' PESOS M/CTE'
-}
+import { numerosALetras } from '@/lib/numero-letras'
 
 interface ExcelData {
   objeto: string

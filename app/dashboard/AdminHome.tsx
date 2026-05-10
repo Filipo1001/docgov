@@ -237,6 +237,15 @@ export default function AdminHome({
             <p className="text-xs text-gray-500 mt-1">Gestionar usuarios del sistema</p>
           </Card>
         </Link>
+        <Link href="/dashboard/admin/importar" className="block">
+          <Card className="hover:border-emerald-200 border-emerald-100 bg-emerald-50/40 transition-colors group h-full">
+            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-emerald-200 transition-colors">
+              <span className="text-xl">📥</span>
+            </div>
+            <h3 className="font-medium text-gray-900 text-sm">Importar Excel</h3>
+            <p className="text-xs text-gray-500 mt-1">Crear usuarios y contratos en masa</p>
+          </Card>
+        </Link>
         <Link href="/dashboard/admin/firmas" className="block">
           <Card className="hover:border-gray-300 transition-colors group h-full">
             <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-gray-200 transition-colors">
