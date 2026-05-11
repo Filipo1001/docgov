@@ -137,11 +137,29 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
 // ─── Seguridad Social ────────────────────────
 
 /**
- * Default base de cotización a la Seguridad Social.
- * Equivale al 40% del SMMLV aplicable al contrato.
- * El admin puede sobreescribir este valor por periodo en periodos.base_cotizacion_ss.
+ * Piso de cotización a la Seguridad Social (Fredonia 2026).
+ * Aplica cuando el 40% del valor mensual del contrato queda por debajo de este piso.
+ * El admin puede sobreescribir este valor por periodo en periodos.base_cotizacion_ss
+ * (incluso en periodos radicados o históricos).
  */
 export const DEFAULT_BASE_COTIZACION_SS = 1_750_905
+
+/**
+ * Calcula la base de cotización a la Seguridad Social según la regla legal:
+ *
+ *   Si valor_mensual ≤ 4.377.262   → DEFAULT_BASE_COTIZACION_SS (piso)
+ *   Si valor_mensual >  4.377.262   → valor_mensual × 0.40
+ *
+ * El umbral (4.377.262) es el valor mensual a partir del cual el 40% supera al piso.
+ * Equivalente a: max(DEFAULT_BASE_COTIZACION_SS, valor_mensual × 0.40)
+ *
+ * El resultado es el valor por defecto que se aplica cuando el admin no ha
+ * editado manualmente la base del periodo. La edición manual siempre gana.
+ */
+export function calcularBaseCotizacionSS(valorMensual: number): number {
+  const cuarenta = Math.round(valorMensual * 0.4)
+  return Math.max(DEFAULT_BASE_COTIZACION_SS, cuarenta)
+}
 
 // ─── Pending review state per role ──────────
 

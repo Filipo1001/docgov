@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion } from '@/app/actions/periodos'
 import type { EstadoPeriodo } from '@/lib/types'
-import { DEFAULT_BASE_COTIZACION_SS } from '@/lib/constants'
+import { DEFAULT_BASE_COTIZACION_SS, calcularBaseCotizacionSS } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -625,12 +625,27 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
       )}
 
       {/* ══ BASE COTIZACIÓN SS ════════════════════════════════ */}
-      {tab === 'base_ss' && (
+      {tab === 'base_ss' && (() => {
+        const baseAutomatica = calcularBaseCotizacionSS(contrato.valor_mensual)
+        const usandoCuarentaPct = baseAutomatica > DEFAULT_BASE_COTIZACION_SS
+        return (
         <div className="space-y-4">
-          <p className="text-xs text-gray-500">
-            Base de cotización a la Seguridad Social que aparece en el Acta de Supervisión de cada periodo.
-            Déjalo en blanco para usar el valor por defecto ($ {DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')}).
-          </p>
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-xs text-gray-700 space-y-1.5">
+            <p className="font-semibold text-violet-900">Cálculo automático para este contrato</p>
+            <p>
+              Valor mensual del contrato: <span className="font-mono font-semibold">$ {contrato.valor_mensual.toLocaleString('es-CO')}</span>
+            </p>
+            <p>
+              Base SS por defecto:{' '}
+              <span className="font-mono font-bold text-violet-700">$ {baseAutomatica.toLocaleString('es-CO')}</span>
+              {usandoCuarentaPct
+                ? ' (40 % del valor mensual, supera el piso)'
+                : ` (piso de $ ${DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')}; el 40 % queda por debajo)`}
+            </p>
+            <p className="text-gray-500 pt-1">
+              Deja el campo en blanco para usar este valor. Escribe un número para sobrescribirlo en cualquier periodo (incluidos radicados e históricos).
+            </p>
+          </div>
 
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
             <table className="w-full text-sm">
@@ -646,7 +661,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                 {periodos.map((p) => {
                   const guardando = guardandoBaseId === p.id
                   const valorEdit = baseEdit[p.id] ?? ''
-                  const valorActual = p.base_cotizacion_ss ?? DEFAULT_BASE_COTIZACION_SS
+                  const valorActual = p.base_cotizacion_ss ?? baseAutomatica
                   const esCambiado = valorEdit.trim() !== (p.base_cotizacion_ss != null ? String(p.base_cotizacion_ss) : '')
 
                   return (
@@ -667,7 +682,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                             onChange={(e) =>
                               setBaseEdit((prev) => ({ ...prev, [p.id]: e.target.value.replace(/\D/g, '') }))
                             }
-                            placeholder={`${DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')}`}
+                            placeholder={`${baseAutomatica.toLocaleString('es-CO')}`}
                             className="w-40 px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:bg-gray-100"
                             disabled={guardando}
                           />
@@ -703,7 +718,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             </table>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Input oculto para subida de PDFs — un solo input compartido por todos los periodos */}
       <input

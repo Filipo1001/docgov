@@ -10,7 +10,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
-import { DEFAULT_BASE_COTIZACION_SS } from '@/lib/constants'
+import { calcularBaseCotizacionSS } from '@/lib/constants'
 
 // Disable automatic hyphenation — prevents words being split mid-line
 Font.registerHyphenationCallback(word => [word])
@@ -446,7 +446,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
     ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
     : formatCOP(contrato.valor_total)
 
-  const baseValor = periodo.base_cotizacion_ss ?? DEFAULT_BASE_COTIZACION_SS
+  const baseValor = periodo.base_cotizacion_ss ?? calcularBaseCotizacionSS(contrato.valor_mensual)
   const baseCotizacionTexto = `${numeroALetrasLargo(baseValor)} PESOS ($ ${baseValor.toLocaleString('es-CO')})`
 
   // Pagos anteriores al mes actual → filas de la tabla de pagos
