@@ -1,9 +1,27 @@
 'use client'
 
+/**
+ * /dashboard/contratos
+ *
+ * Lista de contratos paginada con TanStack Query + virtualización.
+ *
+ *  - useInfiniteQuery: carga 30 contratos por página, auto-fetch al scroll
+ *  - useWindowVirtualizer: renderiza solo lo visible (manejable con sidebar fijo)
+ *  - Filtros estructurados (dependencia, supervisor, rango, vigencia) → queryKey
+ *  - Búsqueda: debounce 300 ms → queryKey
+ *  - "Solo incompletos" → post-filter client-side sobre páginas cargadas
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useEffect, useState, useMemo } from 'react'
-import { createClient } from '@/lib/supabase'
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useUsuario } from '@/lib/user-context'
+import {
+  getContratosPagina,
+  type ContratoListItem,
+  type FiltrosContratos,
+} from '@/services/contratos'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -13,131 +31,149 @@ function norm(s: string) {
 
 function formatCOP(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`
   return `$${n.toLocaleString('es-CO')}`
 }
 
 const RANGOS = [
-  { label: 'Todos los valores',         min: 0,         max: Infinity },
-  { label: 'Hasta $3.000.000',          min: 0,         max: 3_000_000 },
-  { label: '$3.000.001 – $6.000.000',   min: 3_000_001, max: 6_000_000 },
-  { label: '$6.000.001 – $9.000.000',   min: 6_000_001, max: 9_000_000 },
-  { label: 'Más de $9.000.000',         min: 9_000_001, max: Infinity },
+  { label: 'Todos los valores',       min: 0,         max: Infinity },
+  { label: 'Hasta $3.000.000',        min: 0,         max: 3_000_000 },
+  { label: '$3.000.001 – $6.000.000', min: 3_000_001, max: 6_000_000 },
+  { label: '$6.000.001 – $9.000.000', min: 6_000_001, max: 9_000_000 },
+  { label: 'Más de $9.000.000',       min: 9_000_001, max: Infinity },
 ]
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
+/** Debounced value hook */
+function useDebounced<T>(value: T, ms = 300): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return debounced
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ContratosPage() {
   const { usuario, cargando: cargandoUser } = useUsuario()
-  const [contratos, setContratos]           = useState<any[]>([])
-  const [cargando, setCargando]             = useState(true)
-
-  // ── Filters (admin only) ──────────────────────────────────────
-  const [busqueda, setBusqueda]         = useState('')
-  const [filtroDep, setFiltroDep]       = useState('')
-  const [filtroSup, setFiltroSup]       = useState('')
-  const [filtroRango, setFiltroRango]   = useState(0)          // index in RANGOS
-  const [soloIncompletos, setSoloInc]   = useState(false)
-  const [filtroVigencia, setFiltroVig]  = useState<'todos' | 'vigentes' | 'vencidos'>('todos')
-
-  useEffect(() => {
-    if (!usuario) return
-    async function cargar() {
-      const supabase = createClient()
-      let query = supabase
-        .from('contratos')
-        .select(`
-          *,
-          contratista:usuarios!contratos_contratista_id_fkey(
-            nombre_completo, cedula, email, telefono, foto_url,
-            firma_url, cargo, banco, tipo_cuenta, numero_cuenta
-          ),
-          supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
-          dependencia:dependencias(id, nombre, abreviatura)
-        `)
-        .order('numero', { ascending: true })
-
-      if (usuario!.rol === 'supervisor') {
-        query = query.eq('supervisor_id', usuario!.id)
-      } else if (usuario!.rol === 'contratista') {
-        query = query.eq('contratista_id', usuario!.id)
-      }
-
-      const { data } = await query
-      setContratos(data || [])
-      setCargando(false)
-    }
-    cargar()
-  }, [usuario])
-
   const esAdmin = usuario?.rol === 'admin'
   const hoy = new Date().toISOString().split('T')[0]
 
-  // ── Derived filter options from loaded data ───────────────────
-  const dependencias = useMemo(() => {
-    const map = new Map<string, string>()
-    contratos.forEach(c => {
-      if (c.dependencia?.id) map.set(c.dependencia.id, c.dependencia.nombre)
-    })
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]))
-  }, [contratos])
+  // ── Filters ────────────────────────────────────────────────────
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroDep, setFiltroDep] = useState('')
+  const [filtroSup, setFiltroSup] = useState('')
+  const [filtroRango, setFiltroRango] = useState(0)
+  const [soloIncompletos, setSoloInc] = useState(false)
+  const [filtroVigencia, setFiltroVig] = useState<'todos' | 'vigentes' | 'vencidos'>('todos')
 
-  const supervisores = useMemo(() => {
-    const map = new Map<string, string>()
-    contratos.forEach(c => {
-      if (c.supervisor?.id) map.set(c.supervisor.id, c.supervisor.nombre_completo)
-    })
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]))
-  }, [contratos])
+  const busquedaDebounced = useDebounced(busqueda, 300)
 
-  // ── Missing data check ────────────────────────────────────────
-  function datosFaltantes(contrato: any): string[] {
-    if (!esAdmin) return []
-    const c = contrato.contratista
-    if (!c) return ['Contratista no encontrado']
+  const filtros = useMemo<FiltrosContratos>(() => {
+    const r = RANGOS[filtroRango]
+    return {
+      q: busquedaDebounced || undefined,
+      dependenciaId: filtroDep || undefined,
+      supervisorId: filtroSup || undefined,
+      rangoMin: r.min > 0 ? r.min : undefined,
+      rangoMax: Number.isFinite(r.max) ? r.max : undefined,
+      vigencia: filtroVigencia,
+    }
+  }, [busquedaDebounced, filtroDep, filtroSup, filtroRango, filtroVigencia])
+
+  // ── Infinite query ─────────────────────────────────────────────
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['contratos', usuario?.id, usuario?.rol, filtros],
+    queryFn: ({ pageParam }) =>
+      getContratosPagina({
+        pageParam,
+        rol: usuario!.rol,
+        userId: usuario!.id,
+        filtros,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    enabled: !!usuario,
+  })
+
+  // ── Flatten + post-filter (solo incompletos) ──────────────────
+  const todosCargados = useMemo(
+    () => data?.pages.flatMap((p) => p.items) ?? [],
+    [data],
+  )
+  const total = data?.pages[0]?.total ?? 0
+
+  function datosFaltantes(c: ContratoListItem): string[] {
+    if (!esAdmin || !c.contratista) return []
     const f: string[] = []
-    if (!c.email || c.email.endsWith('@pendiente.local')) f.push('Email')
-    if (!c.telefono)     f.push('Celular')
-    if (!c.cargo)        f.push('Cargo')
-    if (!c.foto_url)     f.push('Foto')
-    if (!c.firma_url)    f.push('Firma')
-    if (!c.banco || !c.tipo_cuenta || !c.numero_cuenta) f.push('Cuenta bancaria')
+    const u = c.contratista
+    if (!u.email || u.email.endsWith('@pendiente.local')) f.push('Email')
+    if (!u.telefono) f.push('Celular')
+    if (!u.cargo) f.push('Cargo')
+    if (!u.foto_url) f.push('Foto')
+    if (!u.firma_url) f.push('Firma')
+    if (!u.banco || !u.tipo_cuenta || !u.numero_cuenta) f.push('Cuenta bancaria')
     return f
   }
 
-  // ── Apply filters ─────────────────────────────────────────────
   const visibles = useMemo(() => {
-    if (!esAdmin) return contratos
-
-    const q = norm(busqueda)
-    const rango = RANGOS[filtroRango]
-
-    return contratos.filter(c => {
-      // Text search
-      if (q) {
-        const enNumero = norm(c.numero ?? '').includes(q)
-        const enNombre = norm(c.contratista?.nombre_completo ?? '').includes(q)
-        const enCedula = norm(c.contratista?.cedula ?? '').includes(q)
-        if (!enNumero && !enNombre && !enCedula) return false
-      }
-      // Dependencia
-      if (filtroDep && c.dependencia?.id !== filtroDep) return false
-      // Supervisor
-      if (filtroSup && c.supervisor?.id !== filtroSup) return false
-      // Rango salarial (valor_mensual)
-      const vm = c.valor_mensual ?? 0
-      if (vm < rango.min || vm > rango.max) return false
-      // Solo incompletos
-      if (soloIncompletos && datosFaltantes(c).length === 0) return false
-      // Vigencia
-      if (filtroVigencia === 'vigentes'  && c.fecha_fin <  hoy) return false
-      if (filtroVigencia === 'vencidos'  && c.fecha_fin >= hoy) return false
-      return true
-    })
+    if (!soloIncompletos) return todosCargados
+    return todosCargados.filter((c) => datosFaltantes(c).length > 0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contratos, busqueda, filtroDep, filtroSup, filtroRango, soloIncompletos, filtroVigencia])
+  }, [todosCargados, soloIncompletos, esAdmin])
 
-  const hayFiltrosActivos = busqueda || filtroDep || filtroSup || filtroRango > 0 || soloIncompletos || filtroVigencia !== 'todos'
+  // ── Derived filter options (solo de lo cargado) ───────────────
+  const dependencias = useMemo(() => {
+    const map = new Map<string, string>()
+    todosCargados.forEach((c) => {
+      if (c.dependencia?.id) map.set(c.dependencia.id, c.dependencia.nombre)
+    })
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [todosCargados])
+
+  const supervisores = useMemo(() => {
+    const map = new Map<string, string>()
+    todosCargados.forEach((c) => {
+      if (c.supervisor?.id) map.set(c.supervisor.id, c.supervisor.nombre_completo)
+    })
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [todosCargados])
+
+  // ── Virtualization ────────────────────────────────────────────
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const virtualizer = useWindowVirtualizer({
+    count: visibles.length,
+    estimateSize: () => 132, // card avg height incl. gap
+    overscan: 6,
+    scrollMargin: listRef.current?.offsetTop ?? 0,
+  })
+
+  // ── Auto-load more via sentinel ───────────────────────────────
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!sentinelRef.current || !hasNextPage || isFetchingNextPage) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) fetchNextPage()
+      },
+      { rootMargin: '300px' },
+    )
+    observer.observe(sentinelRef.current)
+    return () => observer.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  // ── Misc ──────────────────────────────────────────────────────
+  const hayFiltrosActivos =
+    busqueda || filtroDep || filtroSup || filtroRango > 0 || soloIncompletos || filtroVigencia !== 'todos'
 
   function limpiarFiltros() {
     setBusqueda('')
@@ -148,8 +184,32 @@ export default function ContratosPage() {
     setFiltroVig('todos')
   }
 
-  if (cargandoUser || cargando) {
-    return <p className="text-gray-500">Cargando contratos...</p>
+  // ── Render ────────────────────────────────────────────────────
+  if (cargandoUser || (isLoading && !data)) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded-xl w-48 mb-6" />
+        {esAdmin && <div className="h-24 bg-gray-200 rounded-2xl" />}
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-28 bg-gray-200 rounded-2xl" />
+        ))}
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+        <p className="text-base font-semibold text-red-800 mb-2">No pudimos cargar los contratos</p>
+        <p className="text-sm text-red-600 mb-4">Revisa tu conexión e intenta de nuevo.</p>
+        <button
+          onClick={() => refetch()}
+          className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-700"
+        >
+          Reintentar
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -170,9 +230,8 @@ export default function ContratosPage() {
       </div>
 
       {/* ── Search + Filters (admin only) ───────────────────────── */}
-      {esAdmin && contratos.length > 0 && (
+      {esAdmin && (
         <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 space-y-3">
-
           {/* Search bar */}
           <div className="relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -180,9 +239,9 @@ export default function ContratosPage() {
             </svg>
             <input
               value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar por N.º contrato, nombre del contratista o cédula…"
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por N.º de contrato u objeto…"
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
             {busqueda && (
               <button onClick={() => setBusqueda('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -195,11 +254,9 @@ export default function ContratosPage() {
 
           {/* Filter row */}
           <div className="flex flex-wrap gap-2 items-center">
-
-            {/* Secretaría */}
             <select
               value={filtroDep}
-              onChange={e => setFiltroDep(e.target.value)}
+              onChange={(e) => setFiltroDep(e.target.value)}
               className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroDep ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
             >
               <option value="">Todas las secretarías</option>
@@ -208,24 +265,20 @@ export default function ContratosPage() {
               ))}
             </select>
 
-            {/* Supervisor */}
             <select
               value={filtroSup}
-              onChange={e => setFiltroSup(e.target.value)}
+              onChange={(e) => setFiltroSup(e.target.value)}
               className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroSup ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
             >
               <option value="">Todos los supervisores</option>
               {supervisores.map(([id, nombre]) => (
-                <option key={id} value={id}>
-                  {nombre.split(' ').slice(0, 2).join(' ')}
-                </option>
+                <option key={id} value={id}>{nombre.split(' ').slice(0, 2).join(' ')}</option>
               ))}
             </select>
 
-            {/* Rango salarial */}
             <select
               value={filtroRango}
-              onChange={e => setFiltroRango(Number(e.target.value))}
+              onChange={(e) => setFiltroRango(Number(e.target.value))}
               className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroRango > 0 ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
             >
               {RANGOS.map((r, i) => (
@@ -233,9 +286,8 @@ export default function ContratosPage() {
               ))}
             </select>
 
-            {/* Vigencia */}
             <div className="flex border border-gray-200 rounded-xl overflow-hidden text-sm">
-              {(['todos', 'vigentes', 'vencidos'] as const).map(v => (
+              {(['todos', 'vigentes', 'vencidos'] as const).map((v) => (
                 <button
                   key={v}
                   onClick={() => setFiltroVig(v)}
@@ -246,9 +298,8 @@ export default function ContratosPage() {
               ))}
             </div>
 
-            {/* Solo incompletos toggle */}
             <button
-              onClick={() => setSoloInc(v => !v)}
+              onClick={() => setSoloInc((v) => !v)}
               className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-sm transition-colors ${
                 soloIncompletos
                   ? 'bg-red-50 border-red-300 text-red-700 font-medium'
@@ -261,28 +312,25 @@ export default function ContratosPage() {
               Solo incompletos
             </button>
 
-            {/* Clear */}
             {hayFiltrosActivos && (
-              <button
-                onClick={limpiarFiltros}
-                className="px-3 py-2 text-sm text-gray-400 hover:text-gray-700 underline"
-              >
+              <button onClick={limpiarFiltros} className="px-3 py-2 text-sm text-gray-400 hover:text-gray-700 underline">
                 Limpiar filtros
               </button>
             )}
           </div>
 
-          {/* Result count */}
           <p className="text-xs text-gray-400">
-            {hayFiltrosActivos
-              ? `${visibles.length} de ${contratos.length} contratos`
-              : `${contratos.length} contratos en total`}
+            {soloIncompletos
+              ? `${visibles.length} incompletos cargados (de ${todosCargados.length} cargados / ${total} totales)`
+              : hayFiltrosActivos
+              ? `Mostrando ${todosCargados.length} de ${total} contratos`
+              : `${total} contratos en total`}
           </p>
         </div>
       )}
 
       {/* ── List ─────────────────────────────────────────────────── */}
-      {contratos.length === 0 ? (
+      {total === 0 ? (
         <div className="bg-white rounded-2xl border p-12 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl">📄</span>
@@ -314,75 +362,119 @@ export default function ContratosPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {visibles.map((contrato) => {
-            const faltantes  = datosFaltantes(contrato)
-            const incompleto = faltantes.length > 0
-            const vencido    = contrato.fecha_fin < hoy
+        <>
+          <div ref={listRef} style={{ position: 'relative' }}>
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const contrato = visibles[virtualRow.index]
+                const faltantes = datosFaltantes(contrato)
+                const incompleto = faltantes.length > 0
+                const vencido = contrato.fecha_fin < hoy
 
-            return (
-              <Link
-                key={contrato.id}
-                href={`/dashboard/contratos/${contrato.id}`}
-                className={`block rounded-2xl border p-5 transition-colors ${
-                  incompleto
-                    ? 'bg-red-50 border-red-200 hover:border-red-300'
-                    : 'bg-white hover:border-gray-300'
-                }`}
+                return (
+                  <div
+                    key={contrato.id}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start - (listRef.current?.offsetTop ?? 0)}px)`,
+                      paddingBottom: '12px',
+                    }}
+                  >
+                    <Link
+                      href={`/dashboard/contratos/${contrato.id}`}
+                      className={`block rounded-2xl border p-5 transition-colors ${
+                        incompleto
+                          ? 'bg-red-50 border-red-200 hover:border-red-300'
+                          : 'bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                            <span className="text-sm font-bold text-gray-900 font-mono">
+                              {contrato.numero}-{contrato.anio}
+                            </span>
+                            {contrato.dependencia?.abreviatura && (
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                {contrato.dependencia.abreviatura}
+                              </span>
+                            )}
+                            {vencido && (
+                              <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                Vencido
+                              </span>
+                            )}
+                            {incompleto && (
+                              <span className="text-[10px] font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                Faltan: {faltantes.join(' · ')}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-sm text-gray-600 line-clamp-1 mb-2">{contrato.objeto}</p>
+
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
+                            <span className="font-medium text-gray-700">
+                              {contrato.contratista?.nombre_completo?.split(' ').slice(0, 3).join(' ')}
+                            </span>
+                            {contrato.contratista?.cedula && (
+                              <span className="font-mono">{contrato.contratista.cedula}</span>
+                            )}
+                            <span>
+                              Sup: {contrato.supervisor?.nombre_completo?.split(' ').slice(0, 2).join(' ')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-gray-900">
+                            {formatCOP(contrato.valor_mensual ?? 0)}
+                            <span className="text-xs text-gray-400 font-normal">/mes</span>
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {formatCOP(contrato.valor_total ?? 0)} total
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {contrato.plazo_meses}m · {contrato.fecha_inicio?.slice(0, 7)}
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Sentinel + load-more indicator */}
+          <div ref={sentinelRef} className="py-6 text-center">
+            {isFetchingNextPage ? (
+              <p className="text-sm text-gray-400">Cargando más contratos…</p>
+            ) : hasNextPage ? (
+              <button
+                onClick={() => fetchNextPage()}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-
-                    {/* Top row */}
-                    <div className="flex items-center flex-wrap gap-2 mb-1.5">
-                      <span className="text-sm font-bold text-gray-900 font-mono">
-                        {contrato.numero}-{contrato.anio}
-                      </span>
-                      {contrato.dependencia?.abreviatura && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                          {contrato.dependencia.abreviatura}
-                        </span>
-                      )}
-                      {vencido && (
-                        <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                          Vencido
-                        </span>
-                      )}
-                      {incompleto && (
-                        <span className="text-[10px] font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
-                          Faltan: {faltantes.join(' · ')}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Object */}
-                    <p className="text-sm text-gray-600 line-clamp-1 mb-2">{contrato.objeto}</p>
-
-                    {/* Meta */}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-                      <span className="font-medium text-gray-700">
-                        {contrato.contratista?.nombre_completo?.split(' ').slice(0, 3).join(' ')}
-                      </span>
-                      {contrato.contratista?.cedula && (
-                        <span className="font-mono">{contrato.contratista.cedula}</span>
-                      )}
-                      <span>Sup: {contrato.supervisor?.nombre_completo?.split(' ').slice(0, 2).join(' ')}</span>
-                    </div>
-                  </div>
-
-                  {/* Right side */}
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-gray-900">
-                      {formatCOP(contrato.valor_mensual ?? 0)}<span className="text-xs text-gray-400 font-normal">/mes</span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{formatCOP(contrato.valor_total ?? 0)} total</p>
-                    <p className="text-xs text-gray-400">{contrato.plazo_meses}m · {contrato.fecha_inicio?.slice(0, 7)}</p>
-                  </div>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
+                Cargar más
+              </button>
+            ) : todosCargados.length > 0 ? (
+              <p className="text-xs text-gray-400">
+                Se cargaron los {todosCargados.length} contratos
+              </p>
+            ) : null}
+          </div>
+        </>
       )}
     </div>
   )

@@ -9,7 +9,118 @@ import { createClient } from '@/lib/supabase'
 import type { Contrato, Obligacion, Rol } from '@/lib/types'
 import { MESES } from '@/lib/constants'
 
-// ─── Contract list queries ────────────────────────────────────
+// ─── Paginated list (TanStack Query) ──────────────────────────
+
+export interface FiltrosContratos {
+  /** Search by N° contrato OR objeto (case-insensitive) */
+  q?: string
+  dependenciaId?: string
+  supervisorId?: string
+  /** valor_mensual range (inclusive). 0/Infinity = no bound. */
+  rangoMin?: number
+  rangoMax?: number
+  /** Filter by current vigencia */
+  vigencia?: 'todos' | 'vigentes' | 'vencidos'
+}
+
+export interface ContratoListItem {
+  id: string
+  numero: string
+  anio: number
+  objeto: string
+  valor_total: number
+  valor_mensual: number
+  plazo_meses: number
+  fecha_inicio: string
+  fecha_fin: string
+  contratista: {
+    nombre_completo: string
+    cedula: string | null
+    email: string | null
+    telefono: string | null
+    foto_url: string | null
+    firma_url: string | null
+    cargo: string | null
+    banco: string | null
+    tipo_cuenta: string | null
+    numero_cuenta: string | null
+  } | null
+  supervisor: { id: string; nombre_completo: string } | null
+  dependencia: { id: string; nombre: string; abreviatura: string } | null
+}
+
+export interface PaginaContratos {
+  items: ContratoListItem[]
+  nextOffset: number | null
+  total: number
+}
+
+/**
+ * Paginated query used by useInfiniteQuery in /dashboard/contratos.
+ * All structural filters are applied server-side; "solo incompletos"
+ * is a post-filter on the client because it requires checking multiple
+ * fields per contractor.
+ */
+export async function getContratosPagina(params: {
+  pageParam?: number
+  limit?: number
+  rol: Rol
+  userId: string
+  filtros?: FiltrosContratos
+}): Promise<PaginaContratos> {
+  const supabase = createClient()
+  const pageParam = params.pageParam ?? 0
+  const limit = params.limit ?? 30
+  const { rol, userId, filtros = {} } = params
+
+  let query = supabase
+    .from('contratos')
+    .select(
+      `
+      id, numero, anio, objeto, valor_total, valor_mensual, plazo_meses,
+      fecha_inicio, fecha_fin,
+      contratista:usuarios!contratos_contratista_id_fkey(
+        nombre_completo, cedula, email, telefono, foto_url,
+        firma_url, cargo, banco, tipo_cuenta, numero_cuenta
+      ),
+      supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
+      dependencia:dependencias(id, nombre, abreviatura)
+    `,
+      { count: 'exact' },
+    )
+    .order('numero', { ascending: true })
+    .range(pageParam, pageParam + limit - 1)
+
+  // Role scoping
+  if (rol === 'supervisor') query = query.eq('supervisor_id', userId)
+  else if (rol === 'contratista') query = query.eq('contratista_id', userId)
+
+  // Server-side filters
+  if (filtros.dependenciaId) query = query.eq('dependencia_id', filtros.dependenciaId)
+  if (filtros.supervisorId) query = query.eq('supervisor_id', filtros.supervisorId)
+  if (filtros.rangoMin && filtros.rangoMin > 0) query = query.gte('valor_mensual', filtros.rangoMin)
+  if (filtros.rangoMax && Number.isFinite(filtros.rangoMax)) query = query.lte('valor_mensual', filtros.rangoMax)
+
+  const hoy = new Date().toISOString().slice(0, 10)
+  if (filtros.vigencia === 'vigentes') query = query.gte('fecha_fin', hoy)
+  else if (filtros.vigencia === 'vencidos') query = query.lt('fecha_fin', hoy)
+
+  // Text search — server-side OR on numero/objeto
+  if (filtros.q && filtros.q.trim()) {
+    const q = filtros.q.trim().replace(/[%,]/g, '') // sanitize
+    query = query.or(`numero.ilike.%${q}%,objeto.ilike.%${q}%`)
+  }
+
+  const { data, count, error } = await query
+  if (error) throw error
+
+  const items = (data ?? []) as unknown as ContratoListItem[]
+  const nextOffset = items.length === limit ? pageParam + limit : null
+
+  return { items, nextOffset, total: count ?? 0 }
+}
+
+// ─── Contract list queries (legacy, kept for back-compat) ─────
 
 export async function getContratos(rol: Rol, userId: string): Promise<Contrato[]> {
   const supabase = createClient()

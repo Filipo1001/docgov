@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import { UserProvider, useUsuario } from '@/lib/user-context'
+import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
 import NotificacionesBell from '@/components/NotificacionesBell'
 
@@ -229,8 +230,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <UserProvider>
-      <DashboardContent>{children}</DashboardContent>
-    </UserProvider>
+    <QueryProvider>
+      <UserProvider>
+        <DashboardContent>{children}</DashboardContent>
+      </UserProvider>
+    </QueryProvider>
   )
 }
