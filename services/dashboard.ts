@@ -7,6 +7,7 @@
  */
 
 import { createClient } from '@/lib/supabase'
+import { getMesActual } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -128,6 +129,7 @@ export async function getPendientesRevisor(
 ): Promise<PeriodoPendienteRevisor[]> {
   const supabase = createClient()
   const now = Date.now()
+  const { mes, anio } = getMesActual()
 
   const { data } = await supabase
     .from('periodos')
@@ -140,6 +142,8 @@ export async function getPendientesRevisor(
       )
     `)
     .eq('estado', estadoFiltro)
+    .eq('mes', mes)
+    .eq('anio', anio)
     .order('fecha_envio', { ascending: true })
     .limit(20)
 
