@@ -463,22 +463,33 @@ export default function ReviewerHome({
         action={
           <Link
             href="/dashboard/informes"
-            className="group flex items-center gap-3 bg-gray-900 hover:bg-gray-800 active:scale-95 text-white pl-3 pr-5 py-2.5 rounded-2xl transition-all duration-200 shadow-sm hover:shadow-lg"
+            className="group flex items-center gap-4 bg-gray-900 hover:bg-gray-800 active:scale-95 text-white pl-4 pr-5 py-3 rounded-2xl transition-all duration-200 shadow-sm hover:shadow-xl"
           >
-            <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center text-base flex-shrink-0">
-              📅
-            </div>
+            {/* Day number */}
+            <span className="text-4xl font-black leading-none tabular-nums text-white">
+              {new Date().getDate()}
+            </span>
+
+            {/* Divider */}
+            <span className="w-px h-8 bg-white/15 flex-shrink-0" />
+
+            {/* Context */}
             <div className="text-left">
-              <p className="text-sm font-bold leading-none">{mes} {anio}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5 leading-none group-hover:text-gray-300 transition-colors">
+              <p className="text-sm font-bold leading-none">
+                {mes} {anio}
+                {pendientes.length > 0 && (
+                  <span className="ml-2 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full align-middle">
+                    {pendientes.length}
+                  </span>
+                )}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1 leading-none capitalize">
+                {new Date().toLocaleDateString('es-CO', { weekday: 'long' })}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5 leading-none group-hover:text-gray-300 transition-colors">
                 Ver informes →
               </p>
             </div>
-            {pendientes.length > 0 && (
-              <span className="ml-0.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-                {pendientes.length}
-              </span>
-            )}
           </Link>
         }
       />
