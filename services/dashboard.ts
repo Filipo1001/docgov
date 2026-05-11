@@ -159,3 +159,108 @@ export async function getPendientesRevisor(
     dependencia_nombre: p.contrato?.dependencia?.nombre ?? null,
   }))
 }
+
+// ─── Asesor Dashboard Stats ───────────────────────────────────
+
+export interface ContadorDestinatarios {
+  total: number
+  conEmail: number   // non-placeholder (@pendiente.local excluded)
+}
+
+export interface AsesorStats {
+  totalContratos: number
+  sinEnviar: number      // no periodo or borrador (needs action from contratista)
+  enMesa: number         // estado: 'enviado' — waiting for asesor review
+  conSecretaria: number  // estado: 'revision' — asesor approved, with secretaría
+  aprobados: number      // estado: 'aprobado' | 'radicado'
+  rechazados: number     // estado: 'rechazado'
+  // Recipient counts per email filter (no emails exposed to client)
+  correoCounts: {
+    sin_enviar: ContadorDestinatarios
+    enviaron: ContadorDestinatarios
+    rechazados_filtro: ContadorDestinatarios
+    todos: ContadorDestinatarios
+  }
+}
+
+export async function getAsesorStats(
+  dependenciaId: string,
+  mes: string,
+  anio: number,
+): Promise<AsesorStats> {
+  const supabase = createClient()
+  const hoy = new Date().toISOString().split('T')[0]
+
+  const empty: AsesorStats = {
+    totalContratos: 0, sinEnviar: 0, enMesa: 0, conSecretaria: 0, aprobados: 0, rechazados: 0,
+    correoCounts: {
+      sin_enviar:       { total: 0, conEmail: 0 },
+      enviaron:         { total: 0, conEmail: 0 },
+      rechazados_filtro:{ total: 0, conEmail: 0 },
+      todos:            { total: 0, conEmail: 0 },
+    },
+  }
+
+  // 1. Active contracts in this dependencia with contractor email
+  const { data: contratos } = await supabase
+    .from('contratos')
+    .select('id, contratista:usuarios!contratos_contratista_id_fkey(email)')
+    .eq('dependencia_id', dependenciaId)
+    .gte('fecha_fin', hoy)
+
+  const contratoList = (contratos ?? []) as unknown as Array<{ id: string; contratista: { email: string } | null }>
+  const contratoIds = contratoList.map(c => c.id)
+  const totalContratos = contratoIds.length
+  if (totalContratos === 0) return empty
+
+  // 2. Periods for this month
+  const { data: periodos } = await supabase
+    .from('periodos')
+    .select('contrato_id, estado')
+    .in('contrato_id', contratoIds)
+    .eq('mes', mes)
+    .eq('anio', anio)
+    .eq('es_historico', false)
+
+  const periodoList = (periodos ?? []) as Array<{ contrato_id: string; estado: string }>
+  const estadoPorContrato = new Map(periodoList.map(p => [p.contrato_id, p.estado]))
+
+  // 3. Pipeline counts
+  const enMesa       = periodoList.filter(p => p.estado === 'enviado').length
+  const conSecretaria= periodoList.filter(p => p.estado === 'revision').length
+  const aprobados    = periodoList.filter(p => ['aprobado', 'radicado'].includes(p.estado)).length
+  const rechazados   = periodoList.filter(p => p.estado === 'rechazado').length
+  const sinEnviar    = totalContratos - enMesa - conSecretaria - aprobados - rechazados
+
+  // 4. Email counts per filter (no emails leave server — just counts)
+  const hasRealEmail = (email?: string | null) => !!email && !email.includes('@pendiente.local')
+
+  const counts = {
+    sin_enviar:       { total: 0, conEmail: 0 },
+    enviaron:         { total: 0, conEmail: 0 },
+    rechazados_filtro:{ total: 0, conEmail: 0 },
+    todos:            { total: 0, conEmail: 0 },
+  }
+
+  for (const c of contratoList) {
+    const email = c.contratista?.email
+    const estado = estadoPorContrato.get(c.id)
+    const real = hasRealEmail(email)
+
+    counts.todos.total++
+    if (real) counts.todos.conEmail++
+
+    if (!estado || estado === 'borrador') {
+      counts.sin_enviar.total++
+      if (real) counts.sin_enviar.conEmail++
+    } else if (estado === 'enviado') {
+      counts.enviaron.total++
+      if (real) counts.enviaron.conEmail++
+    } else if (estado === 'rechazado') {
+      counts.rechazados_filtro.total++
+      if (real) counts.rechazados_filtro.conEmail++
+    }
+  }
+
+  return { totalContratos, sinEnviar, enMesa, conSecretaria, aprobados, rechazados, correoCounts: counts }
+}

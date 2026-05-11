@@ -34,10 +34,10 @@ export default function DashboardPage() {
       return <AdminHome nombre={usuario.nombre_completo} />
 
     case 'asesor':
-      return <ReviewerHome nombre={usuario.nombre_completo} rol={usuario.rol} />
+      return <ReviewerHome nombre={usuario.nombre_completo} dependenciaId={usuario.dependencia_id ?? null} />
 
     default:
       // gobierno, hacienda, or any future reviewer role
-      return <ReviewerHome nombre={usuario.nombre_completo} rol={usuario.rol} />
+      return <ReviewerHome nombre={usuario.nombre_completo} dependenciaId={usuario.dependencia_id ?? null} />
   }
 }
