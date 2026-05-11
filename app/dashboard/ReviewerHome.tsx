@@ -51,49 +51,119 @@ function PipelineBar({ stats }: { stats: AsesorStats }) {
   const { totalContratos, sinEnviar, enMesa, conSecretaria, aprobados, rechazados } = stats
   if (totalContratos === 0) return null
 
-  const pct = (n: number) => `${Math.max(0, Math.round((n / totalContratos) * 100))}%`
+  const rawPct = (n: number) => Math.max(0, (n / totalContratos) * 100)
+  const fmtPct = (n: number) => `${rawPct(n).toFixed(0)}%`
 
   const segments = [
-    { value: sinEnviar,    color: 'bg-gray-300',    label: 'Sin enviar',    dot: 'bg-gray-400' },
-    { value: rechazados,   color: 'bg-red-300',      label: 'Rechazados',    dot: 'bg-red-400' },
-    { value: enMesa,       color: 'bg-amber-400',    label: 'En tu mesa',    dot: 'bg-amber-500' },
-    { value: conSecretaria,color: 'bg-indigo-400',   label: 'Con secretaría',dot: 'bg-indigo-500' },
-    { value: aprobados,    color: 'bg-emerald-400',  label: 'Aprobados',     dot: 'bg-emerald-500' },
+    {
+      value: sinEnviar,
+      color: 'bg-gray-200',
+      textColor: 'text-gray-500',
+      label: 'Sin enviar',
+      border: 'border-gray-300',
+    },
+    {
+      value: rechazados,
+      color: 'bg-red-200',
+      textColor: 'text-red-600',
+      label: 'Rechazados',
+      border: 'border-red-300',
+    },
+    {
+      value: enMesa,
+      color: 'bg-amber-300',
+      textColor: 'text-amber-700',
+      label: 'En tu mesa',
+      border: 'border-amber-400',
+    },
+    {
+      value: conSecretaria,
+      color: 'bg-indigo-400',
+      textColor: 'text-indigo-700',
+      label: 'Con secretaría',
+      border: 'border-indigo-500',
+    },
+    {
+      value: aprobados,
+      color: 'bg-emerald-400',
+      textColor: 'text-emerald-700',
+      label: 'Aprobados',
+      border: 'border-emerald-500',
+    },
   ].filter(s => s.value > 0)
 
-  const completados = aprobados + conSecretaria
-  const pctCompleto = Math.round((completados / totalContratos) * 100)
+  const pctCompleto = Math.round(((aprobados + conSecretaria) / totalContratos) * 100)
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-900">
-          Pipeline de {getMesActual().mes}
-        </h3>
-        <span className="text-xs text-gray-400">{pctCompleto}% completados</span>
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+
+      {/* Header */}
+      <div className="flex items-end justify-between mb-5">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Pipeline · {getMesActual().mes}
+          </h3>
+          <p className="text-xs text-gray-400 mt-0.5">{totalContratos} contratos activos</p>
+        </div>
+        <div className="text-right">
+          <span className="text-2xl font-bold text-emerald-600">{pctCompleto}%</span>
+          <p className="text-xs text-gray-400">completados</p>
+        </div>
       </div>
 
-      {/* Bar */}
-      <div className="flex rounded-full overflow-hidden h-2.5 bg-gray-100 gap-px">
+      {/* Thick segmented bar */}
+      <div className="flex rounded-2xl overflow-hidden h-10 gap-0.5">
         {segments.map((s, i) => (
           <div
             key={i}
-            className={`${s.color} transition-all duration-700 first:rounded-l-full last:rounded-r-full`}
-            style={{ width: pct(s.value) }}
-          />
-        ))}
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
-        {segments.map((s, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
-            <span className="font-medium text-gray-700">{s.value}</span>
-            <span>{s.label}</span>
+            className={`
+              ${s.color} relative flex items-center justify-center
+              transition-all duration-700
+              first:rounded-l-2xl last:rounded-r-2xl
+            `}
+            style={{ width: `${rawPct(s.value)}%` }}
+          >
+            {/* Show number inside segment if wide enough */}
+            {rawPct(s.value) >= 10 && (
+              <span className={`text-xs font-bold ${s.textColor} select-none`}>
+                {s.value}
+              </span>
+            )}
           </div>
         ))}
       </div>
+
+      {/* Segment labels below bar */}
+      <div className="flex mt-1 gap-0.5">
+        {segments.map((s, i) => (
+          <div
+            key={i}
+            className="overflow-hidden"
+            style={{ width: `${rawPct(s.value)}%` }}
+          >
+            {rawPct(s.value) >= 14 && (
+              <p className={`text-[10px] font-medium ${s.textColor} mt-1.5 truncate px-0.5`}>
+                {s.label}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Full legend (always visible) */}
+      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 pt-4 border-t border-gray-100">
+        {segments.map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-md ${s.color} border ${s.border} flex-shrink-0`} />
+            <span className="text-xs text-gray-500">
+              <span className="font-semibold text-gray-800">{s.value}</span>
+              {' '}{s.label}
+              <span className="text-gray-400 ml-1">({fmtPct(s.value)})</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
     </div>
   )
 }
