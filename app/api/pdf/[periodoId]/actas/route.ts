@@ -8,6 +8,11 @@
  * Acceso: asesor / supervisor / admin
  * Condición: periodo debe estar en estado 'aprobado' o 'radicado'
  * Nombre ZIP: NOMBRE_CONTRATISTA_MES_ACTAS.zip
+ *
+ * Optimización: ambas actas se obtienen del caché de Supabase Storage
+ * cuando están disponibles. Solo se regeneran en cache miss.
+ * ZIP usa compresión STORE (level 0) — los PDFs ya están comprimidos,
+ * DEFLATE no reduce el tamaño pero sí consume CPU innecesario.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -15,6 +20,7 @@ import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
+import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -59,21 +65,38 @@ export async function GET(
     )
   }
 
-  const [
-    { renderToBuffer },
-    React,
-    { ActaSupervisionPDF },
-    { ActaPagoPDF },
-  ] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import('react'),
-    import('@/lib/pdf/acta-supervision'),
-    import('@/lib/pdf/acta-pago'),
-  ])
+  const estado = data.periodo.estado
 
+  // Fetch both PDFs in parallel (cache-first)
   const [actaSupervisionBuffer, actaPagoBuffer] = await Promise.all([
-    renderToBuffer(React.createElement(ActaSupervisionPDF, { data }) as any) as unknown as Promise<Buffer>,
-    renderToBuffer(React.createElement(ActaPagoPDF,        { data }) as any) as unknown as Promise<Buffer>,
+    getOrGeneratePDFBuffer({
+      supabase,
+      tipo: 'acta-supervision',
+      periodoId,
+      estado,
+      generate: async () => {
+        const [{ renderToBuffer }, React, { ActaSupervisionPDF }] = await Promise.all([
+          import('@react-pdf/renderer'),
+          import('react'),
+          import('@/lib/pdf/acta-supervision'),
+        ])
+        return renderToBuffer(React.createElement(ActaSupervisionPDF, { data }) as any) as unknown as Promise<Buffer>
+      },
+    }),
+    getOrGeneratePDFBuffer({
+      supabase,
+      tipo: 'acta-pago',
+      periodoId,
+      estado,
+      generate: async () => {
+        const [{ renderToBuffer }, React, { ActaPagoPDF }] = await Promise.all([
+          import('@react-pdf/renderer'),
+          import('react'),
+          import('@/lib/pdf/acta-pago'),
+        ])
+        return renderToBuffer(React.createElement(ActaPagoPDF, { data }) as any) as unknown as Promise<Buffer>
+      },
+    }),
   ])
 
   const nombreNorm = normalizeNombre(data.contrato.contratista.nombre_completo)
@@ -85,10 +108,10 @@ export async function GET(
   folder.file('01_Acta_de_Supervision.pdf', actaSupervisionBuffer)
   folder.file('02_Acta_de_Pago.pdf',        actaPagoBuffer)
 
+  // STORE (level 0): PDFs are already compressed — DEFLATE wastes CPU with no size gain
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
+    compression: 'STORE',
   })
 
   return new NextResponse(zipBuffer as unknown as BodyInit, {

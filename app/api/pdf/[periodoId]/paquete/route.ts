@@ -180,10 +180,10 @@ export async function GET(
     folder.file(`05_Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
   }
 
+  // STORE (level 0): PDFs are already compressed — DEFLATE wastes CPU with no size gain
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
+    compression: 'STORE',
   })
 
   return new NextResponse(zipBuffer as unknown as BodyInit, {

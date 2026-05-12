@@ -21,26 +21,22 @@ export async function GET(
     return NextResponse.json({ error: acceso.message }, { status: acceso.status })
   }
 
-  const data = await buildPDFData(periodoId)
-  if (!data) {
-    return NextResponse.json({ error: 'Periodo no encontrado' }, { status: 404 })
-  }
-
-  const filename = `acta-pago-${data.contrato.numero}-${data.contrato.anio}-periodo-${data.periodo.numero}.pdf`
-
+  // buildPDFData lives inside generate so it is only called on cache miss
   return getOrGeneratePDF({
     supabase,
     tipo: 'acta-pago',
     periodoId,
-    estado: data.periodo.estado,
-    filename,
     generate: async () => {
+      const data = await buildPDFData(periodoId)
+      if (!data) throw new Error('Periodo no encontrado')
+      const filename = `acta-pago-${data.contrato.numero}-${data.contrato.anio}-periodo-${data.periodo.numero}.pdf`
       const [{ renderToBuffer }, React, { ActaPagoPDF }] = await Promise.all([
         import('@react-pdf/renderer'),
         import('react'),
         import('@/lib/pdf/acta-pago'),
       ])
-      return renderToBuffer(React.createElement(ActaPagoPDF, { data }) as any) as unknown as Buffer
+      const buffer = await renderToBuffer(React.createElement(ActaPagoPDF, { data }) as any) as unknown as Buffer
+      return { buffer, filename }
     },
   })
 }

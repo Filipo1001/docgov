@@ -106,8 +106,8 @@ export default function PeriodoDetallePage() {
   const [textoObservacion, setTextoObservacion] = useState('')
   const [guardandoObservacion, setGuardandoObservacion] = useState(false)
 
-  // Lightbox — ampliar imagen de evidencia
-  const [lightbox, setLightbox] = useState<{ url: string; alt: string } | null>(null)
+  // Lightbox — ampliar imagen de evidencia (evId opcional para eliminar desde lightbox)
+  const [lightbox, setLightbox] = useState<{ url: string; alt: string; evId?: string } | null>(null)
 
   // Inline planilla validation (submit section)
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
@@ -583,7 +583,69 @@ export default function PeriodoDetallePage() {
 
   // ── Render ──────────────────────────────────────────────────
 
-  if (cargando) return <p className="text-gray-500">Cargando periodo...</p>
+  if (cargando) return (
+    <div className="max-w-4xl animate-pulse space-y-4">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2">
+        <div className="h-4 w-20 bg-gray-200 rounded" />
+        <div className="h-4 w-3 bg-gray-100 rounded" />
+        <div className="h-4 w-16 bg-gray-200 rounded" />
+        <div className="h-4 w-3 bg-gray-100 rounded" />
+        <div className="h-4 w-24 bg-gray-200 rounded" />
+      </div>
+      {/* Timeline */}
+      <div className="bg-white rounded-2xl border p-5">
+        <div className="flex items-center gap-0">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center flex-1 min-w-0">
+              <div className="flex flex-col items-center shrink-0">
+                <div className="w-7 h-7 bg-gray-200 rounded-full" />
+                <div className="h-2 w-10 bg-gray-100 rounded mt-1" />
+              </div>
+              {i < 4 && <div className="flex-1 h-0.5 bg-gray-100 mx-1 mb-4" />}
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Header período */}
+      <div className="bg-white rounded-2xl border p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2 flex-1">
+            <div className="h-6 w-36 bg-gray-200 rounded" />
+            <div className="h-4 w-52 bg-gray-100 rounded" />
+            <div className="h-4 w-44 bg-gray-100 rounded" />
+          </div>
+          <div className="space-y-2 text-right">
+            <div className="h-5 w-20 bg-gray-200 rounded-full ml-auto" />
+            <div className="h-6 w-28 bg-gray-200 rounded ml-auto" />
+          </div>
+        </div>
+      </div>
+      {/* Obligaciones */}
+      {[...Array(2)].map((_, i) => (
+        <div key={i} className="bg-white rounded-2xl border p-6 space-y-4">
+          <div className="flex gap-3">
+            <div className="w-7 h-7 bg-gray-200 rounded-lg shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-full" />
+              <div className="h-4 bg-gray-200 rounded w-3/4" />
+              <div className="h-3 w-32 bg-gray-100 rounded" />
+            </div>
+          </div>
+          <div className="space-y-3 ml-0 sm:ml-10">
+            {[...Array(2)].map((_, j) => (
+              <div key={j} className="bg-gray-50 rounded-xl p-4 space-y-2">
+                <div className="h-3 w-20 bg-gray-200 rounded" />
+                <div className="h-4 bg-gray-200 rounded w-full" />
+                <div className="h-4 bg-gray-200 rounded w-2/3" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   if (!periodo || !contrato) return <p className="text-red-500">Periodo no encontrado</p>
 
   const estadoClass = ESTADO_COLOR[periodo.estado] ?? 'bg-gray-100 text-gray-600'
@@ -731,75 +793,82 @@ export default function PeriodoDetallePage() {
       </div>
 
       {/* ── Rejection guidance card (contratista only) ─────────── */}
-      {rechazado && esContratista && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
-          {/* Header */}
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">↩️</div>
+      {/* ── Unified "Acción requerida" banner (contratista only) ── */}
+      {esContratista && (rechazado || periodo.planilla_estado === 'rechazada') && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6 space-y-4">
+
+          {/* ── Informe rechazado ──────────────────────────────── */}
+          {rechazado && (
             <div>
-              <p className="text-sm font-bold text-red-800">Tu informe fue devuelto — necesita corrección</p>
-              {periodo.motivo_rechazo ? (
-                <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
-                  <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
-                  <p className="text-sm text-red-700 italic">"{periodo.motivo_rechazo}"</p>
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">↩️</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-red-800">Tu informe fue devuelto — necesita corrección</p>
+                  {periodo.motivo_rechazo ? (
+                    <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
+                      <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
+                      <p className="text-sm text-red-700 italic break-words">"{periodo.motivo_rechazo}"</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-red-600 mt-1">Revisa tus actividades y vuelve a enviar el informe.</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-xs text-red-600 mt-1">Revisa tus actividades y vuelve a enviar el informe.</p>
-              )}
+              </div>
+              {/* Steps */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
+                  <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-800">Corrige tus actividades</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Edita, elimina o agrega actividades según el motivo.</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
+                  <span className="w-6 h-6 bg-gray-300 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-800">Reenvía el informe</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Usa el botón al final de la página cuando termines.</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => seccionActividadesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="mt-3 w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-sm font-medium min-h-[44px] rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                Ir a mis actividades
+              </button>
             </div>
-          </div>
+          )}
 
-          {/* Steps */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
-              <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
-              <div>
-                <p className="text-xs font-semibold text-gray-800">Corrige tus actividades</p>
-                <p className="text-xs text-gray-500 mt-0.5">Edita, elimina o agrega actividades teniendo en cuenta el motivo.</p>
+          {/* Divider when both issues are present */}
+          {rechazado && periodo.planilla_estado === 'rechazada' && (
+            <hr className="border-red-200" />
+          )}
+
+          {/* ── Planilla rechazada ─────────────────────────────── */}
+          {periodo.planilla_estado === 'rechazada' && (
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">🏥</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-red-800">Tu planilla de seguridad social fue rechazada</p>
+                {periodo.planilla_comentario ? (
+                  <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
+                    <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
+                    <p className="text-sm text-red-700 italic break-words">"{periodo.planilla_comentario}"</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-red-600 mt-1">Sube una nueva planilla correcta para continuar.</p>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Ve a <strong>Documentos del periodo</strong> → <em>Planilla SS</em> → <em>Reemplazar planilla</em>.
+                </p>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
-              <span className="w-6 h-6 bg-gray-300 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
-              <div>
-                <p className="text-xs font-semibold text-gray-800">Reenvía el informe</p>
-                <p className="text-xs text-gray-500 mt-0.5">Cuando hayas corregido, usa el botón al final de la página.</p>
-              </div>
-            </div>
-          </div>
+          )}
 
-          {/* CTA */}
-          <button
-            onClick={() => seccionActividadesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            Ir a mis actividades
-          </button>
-        </div>
-      )}
-
-      {/* ── Planilla rejection banner (contratista only) ─────────── */}
-      {periodo.planilla_estado === 'rechazada' && esContratista && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">🏥</div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-red-800">Tu planilla de seguridad social fue rechazada</p>
-              {periodo.planilla_comentario ? (
-                <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
-                  <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
-                  <p className="text-sm text-red-700 italic">"{periodo.planilla_comentario}"</p>
-                </div>
-              ) : (
-                <p className="text-xs text-red-600 mt-1">Debes subir una nueva planilla correcta para continuar.</p>
-              )}
-              <p className="text-xs text-gray-500 mt-2">
-                Ve a la sección <strong>Documentos del periodo</strong> → <em>Planilla de Seguridad Social</em> → <em>Reemplazar planilla</em>.
-              </p>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1123,7 +1192,7 @@ export default function PeriodoDetallePage() {
 
               {/* Activity list */}
               {actsDeObl.length > 0 && (
-                <div className="space-y-3 mb-4 ml-10">
+                <div className="space-y-3 mb-4 ml-0 sm:ml-10">
                   {actsDeObl.map((act, actIndex) => (
                     <div key={act.id} className="bg-gray-50 rounded-xl p-4">
                       {editandoActividad === act.id ? (
@@ -1180,24 +1249,30 @@ export default function PeriodoDetallePage() {
                               <p className="text-sm text-gray-700">{act.descripcion}</p>
                             </div>
                             {esEditable && (
-                              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                                {/* Edit button */}
+                              <div className="flex items-center gap-0 ml-1 shrink-0">
+                                {/* Editar — 44×44 touch target */}
                                 <button
                                   onClick={() => handleAbrirEdicion(act.id, act.descripcion, act.cantidad ?? 1)}
-                                  className="text-gray-300 hover:text-blue-500 transition-colors p-0.5"
-                                  title="Editar actividad"
+                                  className="w-11 h-11 flex items-center justify-center rounded-xl
+                                             text-gray-400 hover:text-blue-500 active:text-blue-600
+                                             hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                                  aria-label="Editar actividad"
                                 >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
                                 </button>
-                                {/* Delete button */}
+                                {/* Eliminar — 44×44 touch target */}
                                 <button
                                   onClick={() => handleEliminarActividad(act.id)}
-                                  className="text-gray-300 hover:text-red-500 transition-colors p-0.5 text-xs"
-                                  title="Eliminar actividad"
+                                  className="w-11 h-11 flex items-center justify-center rounded-xl
+                                             text-gray-400 hover:text-red-500 active:text-red-600
+                                             hover:bg-red-50 active:bg-red-100 transition-colors"
+                                  aria-label="Eliminar actividad"
                                 >
-                                  ✕
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
                                 </button>
                               </div>
                             )}
@@ -1209,33 +1284,36 @@ export default function PeriodoDetallePage() {
                               <div className="flex flex-wrap gap-2 mb-2">
                                 {act.evidencias.map((ev) => (
                                   <div key={ev.id} className="relative group">
-                                    {/* Thumbnail — clicable para abrir lightbox */}
+                                    {/* Thumbnail — abre lightbox (con evId para poder eliminar desde ahí) */}
                                     <button
                                       type="button"
-                                      onClick={() => setLightbox({ url: ev.url, alt: ev.nombre_archivo })}
-                                      className="block focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
-                                      title="Ver imagen ampliada"
+                                      onClick={() => setLightbox({ url: ev.url, alt: ev.nombre_archivo, evId: esEditable ? ev.id : undefined })}
+                                      className="block focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-xl"
+                                      aria-label="Ver imagen ampliada"
                                     >
                                       <img
                                         src={ev.url}
                                         alt={ev.nombre_archivo}
-                                        className="w-20 h-20 object-cover rounded-lg border transition-opacity group-hover:opacity-85"
+                                        className="w-20 h-20 object-cover rounded-xl border border-gray-200 transition-opacity group-hover:opacity-80"
                                       />
-                                      {/* Ícono lupa — indicador visual de zoom */}
-                                      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                        <svg className="w-6 h-6 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0zm0 0l.01.01" />
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 8v6M8 11h6" />
-                                        </svg>
-                                      </span>
                                     </button>
-                                    {/* Botón eliminar — stopPropagation para no abrir el lightbox */}
+                                    {/* Botón eliminar:
+                                        - mobile: siempre visible (opacity-100)
+                                        - desktop: visible solo en hover (md:opacity-0 md:group-hover:opacity-100)
+                                        Touch target 24×24px + posición exterior al thumb */}
                                     {esEditable && (
                                       <button
                                         onClick={(e) => { e.stopPropagation(); handleEliminarEvidencia(ev.id) }}
-                                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity flex items-center justify-center z-10"
+                                        className="absolute -top-1.5 -right-1.5
+                                                   w-6 h-6 bg-red-500 hover:bg-red-600 text-white
+                                                   rounded-full flex items-center justify-center
+                                                   opacity-100 md:opacity-0 md:group-hover:opacity-100
+                                                   active:bg-red-700 transition-opacity shadow-sm z-10"
+                                        aria-label="Eliminar evidencia"
                                       >
-                                        ✕
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
                                       </button>
                                     )}
                                   </div>
@@ -1273,7 +1351,7 @@ export default function PeriodoDetallePage() {
                             )}
 
                             {esEditable && subiendoEvidencia[act.id] == null && (
-                              <div className="flex flex-wrap items-center gap-3">
+                              <div className="flex flex-col xs:flex-row gap-2 mt-1">
                                 {/* Gallery — opens the device photo library */}
                                 <button
                                   type="button"
@@ -1281,9 +1359,9 @@ export default function PeriodoDetallePage() {
                                     uploadTargetId.current = act.id
                                     galleryInputRef.current?.click()
                                   }}
-                                  className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 cursor-pointer bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                                  className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 active:text-blue-800 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 min-h-[44px] px-4 rounded-xl transition-colors"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                   </svg>
                                   Subir imagen
@@ -1295,9 +1373,9 @@ export default function PeriodoDetallePage() {
                                     uploadTargetId.current = act.id
                                     cameraInputRef.current?.click()
                                   }}
-                                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                                  className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-800 active:text-gray-900 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 min-h-[44px] px-4 rounded-xl transition-colors"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                                   </svg>
@@ -1315,7 +1393,7 @@ export default function PeriodoDetallePage() {
 
               {/* Add activity form */}
               {esEditable && (
-                <div className="ml-10">
+                <div className="ml-0 sm:ml-10">
                   {formActivo === obl.id ? (
                     <div className="bg-blue-50 rounded-xl p-4">
                       <textarea
@@ -2016,7 +2094,7 @@ export default function PeriodoDetallePage() {
       {/* ── Lightbox ──────────────────────────────────────────── */}
       {lightbox && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4"
           onClick={() => setLightbox(null)}
           role="dialog"
           aria-modal="true"
@@ -2026,28 +2104,47 @@ export default function PeriodoDetallePage() {
             className="relative max-w-4xl w-full flex flex-col items-center"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Botón cerrar */}
-            <button
-              onClick={() => setLightbox(null)}
-              className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors p-1"
-              aria-label="Cerrar"
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
             {/* Imagen ampliada */}
             <img
               src={lightbox.url}
               alt={lightbox.alt}
-              className="max-w-full max-h-[82vh] object-contain rounded-lg shadow-2xl"
+              className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl"
             />
 
             {/* Nombre del archivo */}
-            <p className="mt-2 text-white/50 text-xs text-center truncate max-w-full px-2">
+            <p className="mt-3 text-white/50 text-xs text-center truncate max-w-full px-2">
               {lightbox.alt}
             </p>
+
+            {/* Barra de acciones — eliminar + cerrar */}
+            <div className="mt-4 flex items-center gap-3">
+              {lightbox.evId && (
+                <button
+                  onClick={() => {
+                    handleEliminarEvidencia(lightbox.evId!)
+                    setLightbox(null)
+                  }}
+                  className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-700
+                             active:bg-red-800 text-white text-sm font-medium rounded-xl
+                             transition-colors min-h-[44px]"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7
+                             m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Eliminar
+                </button>
+              )}
+              <button
+                onClick={() => setLightbox(null)}
+                className="px-5 py-3 bg-white/10 hover:bg-white/20 active:bg-white/30
+                           text-white text-sm font-medium rounded-xl
+                           transition-colors min-h-[44px]"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

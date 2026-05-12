@@ -20,50 +20,64 @@ export const ESTADOS_CACHEABLES = new Set(['enviado', 'revision', 'aprobado', 'r
 /**
  * Serve a PDF from cache if available, otherwise generate, cache and serve.
  * Cached PDFs are served via public-URL redirect (zero server bandwidth).
+ *
+ * Optimization notes:
+ * - `estado` is fetched with a lightweight single-column query (not buildPDFData)
+ *   so expensive PDF data loading only happens on cache miss.
+ * - Cache existence check uses a HEAD request instead of storage.list(),
+ *   which avoids an extra Supabase API round-trip on every cache hit.
+ * - `generate` is called only on cache miss; it returns both the buffer and
+ *   the filename so buildPDFData can live entirely inside the closure.
  */
 export async function getOrGeneratePDF({
   supabase,
   tipo,
   periodoId,
-  estado,
   generate,
-  filename,
 }: {
   supabase: any
   tipo: string
   periodoId: string
-  estado: string
-  generate: () => Promise<Buffer>
-  filename: string
+  generate: () => Promise<{ buffer: Buffer; filename: string }>
 }): Promise<NextResponse> {
   const cacheKey = `${tipo}/${periodoId}.pdf`
+
+  // Lightweight estado check — single column, single row
+  const { data: periodoRow } = await supabase
+    .from('periodos')
+    .select('estado')
+    .eq('id', periodoId)
+    .single()
+
+  const estado = periodoRow?.estado ?? ''
   const shouldCache = ESTADOS_CACHEABLES.has(estado)
 
   if (shouldCache) {
-    // Check for cached file (metadata only — no download)
-    const { data: files } = await supabase.storage
-      .from(BUCKET)
-      .list(tipo, { search: `${periodoId}.pdf`, limit: 1 })
-
-    const hit = (files ?? []).find((f: any) => f.name === `${periodoId}.pdf`)
-    if (hit) {
-      const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
-      // Redirect to Supabase CDN — instant delivery, zero server CPU
-      return NextResponse.redirect(publicUrl, {
-        status: 302,
-        headers: {
-          'Cache-Control': 'public, max-age=3600',
-          'X-PDF-Cache': 'HIT',
-        },
-      })
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
+    try {
+      // HEAD request: existence check without downloading the file
+      const headRes = await fetch(publicUrl, { method: 'HEAD' })
+      if (headRes.ok) {
+        // Redirect to Supabase CDN — instant delivery, zero server CPU
+        return NextResponse.redirect(publicUrl, {
+          status: 302,
+          headers: {
+            'Cache-Control': 'public, max-age=3600',
+            'X-PDF-Cache': 'HIT',
+          },
+        })
+      }
+    } catch {
+      // Cache check failed — fall through to generate
     }
   }
 
-  // Generate PDF
-  const buffer = await generate()
+  // Cache miss (or non-cacheable estado) — generate PDF now
+  // buildPDFData is called inside generate(), so it's skipped on cache hits
+  const { buffer, filename } = await generate()
 
   if (shouldCache) {
-    // Upload to cache — fire and forget (don't block response)
+    // Fire and forget — don't block the response
     supabase.storage
       .from(BUCKET)
       .upload(cacheKey, buffer, { contentType: 'application/pdf', upsert: true })
@@ -81,9 +95,12 @@ export async function getOrGeneratePDF({
 
 /**
  * Same cache logic as getOrGeneratePDF but returns a raw Buffer instead of a
- * NextResponse. Used by the ZIP/paquete route so it can assemble multiple PDFs
- * without spawning separate HTTP responses.
- * Cache hits are fetched directly from the Supabase CDN public URL.
+ * NextResponse. Used by ZIP/paquete and actas routes so they can assemble
+ * multiple PDFs without spawning separate HTTP responses.
+ *
+ * Cache hits are fetched via a single GET to the public CDN URL — the GET both
+ * confirms existence and downloads the content, replacing the old two-step
+ * storage.list() + separate fetch pattern.
  */
 export async function getOrGeneratePDFBuffer({
   supabase,
@@ -102,19 +119,13 @@ export async function getOrGeneratePDFBuffer({
   const shouldCache = ESTADOS_CACHEABLES.has(estado)
 
   if (shouldCache) {
-    const { data: files } = await supabase.storage
-      .from(BUCKET)
-      .list(tipo, { search: `${periodoId}.pdf`, limit: 1 })
-
-    const hit = (files ?? []).find((f: any) => f.name === `${periodoId}.pdf`)
-    if (hit) {
-      const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
-      try {
-        const res = await fetch(publicUrl)
-        if (res.ok) return Buffer.from(await res.arrayBuffer())
-      } catch {
-        // Cache fetch failed — fall through to regenerate
-      }
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
+    try {
+      // Single GET: existence check + content fetch combined (no storage.list() needed)
+      const res = await fetch(publicUrl)
+      if (res.ok) return Buffer.from(await res.arrayBuffer())
+    } catch {
+      // Cache fetch failed — fall through to regenerate
     }
   }
 
