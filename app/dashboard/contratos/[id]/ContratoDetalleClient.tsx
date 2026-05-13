@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
-import { formatCedula } from '@/lib/format'
+import { formatCedula, formatDateMedium } from '@/lib/format'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 
 export default function ContratoDetallePage() {
@@ -227,25 +227,25 @@ export default function ContratoDetallePage() {
         <p className="text-sm text-gray-600 mb-4">{contrato.objeto}</p>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
+          <div className="min-w-0">
             <span className="text-gray-400 text-xs">Contratista</span>
-            <p className="font-medium text-gray-900">{contrato.contratista?.nombre_completo}</p>
+            <p className="font-medium text-gray-900 truncate">{contrato.contratista?.nombre_completo}</p>
             <p className="text-xs text-gray-400">CC {formatCedula(contrato.contratista?.cedula)}</p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-gray-400 text-xs">Supervisor</span>
-            <p className="font-medium text-gray-900">{contrato.supervisor?.nombre_completo}</p>
+            <p className="font-medium text-gray-900 truncate">{contrato.supervisor?.nombre_completo}</p>
             <p className="text-xs text-gray-400">CC {formatCedula(contrato.supervisor?.cedula)}</p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-gray-400 text-xs">Plazo</span>
             <p className="font-medium text-gray-900">{contrato.plazo_meses} meses</p>
-            <p className="text-xs text-gray-400">{contrato.fecha_inicio} a {contrato.fecha_fin}</p>
+            <p className="text-xs text-gray-400">{formatDateMedium(contrato.fecha_inicio)} — {formatDateMedium(contrato.fecha_fin)}</p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-gray-400 text-xs">Valor mensual</span>
             <p className="font-medium text-gray-900">${contrato.valor_mensual?.toLocaleString('es-CO')}</p>
-            <p className="text-xs text-gray-400">{contrato.valor_letras_mensual}</p>
+            <p className="text-xs text-gray-400 truncate">{contrato.valor_letras_mensual}</p>
           </div>
         </div>
 
@@ -387,27 +387,32 @@ export default function ContratoDetallePage() {
               <Link
                 key={periodo.id}
                 href={`/dashboard/contratos/${id}/periodo/${periodo.id}`}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-white border rounded-lg flex items-center justify-center">
-                    <span className="text-sm font-bold text-gray-600">{periodo.numero_periodo}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{periodo.mes} {periodo.anio}</p>
-                    <p className="text-xs text-gray-400">{periodo.fecha_inicio} al {periodo.fecha_fin}</p>
-                  </div>
+                {/* Número de periodo */}
+                <div className="w-10 h-10 bg-white border rounded-lg flex items-center justify-center shrink-0">
+                  <span className="text-sm font-bold text-gray-600">{periodo.numero_periodo}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-sm font-medium text-gray-900">
+
+                {/* Mes + fechas */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{periodo.mes} {periodo.anio}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {formatDateMedium(periodo.fecha_inicio)} — {formatDateMedium(periodo.fecha_fin)}
+                  </p>
+                </div>
+
+                {/* Valor + estado (apilados) */}
+                <div className="shrink-0 flex flex-col items-end gap-1">
+                  <p className="text-sm font-semibold text-gray-900">
                     ${periodo.valor_cobro?.toLocaleString('es-CO')}
                   </p>
                   {periodo.es_historico ? (
-                    <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-amber-100 text-amber-700">
-                      🔒 Histórico
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                      Histórico
                     </span>
                   ) : (
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${estadoColor[periodo.estado] || 'bg-gray-100 text-gray-600'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${estadoColor[periodo.estado] || 'bg-gray-100 text-gray-600'}`}>
                       {estadoLabel[periodo.estado] || periodo.estado}
                     </span>
                   )}

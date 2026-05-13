@@ -191,7 +191,7 @@ function MobileHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 md:hidden">
       <button
         onClick={onMenuToggle}
-        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
+        className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors"
         aria-label="Abrir menu"
       >
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -222,7 +222,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="md:ml-64 flex flex-col min-h-screen">
         <MobileHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-8 md:pb-8">{children}</main>
       </div>
     </div>
   )

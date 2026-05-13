@@ -158,3 +158,17 @@ export function numeroALetras(n: number): string {
 export function formatValorConLetras(valor: number): string {
   return `${numeroALetras(valor)} PESOS M/L (${formatCurrency(valor)})`
 }
+
+/**
+ * Formatea una fecha ISO ("2025-01-15") como texto legible corto.
+ * Usa la zona local para evitar desfases de UTC.
+ * Ejemplos:
+ *   "2025-01-01"  → "1 ene. 2025"
+ *   "2025-12-31"  → "31 dic. 2025"
+ */
+export function formatDateMedium(isoDate: string | null | undefined): string {
+  if (!isoDate) return ''
+  const [y, m, d] = isoDate.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+}
