@@ -23,3 +23,8 @@ body {
 input, textarea, select {
   color: #111827;
 }
+
+/* Eliminate the 300ms tap delay on Android browsers */
+button, a, [role="button"], label[for], input[type="checkbox"], input[type="radio"] {
+  touch-action: manipulation;
+}

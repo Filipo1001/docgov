@@ -764,8 +764,11 @@ export default function PeriodoDetallePage() {
                       )}
                     </div>
                     <span className={`text-[9px] mt-1 font-medium text-center leading-tight ${
-                      active ? 'text-gray-900' :
-                      done ? 'text-emerald-600' : 'text-gray-400'
+                      active
+                        ? 'text-gray-900'
+                        : done
+                          ? 'text-emerald-600 hidden sm:block'
+                          : 'text-gray-400 hidden sm:block'
                     }`}>
                       {step.short}
                     </span>
