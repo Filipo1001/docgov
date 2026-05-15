@@ -2188,6 +2188,66 @@ export default function PeriodoDetallePage() {
           e.target.value = ''
         }}
       />
+
+      {/* ── Upload overlay ── */}
+      {(() => {
+        const evidenciaPct = Object.values(subiendoEvidencia).find(v => v !== null && v !== undefined) ?? null
+        const isUploading = evidenciaPct !== null || subiendoPlanilla
+        if (!isUploading) return null
+
+        const esPlanilla = subiendoPlanilla
+        const pct = esPlanilla ? null : (evidenciaPct ?? 0)
+        const circumference = 2 * Math.PI * 40
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs">
+
+              {/* Spinner */}
+              <div className="relative w-28 h-28">
+                <svg className={`w-28 h-28 ${esPlanilla ? 'animate-spin' : ''}`} viewBox="0 0 96 96" style={{ transform: 'rotate(-90deg)' }}>
+                  {/* Track */}
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8" />
+                  {/* Arc */}
+                  <circle
+                    cx="48" cy="48" r="40"
+                    fill="none"
+                    stroke="#1d4ed8"
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={
+                      esPlanilla
+                        ? circumference * 0.25
+                        : circumference * (1 - (pct ?? 0) / 100)
+                    }
+                    style={{ transition: esPlanilla ? undefined : 'stroke-dashoffset 0.3s ease' }}
+                  />
+                </svg>
+
+                {/* Center content */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {esPlanilla ? (
+                    <svg className="w-9 h-9 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                    </svg>
+                  ) : (
+                    <span className="text-xl font-bold text-blue-700">{pct}%</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Text */}
+              <div className="text-center">
+                <p className="text-base font-semibold text-gray-800">
+                  {esPlanilla ? 'Subiendo planilla...' : 'Subiendo imagen...'}
+                </p>
+                <p className="text-sm text-gray-400 mt-1">Por favor espera</p>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
