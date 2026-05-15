@@ -128,13 +128,18 @@ export default function PeriodoDetallePage() {
   const seccionActividadesRef = useRef<HTMLDivElement>(null)
 
   const cargarDatos = useCallback(async (silencioso = false) => {
-    const datos = await getPeriodoConContrato(periodoId, contratoId)
-    setContrato(datos.contrato)
-    setPeriodo(datos.periodo)
-    setObligaciones(datos.obligaciones)
-    setActividades(datos.actividades)
-    if (datos.periodo?.numero_planilla) setNumPlanilla(datos.periodo.numero_planilla)
-    if (!silencioso) setCargando(false)
+    try {
+      const datos = await getPeriodoConContrato(periodoId, contratoId)
+      setContrato(datos.contrato)
+      setPeriodo(datos.periodo)
+      setObligaciones(datos.obligaciones)
+      setActividades(datos.actividades)
+      if (datos.periodo?.numero_planilla) setNumPlanilla(datos.periodo.numero_planilla)
+    } catch {
+      // Keep showing existing data on transient network errors
+    } finally {
+      if (!silencioso) setCargando(false)
+    }
   }, [periodoId, contratoId])
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
