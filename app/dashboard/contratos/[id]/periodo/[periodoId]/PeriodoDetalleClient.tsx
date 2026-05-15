@@ -903,7 +903,7 @@ export default function PeriodoDetallePage() {
           <span className="text-gray-300">|</span>
           <span className="text-gray-400">Total acciones:</span>
           <span className="font-medium text-gray-900">{totalAcciones()}</span>
-          {periodo.numero_radicado && (
+          {periodo.numero_radicado && periodo.estado === 'radicado' && (
             <>
               <span className="text-gray-300">|</span>
               <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
