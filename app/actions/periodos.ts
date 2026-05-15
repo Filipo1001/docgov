@@ -220,6 +220,18 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
             )
           }
         }
+
+        // Confirm submission to the contratista
+        await enviarNotificacion({
+          tipo: 'enviado_confirmacion',
+          titulo: `Informe enviado — ${periodo.mes} ${periodo.anio}`,
+          mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue enviado exitosamente y está en revisión.`,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          destinatarioId: usuario.id,
+        })
       }
     } catch { /* notification failure must not block a successful submit */ }
 

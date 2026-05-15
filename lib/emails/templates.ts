@@ -126,6 +126,29 @@ export function emailPeriodoRadicado(data: TemplateData) {
   }
 }
 
+export function emailEnvioConfirmacion(data: TemplateData) {
+  return {
+    subject: `Informe enviado exitosamente — ${data.mes} ${data.anio} (Contrato ${data.contrato})`,
+    html: baseHtml(
+      '¡Tu informe fue enviado!',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola <strong>${data.nombreDestinatario}</strong>,</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Tu informe de actividades de <strong>${data.mes} ${data.anio}</strong>
+         del contrato <strong>${data.contrato}</strong> fue enviado exitosamente.
+       </p>
+       <div style="background:#f0fdf4;border:2px solid #16a34a;padding:16px 20px;margin:20px 0;border-radius:12px;text-align:center;">
+         <p style="color:#166534;font-size:13px;margin:0 0 4px;">Estado actual</p>
+         <p style="color:#16a34a;font-size:18px;font-weight:700;margin:0;">En revisión</p>
+       </div>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Nuestro equipo revisará tu informe y te notificaremos cuando haya una actualización.
+         Si necesitas hacer algún ajuste antes de que sea aprobado, podrás hacerlo desde la plataforma.
+       </p>`,
+      '#16a34a'
+    ),
+  }
+}
+
 export function emailRecordatorioInforme(data: TemplateData) {
   return {
     subject: `Recuerda enviar tu informe — ${data.mes} ${data.anio}`,
@@ -148,6 +171,7 @@ export type EmailTemplate = (data: TemplateData) => { subject: string; html: str
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
+  enviado_confirmacion: emailEnvioConfirmacion,
   revision: emailPeriodoAprobadoAsesor,
   aprobado: emailPeriodoAprobado,
   rechazado: emailPeriodoRechazado,
