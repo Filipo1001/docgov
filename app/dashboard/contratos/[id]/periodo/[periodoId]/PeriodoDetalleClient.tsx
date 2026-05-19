@@ -35,7 +35,6 @@ import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
 import { actualizarActividad } from '@/app/actions/actividades'
-import { createClient } from '@/lib/supabase'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
 export default function PeriodoDetallePage() {
@@ -477,16 +476,17 @@ export default function PeriodoDetallePage() {
    * Upload 1–5 evidence files for an activity.
    *
    * Architecture — why this order matters:
-   *   A) refreshSession ONCE  — avoids concurrent auth-token race (5× parallel
-   *      refresh calls on the same cookie store causes JWT conflicts).
-   *   B) Compress in PARALLEL — pure browser Canvas API; safe to parallelise.
-   *   C) Prepare signed URLs SEQUENTIALLY — prevents Date.now() path collision
+   *   A) Compress in PARALLEL — pure browser Canvas API; safe to parallelise.
+   *   B) Prepare signed URLs SEQUENTIALLY — prevents Date.now() path collision
    *      when calls arrive within the same millisecond, and avoids saturating
    *      Supabase's free-tier connection pool with 5 simultaneous query chains.
-   *   D) XHR uploads in PARALLEL — browser → Supabase Storage directly,
+   *      Auth is validated server-side inside each prepararUploadEvidencia call.
+   *   C) XHR uploads in PARALLEL — browser → Supabase Storage directly,
    *      completely bypasses Vercel; no serverless timeout risk here.
-   *   E) DB registration SEQUENTIALLY — keeps insert order deterministic.
-   *   F) try/finally ALWAYS clears the overlay — eliminates the "stuck loading"
+   *   D) DB registration SEQUENTIALLY — keeps insert order deterministic.
+   *      If session expired, registrarEvidencia returns an error and the file
+   *      is stored in pendienteRegistro for the user to retry.
+   *   E) try/finally ALWAYS clears the overlay — eliminates the "stuck loading"
    *      state that occurred when an unhandled throw left the counter non-null.
    */
   async function handleSubirEvidencias(actividadId: string, files: File[]) {
@@ -498,18 +498,10 @@ export default function PeriodoDetallePage() {
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: limited.length }))
 
     try {
-      // A: Refresh session ONCE — single round-trip before any parallel work
-      const supabase = createClient()
-      const { error: sessionErr } = await supabase.auth.refreshSession()
-      if (sessionErr) {
-        toast.error('Tu sesión expiró durante la subida. Inicia sesión nuevamente.', { duration: 10000 })
-        return
-      }
-
-      // B: Compress all files in parallel (pure Canvas — no server calls)
+      // A: Compress all files in parallel (pure Canvas — no server calls)
       const compressed = await Promise.all(limited.map(f => comprimirEvidencia(f)))
 
-      // C: Prepare signed URLs sequentially (one server action at a time)
+      // B: Prepare signed URLs sequentially (one server action at a time)
       const jobs: Array<{ file: File; signedUrl: string; publicUrl: string } | null> = []
       for (const fileToUpload of compressed) {
         const prep = await prepararUploadEvidencia(
