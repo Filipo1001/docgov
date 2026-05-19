@@ -28,3 +28,15 @@ input, textarea, select {
 button, a, [role="button"], label[for], input[type="checkbox"], input[type="radio"] {
   touch-action: manipulation;
 }
+
+/* Upload overlay entry animations */
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes card-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.upload-overlay-enter { animation: overlay-fade-in 0.18s ease-out; }
+.upload-card-enter    { animation: card-scale-in  0.18s ease-out; }

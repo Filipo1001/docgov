@@ -2266,14 +2266,18 @@ export default function PeriodoDetallePage() {
         }}
       />
 
-      {/* ── Upload overlay ─────────────────────────────────────────────────────
-           Always rendered — visibility controlled via CSS transitions so entry
-           and exit are smooth instead of the jarring conditional mount/unmount.
-           The backdrop + card each transition independently for layered depth.
+      {/* ── Upload overlay ──────────────────────────────────────────────────────
+           Conditional render (NOT always-mounted) — a permanently rendered
+           backdrop-filter element covering the full viewport causes GPU
+           compositing issues in some browsers even at opacity:0, making
+           page content appear blank. Only mount when actually uploading.
+           Entry animation via globals.css keyframes (overlay-fade-in / card-scale-in).
         ──────────────────────────────────────────────────────────────────── */}
       {(() => {
         const totalEvidencias: number = Object.values(subiendoEvidencia).reduce((s: number, v) => s + (v ?? 0), 0)
         const isUploading = totalEvidencias > 0 || subiendoPlanilla
+        if (!isUploading) return null
+
         const esPlanilla = subiendoPlanilla
         const label = esPlanilla
           ? 'Subiendo planilla...'
@@ -2282,27 +2286,13 @@ export default function PeriodoDetallePage() {
             : 'Subiendo imagen...'
 
         return (
-          /* Backdrop — fades from transparent to black/60 */
-          <div
-            className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm transition-[opacity,background-color] duration-200 ease-out ${
-              isUploading
-                ? 'bg-black/60 opacity-100 pointer-events-auto'
-                : 'bg-black/0 opacity-0 pointer-events-none'
-            }`}
-          >
-            {/* Card — scales up + fades in for depth effect */}
-            <div
-              className={`bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs transition-all duration-200 ease-out ${
-                isUploading ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
-              }`}
-            >
-              {/* Spinner
-                  Two-layer approach to separate concerns:
-                  · Outer div (-rotate-90): rotates coordinate system so the arc
-                    starts at 12 o'clock instead of 3 o'clock (SVG default).
-                  · Inner div (animate-spin): applies the rotation animation.
-                  Separating these prevents the CSS keyframe from overwriting the
-                  initial offset (which happened when both were on the same element). */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm upload-overlay-enter">
+            <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs upload-card-enter">
+
+              {/* Spinner — two-layer design separates the initial rotation offset
+                  from the spin animation so they don't conflict on the same element:
+                  · Outer div (-rotate-90): shifts arc start from 3 o'clock → 12 o'clock
+                  · Inner div (animate-spin): drives the continuous rotation */}
               <div className="relative w-24 h-24">
                 {/* Static track ring */}
                 <svg className="absolute inset-0 w-24 h-24" viewBox="0 0 96 96">
@@ -2325,7 +2315,7 @@ export default function PeriodoDetallePage() {
                   </div>
                 </div>
 
-                {/* Center icon — not affected by either rotation */}
+                {/* Center icon — sibling div, not affected by the parent rotations */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   {esPlanilla ? (
                     <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
