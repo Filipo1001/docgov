@@ -474,69 +474,20 @@ export default function PeriodoDetallePage() {
   // ── Evidence upload helpers ──────────────────────────────────
 
   /**
-   * Upload a single evidence file to Storage and register it in the DB.
-   * Returns 'ok' | 'pending' (uploaded but registration failed) | 'error'.
-   * Does NOT touch subiendoEvidencia state — caller manages the counter.
-   */
-  async function uploadOneEvidencia(
-    actividadId: string,
-    file: File,
-  ): Promise<'ok' | 'pending' | 'error'> {
-    // Step 0: compress client-side (max 1200×900, JPEG 75%; PDFs pass through)
-    const fileToUpload = await comprimirEvidencia(file)
-
-    // Step 1: server validation + presigned URL
-    const prep = await prepararUploadEvidencia(
-      actividadId, periodoId,
-      fileToUpload.name, fileToUpload.size, fileToUpload.type,
-    )
-    if (prep.error || !prep.data) {
-      toast.error(prep.error ?? 'Error al preparar la subida')
-      return 'error'
-    }
-    const { signedUrl, publicUrl } = prep.data
-
-    // Step 2: PUT directly to Supabase Storage (browser → Storage, skips Vercel)
-    // Normalize MIME: Android sometimes sends type="" or "application/octet-stream"
-    const mime = fileToUpload.type.startsWith('image/') ? fileToUpload.type : 'image/jpeg'
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.onload = () => xhr.status >= 200 && xhr.status < 300
-          ? resolve()
-          : reject(new Error(`HTTP ${xhr.status}`))
-        xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
-        xhr.open('PUT', signedUrl)
-        xhr.setRequestHeader('Content-Type', mime)
-        xhr.send(fileToUpload)
-      })
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error al subir la imagen')
-      return 'error'
-    }
-
-    // Step 3: refresh session (XHR can take 30 s+ on slow connections) then register
-    const supabase = createClient()
-    const { error: sessionErr } = await supabase.auth.refreshSession()
-    if (sessionErr) {
-      setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre: file.name } }))
-      toast.error('Tu sesión expiró durante la subida. Inicia sesión nuevamente y usa "Reintentar".', { duration: 10000 })
-      return 'pending'
-    }
-
-    const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, fileToUpload.name)
-    if (reg.error) {
-      setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre: file.name } }))
-      toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
-      return 'pending'
-    }
-
-    return 'ok'
-  }
-
-  /**
-   * Upload 1–5 evidence files for an activity concurrently.
-   * subiendoEvidencia[actividadId] tracks how many files are still in-flight.
+   * Upload 1–5 evidence files for an activity.
+   *
+   * Architecture — why this order matters:
+   *   A) refreshSession ONCE  — avoids concurrent auth-token race (5× parallel
+   *      refresh calls on the same cookie store causes JWT conflicts).
+   *   B) Compress in PARALLEL — pure browser Canvas API; safe to parallelise.
+   *   C) Prepare signed URLs SEQUENTIALLY — prevents Date.now() path collision
+   *      when calls arrive within the same millisecond, and avoids saturating
+   *      Supabase's free-tier connection pool with 5 simultaneous query chains.
+   *   D) XHR uploads in PARALLEL — browser → Supabase Storage directly,
+   *      completely bypasses Vercel; no serverless timeout risk here.
+   *   E) DB registration SEQUENTIALLY — keeps insert order deterministic.
+   *   F) try/finally ALWAYS clears the overlay — eliminates the "stuck loading"
+   *      state that occurred when an unhandled throw left the counter non-null.
    */
   async function handleSubirEvidencias(actividadId: string, files: File[]) {
     const limited = files.slice(0, 5)
@@ -544,28 +495,86 @@ export default function PeriodoDetallePage() {
       toast.warning('Solo se permiten 5 imágenes a la vez. Se subirán las primeras 5.')
     }
 
-    // Mark N uploads in-flight
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: limited.length }))
 
-    let successCount = 0
-    await Promise.allSettled(
-      limited.map(async (file) => {
-        const result = await uploadOneEvidencia(actividadId, file)
-        if (result === 'ok') successCount++
-        // Decrement counter; set to null when the last upload finishes
-        setSubiendoEvidencia(prev => {
-          const n = (prev[actividadId] ?? 1) - 1
-          return { ...prev, [actividadId]: n <= 0 ? null : n }
-        })
-      }),
-    )
+    try {
+      // A: Refresh session ONCE — single round-trip before any parallel work
+      const supabase = createClient()
+      const { error: sessionErr } = await supabase.auth.refreshSession()
+      if (sessionErr) {
+        toast.error('Tu sesión expiró durante la subida. Inicia sesión nuevamente.', { duration: 10000 })
+        return
+      }
 
-    if (successCount > 0) {
-      toast.success(successCount === 1 ? 'Imagen subida ✓' : `${successCount} imágenes subidas ✓`)
-      setTimeout(() => {
-        if (!mountedRef.current) return
-        cargarDatos()
-      }, 400)
+      // B: Compress all files in parallel (pure Canvas — no server calls)
+      const compressed = await Promise.all(limited.map(f => comprimirEvidencia(f)))
+
+      // C: Prepare signed URLs sequentially (one server action at a time)
+      const jobs: Array<{ file: File; signedUrl: string; publicUrl: string } | null> = []
+      for (const fileToUpload of compressed) {
+        const prep = await prepararUploadEvidencia(
+          actividadId, periodoId,
+          fileToUpload.name, fileToUpload.size, fileToUpload.type,
+        )
+        if (prep.error || !prep.data) {
+          toast.error(prep.error ?? 'Error al preparar la subida')
+          jobs.push(null)
+        } else {
+          jobs.push({ file: fileToUpload, ...prep.data })
+        }
+      }
+
+      // D: Upload all files to Supabase Storage in parallel via XHR
+      //    (browser → Storage directly — Vercel never touches the binary data)
+      const xhrResults = await Promise.allSettled(
+        jobs.map(async (job) => {
+          if (!job) return null as null
+          const { file, signedUrl, publicUrl } = job
+          const mime = file.type.startsWith('image/') ? file.type : 'image/jpeg'
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest()
+            xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+              ? resolve()
+              : reject(new Error(`HTTP ${xhr.status}`))
+            xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
+            xhr.open('PUT', signedUrl)
+            xhr.setRequestHeader('Content-Type', mime)
+            xhr.send(file)
+          })
+          return { publicUrl, nombre: file.name }
+        }),
+      )
+
+      // E: Register successful uploads in DB sequentially
+      let successCount = 0
+      for (let i = 0; i < xhrResults.length; i++) {
+        const res = xhrResults[i]
+        if (res.status === 'rejected') {
+          toast.error(res.reason instanceof Error ? res.reason.message : 'Error al subir imagen')
+          continue
+        }
+        if (res.value === null) continue // prep failed — already toasted above
+
+        const { publicUrl, nombre } = res.value
+        const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, nombre)
+        if (reg.error) {
+          setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre } }))
+          toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
+        } else {
+          successCount++
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(successCount === 1 ? 'Imagen subida ✓' : `${successCount} imágenes subidas ✓`)
+        setTimeout(() => {
+          if (!mountedRef.current) return
+          cargarDatos()
+        }, 400)
+      }
+    } finally {
+      // F: Always clear the overlay — no more "stuck loading" state
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
     }
   }
 
@@ -579,18 +588,20 @@ export default function PeriodoDetallePage() {
     const pending = pendienteRegistro[actividadId]
     if (!pending) return
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 1 }))
-    const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.nombre)
-    if (reg.error) {
-      toast.error(`Reintento fallido: ${reg.error}`)
+    try {
+      const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.nombre)
+      if (reg.error) {
+        toast.error(`Reintento fallido: ${reg.error}`)
+      } else {
+        setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
+        toast.success('Evidencia registrada ✓')
+        setTimeout(() => {
+          if (!mountedRef.current) return
+          cargarDatos()
+        }, 400)
+      }
+    } finally {
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-    } else {
-      setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-      toast.success('Evidencia registrada ✓')
-      setTimeout(() => {
-        if (!mountedRef.current) return
-        cargarDatos()
-      }, 400)
     }
   }
 
@@ -1533,27 +1544,33 @@ export default function PeriodoDetallePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
             {/* Planilla file upload */}
             <div>
-              <div>
-                <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
-                  erroresCampos.planilla
-                    ? 'bg-red-50 border-red-400'
-                    : periodo.planilla_ss_url
-                      ? 'bg-green-50 border-green-200 hover:bg-green-100'
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                }`}>
-                  <span className="text-lg">🏥</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">Planilla Seguridad Social</p>
-                    <p className={`text-xs truncate ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                      {subiendoPlanilla
-                        ? 'Subiendo...'
-                        : periodo.planilla_ss_url
-                          ? '✓ Cargada — clic para reemplazar'
-                          : erroresCampos.planilla
-                            ? 'Requerida — adjunta el archivo'
-                            : 'Subir PDF'}
-                    </p>
-                  </div>
+              {/*
+                Outer div owns the visual card styling.
+                Inner label only covers the text area — triggers the file input.
+                Eye icon anchor sits beside it as a sibling, preventing the
+                click from bubbling into the label and opening the file picker.
+              */}
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                erroresCampos.planilla
+                  ? 'bg-red-50 border-red-400'
+                  : periodo.planilla_ss_url
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-gray-50 border-gray-200'
+              }`}>
+                <span className="text-lg shrink-0">🏥</span>
+
+                {/* Clickable label area */}
+                <label className="flex-1 min-w-0 cursor-pointer hover:opacity-75 transition-opacity">
+                  <p className="text-sm font-medium text-gray-900">Planilla Seguridad Social</p>
+                  <p className={`text-xs truncate ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                    {subiendoPlanilla
+                      ? 'Subiendo...'
+                      : periodo.planilla_ss_url
+                        ? '✓ Cargada — clic para reemplazar'
+                        : erroresCampos.planilla
+                          ? 'Requerida — adjunta el archivo'
+                          : 'Subir PDF'}
+                  </p>
                   <input
                     type="file"
                     accept="application/pdf"
@@ -1570,19 +1587,19 @@ export default function PeriodoDetallePage() {
                   />
                 </label>
 
-                {/* Preview link — visible once a planilla is loaded */}
+                {/* Eye icon — preview without opening the file picker */}
                 {periodo.planilla_ss_url && (
                   <a
                     href={periodo.planilla_ss_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-green-700 hover:text-green-900 font-medium ml-1"
+                    title="Ver planilla cargada"
+                    className="p-1.5 rounded-lg text-green-600 hover:text-green-800 hover:bg-green-100 active:bg-green-200 transition-colors shrink-0"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    Ver planilla cargada
                   </a>
                 )}
               </div>
@@ -2257,12 +2274,14 @@ export default function PeriodoDetallePage() {
         }}
       />
 
-      {/* ── Upload overlay ── */}
+      {/* ── Upload overlay ─────────────────────────────────────────────────────
+           Always rendered — visibility controlled via CSS transitions so entry
+           and exit are smooth instead of the jarring conditional mount/unmount.
+           The backdrop + card each transition independently for layered depth.
+        ──────────────────────────────────────────────────────────────────── */}
       {(() => {
         const totalEvidencias: number = Object.values(subiendoEvidencia).reduce((s: number, v) => s + (v ?? 0), 0)
         const isUploading = totalEvidencias > 0 || subiendoPlanilla
-        if (!isUploading) return null
-
         const esPlanilla = subiendoPlanilla
         const label = esPlanilla
           ? 'Subiendo planilla...'
@@ -2271,31 +2290,57 @@ export default function PeriodoDetallePage() {
             : 'Subiendo imagen...'
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs">
-
-              {/* Spinning arc — same design for both planilla and evidencia */}
-              <div className="relative w-28 h-28">
-                <svg className="w-28 h-28 animate-spin" viewBox="0 0 96 96" style={{ transform: 'rotate(-90deg)' }}>
-                  <circle cx="48" cy="48" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8" />
-                  <circle
-                    cx="48" cy="48" r="40"
-                    fill="none" stroke="#1d4ed8" strokeWidth="8" strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 40}
-                    strokeDashoffset={2 * Math.PI * 40 * 0.72}
-                  />
+          /* Backdrop — fades from transparent to black/60 */
+          <div
+            className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm transition-[opacity,background-color] duration-200 ease-out ${
+              isUploading
+                ? 'bg-black/60 opacity-100 pointer-events-auto'
+                : 'bg-black/0 opacity-0 pointer-events-none'
+            }`}
+          >
+            {/* Card — scales up + fades in for depth effect */}
+            <div
+              className={`bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs transition-all duration-200 ease-out ${
+                isUploading ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+              }`}
+            >
+              {/* Spinner
+                  Two-layer approach to separate concerns:
+                  · Outer div (-rotate-90): rotates coordinate system so the arc
+                    starts at 12 o'clock instead of 3 o'clock (SVG default).
+                  · Inner div (animate-spin): applies the rotation animation.
+                  Separating these prevents the CSS keyframe from overwriting the
+                  initial offset (which happened when both were on the same element). */}
+              <div className="relative w-24 h-24">
+                {/* Static track ring */}
+                <svg className="absolute inset-0 w-24 h-24" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="#e5e7eb" strokeWidth="6" />
                 </svg>
 
-                {/* Center icon */}
+                {/* Offset wrapper (-90°) + spinning arc */}
+                <div className="absolute inset-0 -rotate-90">
+                  <div
+                    className="w-full h-full animate-spin"
+                    style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}
+                  >
+                    <svg className="w-24 h-24" viewBox="0 0 96 96">
+                      <circle
+                        cx="48" cy="48" r="40"
+                        fill="none" stroke="#2563eb" strokeWidth="6" strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 40 * 0.28} ${2 * Math.PI * 40 * 0.72}`}
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Center icon — not affected by either rotation */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   {esPlanilla ? (
-                    /* Document icon */
-                    <svg className="w-9 h-9 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                     </svg>
                   ) : (
-                    /* Image / landscape icon */
-                    <svg className="w-9 h-9 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                     </svg>
                   )}
@@ -2305,7 +2350,7 @@ export default function PeriodoDetallePage() {
               {/* Text */}
               <div className="text-center">
                 <p className="text-base font-semibold text-gray-800">{label}</p>
-                <p className="text-sm text-gray-400 mt-1">Por favor espera</p>
+                <p className="text-sm text-gray-400 mt-1 animate-pulse">Por favor espera</p>
               </div>
             </div>
           </div>
