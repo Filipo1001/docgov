@@ -35,6 +35,7 @@ import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
 import { actualizarActividad } from '@/app/actions/actividades'
+import { createClient } from '@/lib/supabase'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
 export default function PeriodoDetallePage() {
@@ -81,8 +82,15 @@ export default function PeriodoDetallePage() {
   // Upload progress state per activity (null = idle, 0-100 = uploading)
   const [subiendoEvidencia, setSubiendoEvidencia] = useState<Record<string, number | null>>({})
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
-  // Stored so the user can retry step 3 without re-uploading the file.
-  const [pendienteRegistro, setPendienteRegistro] = useState<Record<string, { publicUrl: string; nombre: string } | null>>({})
+  // Persisted to localStorage so the user can retry step 3 after a page refresh.
+  const PENDING_KEY = `pendiente_reg_${periodoId}`
+  const [pendienteRegistro, setPendienteRegistro] = useState<Record<string, { publicUrl: string; nombre: string } | null>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const stored = localStorage.getItem(`pendiente_reg_${periodoId}`)
+      return stored ? JSON.parse(stored) : {}
+    } catch { return {} }
+  })
 
   // Shared file input refs — one for gallery, one for camera.
   // Using refs + programmatic .click() instead of hidden inputs inside <label> tags
@@ -126,6 +134,22 @@ export default function PeriodoDetallePage() {
 
   // Scroll anchors for rejection guidance
   const seccionActividadesRef = useRef<HTMLDivElement>(null)
+
+  // Track mount state to prevent setState after unmount (e.g. navigation during upload)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
+  // Persist pendienteRegistro across page refreshes so the user can retry step 3
+  useEffect(() => {
+    try {
+      const hasAny = Object.values(pendienteRegistro).some(v => v !== null)
+      if (hasAny) localStorage.setItem(PENDING_KEY, JSON.stringify(pendienteRegistro))
+      else localStorage.removeItem(PENDING_KEY)
+    } catch { /* storage full or private mode — silent */ }
+  }, [pendienteRegistro, PENDING_KEY])
 
   const cargarDatos = useCallback(async (silencioso = false) => {
     try {
@@ -447,51 +471,40 @@ export default function PeriodoDetallePage() {
     setGuardandoEdicion(false)
   }
 
-  // Compress evidence image before upload: max 1200×900, JPEG 75%
-  // PDFs are passed through unchanged. All images (including HEIC/HEIF from iPhone
-  // and files with missing MIME types from Android) are converted to JPEG so that
-  // browsers and react-pdf can render them reliably.
-  async function handleSubirEvidencia(actividadId: string, file: File) {
-    // ── Step 0: compress image client-side ────────────────────
+  // ── Evidence upload helpers ──────────────────────────────────
+
+  /**
+   * Upload a single evidence file to Storage and register it in the DB.
+   * Returns 'ok' | 'pending' (uploaded but registration failed) | 'error'.
+   * Does NOT touch subiendoEvidencia state — caller manages the counter.
+   */
+  async function uploadOneEvidencia(
+    actividadId: string,
+    file: File,
+  ): Promise<'ok' | 'pending' | 'error'> {
+    // Step 0: compress client-side (max 1200×900, JPEG 75%; PDFs pass through)
     const fileToUpload = await comprimirEvidencia(file)
 
-    // ── Step 1: server-side validation + get presigned URL ────
-    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 0 }))
-
+    // Step 1: server validation + presigned URL
     const prep = await prepararUploadEvidencia(
-      actividadId,
-      periodoId,
-      fileToUpload.name,
-      fileToUpload.size,
-      fileToUpload.type,
+      actividadId, periodoId,
+      fileToUpload.name, fileToUpload.size, fileToUpload.type,
     )
-
     if (prep.error || !prep.data) {
       toast.error(prep.error ?? 'Error al preparar la subida')
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-      return
+      return 'error'
     }
-
     const { signedUrl, publicUrl } = prep.data
 
-    // ── Step 2: upload DIRECTLY to Supabase (browser → Supabase, no Vercel) ──
-    // Using XHR so we get real upload.onprogress events (0→95%).
-    // Normalize MIME: Android devices sometimes set type="" or "application/octet-stream"
-    // for images. Always upload as image/jpeg when the type is not a recognized image type.
+    // Step 2: PUT directly to Supabase Storage (browser → Storage, skips Vercel)
+    // Normalize MIME: Android sometimes sends type="" or "application/octet-stream"
     const mime = fileToUpload.type.startsWith('image/') ? fileToUpload.type : 'image/jpeg'
     try {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const pct = Math.round((e.loaded / e.total) * 95)
-            setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: pct }))
-          }
-        }
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve()
-          else reject(new Error(`Error al subir: ${xhr.status} ${xhr.statusText}`))
-        }
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+          ? resolve()
+          : reject(new Error(`HTTP ${xhr.status}`))
         xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
         xhr.open('PUT', signedUrl)
         xhr.setRequestHeader('Content-Type', mime)
@@ -499,29 +512,61 @@ export default function PeriodoDetallePage() {
       })
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error al subir la imagen')
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-      return
+      return 'error'
     }
 
-    // ── Step 3: register DB record ─────────────────────────────
-    // The file is already in Supabase Storage. If this step fails (network drop,
-    // transient error), we store the pending registration so the user can retry
-    // without re-uploading the entire file.
-    const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, fileToUpload.name)
+    // Step 3: refresh session (XHR can take 30 s+ on slow connections) then register
+    const supabase = createClient()
+    const { error: sessionErr } = await supabase.auth.refreshSession()
+    if (sessionErr) {
+      setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre: file.name } }))
+      toast.error('Tu sesión expiró durante la subida. Inicia sesión nuevamente y usa "Reintentar".', { duration: 10000 })
+      return 'pending'
+    }
 
+    const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, fileToUpload.name)
     if (reg.error) {
       setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre: file.name } }))
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
       toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
-      return
+      return 'pending'
     }
 
-    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 100 }))
-    toast.success('Evidencia subida ✓')
-    setTimeout(() => {
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-      cargarDatos()
-    }, 600)
+    return 'ok'
+  }
+
+  /**
+   * Upload 1–5 evidence files for an activity concurrently.
+   * subiendoEvidencia[actividadId] tracks how many files are still in-flight.
+   */
+  async function handleSubirEvidencias(actividadId: string, files: File[]) {
+    const limited = files.slice(0, 5)
+    if (files.length > 5) {
+      toast.warning('Solo se permiten 5 imágenes a la vez. Se subirán las primeras 5.')
+    }
+
+    // Mark N uploads in-flight
+    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: limited.length }))
+
+    let successCount = 0
+    await Promise.allSettled(
+      limited.map(async (file) => {
+        const result = await uploadOneEvidencia(actividadId, file)
+        if (result === 'ok') successCount++
+        // Decrement counter; set to null when the last upload finishes
+        setSubiendoEvidencia(prev => {
+          const n = (prev[actividadId] ?? 1) - 1
+          return { ...prev, [actividadId]: n <= 0 ? null : n }
+        })
+      }),
+    )
+
+    if (successCount > 0) {
+      toast.success(successCount === 1 ? 'Imagen subida ✓' : `${successCount} imágenes subidas ✓`)
+      setTimeout(() => {
+        if (!mountedRef.current) return
+        cargarDatos()
+      }, 400)
+    }
   }
 
   async function handleEliminarEvidencia(evId: string) {
@@ -533,19 +578,19 @@ export default function PeriodoDetallePage() {
   async function handleReintentarRegistro(actividadId: string) {
     const pending = pendienteRegistro[actividadId]
     if (!pending) return
-    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 98 }))
+    setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 1 }))
     const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.nombre)
     if (reg.error) {
       toast.error(`Reintento fallido: ${reg.error}`)
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
     } else {
       setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
-      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 100 }))
+      setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
       toast.success('Evidencia registrada ✓')
       setTimeout(() => {
-        setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+        if (!mountedRef.current) return
         cargarDatos()
-      }, 600)
+      }, 400)
     }
   }
 
@@ -1342,39 +1387,41 @@ export default function PeriodoDetallePage() {
                               </div>
                             )}
 
-                            {/* Upload progress bar */}
-                            {subiendoEvidencia[act.id] !== null && subiendoEvidencia[act.id] !== undefined && (
-                              <div className="mb-2">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs text-blue-600 font-medium">Subiendo imagen...</span>
-                                  <span className="text-xs text-blue-400">{subiendoEvidencia[act.id]}%</span>
-                                </div>
-                                <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
-                                  <div
-                                    className="bg-blue-500 h-1.5 rounded-full transition-all duration-150 ease-out"
-                                    style={{ width: `${subiendoEvidencia[act.id]}%` }}
-                                  />
-                                </div>
+                            {/* In-flight indicator — shown while overlay is up */}
+                            {subiendoEvidencia[act.id] != null && (
+                              <div className="mb-2 flex items-center gap-2 text-blue-600">
+                                <svg className="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                                <span className="text-xs font-medium">
+                                  {(subiendoEvidencia[act.id] ?? 0) > 1
+                                    ? `Subiendo ${subiendoEvidencia[act.id]} imágenes...`
+                                    : 'Subiendo imagen...'}
+                                </span>
                               </div>
                             )}
 
                             {esEditable && subiendoEvidencia[act.id] == null && (
                               <div className="flex flex-col xs:flex-row gap-2 mt-1">
-                                {/* Gallery — opens the device photo library */}
+                                {/* Gallery — multiple selection (up to 5 at once) */}
                                 <button
                                   type="button"
                                   onClick={() => {
                                     uploadTargetId.current = act.id
                                     galleryInputRef.current?.click()
                                   }}
-                                  className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 active:text-blue-800 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 min-h-[44px] px-4 rounded-xl transition-colors"
+                                  className="flex-1 inline-flex flex-col items-center justify-center gap-0.5 text-sm font-medium text-blue-600 hover:text-blue-700 active:text-blue-800 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 min-h-[44px] px-4 py-2 rounded-xl transition-colors"
                                 >
-                                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                  Subir imagen
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    Subir imágenes
+                                  </span>
+                                  <span className="text-[10px] font-normal text-blue-400 leading-tight">hasta 5 a la vez</span>
                                 </button>
-                                {/* Camera — directly opens the rear camera */}
+                                {/* Camera — single capture */}
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1486,41 +1533,59 @@ export default function PeriodoDetallePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
             {/* Planilla file upload */}
             <div>
-              <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
-                erroresCampos.planilla
-                  ? 'bg-red-50 border-red-400'
-                  : periodo.planilla_ss_url
-                    ? 'bg-green-50 border-green-200 hover:bg-green-100'
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-              }`}>
-                <span className="text-lg">🏥</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">Planilla Seguridad Social</p>
-                  <p className={`text-xs truncate ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                    {subiendoPlanilla
-                      ? 'Subiendo...'
-                      : periodo.planilla_ss_url
-                        ? '✓ Cargada — clic para reemplazar'
-                        : erroresCampos.planilla
-                          ? 'Requerida — adjunta el archivo'
-                          : 'Subir PDF'}
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  className="hidden"
-                  disabled={subiendoPlanilla}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      handleSubirPlanilla(file)
-                      setErroresCampos(prev => ({ ...prev, planilla: false }))
-                    }
-                    e.target.value = ''
-                  }}
-                />
-              </label>
+              <div>
+                <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                  erroresCampos.planilla
+                    ? 'bg-red-50 border-red-400'
+                    : periodo.planilla_ss_url
+                      ? 'bg-green-50 border-green-200 hover:bg-green-100'
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                }`}>
+                  <span className="text-lg">🏥</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Planilla Seguridad Social</p>
+                    <p className={`text-xs truncate ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                      {subiendoPlanilla
+                        ? 'Subiendo...'
+                        : periodo.planilla_ss_url
+                          ? '✓ Cargada — clic para reemplazar'
+                          : erroresCampos.planilla
+                            ? 'Requerida — adjunta el archivo'
+                            : 'Subir PDF'}
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    disabled={subiendoPlanilla}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        handleSubirPlanilla(file)
+                        setErroresCampos(prev => ({ ...prev, planilla: false }))
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+
+                {/* Preview link — visible once a planilla is loaded */}
+                {periodo.planilla_ss_url && (
+                  <a
+                    href={periodo.planilla_ss_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-green-700 hover:text-green-900 font-medium ml-1"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Ver planilla cargada
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Número de planilla */}
@@ -2165,17 +2230,20 @@ export default function PeriodoDetallePage() {
         position:fixed + opacity:0 + size:0 keeps them in the accessibility
         tree and layout-reachable by the browser's native file dialog trigger.
       */}
+      {/* Gallery: multiple selection (up to 5). */}
       <input
         ref={galleryInputRef}
         type="file"
         accept="image/*,.heic,.heif"
+        multiple
         style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
         onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file && uploadTargetId.current) handleSubirEvidencia(uploadTargetId.current, file)
+          const files = Array.from(e.target.files ?? [])
+          if (files.length > 0 && uploadTargetId.current) handleSubirEvidencias(uploadTargetId.current, files)
           e.target.value = ''
         }}
       />
+      {/* Camera: single capture (capture= doesn't support multiple). */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -2184,64 +2252,59 @@ export default function PeriodoDetallePage() {
         style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
         onChange={(e) => {
           const file = e.target.files?.[0]
-          if (file && uploadTargetId.current) handleSubirEvidencia(uploadTargetId.current, file)
+          if (file && uploadTargetId.current) handleSubirEvidencias(uploadTargetId.current, [file])
           e.target.value = ''
         }}
       />
 
       {/* ── Upload overlay ── */}
       {(() => {
-        const evidenciaPct = Object.values(subiendoEvidencia).find(v => v !== null && v !== undefined) ?? null
-        const isUploading = evidenciaPct !== null || subiendoPlanilla
+        const totalEvidencias: number = Object.values(subiendoEvidencia).reduce((s: number, v) => s + (v ?? 0), 0)
+        const isUploading = totalEvidencias > 0 || subiendoPlanilla
         if (!isUploading) return null
 
         const esPlanilla = subiendoPlanilla
-        const pct = esPlanilla ? null : (evidenciaPct ?? 0)
-        const circumference = 2 * Math.PI * 40
+        const label = esPlanilla
+          ? 'Subiendo planilla...'
+          : totalEvidencias > 1
+            ? `Subiendo ${totalEvidencias} imágenes...`
+            : 'Subiendo imagen...'
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs">
 
-              {/* Spinner */}
+              {/* Spinning arc — same design for both planilla and evidencia */}
               <div className="relative w-28 h-28">
-                <svg className={`w-28 h-28 ${esPlanilla ? 'animate-spin' : ''}`} viewBox="0 0 96 96" style={{ transform: 'rotate(-90deg)' }}>
-                  {/* Track */}
+                <svg className="w-28 h-28 animate-spin" viewBox="0 0 96 96" style={{ transform: 'rotate(-90deg)' }}>
                   <circle cx="48" cy="48" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8" />
-                  {/* Arc */}
                   <circle
                     cx="48" cy="48" r="40"
-                    fill="none"
-                    stroke="#1d4ed8"
-                    strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={
-                      esPlanilla
-                        ? circumference * 0.25
-                        : circumference * (1 - (pct ?? 0) / 100)
-                    }
-                    style={{ transition: esPlanilla ? undefined : 'stroke-dashoffset 0.3s ease' }}
+                    fill="none" stroke="#1d4ed8" strokeWidth="8" strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 40}
+                    strokeDashoffset={2 * Math.PI * 40 * 0.72}
                   />
                 </svg>
 
-                {/* Center content */}
+                {/* Center icon */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   {esPlanilla ? (
+                    /* Document icon */
                     <svg className="w-9 h-9 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                     </svg>
                   ) : (
-                    <span className="text-xl font-bold text-blue-700">{pct}%</span>
+                    /* Image / landscape icon */
+                    <svg className="w-9 h-9 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
                   )}
                 </div>
               </div>
 
               {/* Text */}
               <div className="text-center">
-                <p className="text-base font-semibold text-gray-800">
-                  {esPlanilla ? 'Subiendo planilla...' : 'Subiendo imagen...'}
-                </p>
+                <p className="text-base font-semibold text-gray-800">{label}</p>
                 <p className="text-sm text-gray-400 mt-1">Por favor espera</p>
               </div>
             </div>

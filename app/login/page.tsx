@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
 
 export default function LoginPage() {
@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [magicEnviado, setMagicEnviado] = useState(false)
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const sesionExpirada = searchParams.get('expired') === '1'
 
   // Login con email + contraseña
   async function handleLogin(e: React.FormEvent) {
@@ -92,6 +94,18 @@ export default function LoginPage() {
           <p className="text-gray-500 mt-1">Gestión documental contractual</p>
           <p className="text-sm text-gray-400">Alcaldía Municipal de Fredonia</p>
         </div>
+
+        {/* Expired session banner */}
+        {sesionExpirada && (
+          <div className="mb-4 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <p className="text-sm text-amber-800">
+              Tu sesión expiró por inactividad. Por favor inicia sesión nuevamente.
+            </p>
+          </div>
+        )}
 
         {/* Card principal */}
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">

@@ -241,6 +241,7 @@ export async function getPeriodosPendientesParaRol(
       preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo))
     `)
     .eq('estado', estadoFiltro)
+    .eq('es_historico', false)
     .order('fecha_envio', { ascending: true })
 
   // Supervisor only sees their assigned contracts

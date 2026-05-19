@@ -50,12 +50,15 @@ function PendingBadge({ n }: { n: number }) {
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { usuario, municipio, cargando } = useUsuario()
+  const { usuario, municipio, cargando, sesionExpirada } = useUsuario()
   const [pendientes, setPendientes] = useState(0)
 
   useEffect(() => {
-    if (!cargando && !usuario) router.push('/login')
-  }, [cargando, usuario, router])
+    if (cargando) return
+    if (!usuario) {
+      router.push(sesionExpirada ? '/login?expired=1' : '/login')
+    }
+  }, [cargando, usuario, sesionExpirada, router])
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {

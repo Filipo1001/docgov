@@ -201,6 +201,7 @@ export async function getPeriodosPendientesSupervisor(
     `)
     .in('contrato_id', ids)
     .eq('estado', 'enviado')
+    .eq('es_historico', false)
     .order('fecha_envio', { ascending: true })
 
   const now = Date.now()

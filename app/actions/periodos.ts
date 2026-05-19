@@ -265,6 +265,14 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
       return { error: 'Solo se pueden aprobar periodos en estado "enviado" o "rechazado"' }
     }
 
+    // Asesores can only act on contracts belonging to their own dependencia
+    if (usuario.rol === 'asesor' && usuario.dependencia_id) {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.dependencia_id && contrato.dependencia_id !== usuario.dependencia_id) {
+        return { error: 'No tienes permisos para gestionar contratos de otra dependencia' }
+      }
+    }
+
     const estadoAnterior = periodo.estado
     const { data: updated, error } = await supabase
       .from('periodos')
@@ -328,6 +336,14 @@ export async function rechazarComoAsesor(
 
     if (periodo.estado !== 'enviado' && periodo.estado !== 'revision') {
       return { error: 'Solo se pueden rechazar periodos en estado "enviado" o "revision"' }
+    }
+
+    // Asesores can only act on contracts belonging to their own dependencia
+    if (usuario.rol === 'asesor' && usuario.dependencia_id) {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.dependencia_id && contrato.dependencia_id !== usuario.dependencia_id) {
+        return { error: 'No tienes permisos para gestionar contratos de otra dependencia' }
+      }
     }
 
     const estadoAnterior = periodo.estado
@@ -612,6 +628,14 @@ export async function marcarRadicado(
 
     if (periodo.estado !== 'aprobado') {
       return { error: 'Solo se pueden radicar los periodos aprobados' }
+    }
+
+    // Asesores can only radicar contracts belonging to their own dependencia
+    if (usuario.rol === 'asesor' && usuario.dependencia_id) {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.dependencia_id && contrato.dependencia_id !== usuario.dependencia_id) {
+        return { error: 'No tienes permisos para radicar contratos de otra dependencia' }
+      }
     }
 
     const estadoAnterior = periodo.estado
