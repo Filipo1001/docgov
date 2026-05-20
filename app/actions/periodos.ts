@@ -235,7 +235,11 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       }
     } catch { /* notification failure must not block a successful submit */ }
 
-    invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
+    // Await invalidation — do NOT fire-and-forget here.
+    // A race exists: the client receives the success response and can immediately
+    // request the PDF.  If invalidation runs in the background, the old cached
+    // PDF (from the previous enviado cycle) is served before the delete completes.
+    await invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
@@ -303,7 +307,7 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
       }
     } catch { /* notification failure must not block a successful review */ }
 
-    invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
+    await invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
@@ -377,7 +381,7 @@ export async function rechazarComoAsesor(
       }
     } catch { /* notification failure must not block a successful rejection */ }
 
-    invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
+    await invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {

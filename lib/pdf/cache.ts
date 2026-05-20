@@ -24,8 +24,8 @@ export const ESTADOS_CACHEABLES = new Set(['enviado', 'revision', 'aprobado', 'r
  * Optimization notes:
  * - `estado` is fetched with a lightweight single-column query (not buildPDFData)
  *   so expensive PDF data loading only happens on cache miss.
- * - Cache existence check uses a HEAD request instead of storage.list(),
- *   which avoids an extra Supabase API round-trip on every cache hit.
+ * - Cache existence check uses storage.list() (direct storage API, no CDN layer)
+ *   so it always reflects the true file state — not a potentially-stale CDN response.
  * - `generate` is called only on cache miss; it returns both the buffer and
  *   the filename so buildPDFData can live entirely inside the closure.
  */
@@ -53,11 +53,18 @@ export async function getOrGeneratePDF({
   const shouldCache = ESTADOS_CACHEABLES.has(estado)
 
   if (shouldCache) {
-    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
     try {
-      // HEAD request: existence check without downloading the file
-      const headRes = await fetch(publicUrl, { method: 'HEAD' })
-      if (headRes.ok) {
+      // Use storage.list() instead of a CDN HEAD request.
+      // A HEAD to the public CDN URL can return stale 200s for minutes after
+      // the file is deleted (CDN cache TTL), causing us to redirect to an old
+      // PDF even after invalidarCachePDF has run.  storage.list() queries the
+      // storage service directly — no CDN layer, always reflects true state.
+      const { data: fileList } = await supabase.storage
+        .from(BUCKET)
+        .list(tipo, { limit: 1, search: `${periodoId}.pdf` })
+
+      if (fileList?.some((f: { name: string }) => f.name === `${periodoId}.pdf`)) {
+        const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
         // Redirect to Supabase CDN — instant delivery, zero server CPU
         return NextResponse.redirect(publicUrl, {
           status: 302,
