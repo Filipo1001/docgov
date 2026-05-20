@@ -5,7 +5,9 @@
  * Do NOT import from Server Components or Server Actions.
  *
  * Compression targets:
- *   - Evidence photos  → WebP 1024×768 px  q=0.72  (~70–90 KB vs ~185 KB JPEG before)
+ *   - Evidence photos  → JPEG 1024×768 px  q=0.80  (~90–130 KB)
+ *                        NOTE: must be JPEG, not WebP — @react-pdf/renderer v4
+ *                        has no WebP decoder in Node.js and silently skips WebP images.
  *   - Profile photos   → WebP 400×400 px   q=0.82  (~20–40 KB vs ~550 KB raw)
  *   - Signatures       → PNG  600×200 px   q=0.95, background removed (transparency for PDF)
  */
@@ -25,8 +27,9 @@ function supportsWebP(): boolean {
 // ─── Base resize + encode ─────────────────────────────────────────────────────
 
 /**
- * Resize a File to fit within maxW×maxH (never upscales) and encode as
- * WebP (or JPEG on browsers that don't support WebP encoding) at the given quality.
+ * Resize a File to fit within maxW×maxH (never upscales) and encode at the
+ * given quality.  Pass `forcedMime` to lock the output format; otherwise the
+ * function picks WebP when supported, falling back to JPEG.
  * Returns the original File unchanged on any canvas error.
  */
 export function comprimirImagen(
@@ -34,6 +37,7 @@ export function comprimirImagen(
   maxW: number,
   maxH: number,
   quality: number,
+  forcedMime?: 'image/jpeg' | 'image/webp',
 ): Promise<File> {
   return new Promise((resolve) => {
     const img = new Image()
@@ -51,7 +55,7 @@ export function comprimirImagen(
       canvas.height = h
       canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
 
-      const mime = supportsWebP() ? 'image/webp' : 'image/jpeg'
+      const mime = forcedMime ?? (supportsWebP() ? 'image/webp' : 'image/jpeg')
       const ext  = mime === 'image/webp' ? 'webp' : 'jpg'
       const name = file.name.replace(/\.[^.]+$/, `.${ext}`)
 
@@ -91,10 +95,14 @@ function isHeic(file: File): boolean {
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif', 'bmp', 'tiff'])
 
 /**
- * Compress an evidence photo to max 1024×768 px, WebP q=0.72.
+ * Compress an evidence photo to max 1024×768 px, JPEG q=0.80.
  * HEIC/HEIF files are converted to JPEG first via heic2any.
  * Non-image files (PDFs, etc.) pass through unchanged.
- * Expected output: ~70–90 KB from a typical ~185 KB JPEG.
+ *
+ * Output is always JPEG — NOT WebP.
+ * @react-pdf/renderer v4 has no WebP decoder in Node.js, so WebP images are
+ * silently dropped when the informe PDF is generated server-side.
+ * Expected output: ~90–130 KB from a typical phone photo.
  */
 export async function comprimirEvidencia(file: File): Promise<File> {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -102,7 +110,7 @@ export async function comprimirEvidencia(file: File): Promise<File> {
   if (!looksLikeImage) return file
 
   const source = isHeic(file) ? await convertirHeic(file) : file
-  return comprimirImagen(source, 1024, 768, 0.72)
+  return comprimirImagen(source, 1024, 768, 0.80, 'image/jpeg')
 }
 
 // ─── Profile photos ───────────────────────────────────────────────────────────

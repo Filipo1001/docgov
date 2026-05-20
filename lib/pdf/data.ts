@@ -7,6 +7,35 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { numeroALetras } from '@/lib/format'
 import type { PDFData, PDFPagoHistorial } from './types'
 
+// ─── Image format normalization ───────────────────────────────
+//
+// @react-pdf/renderer v4 has no WebP decoder in Node.js — WebP images are
+// silently skipped when embedded in a PDF (no error is thrown).
+// This function detects WebP by URL extension and converts to JPEG using
+// sharp (already a dependency) before the buffer is handed to the renderer.
+//
+// Only WebP URLs are fetched server-side; JPEG/PNG are passed through as-is
+// so the renderer can fetch them directly (they work natively and this avoids
+// a redundant download for the common case).
+async function resolverImagenParaPDF(url: string): Promise<string> {
+  // Fast path: non-WebP images are supported natively by @react-pdf/renderer
+  if (!/\.webp($|\?)/i.test(url)) return url
+
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return url // keep original URL — image may still fail silently
+
+    const buffer = Buffer.from(await res.arrayBuffer())
+    // Dynamic import avoids loading sharp on paths that don't need it
+    const sharp = (await import('sharp')).default
+    const jpeg = await sharp(buffer).jpeg({ quality: 85 }).toBuffer()
+    return `data:image/jpeg;base64,${jpeg.toString('base64')}`
+  } catch {
+    // Never crash PDF generation over a single image
+    return url
+  }
+}
+
 /** Normaliza abreviatura de moneda → siempre M/L */
 function normalizaMoneda(texto: string): string {
   return texto.replace(/\bM\/CTE\b/gi, 'M/L').trim()
@@ -123,17 +152,40 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     evidencias: Array<{ id: string; url: string; nombre_archivo: string }>
   }
 
+  const actividadesArr = (actividadesDelPeriodo ?? []) as ActRow[]
+
+  // Collect every evidencia URL that needs format conversion (WebP → JPEG).
+  // Run all fetches + conversions in parallel — only WebP images hit the network
+  // here; JPEG/PNG are resolved immediately via the fast-path in resolverImagenParaPDF.
+  type EvRef = { actId: string; evIdx: number; url: string }
+  const evRefs: EvRef[] = []
+  for (const act of actividadesArr) {
+    for (let i = 0; i < (act.evidencias ?? []).length; i++) {
+      evRefs.push({ actId: act.id, evIdx: i, url: act.evidencias[i].url })
+    }
+  }
+  const resolvedUrls = await Promise.all(evRefs.map(r => resolverImagenParaPDF(r.url)))
+
+  // Build a per-activity lookup: actId → [resolvedUrl0, resolvedUrl1, ...]
+  const urlsByAct = new Map<string, string[]>()
+  evRefs.forEach((r, i) => {
+    const arr = urlsByAct.get(r.actId) ?? []
+    arr[r.evIdx] = resolvedUrls[i]
+    urlsByAct.set(r.actId, arr)
+  })
+
   const actsPorObligacion = new Map<
     string,
     Array<{ descripcion: string; cantidad: number; evidencias: Array<{ url: string; nombre_archivo: string }> }>
   >()
-  for (const act of (actividadesDelPeriodo ?? []) as ActRow[]) {
+  for (const act of actividadesArr) {
+    const resolved = urlsByAct.get(act.id) ?? []
     const list = actsPorObligacion.get(act.obligacion_id) ?? []
     list.push({
       descripcion: act.descripcion,
       cantidad: act.cantidad,
-      evidencias: (act.evidencias ?? []).map((ev) => ({
-        url: ev.url,
+      evidencias: (act.evidencias ?? []).map((ev, i) => ({
+        url: resolved[i] ?? ev.url,
         nombre_archivo: ev.nombre_archivo,
       })),
     })
