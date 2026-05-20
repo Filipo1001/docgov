@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import {
   getDashboardContratista,
   type DashboardContratista,
@@ -269,19 +269,17 @@ export default function ContratistaHome({
   userId: string
   nombre: string
 }) {
-  const [data, setData] = useState<DashboardContratista | null>(null)
-  const [cargando, setCargando] = useState(true)
-
   const firstName = nombre.split(' ')[0]
 
-  useEffect(() => {
-    getDashboardContratista(userId).then(d => {
-      setData(d)
-      setCargando(false)
-    })
-  }, [userId])
+  // staleTime: 5 min — navigating back shows cached data instantly;
+  // background refetch runs if data is older than 5 minutes.
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard-contratista', userId],
+    queryFn:  () => getDashboardContratista(userId),
+    staleTime: 5 * 60_000,
+  })
 
-  if (cargando || !data) return <Skeleton />
+  if (isLoading || !data) return <Skeleton />
 
   const { contrato, periodos, periodoActual, progreso, stats } = data
   const mes = mesActualNombre()

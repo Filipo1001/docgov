@@ -34,6 +34,7 @@ export interface ContratoListItem {
   fecha_inicio: string
   fecha_fin: string
   contratista: {
+    id: string
     nombre_completo: string
     cedula: string | null
     email: string | null
@@ -80,7 +81,7 @@ export async function getContratosPagina(params: {
       id, numero, anio, objeto, valor_total, valor_mensual, plazo_meses,
       fecha_inicio, fecha_fin,
       contratista:usuarios!contratos_contratista_id_fkey(
-        nombre_completo, cedula, email, telefono, foto_url,
+        id, nombre_completo, cedula, email, telefono, foto_url,
         firma_url, cargo, banco, tipo_cuenta, numero_cuenta
       ),
       supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { UserProvider, useUsuario } from '@/lib/user-context'
 import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
@@ -50,15 +50,9 @@ function PendingBadge({ n }: { n: number }) {
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { usuario, municipio, cargando, sesionExpirada } = useUsuario()
+  // Auth redirect is handled by DashboardContent — Sidebar is purely presentational
+  const { usuario, municipio } = useUsuario()
   const [pendientes, setPendientes] = useState(0)
-
-  useEffect(() => {
-    if (cargando) return
-    if (!usuario) {
-      router.push(sesionExpirada ? '/login?expired=1' : '/login')
-    }
-  }, [cargando, usuario, sesionExpirada, router])
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {
@@ -216,9 +210,65 @@ function MobileHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
   )
 }
 
+// ─── Global loading skeleton shown while auth resolves ────────
+function AuthLoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar placeholder */}
+      <div className="hidden md:flex fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 flex-col animate-pulse">
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-200 rounded-xl" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3.5 bg-gray-200 rounded w-28" />
+              <div className="h-2.5 bg-gray-100 rounded w-20" />
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 p-4 space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-10 bg-gray-100 rounded-xl" />
+          ))}
+        </div>
+      </div>
+      {/* Content placeholder */}
+      <div className="md:ml-64 flex-1 p-4 md:p-8 space-y-4 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded-xl w-48" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-24 bg-gray-200 rounded-2xl" />
+          ))}
+        </div>
+        <div className="h-64 bg-gray-200 rounded-2xl" />
+      </div>
+    </div>
+  )
+}
+
 // ─── Layout ───────────────────────────────────────────────────
 function DashboardContent({ children }: { children: React.ReactNode }) {
+  const { cargando, usuario, sesionExpirada } = useUsuario()
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Prevent double-redirect if push is already in flight
+  const redirecting = useRef(false)
+
+  useEffect(() => {
+    if (cargando) return
+    if (!usuario && !redirecting.current) {
+      redirecting.current = true
+      router.push(sesionExpirada ? '/login?expired=1' : '/login')
+    }
+    if (usuario) redirecting.current = false
+  }, [cargando, usuario, sesionExpirada, router])
+
+  // Show skeleton while auth is resolving — this prevents children from rendering
+  // with usuario=null and eliminates the navigation race that caused blank pages.
+  if (cargando) return <AuthLoadingSkeleton />
+
+  // Auth resolved but no user: redirect is in flight — render nothing to
+  // avoid a flash of the dashboard before /login takes over.
+  if (!usuario) return null
 
   return (
     <div className="min-h-screen bg-gray-50">

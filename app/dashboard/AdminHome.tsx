@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import {
   getAdminPipeline,
   getActividadReciente,
@@ -91,21 +91,26 @@ export default function AdminHome({
 }: {
   nombre: string
 }) {
-  const [pipeline, setPipeline] = useState<PipelineStats | null>(null)
-  const [actividad, setActividad] = useState<ActividadReciente[]>([])
-  const [cargando, setCargando] = useState(true)
-
   const firstName = nombre.split(' ')[0]
 
-  useEffect(() => {
-    Promise.all([getAdminPipeline(), getActividadReciente()]).then(([p, a]) => {
-      setPipeline(p)
-      setActividad(a)
-      setCargando(false)
-    })
-  }, [])
+  // Single combined query so both loads share one loading state.
+  // staleTime: 5 min — navigating back shows cached data instantly.
+  const { data: dashData, isLoading } = useQuery({
+    queryKey: ['dashboard-admin'],
+    queryFn:  async () => {
+      const [pipeline, actividad] = await Promise.all([
+        getAdminPipeline(),
+        getActividadReciente(),
+      ])
+      return { pipeline, actividad }
+    },
+    staleTime: 5 * 60_000,
+  })
 
-  if (cargando || !pipeline) return <Skeleton />
+  const pipeline  = dashData?.pipeline  ?? null
+  const actividad = dashData?.actividad ?? []
+
+  if (isLoading || !pipeline) return <Skeleton />
 
   const fechaHoy = new Date().toLocaleDateString('es-CO', {
     weekday: 'long',

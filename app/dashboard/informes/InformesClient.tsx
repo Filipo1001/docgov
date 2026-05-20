@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUsuario } from '@/lib/user-context'
 import { MESES, ESTADO_COLOR, ESTADO_LABEL } from '@/lib/constants'
 import { getInformesMensuales, getInformesBorrador } from '@/services/periodos'
@@ -377,15 +378,12 @@ function SinEnviarCard({
 
 export default function InformesPage() {
   const { usuario, cargando: cargandoUser } = useUsuario()
+  const queryClient = useQueryClient()
 
   // Month navigation
   const now = new Date()
   const [mesIdx, setMesIdx] = useState(now.getMonth())
   const [anio, setAnio] = useState(now.getFullYear())
-
-  const [periodos, setPeriodos] = useState<Periodo[]>([])
-  const [periodosBorrador, setPeriodosBorrador] = useState<Periodo[]>([])
-  const [cargando, setCargando] = useState(true)
   const [filtro, setFiltro] = useState<Filtro>('todos')
 
   // Secretary action state
@@ -400,34 +398,37 @@ export default function InformesPage() {
 
   const mesNombre = MESES[mesIdx]
 
-  const cargar = useCallback(async (silencioso = false) => {
-    if (!usuario) return
-    if (!silencioso) setCargando(true)
+  // Asesor only sees their dependencia
+  const depId = usuario?.rol === 'asesor' ? (usuario.dependencia_id ?? undefined) : undefined
 
-    // Asesor only sees their dependencia
-    const depId = usuario.rol === 'asesor' ? usuario.dependencia_id ?? undefined : undefined
-    const [data, borradores] = await Promise.all([
-      getInformesMensuales(mesNombre, anio, depId),
-      getInformesBorrador(mesNombre, anio, depId),
-    ])
-    setPeriodos(data)
-    setPeriodosBorrador(borradores)
-    if (!silencioso) setCargando(false)
-  }, [usuario, mesNombre, anio])
+  const informesKey = ['informes', mesNombre, anio, usuario?.id]
+
+  const { data: periodos = [], isLoading } = useQuery<Periodo[]>({
+    queryKey: informesKey,
+    queryFn: () => getInformesMensuales(mesNombre, anio, depId),
+    enabled: !!usuario,
+    staleTime: 0,
+    refetchInterval: 30_000,
+  })
+
+  const { data: periodosBorrador = [] } = useQuery<Periodo[]>({
+    queryKey: ['informes-borrador', mesNombre, anio, usuario?.id],
+    queryFn: () => getInformesBorrador(mesNombre, anio, depId),
+    enabled: !!usuario,
+    staleTime: 0,
+    refetchInterval: 30_000,
+  })
+
+  // Invalidate both queries — used after server actions
+  function refrescar() {
+    queryClient.invalidateQueries({ queryKey: ['informes'] })
+  }
 
   // Reset reminder sent state when month changes
   useEffect(() => { setRecordatoriosEnviados(false) }, [mesIdx, anio])
 
-  // Initial load
-  useEffect(() => { cargar() }, [cargar])
-
-  // Background polling every 30s — keeps all roles in sync without manual refresh
-  useEffect(() => {
-    const timer = setInterval(() => cargar(true), 30_000)
-    return () => clearInterval(timer)
-  }, [cargar])
-
-  // Navigation
+  // Navigation — clearing the cache for the previous month on navigate is not needed;
+  // staleTime:0 ensures a fresh fetch whenever the key changes.
   function mesAnterior() {
     if (mesIdx === 0) { setMesIdx(11); setAnio(a => a - 1) }
     else setMesIdx(m => m - 1)
@@ -485,7 +486,7 @@ export default function InformesPage() {
       toast.error(res.error)
     } else {
       toast.success(`${res.data?.aprobados ?? 0} informes aprobados`)
-      cargar()
+      refrescar()
     }
 
     setProcesandoMasivo(false)
@@ -500,7 +501,7 @@ export default function InformesPage() {
       toast.success(`${res.data?.rechazados ?? 0} informes devueltos a asesores`)
       setMostrarRechazoMasivo(false)
       setMotivoMasivo('')
-      cargar()
+      refrescar()
     }
     setProcesandoMasivo(false)
   }
@@ -519,7 +520,7 @@ export default function InformesPage() {
     setEnviandoRecordatorios(false)
   }
 
-  if (cargandoUser) return <p className="text-gray-500">Cargando...</p>
+  if (cargandoUser || (isLoading && !periodos.length)) return <p className="text-gray-500">Cargando...</p>
   if (!usuario) return null
 
   const esAsesor = usuario.rol === 'asesor'
@@ -565,7 +566,7 @@ export default function InformesPage() {
       />
 
       {/* Stats bar */}
-      {!cargando && periodos.length > 0 && (
+      {periodos.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard label="Total" value={periodos.length} color="gray" />
           <StatCard label="Enviados" value={enviados.length} color="blue" />
@@ -712,7 +713,7 @@ export default function InformesPage() {
       )}
 
       {/* Content */}
-      {cargando ? (
+      {isLoading ? (
         <div className="space-y-4 animate-pulse">
           {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-200 rounded-2xl" />)}
         </div>
@@ -733,7 +734,7 @@ export default function InformesPage() {
           {periodosVisibles.map(p => (
             filtro === 'sin_enviar'
               ? <SinEnviarCard key={p.id} periodo={p} />
-              : <InformeCard key={p.id} periodo={p} rol={usuario.rol} onUpdate={cargar} />
+              : <InformeCard key={p.id} periodo={p} rol={usuario.rol} onUpdate={refrescar} />
           ))}
         </div>
       )}

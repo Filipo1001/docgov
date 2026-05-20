@@ -1,10 +1,22 @@
 'use server'
 
+import { randomBytes } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import type { ActionResult } from '@/lib/types'
+
+/**
+ * Generates a cryptographically random 12-character temporary password.
+ * Excludes confusable characters (0/O, 1/l/I) for easier communication.
+ * Entropy ≈ 68 bits — far stronger than using a document number.
+ */
+function generarPasswordSegura(): string {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  const bytes = randomBytes(12)
+  return Array.from(bytes).map((b) => chars[b % chars.length]).join('')
+}
 
 // ─── Auth guard ───────────────────────────────────────────────
 
@@ -34,7 +46,7 @@ export async function crearUsuario(formData: {
   rh?: string
   tipo_documento?: string
   dependencia_id?: string
-}): Promise<ActionResult<{ id: string }>> {
+}): Promise<ActionResult<{ id: string; passwordInicial: string }>> {
   const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
 
@@ -46,10 +58,11 @@ export async function crearUsuario(formData: {
   const cargo         = formData.cargo ? normalizeName(formData.cargo) : null
   const direccion     = formData.direccion ? normalizeFreeText(formData.direccion) : null
 
-  // 1. Create auth user (email confirmed immediately, password = document number)
+  // 1. Create auth user with a secure random temporary password
+  const passwordInicial = generarPasswordSegura()
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
-    password: formData.cedula.trim(),
+    password: passwordInicial,
     email_confirm: true,
     user_metadata: { nombre_completo: nombreCompleto },
   })
@@ -90,7 +103,7 @@ export async function crearUsuario(formData: {
   }
 
   revalidatePath('/dashboard/admin/usuarios')
-  return { data: { id: userId } }
+  return { data: { id: userId, passwordInicial } }
 }
 
 // ─── Activate imported contractor ─────────────────────────────
@@ -99,7 +112,7 @@ export async function activarContratista(
   importId: number,
   email: string,
   extraData: { cargo?: string; cedula?: string; telefono?: string; direccion?: string; rh?: string; dependencia_id?: string }
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; passwordInicial: string }>> {
   const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
 
@@ -123,11 +136,11 @@ export async function activarContratista(
     : null
   const direccionNorm = extraData.direccion ? normalizeFreeText(extraData.direccion) : null
 
-  // Create auth user (password = document number)
-  const passwordInicial = (extraData.cedula?.trim() || imp.cedula || '').trim()
+  // Create auth user with a secure random temporary password
+  const passwordInicial = generarPasswordSegura()
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email: emailNorm,
-    password: passwordInicial || emailNorm, // fallback to email if cedula somehow empty
+    password: passwordInicial,
     email_confirm: true,
     user_metadata: { nombre_completo: nombreNorm },
   })
@@ -166,7 +179,7 @@ export async function activarContratista(
     .eq('id', importId)
 
   revalidatePath('/dashboard/admin/usuarios')
-  return { data: { id: userId } }
+  return { data: { id: userId, passwordInicial } }
 }
 
 // ─── Update user profile ──────────────────────────────────────

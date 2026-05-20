@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula } from '@/lib/format'
 import type { ColaboradorListItem } from '@/services/supervisor'
@@ -77,23 +78,22 @@ function aplicarFiltro(items: ColaboradorListItem[], filtro: Filtro): Colaborado
 
 export default function ColaboradoresPage() {
   const { usuario, cargando: cargandoUser } = useUsuario()
-  const [personas, setPersonas] = useState<ColaboradorListItem[]>([])
-  const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState<Filtro>('todos')
 
-  useEffect(() => {
-    if (!usuario) return
-    fetch('/api/supervisor/colaboradores')
-      .then((r) => r.json())
-      .then((data) => {
-        setPersonas(Array.isArray(data) ? data : [])
-        setCargando(false)
-      })
-      .catch(() => setCargando(false))
-  }, [usuario])
+  const { data: personas = [], isLoading, isError } = useQuery<ColaboradorListItem[]>({
+    queryKey: ['colaboradores', usuario?.id],
+    queryFn: async () => {
+      const r = await fetch('/api/supervisor/colaboradores')
+      if (!r.ok) throw new Error('Error al cargar colaboradores')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
+    enabled: !!usuario && (usuario.rol === 'supervisor' || usuario.rol === 'admin'),
+    staleTime: 60_000,
+  })
 
-  if (cargandoUser || cargando) {
+  if (cargandoUser || isLoading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-8 bg-gray-200 rounded-xl w-64" />
@@ -111,6 +111,14 @@ export default function ColaboradoresPage() {
     return (
       <Card className="p-12 text-center">
         <p className="text-gray-500">Solo los supervisores pueden acceder a esta seccion.</p>
+      </Card>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Card className="p-12 text-center">
+        <p className="text-sm text-red-600">No se pudieron cargar los colaboradores. Intenta recargar la página.</p>
       </Card>
     )
   }

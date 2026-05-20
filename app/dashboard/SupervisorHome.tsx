@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getSupervisorDashboard,
   type SupervisorDashboard,
@@ -284,8 +285,7 @@ export default function SupervisorHome({
   userId: string
   nombre: string
 }) {
-  const [data, setData] = useState<SupervisorDashboard | null>(null)
-  const [cargando, setCargando] = useState(true)
+  const queryClient = useQueryClient()
   const [procesando, setProcesando] = useState<string | null>(null)
   const [rechazando, setRechazando] = useState<string | null>(null)
   const [verTodos, setVerTodos] = useState(false)
@@ -298,12 +298,14 @@ export default function SupervisorHome({
   const dia = now.getDate()
   const weekday = now.toLocaleDateString('es-CO', { weekday: 'long' })
 
-  useEffect(() => {
-    getSupervisorDashboard(userId).then(d => {
-      setData(d)
-      setCargando(false)
-    })
-  }, [userId])
+  // staleTime: 5 min — navigating back shows cached data instantly.
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard-supervisor', userId],
+    queryFn:  () => getSupervisorDashboard(userId),
+    staleTime: 5 * 60_000,
+  })
+
+  const QUERY_KEY = ['dashboard-supervisor', userId]
 
   async function handleAprobar(periodoId: string) {
     setProcesando(periodoId)
@@ -311,12 +313,15 @@ export default function SupervisorHome({
     const result = await aprobarPeriodos([periodoId])
     setProcesando(null)
     if (!result.error) {
-      setData(prev => prev ? {
-        ...prev,
-        pendientes: prev.pendientes.filter(p => p.id !== periodoId),
-        porAprobar: Math.max(0, prev.porAprobar - 1),
-        pipeline: { ...prev.pipeline, enviado: Math.max(0, prev.pipeline.enviado - 1) },
-      } : prev)
+      // Optimistic update in cache — avoids a full refetch for a small list change
+      queryClient.setQueryData<SupervisorDashboard>(QUERY_KEY, prev =>
+        prev ? {
+          ...prev,
+          pendientes: prev.pendientes.filter(p => p.id !== periodoId),
+          porAprobar: Math.max(0, prev.porAprobar - 1),
+          pipeline: { ...prev.pipeline, enviado: Math.max(0, prev.pipeline.enviado - 1) },
+        } : prev
+      )
     }
   }
 
@@ -327,20 +332,22 @@ export default function SupervisorHome({
     setProcesando(null)
     setRechazando(null)
     if (!result.error) {
-      setData(prev => prev ? {
-        ...prev,
-        pendientes: prev.pendientes.filter(p => p.id !== periodoId),
-        porAprobar: Math.max(0, prev.porAprobar - 1),
-        pipeline: {
-          ...prev.pipeline,
-          enviado: Math.max(0, prev.pipeline.enviado - 1),
-          rechazado: prev.pipeline.rechazado + 1,
-        },
-      } : prev)
+      queryClient.setQueryData<SupervisorDashboard>(QUERY_KEY, prev =>
+        prev ? {
+          ...prev,
+          pendientes: prev.pendientes.filter(p => p.id !== periodoId),
+          porAprobar: Math.max(0, prev.porAprobar - 1),
+          pipeline: {
+            ...prev.pipeline,
+            enviado: Math.max(0, prev.pipeline.enviado - 1),
+            rechazado: prev.pipeline.rechazado + 1,
+          },
+        } : prev
+      )
     }
   }
 
-  if (cargando) return <Skeleton />
+  if (isLoading) return <Skeleton />
   if (!data) return null
 
   const pendientesVisibles = verTodos ? data.pendientes : data.pendientes.slice(0, 3)

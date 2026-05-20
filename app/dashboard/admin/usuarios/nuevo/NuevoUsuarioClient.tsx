@@ -20,6 +20,9 @@ const TIPOS_DOC = ['CC', 'CE', 'NIT', 'PAS']
 export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dependencia[] }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [passwordCreado, setPasswordCreado] = useState<string | null>(null)
+  const [nombreCreado, setNombreCreado] = useState('')
+  const [copiado, setCopiado] = useState(false)
 
   const [email, setEmail]         = useState('')
   const [nombre, setNombre]       = useState('')
@@ -53,9 +56,64 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
     if (result.error) {
       toast.error(result.error)
     } else {
-      toast.success(`Usuario creado. Contraseña inicial: ${cedula.trim()}`)
-      setTimeout(() => router.push('/dashboard/admin/usuarios'), 1500)
+      setNombreCreado(nombre)
+      setPasswordCreado(result.data!.passwordInicial)
     }
+  }
+
+  function copiarPassword() {
+    if (!passwordCreado) return
+    navigator.clipboard.writeText(passwordCreado).then(() => {
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2500)
+    })
+  }
+
+  // ── Success screen: show generated password ────────────────────
+  if (passwordCreado) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <Toaster richColors />
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center text-2xl mx-auto mb-4">✅</div>
+          <h2 className="text-lg font-bold text-gray-900 mb-1">Usuario creado</h2>
+          <p className="text-sm text-gray-500 mb-6">{nombreCreado}</p>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 text-left">
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">
+              Contraseña temporal generada
+            </p>
+            <div className="flex items-center gap-3 bg-white border border-amber-200 rounded-lg px-3 py-3">
+              <code className="flex-1 text-xl font-mono font-bold text-gray-900 tracking-widest select-all">
+                {passwordCreado}
+              </code>
+              <button
+                type="button"
+                onClick={copiarPassword}
+                className={`shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                  copiado
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                {copiado ? '✓ Copiada' : 'Copiar'}
+              </button>
+            </div>
+            <p className="text-xs text-amber-600 mt-3">
+              Comparte esta contraseña de forma segura con el usuario. Puede cambiarla desde su perfil.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard/admin/usuarios')}
+            className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+          >
+            Ir a usuarios →
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -99,8 +157,8 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             </select>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
-            <span className="font-semibold">Contraseña inicial:</span> el número de documento del usuario.
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+            Se generará una <span className="font-semibold">contraseña temporal segura</span> que podrás copiar y compartir con el usuario.
           </div>
         </div>
 

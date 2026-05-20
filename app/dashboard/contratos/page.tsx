@@ -17,6 +17,7 @@ import Link from 'next/link'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useUsuario } from '@/lib/user-context'
+import { formatCedula } from '@/lib/format'
 import {
   getContratosPagina,
   type ContratoListItem,
@@ -24,6 +25,139 @@ import {
 } from '@/services/contratos'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+type ContratistaInfo = NonNullable<ContratoListItem['contratista']>
+
+function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-base shrink-0 mt-0.5">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-xs text-gray-400">{label}</p>
+        <p className="text-sm text-gray-800 break-all">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+function VerUsuarioModal({
+  contratista,
+  onClose,
+}: {
+  contratista: ContratistaInfo
+  onClose: () => void
+}) {
+  const initials = contratista.nombre_completo
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+
+  const emailVisible =
+    contratista.email && !contratista.email.endsWith('@pendiente.local')
+      ? contratista.email
+      : null
+
+  const tieneCuenta = contratista.banco || contratista.tipo_cuenta || contratista.numero_cuenta
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header ─ photo + name */}
+        <div className="bg-gray-50 border-b border-gray-100 px-6 py-5 flex items-center gap-4">
+          {contratista.foto_url ? (
+            <img
+              src={contratista.foto_url}
+              alt={contratista.nombre_completo}
+              className="w-16 h-16 rounded-full object-cover ring-2 ring-white shadow-sm shrink-0"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-xl font-bold text-gray-500 ring-2 ring-white shadow-sm shrink-0">
+              {initials}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-900 leading-tight">{contratista.nombre_completo}</p>
+            {contratista.cedula && (
+              <p className="text-sm text-gray-500 font-mono mt-0.5">{formatCedula(contratista.cedula)}</p>
+            )}
+            {contratista.cargo && (
+              <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{contratista.cargo}</p>
+            )}
+          </div>
+          {/* Close */}
+          <button
+            onClick={onClose}
+            className="ml-auto shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
+            aria-label="Cerrar"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Info rows */}
+        <div className="px-6 py-5 space-y-4">
+          <InfoRow icon="📧" label="Correo electrónico" value={emailVisible ?? '—'} />
+          <InfoRow icon="📱" label="Celular" value={contratista.telefono ?? '—'} />
+
+          {tieneCuenta && (
+            <>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Cuenta bancaria</p>
+                <div className="space-y-4">
+                  <InfoRow icon="🏦" label="Banco" value={contratista.banco ?? '—'} />
+                  <InfoRow
+                    icon="💳"
+                    label="Tipo · Número"
+                    value={`${contratista.tipo_cuenta ?? '—'} · ${contratista.numero_cuenta ?? '—'}`}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Firma preview */}
+          {contratista.firma_url && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs text-gray-400 mb-2">Firma registrada</p>
+              <img
+                src={contratista.firma_url}
+                alt="Firma"
+                className="h-10 object-contain opacity-70"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/60">
+          <Link
+            href={`/dashboard/admin/usuarios/${contratista.id}`}
+            onClick={onClose}
+            className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            Editar perfil →
+          </Link>
+          <button
+            onClick={onClose}
+            className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function norm(s: string) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
@@ -59,6 +193,9 @@ export default function ContratosPage() {
   const { usuario, cargando: cargandoUser } = useUsuario()
   const esAdmin = usuario?.rol === 'admin'
   const hoy = new Date().toISOString().split('T')[0]
+
+  // ── Modal state ────────────────────────────────────────────────
+  const [viendoUsuario, setViendoUsuario] = useState<ContratistaInfo | null>(null)
 
   // ── Filters ────────────────────────────────────────────────────
   const [busqueda, setBusqueda] = useState('')
@@ -391,66 +528,85 @@ export default function ContratosPage() {
                       paddingBottom: '12px',
                     }}
                   >
-                    <Link
-                      href={`/dashboard/contratos/${contrato.id}`}
-                      className={`block rounded-2xl border p-5 transition-colors ${
+                    <div
+                      className={`rounded-2xl border transition-colors ${
                         incompleto
                           ? 'bg-red-50 border-red-200 hover:border-red-300'
                           : 'bg-white hover:border-gray-300'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center flex-wrap gap-2 mb-1.5">
-                            <span className="text-sm font-bold text-gray-900 font-mono">
-                              {contrato.numero}-{contrato.anio}
-                            </span>
-                            {contrato.dependencia?.abreviatura && (
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                                {contrato.dependencia.abreviatura}
+                      <Link
+                        href={`/dashboard/contratos/${contrato.id}`}
+                        className="block p-5"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                              <span className="text-sm font-bold text-gray-900 font-mono">
+                                {contrato.numero}-{contrato.anio}
                               </span>
-                            )}
-                            {vencido && (
-                              <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                                Vencido
+                              {contrato.dependencia?.abreviatura && (
+                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                  {contrato.dependencia.abreviatura}
+                                </span>
+                              )}
+                              {vencido && (
+                                <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                  Vencido
+                                </span>
+                              )}
+                              {incompleto && (
+                                <span className="text-[10px] font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                  Faltan: {faltantes.join(' · ')}
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-sm text-gray-600 line-clamp-1 mb-2">{contrato.objeto}</p>
+
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
+                              <span className="font-medium text-gray-700">
+                                {contrato.contratista?.nombre_completo?.split(' ').slice(0, 3).join(' ')}
                               </span>
-                            )}
-                            {incompleto && (
-                              <span className="text-[10px] font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
-                                Faltan: {faltantes.join(' · ')}
+                              {contrato.contratista?.cedula && (
+                                <span className="font-mono">{contrato.contratista.cedula}</span>
+                              )}
+                              <span>
+                                Sup: {contrato.supervisor?.nombre_completo?.split(' ').slice(0, 2).join(' ')}
                               </span>
-                            )}
+                            </div>
                           </div>
 
-                          <p className="text-sm text-gray-600 line-clamp-1 mb-2">{contrato.objeto}</p>
-
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-                            <span className="font-medium text-gray-700">
-                              {contrato.contratista?.nombre_completo?.split(' ').slice(0, 3).join(' ')}
-                            </span>
-                            {contrato.contratista?.cedula && (
-                              <span className="font-mono">{contrato.contratista.cedula}</span>
-                            )}
-                            <span>
-                              Sup: {contrato.supervisor?.nombre_completo?.split(' ').slice(0, 2).join(' ')}
-                            </span>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold text-gray-900">
+                              {formatCOP(contrato.valor_mensual ?? 0)}
+                              <span className="text-xs text-gray-400 font-normal">/mes</span>
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {formatCOP(contrato.valor_total ?? 0)} total
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {contrato.plazo_meses}m · {contrato.fecha_inicio?.slice(0, 7)}
+                            </p>
                           </div>
                         </div>
+                      </Link>
 
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-gray-900">
-                            {formatCOP(contrato.valor_mensual ?? 0)}
-                            <span className="text-xs text-gray-400 font-normal">/mes</span>
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {formatCOP(contrato.valor_total ?? 0)} total
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {contrato.plazo_meses}m · {contrato.fecha_inicio?.slice(0, 7)}
-                          </p>
+                      {/* Admin quick-action: ver usuario */}
+                      {esAdmin && contrato.contratista && (
+                        <div className="px-5 pb-3.5 flex justify-end -mt-1">
+                          <button
+                            onClick={() => setViendoUsuario(contrato.contratista!)}
+                            className="text-xs text-gray-400 hover:text-gray-700 font-medium transition-colors flex items-center gap-1"
+                          >
+                            Ver usuario
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6l6 6m0 0l-6 6m6-6H3" />
+                            </svg>
+                          </button>
                         </div>
-                      </div>
-                    </Link>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -475,6 +631,14 @@ export default function ContratosPage() {
             ) : null}
           </div>
         </>
+      )}
+
+      {/* Ver usuario modal */}
+      {viendoUsuario && (
+        <VerUsuarioModal
+          contratista={viendoUsuario}
+          onClose={() => setViendoUsuario(null)}
+        />
       )}
     </div>
   )

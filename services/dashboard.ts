@@ -144,6 +144,7 @@ export async function getPendientesRevisor(
     .eq('estado', estadoFiltro)
     .eq('mes', mes)
     .eq('anio', anio)
+    .eq('es_historico', false)
     .order('fecha_envio', { ascending: true })
     .limit(20)
 

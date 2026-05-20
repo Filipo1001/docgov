@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { useQuery } from '@tanstack/react-query'
 import {
   getAsesorStats,
   getPendientesRevisor,
@@ -380,27 +381,28 @@ export default function ReviewerHome({
   nombre: string
   dependenciaId: string | null
 }) {
-  const [stats,      setStats]      = useState<AsesorStats | null>(null)
-  const [pendientes, setPendientes] = useState<PeriodoPendienteRevisor[]>([])
-  const [cargando,   setCargando]   = useState(true)
-
   const firstName = nombre.split(' ')[0]
   const { mes, anio } = getMesActual()
 
-  useEffect(() => {
-    if (!dependenciaId) { setCargando(false); return }
+  // staleTime: 5 min — navigating back shows cached data instantly.
+  const { data: dashData, isLoading } = useQuery({
+    queryKey: ['dashboard-reviewer', dependenciaId, mes, anio],
+    queryFn:  async () => {
+      const [stats, pendientes] = await Promise.all([
+        getAsesorStats(dependenciaId!, mes, anio),
+        getPendientesRevisor('enviado'),
+      ])
+      return { stats, pendientes }
+    },
+    // Only fetch when a dependenciaId is available
+    enabled: !!dependenciaId,
+    staleTime: 5 * 60_000,
+  })
 
-    Promise.all([
-      getAsesorStats(dependenciaId, mes, anio),
-      getPendientesRevisor('enviado'),
-    ]).then(([s, p]) => {
-      setStats(s)
-      setPendientes(p)
-      setCargando(false)
-    })
-  }, [dependenciaId, mes, anio])
+  const stats      = dashData?.stats      ?? null
+  const pendientes = dashData?.pendientes ?? []
 
-  if (cargando) return <Skeleton />
+  if (isLoading) return <Skeleton />
 
   const fechaHoy = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',

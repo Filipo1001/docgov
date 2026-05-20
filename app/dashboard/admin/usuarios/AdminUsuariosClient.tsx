@@ -7,6 +7,11 @@ import { activarContratista } from '@/app/actions/admin'
 import { formatCedula } from '@/lib/format'
 import type { UsuarioAdmin, ContratistaPendiente, Dependencia } from '@/services/admin'
 
+/** Normaliza tildes y mayúsculas para búsqueda tolerante */
+function norm(s: string) {
+  return (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
+
 const ROL_COLOR: Record<string, string> = {
   admin:       'bg-purple-100 text-purple-700',
   supervisor:  'bg-blue-100 text-blue-700',
@@ -50,6 +55,8 @@ function ActivarModal({
   const [dir, setDir]     = useState('')
   const [depId, setDepId] = useState('')
   const [loading, setLoading] = useState(false)
+  const [passwordRevelado, setPasswordRevelado] = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
 
   async function handle() {
     if (!email.trim()) { toast.error('El email es requerido'); return }
@@ -57,11 +64,68 @@ function ActivarModal({
     const res = await activarContratista(contratista.id, email, {
       cargo, cedula, telefono: tel, direccion: dir, dependencia_id: depId || undefined,
     })
-    if (res.error) { toast.error(res.error); setLoading(false); return }
-    toast.success(`Cuenta creada para ${contratista.nombre_completo}`)
-    onDone()
+    setLoading(false)
+    if (res.error) { toast.error(res.error); return }
+    setPasswordRevelado(res.data!.passwordInicial)
   }
 
+  function copiarPassword() {
+    if (!passwordRevelado) return
+    navigator.clipboard.writeText(passwordRevelado).then(() => {
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2500)
+    })
+  }
+
+  // ── Step 2: show generated password ────────────────────────────
+  if (passwordRevelado) {
+    return (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-xl">✅</div>
+            <div>
+              <p className="font-semibold text-gray-900">Cuenta creada</p>
+              <p className="text-sm text-gray-500">{contratista.nombre_completo}</p>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">
+              Contraseña temporal generada
+            </p>
+            <div className="flex items-center gap-3 bg-white border border-amber-200 rounded-lg px-3 py-2.5">
+              <code className="flex-1 text-lg font-mono font-bold text-gray-900 tracking-widest select-all">
+                {passwordRevelado}
+              </code>
+              <button
+                onClick={copiarPassword}
+                className={`shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                  copiado
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                {copiado ? '✓ Copiada' : 'Copiar'}
+              </button>
+            </div>
+            <p className="text-xs text-amber-600 mt-2.5">
+              Comparte esta contraseña de forma segura con el usuario. Puede cambiarla desde su perfil.
+            </p>
+          </div>
+
+          <button
+            onClick={onDone}
+            className="w-full bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+          >
+            Listo
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Step 1: form ────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
@@ -126,8 +190,8 @@ function ActivarModal({
           </div>
         </div>
 
-        <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mt-4">
-          <strong>Contraseña inicial:</strong> el número de documento del contratista.
+        <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mt-4">
+          Se generará una <strong>contraseña temporal segura</strong> que podrás copiar y compartir con el usuario.
         </p>
 
         <div className="flex gap-3 mt-5">
@@ -164,14 +228,14 @@ export default function AdminUsuariosClient({
   const [activando, setActivando] = useState<ContratistaPendiente | null>(null)
 
   const usuariosFiltrados = usuarios.filter(u => {
-    const q = busqueda.toLowerCase()
-    return (!q || u.nombre_completo.toLowerCase().includes(q) || (u.cedula ?? '').toLowerCase().includes(q))
+    const q = norm(busqueda)
+    return (!q || norm(u.nombre_completo).includes(q) || norm(u.cedula ?? '').includes(q))
       && (!filtroRol || u.rol === filtroRol)
   })
 
   const pendientesFiltrados = pendientes.filter(p => {
-    const q = busqueda.toLowerCase()
-    return !q || p.nombre_completo.toLowerCase().includes(q) || (p.cedula ?? '').toLowerCase().includes(q)
+    const q = norm(busqueda)
+    return !q || norm(p.nombre_completo).includes(q) || norm(p.cedula ?? '').includes(q)
   })
 
   function onActivado() {

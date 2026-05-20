@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { formatCedula } from '@/lib/format'
+import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   AlignmentType, BorderStyle, WidthType, ShadingType,
@@ -38,6 +39,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createServerSupabaseClient()
+
+  // Verificar sesión y permisos antes de generar el documento
+  const acceso = await verificarAccesoPeriodo(supabase, periodoId)
+  if (!acceso.ok) {
+    return NextResponse.json({ error: acceso.message }, { status: acceso.status })
+  }
 
   // Cargar datos del periodo con contrato y relaciones
   const { data: periodo } = await supabase
