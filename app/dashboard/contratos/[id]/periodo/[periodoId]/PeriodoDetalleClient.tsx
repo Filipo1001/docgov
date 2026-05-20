@@ -1847,38 +1847,65 @@ export default function PeriodoDetallePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Always available after sending */}
-            <a href={`/api/pdf/${periodoId}/informe`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-              <span className="text-lg">📝</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Informe de Actividades</p>
-                <p className="text-xs text-gray-400">Generado automáticamente</p>
-              </div>
-            </a>
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+              <a href={`/api/pdf/${periodoId}/informe`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="text-lg shrink-0">📝</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">Informe de Actividades</p>
+                  <p className="text-xs text-gray-400">Generado automáticamente</p>
+                </div>
+              </a>
+              <a href={`/api/pdf/${periodoId}/informe?force=1`} target="_blank" rel="noopener noreferrer"
+                title="Actualizar documento"
+                className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </a>
+            </div>
 
-            <a href={`/api/pdf/${periodoId}/cuenta-cobro`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-              <span className="text-lg">💰</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Cuenta de Cobro</p>
-                <p className="text-xs text-gray-400">Generado automáticamente</p>
-              </div>
-            </a>
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+              <a href={`/api/pdf/${periodoId}/cuenta-cobro`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="text-lg shrink-0">💰</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">Cuenta de Cobro</p>
+                  <p className="text-xs text-gray-400">Generado automáticamente</p>
+                </div>
+              </a>
+              <a href={`/api/pdf/${periodoId}/cuenta-cobro?force=1`} target="_blank" rel="noopener noreferrer"
+                title="Actualizar documento"
+                className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </a>
+            </div>
 
             {/* Acta de Supervisión + observación del supervisor */}
             <div className="flex flex-col gap-2">
-              <a href={`/api/pdf/${periodoId}/acta-supervision`} target="_blank" rel="noopener noreferrer"
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                  puedeDescargarPaquete ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
-                }`}>
-                <span className="text-lg">📋</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Acta de Supervisión</p>
-                  <p className="text-xs text-gray-400">
-                    {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
-                  </p>
-                </div>
-              </a>
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-colors ${
+                puedeDescargarPaquete ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
+              }`}>
+                <a href={`/api/pdf/${periodoId}/acta-supervision`} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-lg shrink-0">📋</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Acta de Supervisión</p>
+                    <p className="text-xs text-gray-400">
+                      {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
+                    </p>
+                  </div>
+                </a>
+                <a href={`/api/pdf/${periodoId}/acta-supervision?force=1`} target="_blank" rel="noopener noreferrer"
+                  title="Actualizar documento"
+                  className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </a>
+              </div>
 
               {/* Observación del supervisor — solo visible para supervisor/admin */}
               {esSecretaria && (
@@ -1950,18 +1977,27 @@ export default function PeriodoDetallePage() {
               )}
             </div>
 
-            <a href={`/api/pdf/${periodoId}/acta-pago`} target="_blank" rel="noopener noreferrer"
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                puedeDescargarPaquete ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
-              }`}>
-              <span className="text-lg">🧾</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Acta de Pago</p>
-                <p className="text-xs text-gray-400">
-                  {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
-                </p>
-              </div>
-            </a>
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-colors ${
+              puedeDescargarPaquete ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
+            }`}>
+              <a href={`/api/pdf/${periodoId}/acta-pago`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="text-lg shrink-0">🧾</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">Acta de Pago</p>
+                  <p className="text-xs text-gray-400">
+                    {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
+                  </p>
+                </div>
+              </a>
+              <a href={`/api/pdf/${periodoId}/acta-pago?force=1`} target="_blank" rel="noopener noreferrer"
+                title="Actualizar documento"
+                className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </a>
+            </div>
 
             {/* ── Planilla de Seguridad Social — dropdown ── */}
             {/* Hidden in editable mode: contratista uses the inline fields in the submit card above */}
