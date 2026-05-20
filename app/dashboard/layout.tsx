@@ -262,13 +262,11 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     if (usuario) redirecting.current = false
   }, [cargando, usuario, sesionExpirada, router])
 
-  // Show skeleton while auth is resolving — this prevents children from rendering
-  // with usuario=null and eliminates the navigation race that caused blank pages.
-  if (cargando) return <AuthLoadingSkeleton />
-
-  // Auth resolved but no user: redirect is in flight — render nothing to
-  // avoid a flash of the dashboard before /login takes over.
-  if (!usuario) return null
+  // Auth confirmed absent — redirect is already in flight, render nothing.
+  // We do NOT gate on cargando here: the server already validated auth via
+  // requireRole / requireContractAccess, so children can mount immediately
+  // and use their SSR-supplied initial data while client-side auth resolves.
+  if (!cargando && !usuario) return null
 
   return (
     <div className="min-h-screen bg-gray-50">
