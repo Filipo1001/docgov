@@ -51,7 +51,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   // Auth redirect is handled by DashboardContent — Sidebar is purely presentational
-  const { usuario, municipio } = useUsuario()
+  const { usuario, municipio, cargando } = useUsuario()
   const [pendientes, setPendientes] = useState(0)
 
   // Close sidebar on navigation (mobile)
@@ -119,28 +119,37 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
         {/* Navegacion */}
         <nav className="flex-1 p-4 overflow-y-auto">
-          <ul className="space-y-1">
-            {menuItems.map((item) => {
-              const activo =
-                pathname === item.href ||
-                (item.href !== '/dashboard' && pathname.startsWith(item.href))
-              const esInformes = item.href === '/dashboard/informes'
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                      activo ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    <span>{item.icon}</span>
-                    <span className="flex-1">{item.label}</span>
-                    {esInformes && pendientes > 0 && <PendingBadge n={pendientes} />}
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+          {cargando && !usuario ? (
+            /* Skeleton nav items while auth resolves */
+            <ul className="space-y-1">
+              {[...Array(5)].map((_, i) => (
+                <li key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
+              ))}
+            </ul>
+          ) : (
+            <ul className="space-y-1">
+              {menuItems.map((item) => {
+                const activo =
+                  pathname === item.href ||
+                  (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                const esInformes = item.href === '/dashboard/informes'
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                        activo ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      <span>{item.icon}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {esInformes && pendientes > 0 && <PendingBadge n={pendientes} />}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </nav>
 
         {/* Notifications — all roles */}
@@ -152,6 +161,15 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
         {/* Usuario */}
         <div className="p-4 border-t border-gray-100">
+          {cargando && !usuario && (
+            <div className="flex items-center gap-3 mb-3 animate-pulse">
+              <div className="w-9 h-9 bg-gray-200 rounded-full flex-shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 bg-gray-200 rounded w-24" />
+                <div className="h-2.5 bg-gray-100 rounded w-16" />
+              </div>
+            </div>
+          )}
           {usuario && (
             <Link
               href="/dashboard/perfil"
