@@ -2,7 +2,17 @@ import { requireContractAccess } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import PeriodoDetalleClient from './PeriodoDetalleClient'
+import type { Contrato, Periodo, Obligacion, Actividad } from '@/lib/types'
 
+/**
+ * Server component — runs with full server-side auth (httpOnly cookies).
+ *
+ * All data is fetched here before the client component mounts, so the page
+ * is never blank on browser refresh: the SSR response already contains the
+ * contract/period data as serialised props, and PeriodoDetalleClient starts
+ * with real data instead of waiting for a client-side fetch that depends on
+ * the browser Supabase session being warm.
+ */
 export default async function PeriodoDetallePage({
   params,
 }: {
@@ -10,18 +20,71 @@ export default async function PeriodoDetallePage({
 }) {
   const { id, periodoId } = await params
 
-  // Verify the periodo belongs to this contract
-  const supabase = await createServerSupabaseClient()
-  const { data: periodo } = await supabase
-    .from('periodos')
-    .select('contrato_id')
-    .eq('id', periodoId)
-    .single()
+  // ── Auth ─────────────────────────────────────────────────────
+  // requireContractAccess redirects to /login (no user) or /dashboard
+  // (insufficient access) — those redirects are handled by Next.js before
+  // any HTML is sent to the browser.
+  await requireContractAccess(id)
 
-  if (!periodo || periodo.contrato_id !== id) {
+  // ── Data fetch (server-side, guaranteed authenticated) ───────
+  const supabase = await createServerSupabaseClient()
+
+  const [
+    { data: contrato },
+    { data: periodo },
+    { data: obligaciones },
+    { data: actividades },
+  ] = await Promise.all([
+    supabase
+      .from('contratos')
+      .select(`
+        *,
+        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, telefono, cargo, direccion, firma_url),
+        supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo, cedula, cargo, firma_url),
+        dependencia:dependencias(nombre, abreviatura)
+      `)
+      .eq('id', id)
+      .single(),
+
+    supabase
+      .from('periodos')
+      .select(`
+        *,
+        preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo)),
+        historial_periodos(id, estado_anterior, estado_nuevo, usuario_id, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(id, nombre_completo, rol))
+      `)
+      .eq('id', periodoId)
+      .order('created_at', { referencedTable: 'historial_periodos', ascending: true })
+      .single(),
+
+    supabase
+      .from('obligaciones')
+      .select('*')
+      .eq('contrato_id', id)
+      .order('orden'),
+
+    supabase
+      .from('actividades')
+      .select('*, evidencias(*)')
+      .eq('periodo_id', periodoId)
+      .order('orden'),
+  ])
+
+  // Safety: if the period doesn't belong to this contract or data is missing,
+  // redirect rather than rendering a broken page.
+  if (!contrato || !periodo || periodo.contrato_id !== id) {
     redirect('/dashboard')
   }
 
-  await requireContractAccess(id)
-  return <PeriodoDetalleClient />
+  return (
+    // key={periodoId} forces a full remount when navigating between periods
+    // so useState initialises fresh from the new props on every SPA navigation.
+    <PeriodoDetalleClient
+      key={periodoId}
+      initialContrato={contrato as unknown as Contrato}
+      initialPeriodo={periodo as unknown as Periodo}
+      initialObligaciones={(obligaciones ?? []) as unknown as Obligacion[]}
+      initialActividades={(actividades ?? []) as unknown as Actividad[]}
+    />
+  )
 }

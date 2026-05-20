@@ -37,15 +37,29 @@ import { comprimirEvidencia } from '@/lib/compress'
 import { actualizarActividad } from '@/app/actions/actividades'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
-export default function PeriodoDetallePage() {
+interface InitialData {
+  initialContrato: Contrato
+  initialPeriodo: Periodo
+  initialObligaciones: Obligacion[]
+  initialActividades: Actividad[]
+}
+
+export default function PeriodoDetallePage({
+  initialContrato,
+  initialPeriodo,
+  initialObligaciones,
+  initialActividades,
+}: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
 
-  const [contrato, setContrato] = useState<Contrato | null>(null)
-  const [periodo, setPeriodo] = useState<Periodo | null>(null)
-  const [obligaciones, setObligaciones] = useState<Obligacion[]>([])
-  const [actividades, setActividades] = useState<Actividad[]>([])
-  const [cargando, setCargando] = useState(true)
+  // Data is pre-fetched server-side and passed as props — no blank page on refresh.
+  // cargarDatos() is still used for post-mutation refreshes and background polling.
+  const [contrato, setContrato] = useState<Contrato | null>(initialContrato)
+  const [periodo, setPeriodo] = useState<Periodo | null>(initialPeriodo)
+  const [obligaciones, setObligaciones] = useState<Obligacion[]>(initialObligaciones)
+  const [actividades, setActividades] = useState<Actividad[]>(initialActividades)
+  const [cargando, setCargando] = useState(false)
 
   // Action state
   const [procesando, setProcesando] = useState(false)
@@ -67,7 +81,7 @@ export default function PeriodoDetallePage() {
 
 
   // Planilla state
-  const [numPlanilla, setNumPlanilla] = useState('')
+  const [numPlanilla, setNumPlanilla] = useState(initialPeriodo.numero_planilla ?? '')
   const [guardandoPlanilla, setGuardandoPlanilla] = useState(false)
 
 
@@ -150,26 +164,9 @@ export default function PeriodoDetallePage() {
     } catch { /* storage full or private mode — silent */ }
   }, [pendienteRegistro, PENDING_KEY])
 
-  // Prevent infinite auto-retry: only attempt once when initial load returns empty data
-  const retriedInitialLoad = useRef(false)
-
   const cargarDatos = useCallback(async (silencioso = false) => {
-    let autoRetrying = false
     try {
       const datos = await getPeriodoConContrato(periodoId, contratoId)
-
-      // On the initial (non-silent) load: if essential data came back empty, schedule
-      // one automatic retry after 1 s.  This handles the browser-refresh timing gap
-      // where the Supabase session cookie may not yet have propagated to the RLS layer
-      // by the time the first query fires — SPA navigation never hits this because
-      // the session is already warm in the singleton when the component mounts.
-      if (!silencioso && !datos.contrato && !retriedInitialLoad.current) {
-        retriedInitialLoad.current = true
-        autoRetrying = true
-        setTimeout(() => { if (mountedRef.current) cargarDatos() }, 1000)
-        return  // stay in loading state — finally will NOT call setCargando
-      }
-
       setContrato(datos.contrato)
       setPeriodo(datos.periodo)
       setObligaciones(datos.obligaciones)
@@ -178,13 +175,12 @@ export default function PeriodoDetallePage() {
     } catch {
       // Keep showing existing data on transient network errors
     } finally {
-      // Skip setCargando(false) when we are about to auto-retry — keep the skeleton
-      // visible so the user never sees a blank flash before the retry resolves.
-      if (!silencioso && !autoRetrying) setCargando(false)
+      if (!silencioso) setCargando(false)
     }
   }, [periodoId, contratoId])
 
-  useEffect(() => { cargarDatos() }, [cargarDatos])
+  // No initial useEffect fetch — data arrives as SSR props (see page.tsx).
+  // cargarDatos is called explicitly after mutations and by the 30s poller below.
 
   // Background polling every 30s — contratista sees estado changes without manual refresh
   useEffect(() => {

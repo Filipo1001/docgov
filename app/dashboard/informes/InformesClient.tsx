@@ -376,11 +376,27 @@ function SinEnviarCard({
 
 // ─── Page ─────────────────────────────────────────────────────
 
-export default function InformesPage() {
+interface InformesProps {
+  initialPeriodos: Periodo[]
+  initialBorradores: Periodo[]
+  /** The month name (e.g. "MAYO") that was pre-fetched server-side */
+  initialMes: string
+  initialAnio: number
+  /** Server-side timestamp used as initialDataUpdatedAt for TanStack Query */
+  ssrTimestamp: number
+}
+
+export default function InformesPage({
+  initialPeriodos,
+  initialBorradores,
+  initialMes,
+  initialAnio,
+  ssrTimestamp,
+}: InformesProps) {
   const { usuario, cargando: cargandoUser } = useUsuario()
   const queryClient = useQueryClient()
 
-  // Month navigation
+  // Month navigation — starts on the SSR-fetched month so the initial data matches
   const now = new Date()
   const [mesIdx, setMesIdx] = useState(now.getMonth())
   const [anio, setAnio] = useState(now.getFullYear())
@@ -403,20 +419,31 @@ export default function InformesPage() {
 
   const informesKey = ['informes', mesNombre, anio, usuario?.id]
 
+  // True when the displayed month matches what the server pre-fetched
+  const isInitialMonth = mesNombre === initialMes && anio === initialAnio
+
   const { data: periodos = [], isLoading } = useQuery<Periodo[]>({
     queryKey: informesKey,
     queryFn: () => getInformesMensuales(mesNombre, anio, depId),
     enabled: !!usuario,
-    staleTime: 0,
+    // 60 s cache — return-visits within that window show data instantly.
+    // refetchInterval handles background freshness regardless.
+    staleTime: 60_000,
     refetchInterval: 30_000,
+    // Pre-populate with SSR data for the initial month so there is zero
+    // loading spinner on first render, even before the client fetches.
+    initialData: isInitialMonth ? initialPeriodos : undefined,
+    initialDataUpdatedAt: isInitialMonth ? ssrTimestamp : undefined,
   })
 
   const { data: periodosBorrador = [] } = useQuery<Periodo[]>({
     queryKey: ['informes-borrador', mesNombre, anio, usuario?.id],
     queryFn: () => getInformesBorrador(mesNombre, anio, depId),
     enabled: !!usuario,
-    staleTime: 0,
+    staleTime: 60_000,
     refetchInterval: 30_000,
+    initialData: isInitialMonth ? initialBorradores : undefined,
+    initialDataUpdatedAt: isInitialMonth ? ssrTimestamp : undefined,
   })
 
   // Invalidate both queries — used after server actions
@@ -427,8 +454,8 @@ export default function InformesPage() {
   // Reset reminder sent state when month changes
   useEffect(() => { setRecordatoriosEnviados(false) }, [mesIdx, anio])
 
-  // Navigation — clearing the cache for the previous month on navigate is not needed;
-  // staleTime:0 ensures a fresh fetch whenever the key changes.
+  // Navigation — when the query key changes (new month), TanStack Query fetches fresh
+  // data client-side. The 60 s staleTime only benefits same-month return visits.
   function mesAnterior() {
     if (mesIdx === 0) { setMesIdx(11); setAnio(a => a - 1) }
     else setMesIdx(m => m - 1)

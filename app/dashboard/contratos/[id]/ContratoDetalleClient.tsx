@@ -9,14 +9,25 @@ import { useUsuario } from '@/lib/user-context'
 import { formatCedula, formatDateMedium } from '@/lib/format'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 
-export default function ContratoDetallePage() {
+export default function ContratoDetallePage({
+  initialContrato,
+  initialObligaciones,
+  initialPeriodos,
+}: {
+  initialContrato: any
+  initialObligaciones: any[]
+  initialPeriodos: any[]
+}) {
   const { id } = useParams()
   const router = useRouter()
   const { usuario } = useUsuario()
-  const [contrato, setContrato] = useState<any>(null)
-  const [obligaciones, setObligaciones] = useState<any[]>([])
-  const [periodos, setPeriodos] = useState<any[]>([])
-  const [cargando, setCargando] = useState(true)
+
+  // Data is pre-fetched server-side — no client fetch needed on mount.
+  // cargarDatos() is still called explicitly after mutations.
+  const [contrato, setContrato] = useState<any>(initialContrato)
+  const [obligaciones, setObligaciones] = useState<any[]>(initialObligaciones)
+  const [periodos, setPeriodos] = useState<any[]>(initialPeriodos)
+  const [cargando, setCargando] = useState(false)
 
   // Form para nueva obligación
   const [nuevaObligacion, setNuevaObligacion] = useState('')
@@ -69,7 +80,8 @@ export default function ContratoDetallePage() {
     }
   }
 
-  useEffect(() => { cargarDatos() }, [id])
+  // No initial useEffect — data arrives as SSR props from page.tsx.
+  // cargarDatos() is called explicitly after mutations (agregarObligacion, etc.).
 
   async function agregarObligacion(e: React.FormEvent) {
     e.preventDefault()
