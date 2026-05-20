@@ -28,35 +28,45 @@ export default function ContratoDetallePage() {
 
 
   async function cargarDatos() {
-    const supabase = createClient()
+    try {
+      const supabase = createClient()
 
-    const { data: cont } = await supabase
-      .from('contratos')
-      .select(`
-        *,
-        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono),
-        supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
-        dependencia:dependencias(nombre, abreviatura)
-      `)
-      .eq('id', id)
-      .single()
+      // Run all three queries in parallel for speed.
+      // Wrapped in try/finally so setCargando(false) is guaranteed even on error —
+      // previously a failed query left cargando=true forever (infinite loading screen).
+      const [{ data: cont }, { data: obls }, { data: pers }] = await Promise.all([
+        supabase
+          .from('contratos')
+          .select(`
+            *,
+            contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono),
+            supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
+            dependencia:dependencias(nombre, abreviatura)
+          `)
+          .eq('id', id)
+          .single(),
 
-    const { data: obls } = await supabase
-      .from('obligaciones')
-      .select('*')
-      .eq('contrato_id', id)
-      .order('orden')
+        supabase
+          .from('obligaciones')
+          .select('*')
+          .eq('contrato_id', id)
+          .order('orden'),
 
-    const { data: pers } = await supabase
-      .from('periodos')
-      .select('*')
-      .eq('contrato_id', id)
-      .order('numero_periodo')
+        supabase
+          .from('periodos')
+          .select('*')
+          .eq('contrato_id', id)
+          .order('numero_periodo'),
+      ])
 
-    setContrato(cont)
-    setObligaciones(obls || [])
-    setPeriodos(pers || [])
-    setCargando(false)
+      setContrato(cont)
+      setObligaciones(obls || [])
+      setPeriodos(pers || [])
+    } catch {
+      // Queries failed — contrato stays null, render shows "Contrato no encontrado"
+    } finally {
+      setCargando(false)
+    }
   }
 
   useEffect(() => { cargarDatos() }, [id])

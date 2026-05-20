@@ -150,9 +150,26 @@ export default function PeriodoDetallePage() {
     } catch { /* storage full or private mode — silent */ }
   }, [pendienteRegistro, PENDING_KEY])
 
+  // Prevent infinite auto-retry: only attempt once when initial load returns empty data
+  const retriedInitialLoad = useRef(false)
+
   const cargarDatos = useCallback(async (silencioso = false) => {
+    let autoRetrying = false
     try {
       const datos = await getPeriodoConContrato(periodoId, contratoId)
+
+      // On the initial (non-silent) load: if essential data came back empty, schedule
+      // one automatic retry after 1 s.  This handles the browser-refresh timing gap
+      // where the Supabase session cookie may not yet have propagated to the RLS layer
+      // by the time the first query fires — SPA navigation never hits this because
+      // the session is already warm in the singleton when the component mounts.
+      if (!silencioso && !datos.contrato && !retriedInitialLoad.current) {
+        retriedInitialLoad.current = true
+        autoRetrying = true
+        setTimeout(() => { if (mountedRef.current) cargarDatos() }, 1000)
+        return  // stay in loading state — finally will NOT call setCargando
+      }
+
       setContrato(datos.contrato)
       setPeriodo(datos.periodo)
       setObligaciones(datos.obligaciones)
@@ -161,7 +178,9 @@ export default function PeriodoDetallePage() {
     } catch {
       // Keep showing existing data on transient network errors
     } finally {
-      if (!silencioso) setCargando(false)
+      // Skip setCargando(false) when we are about to auto-retry — keep the skeleton
+      // visible so the user never sees a blank flash before the retry resolves.
+      if (!silencioso && !autoRetrying) setCargando(false)
     }
   }, [periodoId, contratoId])
 
