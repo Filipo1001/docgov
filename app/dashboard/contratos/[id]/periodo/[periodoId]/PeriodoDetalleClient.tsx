@@ -554,28 +554,27 @@ export default function PeriodoDetallePage({
       // A: Compress all files in parallel (pure Canvas — no server calls)
       const compressed = await Promise.all(limited.map(f => comprimirEvidencia(f)))
 
-      // B: Prepare signed URLs sequentially (one server action at a time)
-      const jobs: Array<{ file: File; signedUrl: string; publicUrl: string } | null> = []
-      for (const fileToUpload of compressed) {
-        const prep = await prepararUploadEvidencia(
-          actividadId, periodoId,
-          fileToUpload.name, fileToUpload.size, fileToUpload.type,
-        )
-        if (prep.error || !prep.data) {
-          toast.error(prep.error ?? 'Error al preparar la subida')
-          jobs.push(null)
-        } else {
-          jobs.push({ file: fileToUpload, ...prep.data })
-        }
-      }
-
-      // D: Upload all files to Supabase Storage in parallel via XHR
-      //    (browser → Storage directly — Vercel never touches the binary data)
+      // B+D: For each file, request its signed URL and start the XHR upload immediately,
+      //      all in parallel. This replaces the old two-step "prepare all → upload all"
+      //      pattern where upload #1 couldn't start until URL #N was ready. Now each file's
+      //      upload begins as soon as its own URL is issued (~300 ms), cutting total wait
+      //      time significantly when uploading multiple images on a slow connection.
       const xhrResults = await Promise.allSettled(
-        jobs.map(async (job) => {
-          if (!job) return null as null
-          const { file, signedUrl, publicUrl } = job
-          const mime = file.type.startsWith('image/') ? file.type : 'image/jpeg'
+        compressed.map(async (fileToUpload) => {
+          const mime = fileToUpload.type.startsWith('image/') ? fileToUpload.type : 'image/jpeg'
+
+          // Step 1: get signed URL just-in-time (server-side auth + validation)
+          const prep = await prepararUploadEvidencia(
+            actividadId, periodoId,
+            fileToUpload.name, fileToUpload.size, fileToUpload.type,
+          )
+          if (prep.error || !prep.data) {
+            throw new Error(prep.error ?? 'Error al preparar la subida')
+          }
+
+          const { signedUrl, publicUrl } = prep.data
+
+          // Step 2: upload directly to Supabase Storage (browser → Storage, bypasses Vercel)
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest()
             xhr.timeout = 90_000  // 90 s — covers large images on slow mobile connections
@@ -586,9 +585,10 @@ export default function PeriodoDetallePage({
             xhr.ontimeout = () => reject(new Error('La imagen tardó demasiado en subirse. Intenta con una imagen más pequeña o verifica tu conexión.'))
             xhr.open('PUT', signedUrl)
             xhr.setRequestHeader('Content-Type', mime)
-            xhr.send(file)
+            xhr.send(fileToUpload)
           })
-          return { publicUrl, nombre: file.name }
+
+          return { publicUrl, nombre: fileToUpload.name }
         }),
       )
 
@@ -600,7 +600,6 @@ export default function PeriodoDetallePage({
           toast.error(res.reason instanceof Error ? res.reason.message : 'Error al subir imagen')
           continue
         }
-        if (res.value === null) continue // prep failed — already toasted above
 
         const { publicUrl, nombre } = res.value
         const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, nombre)
