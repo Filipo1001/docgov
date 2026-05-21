@@ -13,7 +13,6 @@ import {
 } from '@/lib/constants'
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo } from '@/lib/types'
 import { getPeriodoConContrato } from '@/services/periodos'
-import { crearActividad, eliminarActividad } from '@/services/periodos'
 import {
   enviarPeriodo,
   aprobarComoAsesor,
@@ -34,7 +33,7 @@ import {
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
-import { actualizarActividad } from '@/app/actions/actividades'
+import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
 interface InitialData {
@@ -178,6 +177,23 @@ export default function PeriodoDetallePage({
       if (!silencioso) setCargando(false)
     }
   }, [periodoId, contratoId])
+
+  // Lightweight refresh — only re-fetches actividades+evidencias after activity mutations.
+  // Avoids the full 4-query reload that cargarDatos() does (contrato+periodo+obligaciones+actividades).
+  const cargarActividades = useCallback(async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase')
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('actividades')
+        .select('*, evidencias(*)')
+        .eq('periodo_id', periodoId)
+        .order('orden')
+      if (data) setActividades(data as Actividad[])
+    } catch {
+      // Keep showing existing data on transient errors
+    }
+  }, [periodoId])
 
   // No initial useEffect fetch — data arrives as SSR props (see page.tsx).
   // cargarDatos is called explicitly after mutations and by the 30s poller below.
@@ -447,16 +463,15 @@ export default function PeriodoDetallePage({
       setNuevaActividad('')
       setNuevaCantidad(1)
       setFormActivo(null)
-      cargarDatos()
+      cargarActividades()  // only refresh actividades, not the full page
     }
     setGuardando(false)
   }
 
-
   async function handleEliminarActividad(actId: string) {
     const result = await eliminarActividad(actId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Actividad eliminada'); cargarDatos() }
+    else { toast.success('Actividad eliminada'); cargarActividades() }  // targeted refresh
   }
 
   function handleAbrirEdicion(actId: string, descripcion: string, cantidad: number) {
@@ -480,7 +495,7 @@ export default function PeriodoDetallePage({
     } else {
       toast.success('Actividad actualizada ✓')
       handleCancelarEdicion()
-      cargarDatos()
+      cargarActividades()  // targeted refresh — no need to reload contrato/periodo/obligaciones
     }
     setGuardandoEdicion(false)
   }
