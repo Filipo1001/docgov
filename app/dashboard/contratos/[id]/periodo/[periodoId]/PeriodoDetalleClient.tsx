@@ -12,6 +12,7 @@ import {
   DEFAULT_BASE_COTIZACION_SS,
 } from '@/lib/constants'
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo } from '@/lib/types'
+import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import {
   enviarPeriodo,
@@ -22,7 +23,8 @@ import {
   rechazarPeriodos,
   marcarRadicado,
   actualizarNumeroRadicado,
-  subirPlanilla,
+  prepararUploadPlanilla,
+  confirmarUploadPlanilla,
   eliminarPlanilla,
   guardarNumeroPlanilla,
   revisarPlanilla,
@@ -77,6 +79,10 @@ export default function PeriodoDetallePage({
   const [editDesc, setEditDesc] = useState('')
   const [editCantidad, setEditCantidad] = useState(1)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
+
+  // Activity delete — inline confirmation + in-flight guard
+  const [confirmarEliminarId, setConfirmarEliminarId] = useState<string | null>(null)
+  const [eliminandoActividad, setEliminandoActividad] = useState<string | null>(null)
 
 
   // Planilla state
@@ -182,7 +188,6 @@ export default function PeriodoDetallePage({
   // Avoids the full 4-query reload that cargarDatos() does (contrato+periodo+obligaciones+actividades).
   const cargarActividades = useCallback(async () => {
     try {
-      const { createClient } = await import('@/lib/supabase')
       const supabase = createClient()
       const { data } = await supabase
         .from('actividades')
@@ -203,6 +208,21 @@ export default function PeriodoDetallePage({
     const timer = setInterval(() => cargarDatos(true), 30_000)
     return () => clearInterval(timer)
   }, [cargarDatos])
+
+  // Dismiss delete-confirm on click-outside or Escape
+  useEffect(() => {
+    if (!confirmarEliminarId) return
+    const dismiss = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent && e.key !== 'Escape') return
+      setConfirmarEliminarId(null)
+    }
+    document.addEventListener('click', dismiss)
+    document.addEventListener('keydown', dismiss)
+    return () => {
+      document.removeEventListener('click', dismiss)
+      document.removeEventListener('keydown', dismiss)
+    }
+  }, [confirmarEliminarId])
 
   // Cerrar lightbox con tecla Escape
   useEffect(() => {
@@ -468,10 +488,13 @@ export default function PeriodoDetallePage({
     setGuardando(false)
   }
 
-  async function handleEliminarActividad(actId: string) {
+  async function handleConfirmarEliminar(actId: string) {
+    setConfirmarEliminarId(null)
+    setEliminandoActividad(actId)
     const result = await eliminarActividad(actId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Actividad eliminada'); cargarActividades() }  // targeted refresh
+    else { toast.success('Actividad eliminada'); cargarActividades() }
+    setEliminandoActividad(null)
   }
 
   function handleAbrirEdicion(actId: string, descripcion: string, cantidad: number) {
@@ -555,10 +578,12 @@ export default function PeriodoDetallePage({
           const mime = file.type.startsWith('image/') ? file.type : 'image/jpeg'
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest()
+            xhr.timeout = 90_000  // 90 s — covers large images on slow mobile connections
             xhr.onload = () => xhr.status >= 200 && xhr.status < 300
               ? resolve()
               : reject(new Error(`HTTP ${xhr.status}`))
             xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
+            xhr.ontimeout = () => reject(new Error('La imagen tardó demasiado en subirse. Intenta con una imagen más pequeña o verifica tu conexión.'))
             xhr.open('PUT', signedUrl)
             xhr.setRequestHeader('Content-Type', mime)
             xhr.send(file)
@@ -589,10 +614,7 @@ export default function PeriodoDetallePage({
 
       if (successCount > 0) {
         toast.success(successCount === 1 ? 'Imagen subida ✓' : `${successCount} imágenes subidas ✓`)
-        setTimeout(() => {
-          if (!mountedRef.current) return
-          cargarDatos()
-        }, 400)
+        if (mountedRef.current) cargarActividades()
       }
     } finally {
       // F: Always clear the overlay — no more "stuck loading" state
@@ -603,7 +625,7 @@ export default function PeriodoDetallePage({
   async function handleEliminarEvidencia(evId: string) {
     const result = await eliminarEvidencia(evId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Evidencia eliminada'); cargarDatos() }
+    else { toast.success('Evidencia eliminada'); cargarActividades() }
   }
 
   async function handleReintentarRegistro(actividadId: string) {
@@ -617,10 +639,7 @@ export default function PeriodoDetallePage({
       } else {
         setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
         toast.success('Evidencia registrada ✓')
-        setTimeout(() => {
-          if (!mountedRef.current) return
-          cargarDatos()
-        }, 400)
+        if (mountedRef.current) cargarActividades()
       }
     } finally {
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
@@ -629,12 +648,41 @@ export default function PeriodoDetallePage({
 
   async function handleSubirPlanilla(file: File) {
     setSubiendoPlanilla(true)
-    const formData = new FormData()
-    formData.append('file', file)
-    const result = await subirPlanilla(periodoId, formData)
-    if (result.error) toast.error(result.error)
-    else { toast.success('Planilla subida exitosamente'); setPlanillaMenuAbierto(false); cargarDatos() }
-    setSubiendoPlanilla(false)
+    try {
+      // Step 1 — server validates auth + period state, returns presigned URL
+      const prep = await prepararUploadPlanilla(periodoId, file.name, file.size)
+      if (prep.error || !prep.data) {
+        toast.error(prep.error ?? 'Error al preparar la subida')
+        return
+      }
+      const { signedUrl, publicUrl } = prep.data
+
+      // Step 2 — XHR upload directly to Supabase Storage (bypasses Vercel entirely)
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.timeout = 120_000  // 2 min — PDFs can be large
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+          ? resolve()
+          : reject(new Error(`Error al subir: HTTP ${xhr.status}`))
+        xhr.onerror = () => reject(new Error('Error de red al subir la planilla'))
+        xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado. Verifica tu conexión e intenta de nuevo.'))
+        xhr.open('PUT', signedUrl)
+        xhr.setRequestHeader('Content-Type', 'application/pdf')
+        xhr.send(file)
+      })
+
+      // Step 3 — register the URL in the DB
+      const confirm = await confirmarUploadPlanilla(periodoId, publicUrl)
+      if (confirm.error) { toast.error(confirm.error); return }
+
+      toast.success('Planilla subida exitosamente')
+      setPlanillaMenuAbierto(false)
+      cargarDatos()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir la planilla')
+    } finally {
+      setSubiendoPlanilla(false)
+    }
   }
 
   async function handleEliminarPlanilla() {
@@ -1339,26 +1387,41 @@ export default function PeriodoDetallePage({
                                 {/* Editar — 44×44 touch target */}
                                 <button
                                   onClick={() => handleAbrirEdicion(act.id, act.descripcion, act.cantidad ?? 1)}
+                                  disabled={eliminandoActividad === act.id}
                                   className="w-11 h-11 flex items-center justify-center rounded-xl
                                              text-gray-400 hover:text-blue-500 active:text-blue-600
-                                             hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                                             hover:bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-30"
                                   aria-label="Editar actividad"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
                                 </button>
-                                {/* Eliminar — 44×44 touch target */}
+                                {/* Eliminar — 44×44 touch target, inline confirm on first tap */}
                                 <button
-                                  onClick={() => handleEliminarActividad(act.id)}
-                                  className="w-11 h-11 flex items-center justify-center rounded-xl
-                                             text-gray-400 hover:text-red-500 active:text-red-600
-                                             hover:bg-red-50 active:bg-red-100 transition-colors"
-                                  aria-label="Eliminar actividad"
+                                  onClick={() => confirmarEliminarId === act.id
+                                    ? handleConfirmarEliminar(act.id)
+                                    : setConfirmarEliminarId(act.id)}
+                                  disabled={eliminandoActividad === act.id}
+                                  className={`w-11 h-11 flex items-center justify-center rounded-xl transition-colors
+                                    disabled:opacity-30
+                                    ${confirmarEliminarId === act.id
+                                      ? 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700'
+                                      : 'text-gray-400 hover:text-red-500 active:text-red-600 hover:bg-red-50 active:bg-red-100'
+                                    }`}
+                                  aria-label={confirmarEliminarId === act.id ? 'Confirmar eliminación' : 'Eliminar actividad'}
+                                  title={confirmarEliminarId === act.id ? 'Toca de nuevo para confirmar' : 'Eliminar'}
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
+                                  {eliminandoActividad === act.id ? (
+                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  )}
                                 </button>
                               </div>
                             )}

@@ -767,7 +767,92 @@ export async function revisarPlanilla(
 // ─── File upload actions ────────────────────────────────────
 
 /**
+ * Step 1 — Prepare a presigned upload URL for the planilla de seguridad social.
+ * The client uploads the PDF directly to Supabase Storage via XHR (bypasses Vercel).
+ * Replaces the old subirPlanilla that streamed the file through the server action,
+ * risking the 10 s Vercel function timeout on PDFs > 3 MB.
+ */
+export async function prepararUploadPlanilla(
+  periodoId: string,
+  fileName: string,
+  fileSize: number,
+): Promise<ActionResult<{ signedUrl: string; path: string; publicUrl: string }>> {
+  try {
+    const ext = fileName.split('.').pop()?.toLowerCase() || ''
+    if (ext !== 'pdf') return { error: 'Solo se aceptan archivos PDF para la planilla' }
+    if (fileSize > 10 * 1024 * 1024) return { error: 'El archivo no puede superar 10 MB' }
+
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede subir la planilla' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (usuario.rol !== 'admin') {
+      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+        return { error: 'No se puede reemplazar la planilla de un periodo ya aprobado o radicado' }
+      }
+    }
+
+    const path = `planillas/${periodoId}/${Date.now()}.pdf`
+    // Use adminClient — bypasses bucket RLS so the user JWT level doesn't need write access.
+    const adminClient = createAdminSupabaseClient()
+
+    const { data: signedData, error: signedError } = await adminClient.storage
+      .from('documentos')
+      .createSignedUploadUrl(path)
+
+    if (signedError || !signedData) {
+      return { error: `Error al preparar la subida: ${signedError?.message}` }
+    }
+
+    const { data: { publicUrl } } = adminClient.storage.from('documentos').getPublicUrl(path)
+
+    return { data: { signedUrl: signedData.signedUrl, path, publicUrl } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al preparar la subida' }
+  }
+}
+
+/**
+ * Step 2 — Register the planilla URL in the DB after the client XHR upload succeeds.
+ * Resets planilla_estado to 'pendiente' so the asesor must re-review the new file.
+ */
+export async function confirmarUploadPlanilla(
+  periodoId: string,
+  publicUrl: string,
+): Promise<ActionResult> {
+  try {
+    const { usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede subir la planilla' }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { data: updated, error: updateError } = await adminClient
+      .from('periodos')
+      .update({ planilla_ss_url: publicUrl, planilla_estado: 'pendiente', planilla_comentario: null })
+      .eq('id', periodoId)
+      .select('id')
+
+    if (updateError) return { error: `Error al guardar: ${updateError.message}` }
+    if (!updated?.length) return { error: 'No se pudo guardar. Periodo no encontrado.' }
+
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al registrar la planilla' }
+  }
+}
+
+/**
  * Upload planilla de seguridad social for a period.
+ * @deprecated Use prepararUploadPlanilla + confirmarUploadPlanilla instead.
+ * Kept for compatibility during transition.
  */
 export async function subirPlanilla(
   periodoId: string,
