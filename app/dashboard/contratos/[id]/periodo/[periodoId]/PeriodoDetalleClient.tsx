@@ -97,12 +97,14 @@ export default function PeriodoDetallePage({
   const [numRadicadoEdit, setNumRadicadoEdit] = useState('')
   const [guardandoRadicado, setGuardandoRadicado] = useState(false)
 
-  // Upload progress state per activity (null = idle, 0-100 = uploading)
+  // Upload progress state per activity (null = idle, number = count of files uploading)
   const [subiendoEvidencia, setSubiendoEvidencia] = useState<Record<string, number | null>>({})
+  // Byte-level progress 0-100 per activity (M-1)
+  const [progresoEvidencia, setProgresoEvidencia] = useState<Record<string, number>>({})
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
   // Persisted to localStorage so the user can retry step 3 after a page refresh.
   const PENDING_KEY = `pendiente_reg_${periodoId}`
-  const [pendienteRegistro, setPendienteRegistro] = useState<Record<string, { publicUrl: string; nombre: string } | null>>(() => {
+  const [pendienteRegistro, setPendienteRegistro] = useState<Record<string, { publicUrl: string; storagePath: string; nombre: string } | null>>(() => {
     if (typeof window === 'undefined') return {}
     try {
       const stored = localStorage.getItem(`pendiente_reg_${periodoId}`)
@@ -555,12 +557,47 @@ export default function PeriodoDetallePage({
       const compressed = await Promise.all(limited.map(f => comprimirEvidencia(f)))
 
       // B+D: For each file, request its signed URL and start the XHR upload immediately,
-      //      all in parallel. This replaces the old two-step "prepare all → upload all"
-      //      pattern where upload #1 couldn't start until URL #N was ready. Now each file's
-      //      upload begins as soon as its own URL is issued (~300 ms), cutting total wait
-      //      time significantly when uploading multiple images on a slow connection.
+      //      all in parallel. Each file tracks its own byte-level progress (M-1) and
+      //      retries up to 2× on network/timeout failures (M-2).
+      const totalBytes = Math.max(1, compressed.reduce((sum, f) => sum + f.size, 0))
+      const loadedBytes = new Array(compressed.length).fill(0)
+
+      // M-2: XHR upload with automatic retry on network/timeout failures.
+      // HTTP errors (4xx/5xx) are NOT retried — they indicate a real problem.
+      function subirConReintentos(
+        signedUrl: string, file: File, mime: string,
+        onProgress: (loaded: number) => void,
+        maxReintentos = 2,
+      ): Promise<void> {
+        async function intento(n: number): Promise<void> {
+          if (n > 0) await new Promise(r => setTimeout(r, n * 1_000)) // 1 s, 2 s backoff
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest()
+            xhr.timeout = 90_000
+            // M-1: report actual bytes loaded so the UI can show real progress
+            xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded) }
+            xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+              ? resolve()
+              : reject(Object.assign(new Error(`HTTP ${xhr.status}`), { esHttp: true }))
+            xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
+            xhr.ontimeout = () => reject(new Error('La imagen tardó demasiado en subirse. Intenta con una imagen más pequeña o verifica tu conexión.'))
+            xhr.open('PUT', signedUrl)
+            xhr.setRequestHeader('Content-Type', mime)
+            xhr.send(file)
+          })
+        }
+        async function loop(n: number): Promise<void> {
+          try { await intento(n) }
+          catch (e: unknown) {
+            if ((e as { esHttp?: boolean }).esHttp || n >= maxReintentos) throw e
+            return loop(n + 1)
+          }
+        }
+        return loop(0)
+      }
+
       const xhrResults = await Promise.allSettled(
-        compressed.map(async (fileToUpload) => {
+        compressed.map(async (fileToUpload, idx) => {
           const mime = fileToUpload.type.startsWith('image/') ? fileToUpload.type : 'image/jpeg'
 
           // Step 1: get signed URL just-in-time (server-side auth + validation)
@@ -572,23 +609,16 @@ export default function PeriodoDetallePage({
             throw new Error(prep.error ?? 'Error al preparar la subida')
           }
 
-          const { signedUrl, publicUrl } = prep.data
+          const { signedUrl, path, publicUrl } = prep.data
 
-          // Step 2: upload directly to Supabase Storage (browser → Storage, bypasses Vercel)
-          await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest()
-            xhr.timeout = 90_000  // 90 s — covers large images on slow mobile connections
-            xhr.onload = () => xhr.status >= 200 && xhr.status < 300
-              ? resolve()
-              : reject(new Error(`HTTP ${xhr.status}`))
-            xhr.onerror = () => reject(new Error('Error de red al subir la imagen'))
-            xhr.ontimeout = () => reject(new Error('La imagen tardó demasiado en subirse. Intenta con una imagen más pequeña o verifica tu conexión.'))
-            xhr.open('PUT', signedUrl)
-            xhr.setRequestHeader('Content-Type', mime)
-            xhr.send(fileToUpload)
+          // Step 2: upload with retry + byte-level progress tracking
+          await subirConReintentos(signedUrl, fileToUpload, mime, (loaded) => {
+            loadedBytes[idx] = loaded
+            const pct = Math.min(99, Math.round(loadedBytes.reduce((a, b) => a + b, 0) / totalBytes * 100))
+            setProgresoEvidencia(prev => ({ ...prev, [actividadId]: pct }))
           })
 
-          return { publicUrl, nombre: fileToUpload.name }
+          return { publicUrl, storagePath: path, nombre: fileToUpload.name }
         }),
       )
 
@@ -601,10 +631,10 @@ export default function PeriodoDetallePage({
           continue
         }
 
-        const { publicUrl, nombre } = res.value
-        const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, nombre)
+        const { publicUrl, storagePath, nombre } = res.value
+        const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, storagePath, nombre)
         if (reg.error) {
-          setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, nombre } }))
+          setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, storagePath, nombre } }))
           toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
         } else {
           successCount++
@@ -616,8 +646,9 @@ export default function PeriodoDetallePage({
         if (mountedRef.current) cargarActividades()
       }
     } finally {
-      // F: Always clear the overlay — no more "stuck loading" state
+      // F: Always clear overlay + progress — no more "stuck loading" state
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
+      setProgresoEvidencia(prev => { const n = { ...prev }; delete n[actividadId]; return n })
     }
   }
 
@@ -632,7 +663,7 @@ export default function PeriodoDetallePage({
     if (!pending) return
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 1 }))
     try {
-      const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.nombre)
+      const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.storagePath ?? '', pending.nombre)
       if (reg.error) {
         toast.error(`Reintento fallido: ${reg.error}`)
       } else {
@@ -2407,52 +2438,68 @@ export default function PeriodoDetallePage({
         if (!isUploading) return null
 
         const esPlanilla = subiendoPlanilla
+
+        // M-1: aggregate byte progress across all uploading activities (0-100)
+        const activeIds = Object.keys(subiendoEvidencia).filter(k => subiendoEvidencia[k] != null)
+        const progresoTotal = activeIds.length > 0
+          ? Math.round(activeIds.reduce((sum, k) => sum + (progresoEvidencia[k] ?? 0), 0) / activeIds.length)
+          : 0
+
         const label = esPlanilla
           ? 'Subiendo planilla...'
           : totalEvidencias > 1
             ? `Subiendo ${totalEvidencias} imágenes...`
             : 'Subiendo imagen...'
 
+        // SVG circle metrics
+        const R = 40
+        const CIRCUNFERENCIA = 2 * Math.PI * R // ≈ 251.33
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm upload-overlay-enter">
             <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs upload-card-enter">
 
-              {/* Spinner — two-layer design separates the initial rotation offset
-                  from the spin animation so they don't conflict on the same element:
-                  · Outer div (-rotate-90): shifts arc start from 3 o'clock → 12 o'clock
-                  · Inner div (animate-spin): drives the continuous rotation */}
               <div className="relative w-24 h-24">
                 {/* Static track ring */}
                 <svg className="absolute inset-0 w-24 h-24" viewBox="0 0 96 96">
-                  <circle cx="48" cy="48" r="40" fill="none" stroke="#e5e7eb" strokeWidth="6" />
+                  <circle cx="48" cy="48" r={R} fill="none" stroke="#e5e7eb" strokeWidth="6" />
                 </svg>
 
-                {/* Offset wrapper (-90°) + spinning arc */}
-                <div className="absolute inset-0 -rotate-90">
-                  <div
-                    className="w-full h-full animate-spin"
-                    style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}
-                  >
+                {esPlanilla ? (
+                  /* Planilla: indeterminate spinning arc (no byte-level progress available) */
+                  <div className="absolute inset-0 -rotate-90">
+                    <div className="w-full h-full animate-spin" style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}>
+                      <svg className="w-24 h-24" viewBox="0 0 96 96">
+                        <circle cx="48" cy="48" r={R} fill="none" stroke="#2563eb" strokeWidth="6" strokeLinecap="round"
+                          strokeDasharray={`${CIRCUNFERENCIA * 0.28} ${CIRCUNFERENCIA * 0.72}`}
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                ) : (
+                  /* Evidencias: determinate progress arc — grows from 0 → 100% (M-1) */
+                  <div className="absolute inset-0 -rotate-90">
                     <svg className="w-24 h-24" viewBox="0 0 96 96">
                       <circle
-                        cx="48" cy="48" r="40"
+                        cx="48" cy="48" r={R}
                         fill="none" stroke="#2563eb" strokeWidth="6" strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 40 * 0.28} ${2 * Math.PI * 40 * 0.72}`}
+                        strokeDasharray={CIRCUNFERENCIA}
+                        strokeDashoffset={CIRCUNFERENCIA * (1 - progresoTotal / 100)}
+                        style={{ transition: 'stroke-dashoffset 0.2s ease' }}
                       />
                     </svg>
                   </div>
-                </div>
+                )}
 
-                {/* Center icon — sibling div, not affected by the parent rotations */}
+                {/* Center content */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   {esPlanilla ? (
                     <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                     </svg>
                   ) : (
-                    <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                    </svg>
+                    /* M-1: show real percentage instead of a static icon */
+                    <span className="text-xl font-bold text-blue-600 tabular-nums">{progresoTotal}%</span>
                   )}
                 </div>
               </div>

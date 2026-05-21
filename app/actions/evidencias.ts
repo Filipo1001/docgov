@@ -19,6 +19,7 @@
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { FILE_UPLOAD, ESTADOS_EDITABLES } from '@/lib/constants'
 import type { ActionResult } from '@/lib/types'
 
@@ -140,6 +141,7 @@ export async function registrarEvidencia(
   actividadId: string,
   periodoId: string,
   publicUrl: string,
+  storagePath: string,
   nombreArchivo: string,
 ): Promise<ActionResult<{ url: string; nombre: string }>> {
   try {
@@ -164,6 +166,7 @@ export async function registrarEvidencia(
       .insert({
         actividad_id: actividadId,
         url: publicUrl,
+        storage_path: storagePath,
         nombre_archivo: nombreArchivo,
       })
 
@@ -188,7 +191,7 @@ export async function eliminarEvidencia(evidenciaId: string): Promise<ActionResu
 
     const { data: evidencia } = await supabase
       .from('evidencias')
-      .select('id, actividad:actividades(periodo_id, periodo:periodos(estado))')
+      .select('id, url, storage_path, actividad:actividades(periodo_id, periodo:periodos(estado))')
       .eq('id', evidenciaId)
       .single()
 
@@ -202,6 +205,23 @@ export async function eliminarEvidencia(evidenciaId: string): Promise<ActionResu
 
     if (error) return { error: `Error al eliminar: ${error.message}` }
     if (!deleted?.length) return { error: 'No se pudo eliminar la evidencia. No fue encontrada o no tienes permiso.' }
+
+    // ── C-4: delete the actual file from Storage ──────────────────────────
+    // Resolve path: prefer the explicit storage_path column; fall back to
+    // extracting it from the public URL for legacy records that pre-date the column.
+    const storagePath = (evidencia as unknown as { storage_path: string | null }).storage_path
+      ?? (evidencia as unknown as { url: string }).url?.split('/storage/v1/object/public/evidencias/')[1]
+
+    if (storagePath) {
+      const adminClient = createAdminSupabaseClient()
+      // Best-effort: log but don't fail the action if storage delete errors
+      const { error: storageError } = await adminClient.storage
+        .from('evidencias')
+        .remove([storagePath])
+      if (storageError) {
+        console.error('[eliminarEvidencia] storage delete failed:', storageError.message)
+      }
+    }
 
     return {}
   } catch (e: unknown) {
