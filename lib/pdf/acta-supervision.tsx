@@ -649,32 +649,50 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <View style={s.val}><Text>{baseCotizacionTexto}</Text></View>
           </View>
 
-          {/* Planilla — label combinado + sub-filas a la derecha */}
-          <View style={s.mergedRow}>
-            {/* Columna izquierda: "Numero de planilla" — usa StyleSheet para que justifyContent funcione */}
-            <View style={s.mergedLbl}>
-              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Numero de planilla</Text>
-            </View>
-            {/* Columna derecha: sub-filas apiladas */}
-            <View style={{ flex: 1 }}>
-              {(pagosHistorial ?? []).map((pago, idx, arr) => (
-                <View
-                  key={pago.acta_numero}
-                  style={{ flexDirection: 'row', borderBottomWidth: idx < arr.length - 1 ? 1 : 0, borderBottomColor: '#000', minHeight: 20 }}
-                >
-                  <View style={{ flex: 1, padding: '3 5', fontSize: 9 }}>
-                    <Text>{pago.numero_planilla ?? '—'}</Text>
-                  </View>
-                  <View style={{ width: '32%', padding: '3 5', fontFamily: 'Helvetica-Bold', fontSize: 8.5, backgroundColor: '#f5f5f5', borderLeftWidth: 1, borderLeftColor: '#000' }}>
-                    <Text>Periodo de Cotización</Text>
-                  </View>
-                  <View style={{ width: '18%', padding: '3 5', fontSize: 9, borderLeftWidth: 1, borderLeftColor: '#000' }}>
-                    <Text>{capitalizeMes(pago.mes)}</Text>
-                  </View>
+          {/* Planilla — cada fila es independiente y auto-contenida.
+               El patrón anterior (celda izquierda fija + N sub-filas a la derecha dentro
+               de flex:1) hace que @react-pdf/renderer recorte las filas intermedias al
+               calcular la altura del contenedor flex-row externo. La solución es renderizar
+               cada periodo como una fila completa, mostrando la etiqueta sólo en la primera
+               para simular visualmente la celda combinada. */}
+          {(pagosHistorial ?? []).map((pago, idx, arr) => {
+            const esUltima = idx === arr.length - 1
+            return (
+              <View
+                key={pago.acta_numero}
+                wrap={false}
+                style={{
+                  flexDirection: 'row',
+                  borderBottomWidth: esUltima ? 1 : 1,
+                  borderBottomColor: '#000',
+                  minHeight: 20,
+                }}
+              >
+                {/* Columna izquierda: etiqueta solo en la primera fila */}
+                <View style={{
+                  ...s.mergedLbl,
+                  justifyContent: 'center',
+                  borderBottomWidth: 0,
+                }}>
+                  {idx === 0 && (
+                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Numero de planilla</Text>
+                  )}
                 </View>
-              ))}
-            </View>
-          </View>
+                {/* Número de planilla */}
+                <View style={{ flex: 1, padding: '3 5', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 9 }}>{pago.numero_planilla ?? '—'}</Text>
+                </View>
+                {/* Periodo de Cotización */}
+                <View style={{ width: '32%', padding: '3 5', backgroundColor: '#f5f5f5', borderLeftWidth: 1, borderLeftColor: '#000', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Periodo de Cotización</Text>
+                </View>
+                {/* Mes */}
+                <View style={{ width: '18%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 9 }}>{capitalizeMes(pago.mes)}</Text>
+                </View>
+              </View>
+            )
+          })}
 
           {/* Pagos realizados — wrap=false para no partir entre páginas */}
           <View style={s.mergedRow} wrap={false}>
