@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase'
+import { obtenerPerfilUsuario } from '@/app/actions/usuario'
 import type { Usuario, Municipio } from '@/lib/types'
 
 interface UserCtx {
@@ -24,29 +25,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient()
 
-    async function cargarPerfil(userId: string) {
-      const [{ data: u }, { data: m }] = await Promise.all([
-        supabase.from('usuarios').select('*').eq('id', userId).single(),
-        supabase.from('municipios').select('*').single(),
-      ])
-      setUsuario(u as Usuario ?? null)
-      setMunicipio(m as Municipio ?? null)
+    // ── cargarPerfil usa Server Action en lugar del browser client ──────────
+    // El browser Supabase client puede no tener sesión activa justo después
+    // de un page reload (token expirado, cookie no sincronizada, etc.).
+    // El Server Action siempre usa las httpOnly cookies renovadas por el
+    // middleware, garantizando que auth.uid() esté disponible en el servidor.
+    async function cargarPerfil() {
+      const { usuario: u, municipio: m } = await obtenerPerfilUsuario()
+      if (u) tuvoSesion.current = true
+      setUsuario(u)
+      setMunicipio(m)
     }
 
-    // Initial load
-    // try/finally guarantees setCargando(false) is always called — even if
-    // cargarPerfil() throws (network error, unexpected Supabase error, etc.).
-    // Without the finally, cargando stays true forever and the sidebar gets
-    // stuck in skeleton state.
+    // Initial load — try/finally garantiza que setCargando(false) siempre se
+    // llame, incluso si cargarPerfil() falla por red u otro error.
     async function load() {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          tuvoSesion.current = true
-          await cargarPerfil(session.user.id)
-        }
+        await cargarPerfil()
       } catch (err) {
-        console.error('[UserProvider] failed to load session:', err)
+        console.error('[UserProvider] failed to load profile:', err)
       } finally {
         setCargando(false)
       }
@@ -56,11 +53,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // React to auth state changes (token refresh, sign-out, sign-in from another tab)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session) {
-          tuvoSesion.current = true
-          setSesionExpirada(false)
-          await cargarPerfil(session.user.id)
-        }
+        // Token renovado o nueva sesión — recargar perfil vía Server Action
+        setSesionExpirada(false)
+        await cargarPerfil()
       } else if (event === 'SIGNED_OUT') {
         setUsuario(null)
         setMunicipio(null)
