@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
@@ -53,6 +53,7 @@ export default function PeriodoDetallePage({
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
+  const router = useRouter()
 
   // Data is pre-fetched server-side and passed as props — no blank page on refresh.
   // cargarDatos() is still used for post-mutation refreshes and background polling.
@@ -61,6 +62,20 @@ export default function PeriodoDetallePage({
   const [obligaciones, setObligaciones] = useState<Obligacion[]>(initialObligaciones)
   const [actividades, setActividades] = useState<Actividad[]>(initialActividades)
   const [cargando, setCargando] = useState(false)
+
+  // ── Sync SSR props → state when router.refresh() delivers new server data ──
+  // router.refresh() re-runs the server component (page.tsx) which fetches fresh
+  // data and passes new props to this component. Since useState only initialises
+  // from props once, we need a useEffect to pick up prop changes after the first
+  // render. This is the reliable path when the browser Supabase client has a
+  // stale/missing session (e.g. after token expiry between refreshes).
+  const prevInitialActividadesRef = useRef(initialActividades)
+  useEffect(() => {
+    if (prevInitialActividadesRef.current !== initialActividades) {
+      prevInitialActividadesRef.current = initialActividades
+      setActividades(initialActividades)
+    }
+  }, [initialActividades])
 
   // Action state
   const [procesando, setProcesando] = useState(false)
@@ -485,7 +500,14 @@ export default function PeriodoDetallePage({
       setNuevaActividad('')
       setNuevaCantidad(1)
       setFormActivo(null)
-      cargarActividades()  // only refresh actividades, not the full page
+      // router.refresh() re-runs the server component which always has a valid
+      // server-side session. The new initialActividades prop is then picked up
+      // by the useEffect above and synced into local state.
+      // cargarActividades() runs concurrently as an optimistic fast path —
+      // whichever resolves first wins; if the browser client session is stale
+      // the server refresh is the reliable fallback.
+      router.refresh()
+      cargarActividades()
     }
     setGuardando(false)
   }
@@ -495,7 +517,7 @@ export default function PeriodoDetallePage({
     setEliminandoActividad(actId)
     const result = await eliminarActividad(actId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Actividad eliminada'); cargarActividades() }
+    else { toast.success('Actividad eliminada'); router.refresh(); cargarActividades() }
     setEliminandoActividad(null)
   }
 
@@ -520,7 +542,8 @@ export default function PeriodoDetallePage({
     } else {
       toast.success('Actividad actualizada ✓')
       handleCancelarEdicion()
-      cargarActividades()  // targeted refresh — no need to reload contrato/periodo/obligaciones
+      router.refresh()
+      cargarActividades()
     }
     setGuardandoEdicion(false)
   }
@@ -643,7 +666,10 @@ export default function PeriodoDetallePage({
 
       if (successCount > 0) {
         toast.success(successCount === 1 ? 'Imagen subida ✓' : `${successCount} imágenes subidas ✓`)
-        if (mountedRef.current) cargarActividades()
+        if (mountedRef.current) {
+          router.refresh()
+          cargarActividades()
+        }
       }
     } finally {
       // F: Always clear overlay + progress — no more "stuck loading" state
@@ -655,7 +681,7 @@ export default function PeriodoDetallePage({
   async function handleEliminarEvidencia(evId: string) {
     const result = await eliminarEvidencia(evId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Evidencia eliminada'); cargarActividades() }
+    else { toast.success('Evidencia eliminada'); router.refresh(); cargarActividades() }
   }
 
   async function handleReintentarRegistro(actividadId: string) {
@@ -669,7 +695,7 @@ export default function PeriodoDetallePage({
       } else {
         setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
         toast.success('Evidencia registrada ✓')
-        if (mountedRef.current) cargarActividades()
+        if (mountedRef.current) { router.refresh(); cargarActividades() }
       }
     } finally {
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))

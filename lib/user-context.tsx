@@ -34,13 +34,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     // Initial load
+    // try/finally guarantees setCargando(false) is always called — even if
+    // cargarPerfil() throws (network error, unexpected Supabase error, etc.).
+    // Without the finally, cargando stays true forever and the sidebar gets
+    // stuck in skeleton state.
     async function load() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        tuvoSesion.current = true
-        await cargarPerfil(session.user.id)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          tuvoSesion.current = true
+          await cargarPerfil(session.user.id)
+        }
+      } catch (err) {
+        console.error('[UserProvider] failed to load session:', err)
+      } finally {
+        setCargando(false)
       }
-      setCargando(false)
     }
     load()
 
