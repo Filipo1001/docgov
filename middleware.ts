@@ -13,17 +13,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(destination, { status: 301 })
   }
 
+  // ── Fast path: skip auth refresh when there is no session ────
+  // getUser() calls the Supabase auth server to validate / refresh the token.
+  // When there is no session cookie at all the user is unauthenticated and
+  // getUser() returns null anyway, so calling it is pure overhead that hammers
+  // the auth server with every Edge Function invocation (login page, public
+  // routes, prefetch requests, etc.).  Skip it early and let the page's own
+  // auth guard (requireRole / requireContractAccess) redirect to /login.
+  const hasSessionCookie = request.cookies.getAll().some(
+    c => c.name.includes('-auth-token')
+  )
+  if (!hasSessionCookie) {
+    return NextResponse.next({ request })
+  }
+
   // ── Supabase session refresh ──────────────────────────────────
   // The server-side Supabase client (in Server Components and Server Actions)
   // cannot refresh expired access tokens on its own because Server Components
   // cannot set cookies on the response.  Without this middleware step, tokens
-  // expire after 1 h and the browser client loses its session, causing:
-  //  • cargarActividades() to return null (RLS blocks unauthenticated reads)
-  //  • user-context.tsx to not load the user profile (sidebar stays in skeleton)
+  // expire after 1 h and the browser client loses its session.
   //
-  // This block validates and refreshes the session on EVERY request so the
-  // auth cookie is always fresh.  For a valid non-expired token the JWT is
-  // validated locally (no network call); only expired tokens hit the network.
+  // For a valid non-expired token the JWT is validated locally (no network
+  // call); only expired tokens hit the auth server.  We already confirmed a
+  // session cookie exists above, so this call is always meaningful.
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
