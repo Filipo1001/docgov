@@ -19,29 +19,49 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [municipio, setMunicipio] = useState<Municipio | null>(null)
   const [cargando, setCargando] = useState(true)
   const [sesionExpirada, setSesionExpirada] = useState(false)
-  // Whether a session was ever established in this browser session
   const tuvoSesion = useRef(false)
 
   useEffect(() => {
     const supabase = createClient()
 
-    // ── cargarPerfil usa Server Action en lugar del browser client ──────────
-    // El browser Supabase client puede no tener sesión activa justo después
-    // de un page reload (token expirado, cookie no sincronizada, etc.).
-    // El Server Action siempre usa las httpOnly cookies renovadas por el
-    // middleware, garantizando que auth.uid() esté disponible en el servidor.
-    async function cargarPerfil() {
-      const { usuario: u, municipio: m } = await obtenerPerfilUsuario()
-      if (u) tuvoSesion.current = true
-      setUsuario(u)
-      setMunicipio(m)
+    // ── Ruta A: browser client ────────────────────────────────────────────────
+    // Usada en SIGNED_IN y TOKEN_REFRESHED: el token YA está en el browser,
+    // así que el browser client puede hacer las queries directamente.
+    // NO usada en page reload: justo después de un reload, el browser client
+    // puede no tener sesión activa aunque las cookies del servidor sí existan.
+    async function cargarPerfilBrowser(userId: string) {
+      // Marcar tuvoSesion SINCRÓNICAMENTE antes del await, para que si load()
+      // (Ruta B) completa en paralelo con null, no sobreescriba al usuario real.
+      tuvoSesion.current = true
+      const [{ data: u }, { data: m }] = await Promise.all([
+        supabase.from('usuarios').select('*').eq('id', userId).single(),
+        supabase.from('municipios').select('*').single(),
+      ])
+      setUsuario((u as Usuario) ?? null)
+      setMunicipio((m as Municipio) ?? null)
     }
 
-    // Initial load — try/finally garantiza que setCargando(false) siempre se
-    // llame, incluso si cargarPerfil() falla por red u otro error.
+    // ── Ruta B: Server Action ─────────────────────────────────────────────────
+    // Usada en el load() inicial (page reload): el middleware ya renovó la
+    // httpOnly cookie antes de que el componente montara, así que el server
+    // client siempre tiene auth válida independiente del browser client.
+    // NO usada en SIGNED_IN: justo después de un login fresco, el server aún
+    // no tiene la cookie → getUser() devolvería null → usuario queda null.
+    async function cargarPerfilServer() {
+      const { usuario: u, municipio: m } = await obtenerPerfilUsuario()
+      // Si SIGNED_IN ya disparó en paralelo y fijó tuvoSesion=true, no
+      // sobreescribir con null (evita condición de carrera en logins rápidos).
+      if (u || !tuvoSesion.current) {
+        if (u) tuvoSesion.current = true
+        setUsuario(u)
+        setMunicipio(m)
+      }
+    }
+
+    // Carga inicial — siempre resuelve cargando via finally
     async function load() {
       try {
-        await cargarPerfil()
+        await cargarPerfilServer()
       } catch (err) {
         console.error('[UserProvider] failed to load profile:', err)
       } finally {
@@ -53,13 +73,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // React to auth state changes (token refresh, sign-out, sign-in from another tab)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        // Token renovado o nueva sesión — recargar perfil vía Server Action
         setSesionExpirada(false)
-        await cargarPerfil()
+        if (session?.user) {
+          // Browser client: la sesión ya está en el browser en este momento
+          await cargarPerfilBrowser(session.user.id)
+          // Garantizar que cargando quede en false aunque load() aún no haya
+          // terminado (puede ocurrir si el usuario inicia sesión muy rápido)
+          setCargando(false)
+        }
       } else if (event === 'SIGNED_OUT') {
         setUsuario(null)
         setMunicipio(null)
-        // Only flag as expired if we had an active session — not on a fresh logout
         if (tuvoSesion.current) setSesionExpirada(true)
       }
     })
