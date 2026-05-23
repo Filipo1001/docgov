@@ -3,8 +3,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUsuario } from '@/lib/user-context'
+import { createClient } from '@/lib/supabase'
 import { getNotificaciones, getConteoNoLeidas, marcarLeida, marcarTodasLeidas } from '@/services/notificaciones'
 import type { Notificacion } from '@/lib/types'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function tiempoRelativo(fechaISO: string): string {
   const ahora = Date.now()
@@ -29,6 +32,14 @@ function iconoPorTipo(tipo: string): string {
   }
 }
 
+// ─── Circuit breaker config ────────────────────────────────────────────────────
+// Si 3 cargas consecutivas fallan, el sistema espera 30 min antes de reintentar.
+// Esto evita bombardear la DB cuando está caída (lo que empeora la crisis).
+const CIRCUIT_MAX_FAILURES = 3
+const CIRCUIT_BACKOFF_MS = 30 * 60 * 1000 // 30 minutos
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function NotificacionesBell() {
   const { usuario } = useUsuario()
   const router = useRouter()
@@ -37,23 +48,84 @@ export default function NotificacionesBell() {
   const [abierto, setAbierto] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
+  // Circuit breaker state (no reactivo — solo refs para no causar re-renders)
+  const fallosConsecutivos = useRef(0)
+  const backoffHasta = useRef(0)
+
   const cargar = useCallback(async () => {
     if (!usuario) return
-    const [data, conteo] = await Promise.all([
-      getNotificaciones(usuario.id),
-      getConteoNoLeidas(usuario.id),
-    ])
-    setNotificaciones(data)
-    setTotalNoLeidas(conteo)
+
+    // ── Circuit breaker: skip si estamos en período de espera ────────────────
+    if (Date.now() < backoffHasta.current) return
+
+    try {
+      const [data, conteo] = await Promise.all([
+        getNotificaciones(usuario.id),
+        getConteoNoLeidas(usuario.id),
+      ])
+      setNotificaciones(data)
+      setTotalNoLeidas(conteo)
+      // Éxito → resetear contador de fallos
+      fallosConsecutivos.current = 0
+    } catch {
+      fallosConsecutivos.current += 1
+      if (fallosConsecutivos.current >= CIRCUIT_MAX_FAILURES) {
+        // Abrir el circuit breaker: no reintentar por 30 minutos
+        backoffHasta.current = Date.now() + CIRCUIT_BACKOFF_MS
+        fallosConsecutivos.current = 0
+        console.warn('[NotificacionesBell] Circuit breaker abierto — DB no disponible, reintento en 30 min')
+      }
+    }
   }, [usuario])
 
   useEffect(() => {
-    cargar()
-    const timer = setInterval(cargar, 300_000) // 5 min — reduce DB load (was 1 min)
-    return () => clearInterval(timer)
-  }, [cargar])
+    if (!usuario) return
 
-  // Close dropdown on outside click
+    // Carga inicial
+    cargar()
+
+    const supabase = createClient()
+
+    // ── Realtime: walkie-talkie siempre abierto con la DB ───────────────────
+    // Solo dispara cuando hay un INSERT o UPDATE real en la tabla.
+    // Cero carga sobre la DB mientras no hay actividad — a diferencia del
+    // polling que preguntaba cada N minutos sin importar si había cambios.
+    const channel = supabase
+      .channel(`notificaciones_usuario_${usuario.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notificaciones',
+          filter: `usuario_id=eq.${usuario.id}`,
+        },
+        () => cargar()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notificaciones',
+          filter: `usuario_id=eq.${usuario.id}`,
+        },
+        () => cargar()
+      )
+      .subscribe()
+
+    // ── Fallback poll cada 15 min ─────────────────────────────────────────────
+    // Red de seguridad por si el WebSocket se desconecta silenciosamente.
+    // 15 min en vez de 5 min porque el Realtime cubre el 99% de los casos.
+    const fallback = setInterval(cargar, 15 * 60 * 1000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(fallback)
+    }
+  }, [usuario, cargar])
+
+  // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -64,7 +136,6 @@ export default function NotificacionesBell() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // noLeidas drives blue-dot indicators in the visible list
   const noLeidas = notificaciones.filter(n => !n.leida).length
 
   async function handleClickNotificacion(n: Notificacion) {

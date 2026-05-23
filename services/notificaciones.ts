@@ -9,10 +9,11 @@ import type { Notificacion } from '@/lib/types'
 
 /**
  * Get all notifications for a user, ordered by newest first.
+ * Throws on DB error so callers can implement circuit-breaker logic.
  */
 export async function getNotificaciones(userId: string): Promise<Notificacion[]> {
   const supabase = createClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('notificaciones')
     .select(`
       *,
@@ -22,6 +23,7 @@ export async function getNotificaciones(userId: string): Promise<Notificacion[]>
     .order('created_at', { ascending: false })
     .limit(50)
 
+  if (error) throw error
   return (data as Notificacion[]) ?? []
 }
 
@@ -29,14 +31,16 @@ export async function getNotificaciones(userId: string): Promise<Notificacion[]>
  * Count total unread notifications for a user.
  * Separate from getNotificaciones so the badge is always accurate
  * even when there are more than 50 unread items.
+ * Throws on DB error so callers can implement circuit-breaker logic.
  */
 export async function getConteoNoLeidas(userId: string): Promise<number> {
   const supabase = createClient()
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('notificaciones')
     .select('id', { count: 'exact', head: true })
     .eq('usuario_id', userId)
     .eq('leida', false)
+  if (error) throw error
   return count ?? 0
 }
 
