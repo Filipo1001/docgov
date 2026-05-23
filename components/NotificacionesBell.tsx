@@ -49,7 +49,7 @@ export default function NotificacionesBell() {
 
   useEffect(() => {
     cargar()
-    const timer = setInterval(cargar, 60_000)
+    const timer = setInterval(cargar, 300_000) // 5 min — reduce DB load (was 1 min)
     return () => clearInterval(timer)
   }, [cargar])
 
