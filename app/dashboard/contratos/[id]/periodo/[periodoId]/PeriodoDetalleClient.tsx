@@ -77,6 +77,23 @@ export default function PeriodoDetallePage({
     }
   }, [initialActividades])
 
+  // ── Sync initialPeriodo SSR prop → periodo state ──────────────────────────
+  // router.refresh() re-runs page.tsx on the server (fresh DB fetch), producing
+  // a new initialPeriodo object. Without this effect the updated prop is silently
+  // ignored because useState only reads the initial value on first render.
+  // This is the fix for the "Informe enviado" button staying visible after submit.
+  const prevInitialPeriodoRef = useRef(initialPeriodo)
+  useEffect(() => {
+    if (prevInitialPeriodoRef.current !== initialPeriodo) {
+      prevInitialPeriodoRef.current = initialPeriodo
+      setPeriodo(initialPeriodo)
+      // Keep numPlanilla input in sync with any server-side value change
+      if (initialPeriodo?.numero_planilla) {
+        setNumPlanilla(initialPeriodo.numero_planilla)
+      }
+    }
+  }, [initialPeriodo])
+
   // Action state
   const [procesando, setProcesando] = useState(false)
   const [mostrarRechazo, setMostrarRechazo] = useState(false)
@@ -339,7 +356,7 @@ export default function PeriodoDetallePage({
     setEnviando(true)
     const result = await enviarPeriodo(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Informe enviado a revisión'); cargarDatos() }
+    else { toast.success('Informe enviado a revisión'); router.refresh(); cargarDatos() }
     setEnviando(false)
   }
 
@@ -347,7 +364,7 @@ export default function PeriodoDetallePage({
     setProcesando(true)
     const result = await aprobarComoAsesor(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Informe aprobado como asesor'); cargarDatos() }
+    else { toast.success('Informe aprobado como asesor'); router.refresh(); cargarDatos() }
     setProcesando(false)
   }
 
@@ -355,7 +372,7 @@ export default function PeriodoDetallePage({
     setProcesando(true)
     const result = await revocarPreaprobacion(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Aprobación revocada'); cargarDatos() }
+    else { toast.success('Aprobación revocada'); router.refresh(); cargarDatos() }
     setProcesando(false)
   }
 
@@ -367,7 +384,7 @@ export default function PeriodoDetallePage({
       toast.success('Informe devuelto al contratista')
       setMostrarRechazo(false)
       setMotivoRechazo('')
-      cargarDatos()
+      router.refresh(); cargarDatos()
     }
     setProcesando(false)
   }
@@ -376,7 +393,7 @@ export default function PeriodoDetallePage({
     setProcesando(true)
     const result = await aprobarPeriodos([periodoId])
     if (result.error) toast.error(result.error)
-    else { toast.success('Informe aprobado'); cargarDatos() }
+    else { toast.success('Informe aprobado'); router.refresh(); cargarDatos() }
     setProcesando(false)
   }
 
@@ -388,7 +405,7 @@ export default function PeriodoDetallePage({
       toast.success('Devuelto a los asesores para revisión')
       setMostrarRechazo(false)
       setMotivoRechazo('')
-      cargarDatos()
+      router.refresh(); cargarDatos()
     }
     setProcesando(false)
   }
@@ -402,7 +419,7 @@ export default function PeriodoDetallePage({
         ? `Radicado con No. ${numRadicado.trim()} ✓`
         : 'Periodo marcado como radicado'
       toast.success(msg)
-      cargarDatos()
+      router.refresh(); cargarDatos()
     }
     setRadicando(false)
   }
@@ -451,7 +468,7 @@ export default function PeriodoDetallePage({
       toast.success(`Periodo devuelto a ${label}`)
       setDestinoDevolver(null)
       setMotivoDevolver('')
-      cargarDatos()
+      router.refresh(); cargarDatos()
     }
     setProcesandoDevolver(false)
   }
