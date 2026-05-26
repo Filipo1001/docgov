@@ -85,42 +85,54 @@ export default function NotificacionesBell() {
     cargar()
 
     const supabase = createClient()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let mounted = true
 
     // ── Realtime: walkie-talkie siempre abierto con la DB ───────────────────
-    // Solo dispara cuando hay un INSERT o UPDATE real en la tabla.
-    // Cero carga sobre la DB mientras no hay actividad — a diferencia del
-    // polling que preguntaba cada N minutos sin importar si había cambios.
-    const channel = supabase
-      .channel(`notificaciones_usuario_${usuario.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notificaciones',
-          filter: `usuario_id=eq.${usuario.id}`,
-        },
-        () => cargar()
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notificaciones',
-          filter: `usuario_id=eq.${usuario.id}`,
-        },
-        () => cargar()
-      )
-      .subscribe()
+    // @supabase/ssr resuelve el estado de sesión de forma asíncrona al montar.
+    // Si suscribimos el canal ANTES de que getSession() resuelva, el WebSocket
+    // sale con solo el apikey (sin JWT) y el servidor responde 401.
+    // Solución: esperar la sesión, inyectarla con setAuth(), luego suscribir.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return // componente desmontado antes de que resolviera
+
+      // Inyectar el JWT para que postgres_changes pueda verificar RLS
+      if (session?.access_token) {
+        supabase.realtime.setAuth(session.access_token)
+      }
+
+      channel = supabase
+        .channel(`notificaciones_usuario_${usuario.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notificaciones',
+            filter: `usuario_id=eq.${usuario.id}`,
+          },
+          () => cargar()
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notificaciones',
+            filter: `usuario_id=eq.${usuario.id}`,
+          },
+          () => cargar()
+        )
+        .subscribe()
+    })
 
     // ── Fallback poll cada 15 min ─────────────────────────────────────────────
     // Red de seguridad por si el WebSocket se desconecta silenciosamente.
-    // 15 min en vez de 5 min porque el Realtime cubre el 99% de los casos.
     const fallback = setInterval(cargar, 15 * 60 * 1000)
 
     return () => {
-      supabase.removeChannel(channel)
+      mounted = false
+      if (channel) supabase.removeChannel(channel)
       clearInterval(fallback)
     }
   }, [usuario, cargar])
