@@ -13,6 +13,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(destination, { status: 301 })
   }
 
+  // ── Fast path: skip auth for Next.js prefetch requests ──────────────────────
+  // When a <Link> enters the viewport Next.js fires a prefetch request with the
+  // header "Next-Router-Prefetch: 1".  With 20+ contract links visible on the
+  // dashboard this creates a burst of 20+ simultaneous middleware invocations,
+  // each calling getUser() which ALWAYS hits the Supabase Auth network endpoint.
+  // Prefetches don't need token refresh — the real navigation re-runs middleware
+  // if the token is actually expired.  Skipping here reduces Auth server load by
+  // ~95% and eliminates the "exhausting resources" burst pattern in the logs.
+  if (request.headers.get('Next-Router-Prefetch') === '1') {
+    return NextResponse.next({ request })
+  }
+
   // ── Fast path: skip auth refresh when there is no session ────
   // getUser() calls the Supabase auth server to validate / refresh the token.
   // When there is no session cookie at all the user is unauthenticated and
