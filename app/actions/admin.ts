@@ -388,6 +388,110 @@ export async function actualizarMunicipio(
   return {}
 }
 
+// ─── Eliminar usuario ─────────────────────────────────────────
+
+/**
+ * Elimina un usuario del sistema con dos modos:
+ *
+ *  incluirContrato = false → Solo elimina el usuario. Los contratos
+ *    asociados permanecen pero pierden la referencia al contratista.
+ *
+ *  incluirContrato = true  → Elimina el usuario Y sus contratos
+ *    (incluyendo periodos, actividades y evidencias por CASCADE).
+ *
+ * Orden de operaciones (resuelve todas las FK con NO ACTION antes de borrar):
+ *   1. Contratos: borrar o desvincular contratista_id
+ *   2. Contratos: desvincular supervisor_id (siempre)
+ *   3. periodos.historico_marcado_por → NULL
+ *   4. documentos.generado_por → NULL
+ *   5. aprobaciones where usuario_id → DELETE
+ *   6. historial_periodos.usuario_id → NULL (fallback: DELETE si NOT NULL)
+ *   7. usuarios → DELETE (CASCADE: notificaciones, preaprobaciones, preferencias)
+ *   8. auth.users → DELETE (siempre al final)
+ */
+export async function eliminarUsuario(
+  userId: string,
+  incluirContrato: boolean,
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  if (!admin) return { error: 'No autorizado' }
+  if (userId === admin.userId) return { error: 'No puedes eliminar tu propia cuenta de administrador' }
+
+  const adminClient = createAdminSupabaseClient()
+
+  try {
+    // 1. Contratos del contratista
+    if (incluirContrato) {
+      const { error } = await adminClient
+        .from('contratos')
+        .delete()
+        .eq('contratista_id', userId)
+      if (error) throw new Error(`Error eliminando contratos: ${error.message}`)
+    } else {
+      // Desvincular sin borrar el contrato
+      await adminClient
+        .from('contratos')
+        .update({ contratista_id: null })
+        .eq('contratista_id', userId)
+    }
+
+    // 2. Desvincular rol de supervisor en cualquier contrato
+    await adminClient
+      .from('contratos')
+      .update({ supervisor_id: null })
+      .eq('supervisor_id', userId)
+
+    // 3. Desvincular referencia en periodos
+    await adminClient
+      .from('periodos')
+      .update({ historico_marcado_por: null })
+      .eq('historico_marcado_por', userId)
+
+    // 4. Desvincular referencia en documentos generados
+    await adminClient
+      .from('documentos')
+      .update({ generado_por: null })
+      .eq('generado_por', userId)
+
+    // 5. Eliminar aprobaciones (sin usuario no tienen sentido)
+    await adminClient
+      .from('aprobaciones')
+      .delete()
+      .eq('usuario_id', userId)
+
+    // 6. historial_periodos: intentar NULL; si la columna es NOT NULL, borrar esas filas
+    const { error: historialError } = await adminClient
+      .from('historial_periodos')
+      .update({ usuario_id: null })
+      .eq('usuario_id', userId)
+    if (historialError) {
+      await adminClient
+        .from('historial_periodos')
+        .delete()
+        .eq('usuario_id', userId)
+    }
+
+    // 7. Eliminar el usuario (CASCADE: notificaciones, preaprobaciones, preferencias_notificacion)
+    const { error: usuarioError } = await adminClient
+      .from('usuarios')
+      .delete()
+      .eq('id', userId)
+    if (usuarioError) throw new Error(`Error eliminando usuario: ${usuarioError.message}`)
+
+    // 8. Eliminar de auth.users (siempre al final)
+    const { error: authError } = await adminClient.auth.admin.deleteUser(userId)
+    if (authError) throw new Error(`Error eliminando cuenta de acceso: ${authError.message}`)
+
+    revalidatePath('/dashboard/admin/usuarios')
+    revalidatePath('/dashboard')
+    return {}
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar el usuario'
+    console.error('[eliminarUsuario]', err)
+    return { error: msg }
+  }
+}
+
 // ─── Firma management ─────────────────────────────────────────
 
 /**

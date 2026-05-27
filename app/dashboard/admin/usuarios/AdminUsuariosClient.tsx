@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
-import { activarContratista } from '@/app/actions/admin'
+import { activarContratista, eliminarUsuario } from '@/app/actions/admin'
 import { formatCedula } from '@/lib/format'
 import type { UsuarioAdmin, ContratistaPendiente, Dependencia } from '@/services/admin'
 
@@ -209,6 +209,161 @@ function ActivarModal({
   )
 }
 
+// ── Delete modal ───────────────────────────────────────────────
+
+function EliminarUsuarioModal({
+  usuario,
+  onClose,
+  onDone,
+}: {
+  usuario: UsuarioAdmin
+  onClose: () => void
+  onDone: (id: string) => void
+}) {
+  const [opcion, setOpcion] = useState<'solo' | 'con_contrato' | null>(null)
+  const [confirmado, setConfirmado] = useState(false)
+  const [procesando, setProcesando] = useState(false)
+
+  const contratos = usuario.contratos ?? []
+  const tieneContrato = contratos.length > 0
+
+  async function handleEliminar() {
+    if (!opcion || !confirmado) return
+    setProcesando(true)
+    const result = await eliminarUsuario(usuario.id, opcion === 'con_contrato')
+    setProcesando(false)
+    if (result.error) { toast.error(result.error); return }
+    toast.success('Usuario eliminado correctamente')
+    onDone(usuario.id)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-lg shrink-0">🗑️</div>
+          <div>
+            <h3 className="font-bold text-gray-900 text-base">Eliminar usuario</h3>
+            <p className="text-sm text-gray-500 mt-0.5">{usuario.nombre_completo}</p>
+          </div>
+        </div>
+
+        {/* Warning banner */}
+        <div className="flex gap-2.5 bg-red-50 border border-red-200 rounded-xl px-3.5 py-3 mb-5">
+          <span className="text-red-500 text-sm shrink-0 mt-0.5">⚠️</span>
+          <p className="text-xs text-red-700 leading-relaxed">
+            Esta acción es <strong>irreversible</strong>. El usuario perderá el acceso al sistema de inmediato.
+          </p>
+        </div>
+
+        {/* Options */}
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+          ¿Qué deseas eliminar?
+        </p>
+
+        <div className="space-y-2.5 mb-5">
+
+          {/* Opción 1: Solo usuario */}
+          <button
+            onClick={() => { setOpcion('solo'); setConfirmado(false) }}
+            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+              opcion === 'solo'
+                ? 'border-gray-900 bg-gray-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 flex items-center justify-center transition-colors ${
+                opcion === 'solo' ? 'border-gray-900' : 'border-gray-300'
+              }`}>
+                {opcion === 'solo' && <div className="w-2 h-2 rounded-full bg-gray-900" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Solo eliminar usuario</p>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  {tieneContrato
+                    ? <>El contrato {contratos.map(c => <strong key={c.id}>N.° {c.numero}</strong>).reduce<React.ReactNode[]>((acc, el, i) => i === 0 ? [el] : [...acc, ', ', el], [])} permanece en el sistema sin contratista vinculado.</>
+                    : 'Este usuario no tiene contrato vinculado. Solo se eliminará su cuenta.'}
+                </p>
+              </div>
+            </div>
+          </button>
+
+          {/* Opción 2: Usuario + contrato */}
+          <button
+            onClick={() => { if (!tieneContrato) return; setOpcion('con_contrato'); setConfirmado(false) }}
+            disabled={!tieneContrato}
+            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+              !tieneContrato
+                ? 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-60'
+                : opcion === 'con_contrato'
+                  ? 'border-red-500 bg-red-50'
+                  : 'border-gray-200 hover:border-red-300'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 flex items-center justify-center transition-colors ${
+                opcion === 'con_contrato' ? 'border-red-500' : 'border-gray-300'
+              }`}>
+                {opcion === 'con_contrato' && <div className="w-2 h-2 rounded-full bg-red-500" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  Eliminar usuario y contrato vinculado
+                </p>
+                {tieneContrato ? (
+                  <p className="text-xs text-red-600 mt-1 leading-relaxed">
+                    Se eliminarán {contratos.map(c => <strong key={c.id}>Contrato N.° {c.numero}</strong>).reduce<React.ReactNode[]>((acc, el, i) => i === 0 ? [el] : [...acc, ' y ', el], [])}, incluyendo todos sus periodos, actividades y evidencias.
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Este usuario no tiene contrato vinculado — opción no disponible.
+                  </p>
+                )}
+              </div>
+            </div>
+          </button>
+        </div>
+
+        {/* Confirmación */}
+        {opcion && (
+          <label className="flex items-start gap-2.5 mb-5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={confirmado}
+              onChange={e => setConfirmado(e.target.checked)}
+              className="w-4 h-4 mt-0.5 rounded accent-gray-900 shrink-0"
+            />
+            <span className="text-xs text-gray-600 leading-relaxed">
+              Entiendo que esta acción es <strong>irreversible</strong> y confirmo que deseo continuar con la eliminación.
+            </span>
+          </label>
+        )}
+
+        {/* Botones */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleEliminar}
+            disabled={!opcion || !confirmado || procesando}
+            className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {procesando ? 'Eliminando...' : 'Confirmar eliminación'}
+          </button>
+          <button
+            onClick={onClose}
+            disabled={procesando}
+            className="px-4 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main client ────────────────────────────────────────────────
 
 export default function AdminUsuariosClient({
@@ -221,11 +376,12 @@ export default function AdminUsuariosClient({
   dependencias: Dependencia[]
 }) {
   const [tab, setTab]           = useState<'activos' | 'pendientes'>('activos')
-  const [usuarios]              = useState(initialUsuarios)
+  const [usuarios, setUsuarios] = useState(initialUsuarios)
   const [pendientes, setPendientes] = useState(initialPendientes)
   const [busqueda, setBusqueda] = useState('')
   const [filtroRol, setFiltroRol] = useState('')
   const [activando, setActivando] = useState<ContratistaPendiente | null>(null)
+  const [eliminando, setEliminando] = useState<UsuarioAdmin | null>(null)
 
   const usuariosFiltrados = usuarios.filter(u => {
     const q = norm(busqueda)
@@ -240,10 +396,14 @@ export default function AdminUsuariosClient({
 
   function onActivado() {
     setActivando(null)
-    // Remove the activated contractor from the local list optimistically
     if (activando) {
       setPendientes(prev => prev.filter(p => p.id !== activando.id))
     }
+  }
+
+  function onEliminado(id: string) {
+    setEliminando(null)
+    setUsuarios(prev => prev.filter(u => u.id !== id))
   }
 
   return (
@@ -336,10 +496,18 @@ export default function AdminUsuariosClient({
                     <td className="px-5 py-3.5 text-sm text-gray-600">{u.cargo ?? '—'}</td>
                     <td className="px-5 py-3.5 text-sm text-gray-600">{u.dependencia?.nombre ?? '—'}</td>
                     <td className="px-5 py-3.5 text-right">
-                      <Link href={`/dashboard/admin/usuarios/${u.id}`}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                        Editar →
-                      </Link>
+                      <div className="flex items-center justify-end gap-3">
+                        <Link href={`/dashboard/admin/usuarios/${u.id}`}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                          Editar →
+                        </Link>
+                        <button
+                          onClick={() => setEliminando(u)}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -399,6 +567,15 @@ export default function AdminUsuariosClient({
           dependencias={dependencias}
           onClose={() => setActivando(null)}
           onDone={onActivado}
+        />
+      )}
+
+      {/* Delete modal */}
+      {eliminando && (
+        <EliminarUsuarioModal
+          usuario={eliminando}
+          onClose={() => setEliminando(null)}
+          onDone={onEliminado}
         />
       )}
     </div>

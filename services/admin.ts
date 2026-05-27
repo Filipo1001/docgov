@@ -24,6 +24,8 @@ export interface UsuarioAdmin {
   banco?: string
   tipo_cuenta?: string
   numero_cuenta?: string
+  /** Contratos donde este usuario es el contratista principal */
+  contratos?: Array<{ id: string; numero: string }>
 }
 
 export interface ContratistaPendiente {
@@ -60,7 +62,29 @@ export async function getUsuariosAdmin(): Promise<UsuarioAdmin[]> {
     .from('usuarios')
     .select('id, nombre_completo, cedula, rol, cargo, telefono, rh, foto_url, tipo_documento, dependencia_id, dependencia:dependencias(id, nombre)')
     .order('nombre_completo')
-  return (data ?? []) as unknown as UsuarioAdmin[]
+
+  if (!data || data.length === 0) return []
+
+  // Fetch contracts for all users in a single query (avoids N+1)
+  const { data: contratos } = await supabase
+    .from('contratos')
+    .select('id, numero, contratista_id')
+    .in('contratista_id', data.map(u => u.id))
+
+  const contratoMap = (contratos ?? []).reduce<Record<string, Array<{ id: string; numero: string }>>>(
+    (acc, c) => {
+      const uid = c.contratista_id as string
+      if (!acc[uid]) acc[uid] = []
+      acc[uid].push({ id: c.id as string, numero: c.numero as string })
+      return acc
+    },
+    {}
+  )
+
+  return data.map(u => ({
+    ...u,
+    contratos: contratoMap[u.id] ?? [],
+  })) as unknown as UsuarioAdmin[]
 }
 
 export async function getUsuarioAdmin(id: string): Promise<UsuarioAdmin | null> {
