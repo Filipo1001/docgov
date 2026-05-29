@@ -428,8 +428,11 @@ export default function InformesPage({
     enabled: !!usuario,
     // 60 s cache — return-visits within that window show data instantly.
     // refetchInterval handles background freshness regardless.
+    // Raised 30s → 60s; TanStack pauses the interval while the tab is hidden
+    // (refetchIntervalInBackground defaults to false), so this cuts background
+    // query load without users noticing.
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     // Pre-populate with SSR data for the initial month so there is zero
     // loading spinner on first render, even before the client fetches.
     initialData: isInitialMonth ? initialPeriodos : undefined,
@@ -441,7 +444,7 @@ export default function InformesPage({
     queryFn: () => getInformesBorrador(mesNombre, anio, depId),
     enabled: !!usuario,
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     initialData: isInitialMonth ? initialBorradores : undefined,
     initialDataUpdatedAt: isInitialMonth ? ssrTimestamp : undefined,
   })

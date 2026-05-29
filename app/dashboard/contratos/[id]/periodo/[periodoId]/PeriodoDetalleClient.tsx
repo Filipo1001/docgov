@@ -237,10 +237,23 @@ export default function PeriodoDetallePage({
   // No initial useEffect fetch — data arrives as SSR props (see page.tsx).
   // cargarDatos is called explicitly after mutations and by the 30s poller below.
 
-  // Background polling every 30s — contratista sees estado changes without manual refresh
+  // Background polling — contratista sees estado changes without manual refresh.
+  // Interval raised 30s → 90s and paused while the tab is hidden to cut the
+  // background query load on Supabase (Disk IO). When the tab regains focus we
+  // fetch once immediately so the user never sees stale data on return.
   useEffect(() => {
-    const timer = setInterval(() => cargarDatos(true), 30_000)
-    return () => clearInterval(timer)
+    const tick = () => {
+      if (document.visibilityState === 'visible') cargarDatos(true)
+    }
+    const timer = setInterval(tick, 90_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') cargarDatos(true)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [cargarDatos])
 
   // Dismiss delete-confirm on click-outside or Escape

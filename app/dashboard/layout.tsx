@@ -74,8 +74,18 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     }
 
     fetchPendientes()
-    const timer = setInterval(fetchPendientes, 60_000)
-    return () => clearInterval(timer)
+    // Interval raised 60s → 120s and paused while the tab is hidden to reduce
+    // the steady background load on Supabase. A visibility listener refetches
+    // once on return so the badge is up to date when the user comes back.
+    const tick = () => {
+      if (document.visibilityState === 'visible') fetchPendientes()
+    }
+    const timer = setInterval(tick, 120_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
+    }
   }, [usuario])
 
   const menuItems = usuario ? getMenuPorRol(usuario.rol) : []
