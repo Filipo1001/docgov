@@ -13,6 +13,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(destination, { status: 301 })
   }
 
+  // ── Maintenance mode ──────────────────────────────────────────
+  // Activated by setting MAINTENANCE_MODE=1 in Vercel env vars.
+  // Takes effect in ~30 s without a redeploy.
+  // Redirects ALL routes to /maintenance except the page itself.
+  if (process.env.MAINTENANCE_MODE === '1') {
+    if (!request.nextUrl.pathname.startsWith('/maintenance')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/maintenance'
+      return NextResponse.redirect(url)
+    }
+    return NextResponse.next({ request })
+  }
+
   // ── Fast path: skip auth for Next.js prefetch requests ──────────────────────
   // When a <Link> enters the viewport Next.js fires a prefetch request with the
   // header "Next-Router-Prefetch: 1".  With 20+ contract links visible on the
