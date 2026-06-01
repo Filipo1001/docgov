@@ -2,11 +2,11 @@
  * GET /api/pdf/[periodoId]/paquete
  *
  * Descarga un ZIP con los 5 documentos del periodo:
- *   01_Informe_de_Actividades.pdf
- *   02_Cuenta_de_Cobro.pdf
- *   03_Acta_de_Supervision.pdf
- *   04_Acta_de_Pago.pdf
- *   05_Planilla_Seguridad_Social.{ext}  (si está adjunta)
+ *   Informe_de_Actividades.pdf
+ *   Cuenta_de_Cobro.pdf
+ *   Acta_de_Supervision.pdf
+ *   Acta_de_Pago.pdf
+ *   Planilla_Seguridad_Social.{ext}  (si está adjunta)
  *
  * Acceso: solo asesor / supervisor / admin
  * Condición: periodo debe estar en estado 'aprobado' o 'radicado'
@@ -172,12 +172,12 @@ export async function GET(
   const zip    = new JSZip()
   const folder = zip.folder(folderName)!
 
-  folder.file('01_Informe_de_Actividades.pdf', informeBuffer)
-  folder.file('02_Cuenta_de_Cobro.pdf',        cuentaBuffer)
-  folder.file('03_Acta_de_Supervision.pdf',    supervisionBuffer)
-  folder.file('04_Acta_de_Pago.pdf',           pagoBuffer)
+  folder.file('Informe_de_Actividades.pdf', informeBuffer)
+  folder.file('Cuenta_de_Cobro.pdf',        cuentaBuffer)
+  folder.file('Acta_de_Supervision.pdf',    supervisionBuffer)
+  folder.file('Acta_de_Pago.pdf',           pagoBuffer)
   if (planillaBuffer) {
-    folder.file(`05_Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
+    folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
   }
 
   // STORE (level 0): PDFs are already compressed — DEFLATE wastes CPU with no size gain

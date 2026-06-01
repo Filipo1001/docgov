@@ -2,9 +2,9 @@
  * GET /api/pdf/[periodoId]/secop
  *
  * Descarga un ZIP con los 3 documentos requeridos para SECOP:
- *   01_Informe_de_Actividades.pdf
- *   02_Cuenta_de_Cobro.pdf
- *   03_Planilla_Seguridad_Social.{ext}  (si está adjunta)
+ *   Informe_de_Actividades.pdf
+ *   Cuenta_de_Cobro.pdf
+ *   Planilla_Seguridad_Social.{ext}  (si está adjunta)
  *
  * Acceso: contratista del contrato + asesor / supervisor / admin
  * Condición: periodo debe estar en estado 'aprobado' o 'radicado'
@@ -106,10 +106,10 @@ export async function GET(
   const zip    = new JSZip()
   const folder = zip.folder(folderName)!
 
-  folder.file('01_Informe_de_Actividades.pdf', informeBuffer)
-  folder.file('02_Cuenta_de_Cobro.pdf',        cuentaBuffer)
+  folder.file('Informe_de_Actividades.pdf', informeBuffer)
+  folder.file('Cuenta_de_Cobro.pdf',        cuentaBuffer)
   if (planillaBuffer) {
-    folder.file(`03_Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
+    folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
   }
 
   const zipBuffer = await zip.generateAsync({

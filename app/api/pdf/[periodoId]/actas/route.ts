@@ -2,8 +2,8 @@
  * GET /api/pdf/[periodoId]/actas
  *
  * Descarga un ZIP con los dos documentos institucionales del periodo:
- *   01_Acta_de_Supervision.pdf
- *   02_Acta_de_Pago.pdf
+ *   Acta_de_Supervision.pdf
+ *   Acta_de_Pago.pdf
  *
  * Acceso: asesor / supervisor / admin
  * Condición: periodo debe estar en estado 'aprobado' o 'radicado'
@@ -105,8 +105,8 @@ export async function GET(
 
   const zip    = new JSZip()
   const folder = zip.folder(folderName)!
-  folder.file('01_Acta_de_Supervision.pdf', actaSupervisionBuffer)
-  folder.file('02_Acta_de_Pago.pdf',        actaPagoBuffer)
+  folder.file('Acta_de_Supervision.pdf', actaSupervisionBuffer)
+  folder.file('Acta_de_Pago.pdf',        actaPagoBuffer)
 
   // STORE (level 0): PDFs are already compressed — DEFLATE wastes CPU with no size gain
   const zipBuffer = await zip.generateAsync({
