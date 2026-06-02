@@ -29,7 +29,7 @@ export async function actualizarActividad(
   try {
     const trimmed = descripcion.trim()
     if (!trimmed) return { error: 'La descripción no puede estar vacía' }
-    if (trimmed.length > 500) return { error: 'La descripción no puede superar los 500 caracteres' }
+    if (trimmed.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
     if (cantidad < 1 || !Number.isInteger(cantidad)) {
       return { error: 'La cantidad debe ser un número entero mayor a 0' }
     }
@@ -100,7 +100,7 @@ export async function crearActividad(params: {
   try {
     const trimmed = params.descripcion.trim()
     if (!trimmed) return { error: 'La descripción no puede estar vacía' }
-    if (trimmed.length > 500) return { error: 'La descripción no puede superar los 500 caracteres' }
+    if (trimmed.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
     if (params.cantidad < 1 || !Number.isInteger(params.cantidad)) {
       return { error: 'La cantidad debe ser un número entero mayor a 0' }
     }
