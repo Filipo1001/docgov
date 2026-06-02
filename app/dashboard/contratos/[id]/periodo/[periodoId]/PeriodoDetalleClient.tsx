@@ -175,6 +175,8 @@ export default function PeriodoDetallePage({
 
   // Planilla dropdown state
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
+  // Descarga del paquete desde el pipeline (con feedback)
+  const [descargandoPaquete, setDescargandoPaquete] = useState(false)
   const [subiendoPlanilla, setSubiendoPlanilla] = useState(false)
 
   // Inline planilla rejection form (replaces window.prompt)
@@ -894,6 +896,40 @@ export default function PeriodoDetallePage({
     setGuardandoMesCotizacion(false)
   }
 
+  // Descarga del paquete ZIP desde el nodo del pipeline, con feedback de progreso.
+  // Hace fetch del ZIP (mostrando toast + spinner) y dispara la descarga al llegar,
+  // en vez de un <a download> silencioso que deja al usuario sin saber qué pasa.
+  async function handleDescargarPaquete(href: string) {
+    if (descargandoPaquete) return
+    setDescargandoPaquete(true)
+    const toastId = toast.loading('Generando documentos…')
+    try {
+      const res = await fetch(href)
+      if (!res.ok) throw new Error('No se pudo generar el paquete')
+      const blob = await res.blob()
+
+      // Nombre de archivo desde Content-Disposition, con fallback razonable
+      const cd = res.headers.get('Content-Disposition') ?? ''
+      const match = cd.match(/filename="?([^"]+)"?/)
+      const nombre = match?.[1] ?? `documentos_${periodo?.mes ?? ''}_${periodo?.anio ?? ''}.zip`
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = nombre
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+
+      toast.success('Descarga lista ✓', { id: toastId })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al descargar', { id: toastId })
+    } finally {
+      setDescargandoPaquete(false)
+    }
+  }
+
   // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
   const puedeRevisarPlanilla = (esAsesor && !esSecretaria) // asesor o admin (no supervisor puro)
 
@@ -1135,16 +1171,23 @@ export default function PeriodoDetallePage({
                     : active ? 'bg-gray-900 text-white ring-2 ring-gray-900 ring-offset-2'
                     : 'bg-gray-100 text-gray-400'
                 }`}>
-                  {/* En hover, el nodo descargable revela el ícono de descarga */}
+                  {/* Nodo descargable: spinner si está descargando, si no check→descarga en hover */}
                   {esNodoDescargable ? (
-                    <>
-                      <svg className="w-3.5 h-3.5 group-hover:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    descargandoPaquete ? (
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <svg className="w-3.5 h-3.5 hidden group-hover:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                      </svg>
-                    </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5 group-hover:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <svg className="w-3.5 h-3.5 hidden group-hover:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                      </>
+                    )
                   ) : done ? (
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -1168,15 +1211,16 @@ export default function PeriodoDetallePage({
               return (
                 <div key={step.estado} className="flex items-center flex-1 min-w-0">
                   {esNodoDescargable ? (
-                    <a
-                      href={zipPipelineHref}
-                      download
+                    <button
+                      type="button"
+                      onClick={() => zipPipelineHref && handleDescargarPaquete(zipPipelineHref)}
+                      disabled={descargandoPaquete}
                       title={`Descargar ${esContratista ? 'documentos SECOP' : 'actas'} (${step.short})`}
-                      className="group flex flex-col items-center flex-shrink-0 -m-2 p-2 cursor-pointer"
+                      className="group flex flex-col items-center flex-shrink-0 -m-2 p-2 cursor-pointer disabled:cursor-wait"
                     >
                       {circulo}
                       {etiqueta}
-                    </a>
+                    </button>
                   ) : (
                     <div className="flex flex-col items-center flex-shrink-0">
                       {circulo}

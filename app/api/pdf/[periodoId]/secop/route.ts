@@ -16,6 +16,7 @@ import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
+import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -62,21 +63,41 @@ export async function GET(
     .eq('id', periodoId)
     .single()
 
-  const [
-    { renderToBuffer },
-    React,
-    { InformeActividadesPDF },
-    { CuentaDeCobroPDF },
-  ] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import('react'),
-    import('@/lib/pdf/informe-actividades'),
-    import('@/lib/pdf/cuenta-de-cobro'),
-  ])
+  const estado = data.periodo.estado
 
+  // Informe y Cuenta de Cobro: cache-first (igual que /actas). La primera
+  // descarga genera y cachea; las siguientes se sirven desde Storage casi
+  // instantáneamente. Los tipos 'informe' y 'cuenta-cobro' ya son invalidados
+  // por invalidarCachePDF cuando cambia el estado del periodo.
   const [informeBuffer, cuentaBuffer, planillaResult] = await Promise.all([
-    renderToBuffer(React.createElement(InformeActividadesPDF, { data }) as any) as unknown as Promise<Buffer>,
-    renderToBuffer(React.createElement(CuentaDeCobroPDF,      { data }) as any) as unknown as Promise<Buffer>,
+    getOrGeneratePDFBuffer({
+      supabase,
+      tipo: 'informe',
+      periodoId,
+      estado,
+      generate: async () => {
+        const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
+          import('@react-pdf/renderer'),
+          import('react'),
+          import('@/lib/pdf/informe-actividades'),
+        ])
+        return renderToBuffer(React.createElement(InformeActividadesPDF, { data }) as any) as unknown as Promise<Buffer>
+      },
+    }),
+    getOrGeneratePDFBuffer({
+      supabase,
+      tipo: 'cuenta-cobro',
+      periodoId,
+      estado,
+      generate: async () => {
+        const [{ renderToBuffer }, React, { CuentaDeCobroPDF }] = await Promise.all([
+          import('@react-pdf/renderer'),
+          import('react'),
+          import('@/lib/pdf/cuenta-de-cobro'),
+        ])
+        return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data }) as any) as unknown as Promise<Buffer>
+      },
+    }),
     planillaPromise,
   ])
 
