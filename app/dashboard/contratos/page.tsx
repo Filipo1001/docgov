@@ -3,25 +3,26 @@
 /**
  * /dashboard/contratos
  *
- * Lista de contratos paginada con TanStack Query + virtualización.
+ * Lista de contratos con carga única + búsqueda/filtros en cliente.
  *
- *  - useInfiniteQuery: carga 30 contratos por página, auto-fetch al scroll
- *  - useWindowVirtualizer: renderiza solo lo visible (manejable con sidebar fijo)
- *  - Filtros estructurados (dependencia, supervisor, rango, vigencia) → queryKey
- *  - Búsqueda: debounce 300 ms → queryKey
- *  - "Solo incompletos" → post-filter client-side sobre páginas cargadas
+ *  - useQuery: trae todos los contratos del rol en UNA sola consulta
+ *    (elimina los múltiples viajes de red y el count:'exact' por página)
+ *  - useWindowVirtualizer: renderiza solo lo visible
+ *  - Búsqueda instantánea por nombre/apellido/cédula/N° contrato/objeto
+ *    (debounce ligero solo para no recalcular en cada pulsación)
+ *  - Filtros estructurados (dependencia, supervisor, rango, vigencia,
+ *    incompletos) aplicados en cliente sobre el dataset completo
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula } from '@/lib/format'
 import {
-  getContratosPagina,
+  getTodosContratos,
   type ContratoListItem,
-  type FiltrosContratos,
 } from '@/services/contratos'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -205,49 +206,23 @@ export default function ContratosPage() {
   const [soloIncompletos, setSoloInc] = useState(false)
   const [filtroVigencia, setFiltroVig] = useState<'todos' | 'vigentes' | 'vencidos'>('todos')
 
-  const busquedaDebounced = useDebounced(busqueda, 300)
+  const busquedaDebounced = useDebounced(busqueda, 200)
 
-  const filtros = useMemo<FiltrosContratos>(() => {
-    const r = RANGOS[filtroRango]
-    return {
-      q: busquedaDebounced || undefined,
-      dependenciaId: filtroDep || undefined,
-      supervisorId: filtroSup || undefined,
-      rangoMin: r.min > 0 ? r.min : undefined,
-      rangoMax: Number.isFinite(r.max) ? r.max : undefined,
-      vigencia: filtroVigencia,
-    }
-  }, [busquedaDebounced, filtroDep, filtroSup, filtroRango, filtroVigencia])
-
-  // ── Infinite query ─────────────────────────────────────────────
+  // ── Carga única de todos los contratos del rol ─────────────────
   const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
+    data: todosContratos,
     isLoading,
     isError,
     refetch,
-  } = useInfiniteQuery({
-    queryKey: ['contratos', usuario?.id, usuario?.rol, filtros],
-    queryFn: ({ pageParam }) =>
-      getContratosPagina({
-        pageParam,
-        rol: usuario!.rol,
-        userId: usuario!.id,
-        filtros,
-      }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => lastPage.nextOffset,
+  } = useQuery({
+    queryKey: ['contratos-todos', usuario?.id, usuario?.rol],
+    queryFn: () => getTodosContratos({ rol: usuario!.rol, userId: usuario!.id }),
     enabled: !!usuario,
+    staleTime: 2 * 60_000, // 2 min: volver a la lista no re-consulta
   })
 
-  // ── Flatten + post-filter (solo incompletos) ──────────────────
-  const todosCargados = useMemo(
-    () => data?.pages.flatMap((p) => p.items) ?? [],
-    [data],
-  )
-  const total = data?.pages[0]?.total ?? 0
+  const todosCargados = useMemo(() => todosContratos ?? [], [todosContratos])
+  const total = todosCargados.length
 
   function datosFaltantes(c: ContratoListItem): string[] {
     if (!esAdmin || !c.contratista) return []
@@ -262,13 +237,38 @@ export default function ContratosPage() {
     return f
   }
 
+  // ── Filtrado + búsqueda 100% en cliente sobre el dataset completo ──
   const visibles = useMemo(() => {
-    if (!soloIncompletos) return todosCargados
-    return todosCargados.filter((c) => datosFaltantes(c).length > 0)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todosCargados, soloIncompletos, esAdmin])
+    const r = RANGOS[filtroRango]
+    const q = norm(busquedaDebounced)
 
-  // ── Derived filter options (solo de lo cargado) ───────────────
+    return todosCargados.filter((c) => {
+      // Búsqueda: nombre/apellidos, cédula, N° contrato, objeto
+      if (q) {
+        const cedula = (c.contratista?.cedula ?? '').toLowerCase()
+        const haystack = norm(
+          `${c.contratista?.nombre_completo ?? ''} ${c.numero} ${c.objeto}`,
+        )
+        if (!haystack.includes(q) && !cedula.includes(q.replace(/\s/g, ''))) return false
+      }
+      // Dependencia / supervisor
+      if (filtroDep && c.dependencia?.id !== filtroDep) return false
+      if (filtroSup && c.supervisor?.id !== filtroSup) return false
+      // Rango de valor mensual
+      const vm = c.valor_mensual ?? 0
+      if (r.min > 0 && vm < r.min) return false
+      if (Number.isFinite(r.max) && vm > r.max) return false
+      // Vigencia
+      if (filtroVigencia === 'vigentes' && c.fecha_fin < hoy) return false
+      if (filtroVigencia === 'vencidos' && c.fecha_fin >= hoy) return false
+      // Solo incompletos
+      if (soloIncompletos && datosFaltantes(c).length === 0) return false
+      return true
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todosCargados, busquedaDebounced, filtroDep, filtroSup, filtroRango, filtroVigencia, soloIncompletos, esAdmin, hoy])
+
+  // ── Opciones de filtro derivadas de TODO el dataset ───────────
   const dependencias = useMemo(() => {
     const map = new Map<string, string>()
     todosCargados.forEach((c) => {
@@ -294,20 +294,6 @@ export default function ContratosPage() {
     scrollMargin: listRef.current?.offsetTop ?? 0,
   })
 
-  // ── Auto-load more via sentinel ───────────────────────────────
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    if (!sentinelRef.current || !hasNextPage || isFetchingNextPage) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) fetchNextPage()
-      },
-      { rootMargin: '300px' },
-    )
-    observer.observe(sentinelRef.current)
-    return () => observer.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
-
   // ── Misc ──────────────────────────────────────────────────────
   const hayFiltrosActivos =
     busqueda || filtroDep || filtroSup || filtroRango > 0 || soloIncompletos || filtroVigencia !== 'todos'
@@ -322,7 +308,7 @@ export default function ContratosPage() {
   }
 
   // ── Render ────────────────────────────────────────────────────
-  if (cargandoUser || (isLoading && !data)) {
+  if (cargandoUser || isLoading) {
     return (
       <div className="space-y-3 animate-pulse">
         <div className="h-8 bg-gray-200 rounded-xl w-48 mb-6" />
@@ -377,7 +363,7 @@ export default function ContratosPage() {
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por N.º de contrato u objeto…"
+              placeholder="Buscar por contratista, cédula, N.º de contrato u objeto…"
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
             {busqueda && (
@@ -457,10 +443,8 @@ export default function ContratosPage() {
           </div>
 
           <p className="text-xs text-gray-400">
-            {soloIncompletos
-              ? `${visibles.length} incompletos cargados (de ${todosCargados.length} cargados / ${total} totales)`
-              : hayFiltrosActivos
-              ? `Mostrando ${todosCargados.length} de ${total} contratos`
+            {hayFiltrosActivos
+              ? `Mostrando ${visibles.length} de ${total} contratos`
               : `${total} contratos en total`}
           </p>
         </div>
@@ -613,23 +597,16 @@ export default function ContratosPage() {
             </div>
           </div>
 
-          {/* Sentinel + load-more indicator */}
-          <div ref={sentinelRef} className="py-6 text-center">
-            {isFetchingNextPage ? (
-              <p className="text-sm text-gray-400">Cargando más contratos…</p>
-            ) : hasNextPage ? (
-              <button
-                onClick={() => fetchNextPage()}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Cargar más
-              </button>
-            ) : todosCargados.length > 0 ? (
+          {/* Footer */}
+          {visibles.length > 0 && (
+            <div className="py-6 text-center">
               <p className="text-xs text-gray-400">
-                Se cargaron los {todosCargados.length} contratos
+                {hayFiltrosActivos
+                  ? `${visibles.length} de ${total} contratos`
+                  : `${total} contratos`}
               </p>
-            ) : null}
-          </div>
+            </div>
+          )}
         </>
       )}
 

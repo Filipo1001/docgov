@@ -121,6 +121,45 @@ export async function getContratosPagina(params: {
   return { items, nextOffset, total: count ?? 0 }
 }
 
+/**
+ * Trae TODOS los contratos del rol en una sola query (campos ligeros para
+ * lista + búsqueda + modal de contratista). Pensada para volúmenes moderados
+ * (cientos de contratos): la búsqueda y los filtros se aplican en el cliente,
+ * lo que da búsqueda instantánea por contratista/cédula/número/objeto y
+ * elimina la latencia de red por cada tecleo o scroll.
+ *
+ * Si en el futuro el volumen supera ~1.000 contratos, migrar a un RPC
+ * server-side con JOIN + índice trigram (ver diagnóstico).
+ */
+export async function getTodosContratos(params: {
+  rol: Rol
+  userId: string
+}): Promise<ContratoListItem[]> {
+  const supabase = createClient()
+  const { rol, userId } = params
+
+  let query = supabase
+    .from('contratos')
+    .select(`
+      id, numero, anio, objeto, valor_total, valor_mensual, plazo_meses,
+      fecha_inicio, fecha_fin,
+      contratista:usuarios!contratos_contratista_id_fkey(
+        id, nombre_completo, cedula, email, telefono, foto_url,
+        firma_url, cargo, banco, tipo_cuenta, numero_cuenta
+      ),
+      supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
+      dependencia:dependencias(id, nombre, abreviatura)
+    `)
+    .order('numero', { ascending: true })
+
+  if (rol === 'supervisor') query = query.eq('supervisor_id', userId)
+  else if (rol === 'contratista') query = query.eq('contratista_id', userId)
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []) as unknown as ContratoListItem[]
+}
+
 // ─── Contract list queries (legacy, kept for back-compat) ─────
 
 export async function getContratos(rol: Rol, userId: string): Promise<Contrato[]> {
