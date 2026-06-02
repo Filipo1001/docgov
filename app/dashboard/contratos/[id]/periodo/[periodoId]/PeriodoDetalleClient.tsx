@@ -10,6 +10,7 @@ import {
   ESTADO_COLOR,
   ESTADOS_EDITABLES,
   DEFAULT_BASE_COTIZACION_SS,
+  MESES,
 } from '@/lib/constants'
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
@@ -27,6 +28,7 @@ import {
   confirmarUploadPlanilla,
   eliminarPlanilla,
   guardarNumeroPlanilla,
+  guardarMesCotizacion,
   revisarPlanilla,
   actualizarObservacionSupervisor,
   actualizarBaseCotizacion,
@@ -91,6 +93,8 @@ export default function PeriodoDetallePage({
       if (initialPeriodo?.numero_planilla) {
         setNumPlanilla(initialPeriodo.numero_planilla)
       }
+      // Keep mes de cotización in sync with server-side value
+      setMesCotizacion(initialPeriodo?.cotizacion_mes ?? initialPeriodo?.mes ?? '')
     }
   }, [initialPeriodo])
 
@@ -120,6 +124,12 @@ export default function PeriodoDetallePage({
   // Planilla state
   const [numPlanilla, setNumPlanilla] = useState(initialPeriodo.numero_planilla ?? '')
   const [guardandoPlanilla, setGuardandoPlanilla] = useState(false)
+
+  // Mes de cotización (validado por asesor/supervisor/admin durante la revisión)
+  const [mesCotizacion, setMesCotizacion] = useState(
+    initialPeriodo.cotizacion_mes ?? initialPeriodo.mes ?? ''
+  )
+  const [guardandoMesCotizacion, setGuardandoMesCotizacion] = useState(false)
 
 
   // Radicado state
@@ -321,6 +331,29 @@ export default function PeriodoDetallePage({
   })()
 
   const esEditable = !esHistorico && !periodoVencido && (periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false)
+
+  // ── Mes de cotización: meses disponibles (rango del contrato) ──────────────
+  // El selector ofrece cualquier mes dentro del rango del contrato.
+  const mesesContrato = (() => {
+    if (!contrato?.fecha_inicio || !contrato?.fecha_fin) return [...MESES]
+    const ini = new Date(contrato.fecha_inicio + 'T00:00:00')
+    const fin = new Date(contrato.fecha_fin + 'T00:00:00')
+    const out: string[] = []
+    const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1)
+    const tope = new Date(fin.getFullYear(), fin.getMonth(), 1)
+    while (cursor <= tope && out.length < 24) {
+      out.push(MESES[cursor.getMonth()])
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+    return out.length ? out : [...MESES]
+  })()
+
+  // Detección de "mes vencido": el mes de cotización confirmado/sugerido difiere
+  // del mes del informe. Es una ayuda visual, no un bloqueo.
+  const mesCotizacionActual = periodo?.cotizacion_mes ?? periodo?.mes ?? ''
+  const esMesVencido = !!periodo && !!mesCotizacionActual &&
+    mesCotizacionActual.toLowerCase() !== (periodo.mes ?? '').toLowerCase()
+  const mesCotizacionSinVerificar = periodo?.cotizacion_origen !== 'confirmado'
 
   // Planilla: contratista puede gestionar hasta que esté aprobado o radicado
   const esPlanillaGestionable = !esHistorico && !periodoVencido && esContratista && periodo
@@ -798,6 +831,65 @@ export default function PeriodoDetallePage({
     setGuardandoPlanilla(false)
   }
 
+  async function handleGuardarMesCotizacion(mes: string) {
+    setMesCotizacion(mes)
+    setGuardandoMesCotizacion(true)
+    const result = await guardarMesCotizacion(periodoId, mes)
+    if (result.error) toast.error(result.error)
+    else {
+      toast.success('Mes de cotización confirmado')
+      router.refresh()
+    }
+    setGuardandoMesCotizacion(false)
+  }
+
+  // Bloque reutilizable: selector de mes de cotización para asesor/supervisor/admin.
+  // Aparece en los paneles de revisión. Asiste sin bloquear.
+  const panelMesCotizacion = periodo && periodo.planilla_ss_url ? (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🗓️</span>
+          <p className="text-sm font-medium text-gray-900">Mes de cotización de la planilla</p>
+        </div>
+        {esMesVencido && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+            ⚠️ Mes vencido detectado
+          </span>
+        )}
+        {mesCotizacionSinVerificar && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
+            Sugerido · sin verificar
+          </span>
+        )}
+        {!mesCotizacionSinVerificar && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+            ✓ Confirmado
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 mb-3">
+        Mes del informe: <strong className="text-gray-600">{periodo.mes}</strong>.
+        Confirma a qué mes corresponde realmente la planilla presentada (puede diferir por mes vencido).
+      </p>
+      <div className="flex items-center gap-2">
+        <select
+          value={mesCotizacion}
+          onChange={(e) => handleGuardarMesCotizacion(e.target.value)}
+          disabled={guardandoMesCotizacion}
+          className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:opacity-50"
+        >
+          {mesesContrato.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        {guardandoMesCotizacion && (
+          <span className="text-xs text-gray-400">Guardando…</span>
+        )}
+      </div>
+    </div>
+  ) : null
+
   // ── Render ──────────────────────────────────────────────────
 
   if (cargando) return (
@@ -1231,6 +1323,9 @@ export default function PeriodoDetallePage({
             </div>
           )}
 
+          {/* Mes de cotización — confirmación durante la revisión */}
+          {panelMesCotizacion}
+
           {!mostrarRechazo ? (
             <div className="flex gap-3">
               {periodo.estado === 'revision' ? (
@@ -1310,6 +1405,9 @@ export default function PeriodoDetallePage({
               ))}
             </div>
           )}
+
+          {/* Mes de cotización — confirmación durante la revisión */}
+          {panelMesCotizacion}
 
           {!mostrarRechazo ? (
             <div className="flex gap-3">

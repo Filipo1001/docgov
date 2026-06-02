@@ -686,9 +686,9 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                 <View style={{ width: '32%', padding: '3 5', backgroundColor: '#f5f5f5', borderLeftWidth: 1, borderLeftColor: '#000', justifyContent: 'center' }}>
                   <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>Periodo de Cotización</Text>
                 </View>
-                {/* Mes */}
+                {/* Mes de cotización (puede diferir del mes del informe por "mes vencido") */}
                 <View style={{ width: '18%', padding: '3 5', borderLeftWidth: 1, borderLeftColor: '#000', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 9 }}>{capitalizeMes(pago.mes)}</Text>
+                  <Text style={{ fontSize: 9 }}>{capitalizeMes(pago.cotizacion_mes ?? pago.mes)}</Text>
                 </View>
               </View>
             )

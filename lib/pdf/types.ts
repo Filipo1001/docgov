@@ -75,7 +75,8 @@ export interface PDFObligacion {
 /** Payment history row for Acta de Pago / Acta de Supervisión */
 export interface PDFPagoHistorial {
   acta_numero: number
-  mes: string              // 'ENERO', 'FEBRERO', etc. (uppercase from DB)
+  mes: string              // 'ENERO', 'FEBRERO', etc. (uppercase from DB) — mes del informe
+  cotizacion_mes?: string | null  // Mes real cotizado en la planilla (puede diferir por "mes vencido")
   fecha_pago: string       // 'DD/MM/YYYY' — último día del mes + 6 días calendario
   valor_contrato: number
   valor_pagado_acumulado: number

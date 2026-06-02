@@ -107,7 +107,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     // All periods for payment history + planilla table
     supabase
       .from('periodos')
-      .select('numero_periodo, valor_cobro, estado, mes, fecha_fin, numero_planilla')
+      .select('numero_periodo, valor_cobro, estado, mes, fecha_fin, numero_planilla, cotizacion_mes')
       .eq('contrato_id', contrato.id)
       .order('numero_periodo'),
 
@@ -135,6 +135,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     pagosHistorial.push({
       acta_numero: p.numero_periodo,
       mes: p.mes,
+      cotizacion_mes: p.cotizacion_mes ?? p.mes,  // mes real cotizado (fallback al mes del informe)
       fecha_pago: calcFechaPago(p.fecha_fin),
       valor_contrato: contrato.valor_total,
       valor_pagado_acumulado: acumulado - p.valor_cobro,

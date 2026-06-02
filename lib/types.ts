@@ -142,6 +142,8 @@ export interface Periodo {
   motivo_rechazo: string | null
   planilla_ss_url: string | null    // Uploaded security social PDF
   numero_planilla: string | null     // Planilla number
+  cotizacion_mes?: string | null     // Mes real cotizado (puede diferir de `mes` por "mes vencido")
+  cotizacion_origen?: 'inferido' | 'confirmado' | null  // Trazabilidad: sugerido por el sistema vs validado por humano
   numero_radicado: string | null     // Radicado number assigned on filing
   // Joined
   contrato?: Pick<Contrato, 'id' | 'numero' | 'objeto' | 'contratista_id' | 'supervisor_id' | 'dependencia_id'> & {

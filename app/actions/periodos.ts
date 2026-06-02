@@ -17,7 +17,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
-import { ESTADOS_EDITABLES } from '@/lib/constants'
+import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
@@ -1001,6 +1001,78 @@ export async function guardarNumeroPlanilla(
     if (error) return { error: `Error al guardar: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo guardar el número de planilla. El periodo no fue encontrado.' }
 
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Guardar el mes de cotización de la planilla (asesor / supervisor / admin).
+ *
+ * El mes de cotización es el mes REAL que cubre la planilla de seguridad social,
+ * que puede diferir del mes del informe por el caso legal de "mes vencido"
+ * (ej. la planilla de mayo cotiza realmente abril).
+ *
+ * Cuando un humano elige/confirma el mes, el origen pasa a 'confirmado',
+ * distinguiéndolo de los valores 'inferido' que puso el sistema por defecto.
+ * Registra en historial e invalida el PDF cacheado para que el acta se regenere.
+ */
+export async function guardarMesCotizacion(
+  periodoId: string,
+  mesCotizacion: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (!['asesor', 'supervisor', 'admin'].includes(usuario.rol)) {
+      return { error: 'Solo asesor, supervisor o administrador pueden confirmar el mes de cotización' }
+    }
+
+    // Validar que el mes sea uno de los 12 meses válidos
+    const mes = mesCotizacion.trim()
+    if (!MESES.includes(mes as (typeof MESES)[number])) {
+      return { error: 'Mes de cotización inválido' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    // Si es supervisor, verificar que supervisa este contrato
+    if (usuario.rol === 'supervisor') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.supervisor_id !== usuario.id) {
+        return { error: 'No tienes permiso para editar este periodo' }
+      }
+    }
+
+    const { data: prev } = await supabase
+      .from('periodos')
+      .select('cotizacion_mes')
+      .eq('id', periodoId)
+      .single()
+
+    const adminClient = createAdminSupabaseClient()
+    const { data: updated, error } = await adminClient
+      .from('periodos')
+      .update({ cotizacion_mes: mes, cotizacion_origen: 'confirmado' })
+      .eq('id', periodoId)
+      .select('id')
+
+    if (error) return { error: `Error al guardar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo guardar el mes de cotización. El periodo no fue encontrado.' }
+
+    await insertHistorial(
+      supabase,
+      periodoId,
+      periodo.estado,
+      periodo.estado,
+      usuario.id,
+      `Mes de cotización confirmado: ${prev?.cotizacion_mes ?? '?'} → ${mes}`
+    )
+
+    invalidarCachePDF(adminClient, periodoId)
     revalidar(periodo.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {

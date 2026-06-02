@@ -6,9 +6,9 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
-import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion } from '@/app/actions/periodos'
+import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion, guardarMesCotizacion } from '@/app/actions/periodos'
 import type { EstadoPeriodo } from '@/lib/types'
-import { DEFAULT_BASE_COTIZACION_SS, calcularBaseCotizacionSS } from '@/lib/constants'
+import { DEFAULT_BASE_COTIZACION_SS, calcularBaseCotizacionSS, MESES } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ type PeriodoRow = {
   numero_planilla: string | null
   planilla_estado: 'pendiente' | 'aprobada' | 'rechazada' | null
   base_cotizacion_ss: number | null
+  cotizacion_mes: string | null
+  cotizacion_origen: 'inferido' | 'confirmado' | null
 }
 
 type ContratoRow = {
@@ -101,6 +103,9 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [planillasEdit, setPlanillasEdit] = useState<Record<string, string>>({})
   const [guardandoPlanillaId, setGuardandoPlanillaId] = useState<string | null>(null)
 
+  // Mes de cotización — edición inline por periodo
+  const [guardandoMesId, setGuardandoMesId] = useState<string | null>(null)
+
   // Base cotización SS — edición inline por periodo
   const [baseEdit, setBaseEdit] = useState<Record<string, string>>({})
   const [guardandoBaseId, setGuardandoBaseId] = useState<string | null>(null)
@@ -120,7 +125,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
         .single(),
       supabase
         .from('periodos')
-        .select('id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, es_historico, planilla_ss_url, numero_planilla, planilla_estado, base_cotizacion_ss')
+        .select('id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, es_historico, planilla_ss_url, numero_planilla, planilla_estado, base_cotizacion_ss, cotizacion_mes, cotizacion_origen')
         .eq('contrato_id', contratoId)
         .order('numero_periodo'),
     ])
@@ -223,6 +228,15 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
     setGuardandoPlanillaId(null)
     if (res.error) { toast.error(res.error); return }
     toast.success(planillasEdit[periodoId]?.trim() ? 'Planilla actualizada' : 'Planilla borrada')
+    await cargarDatos()
+  }
+
+  async function guardarMes(periodoId: string, mes: string) {
+    setGuardandoMesId(periodoId)
+    const res = await guardarMesCotizacion(periodoId, mes)
+    setGuardandoMesId(null)
+    if (res.error) { toast.error(res.error); return }
+    toast.success('Mes de cotización actualizado')
     await cargarDatos()
   }
 
@@ -514,6 +528,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">N.° Planilla</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Mes cotización</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">PDF</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500">Completo</th>
@@ -564,6 +579,28 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                             {p.numero_planilla ?? <span className="text-gray-400 italic">Sin número</span>}
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={p.cotizacion_mes ?? p.mes}
+                            onChange={(e) => guardarMes(p.id, e.target.value)}
+                            disabled={guardandoMesId === p.id}
+                            className="px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-gray-100"
+                          >
+                            {MESES.map((m) => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                          {p.cotizacion_origen === 'confirmado' ? (
+                            <span title="Confirmado por un humano" className="text-emerald-500 text-xs">✓</span>
+                          ) : (
+                            <span title="Sugerido por el sistema (sin verificar)" className="text-gray-300 text-xs">●</span>
+                          )}
+                          {(p.cotizacion_mes ?? p.mes).toLowerCase() !== p.mes.toLowerCase() && (
+                            <span title="Mes vencido (difiere del mes del informe)" className="text-amber-500 text-xs">⚠️</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
