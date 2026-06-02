@@ -175,7 +175,6 @@ export default function PeriodoDetallePage({
 
   // Planilla dropdown state
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
-  const [tooltipAlertaAbierto, setTooltipAlertaAbierto] = useState(false)
   const [subiendoPlanilla, setSubiendoPlanilla] = useState(false)
 
   // Inline planilla rejection form (replaces window.prompt)
@@ -888,42 +887,29 @@ export default function PeriodoDetallePage({
   // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
   const puedeRevisarPlanilla = (esAsesor && !esSecretaria) // asesor o admin (no supervisor puro)
 
-  // Franja de alerta de planilla (naranja / roja) con tooltip on hover + tap.
-  // Visible para revisores (asesor/secretaría/admin). Informa sin saturar.
+  // Franja de alerta de planilla (naranja / roja). Visible para revisores.
+  // Mensaje completo siempre visible (sin depender de hover) — claro y directo.
   const franjaAlertaPlanilla = nivelAlertaPlanilla && (esAsesor || esSecretaria) ? (
     <div className="px-4 py-3">
-      <button
-        type="button"
-        onClick={() => setTooltipAlertaAbierto(v => !v)}
-        onMouseEnter={() => setTooltipAlertaAbierto(true)}
-        onMouseLeave={() => setTooltipAlertaAbierto(false)}
-        className={`relative w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${
+      <div
+        className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl border ${
           nivelAlertaPlanilla === 'roja'
-            ? 'bg-red-50 border-red-200 hover:bg-red-100'
-            : 'bg-orange-50 border-orange-200 hover:bg-orange-100'
+            ? 'bg-red-50 border-red-200'
+            : 'bg-orange-50 border-orange-200'
         }`}
       >
-        <span className="text-base flex-shrink-0">{nivelAlertaPlanilla === 'roja' ? '🔴' : '🟠'}</span>
-        <span className={`text-xs font-medium flex-1 ${nivelAlertaPlanilla === 'roja' ? 'text-red-700' : 'text-orange-700'}`}>
-          {nivelAlertaPlanilla === 'roja'
-            ? 'Posible cotización faltante — revisar'
-            : 'Pago por mes vencido — verificar'}
-        </span>
-        <span className="text-xs text-gray-400 flex-shrink-0">ⓘ</span>
-
-        {tooltipAlertaAbierto && (
-          <span
-            role="tooltip"
-            className={`absolute left-0 right-0 bottom-full mb-2 z-20 px-3 py-2 rounded-xl text-xs leading-relaxed shadow-lg border ${
-              nivelAlertaPlanilla === 'roja'
-                ? 'bg-white border-red-200 text-red-800'
-                : 'bg-white border-orange-200 text-orange-800'
-            }`}
-          >
+        <span className="text-base flex-shrink-0 leading-none mt-0.5">{nivelAlertaPlanilla === 'roja' ? '🔴' : '🟠'}</span>
+        <div className="min-w-0">
+          <p className={`text-xs font-semibold ${nivelAlertaPlanilla === 'roja' ? 'text-red-700' : 'text-orange-700'}`}>
+            {nivelAlertaPlanilla === 'roja'
+              ? 'Posible cotización faltante'
+              : 'Pago por mes vencido'}
+          </p>
+          <p className={`text-[11px] leading-relaxed mt-0.5 ${nivelAlertaPlanilla === 'roja' ? 'text-red-600/90' : 'text-orange-700/80'}`}>
             {mensajeAlertaPlanilla}
-          </span>
-        )}
-      </button>
+          </p>
+        </div>
+      </div>
     </div>
   ) : null
 
@@ -1357,7 +1343,7 @@ export default function PeriodoDetallePage({
 
       {/* ── Asesor panel (approve / reject) ── */}
       {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (
-        <div className="bg-white rounded-2xl border border-blue-200 p-6 mb-6">
+        <div className="bg-white rounded-2xl border border-blue-200 p-4 sm:p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-base">🔍</div>
             <div>
@@ -1440,7 +1426,7 @@ export default function PeriodoDetallePage({
 
       {/* ── Secretaria panel (approve / reject) ── */}
       {(periodo.estado === 'revision' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
-        <div className="bg-white rounded-2xl border border-amber-200 p-6 mb-6">
+        <div className="bg-white rounded-2xl border border-amber-200 p-4 sm:p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-base">📋</div>
             <div>
@@ -2105,10 +2091,10 @@ export default function PeriodoDetallePage({
 
       {/* ── Documents section ── */}
       {puedeVerDocumentos && (
-        <div className="bg-white rounded-2xl border p-6 mt-4">
+        <div className="bg-white rounded-2xl border p-4 sm:p-6 mt-4">
 
-          {/* Header + download buttons */}
-          <div className="flex items-center justify-between mb-1 gap-3">
+          {/* Header + download buttons — apilado en móvil, en línea en desktop */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-3">
             <h3 className="text-sm font-semibold text-gray-900">Documentos del periodo</h3>
 
             <div className="flex items-center gap-2">
@@ -2118,19 +2104,19 @@ export default function PeriodoDetallePage({
                   <a
                     href={`/api/pdf/${periodoId}/secop`}
                     download
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl hover:bg-emerald-700 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl hover:bg-emerald-700 transition-colors"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                     </svg>
                     Descargar Para Secop
                   </a>
                 ) : (
                   <div
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
                     title="Disponible cuando la secretaria apruebe el periodo"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                     </svg>
                     Descargar Para Secop
@@ -2144,19 +2130,19 @@ export default function PeriodoDetallePage({
                   <a
                     href={`/api/pdf/${periodoId}/paquete`}
                     download
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                     </svg>
                     Descargar Paquete
                   </a>
                 ) : (
                   <div
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
                     title="Disponible cuando la secretaria apruebe el periodo"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                     </svg>
                     Descargar Paquete
@@ -2167,14 +2153,14 @@ export default function PeriodoDetallePage({
           </div>
 
           {!puedeDescargarPaquete && (
-            <p className="text-xs text-amber-600 mb-4">
+            <p className="text-xs text-amber-600 mb-4 mt-2">
               {esContratista
                 ? 'Los documentos SECOP estarán disponibles cuando la secretaria apruebe tu informe.'
                 : 'El paquete completo (documentos firmados) estará disponible cuando la secretaria apruebe.'}
             </p>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
             {/* Always available after sending */}
             <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
               <a href={`/api/pdf/${periodoId}/informe`} target="_blank" rel="noopener noreferrer"
