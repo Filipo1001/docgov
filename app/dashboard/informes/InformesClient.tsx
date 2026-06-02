@@ -454,8 +454,14 @@ export default function InformesPage({
     queryClient.invalidateQueries({ queryKey: ['informes'] })
   }
 
-  // Reset reminder sent state when month changes
-  useEffect(() => { setRecordatoriosEnviados(false) }, [mesIdx, anio])
+  // Reset reminder sent state + filter tab when month changes.
+  // Resetear a "todos" evita que, al navegar a un mes sin registros en la
+  // pestaña activa (p. ej. quedaste en "Aprobados" y vas a un mes que solo
+  // tiene borradores), la vista parezca vacía aunque sí haya informes.
+  useEffect(() => {
+    setRecordatoriosEnviados(false)
+    setFiltro('todos')
+  }, [mesIdx, anio])
 
   // Navigation — when the query key changes (new month), TanStack Query fetches fresh
   // data client-side. The 60 s staleTime only benefits same-month return visits.
@@ -474,10 +480,15 @@ export default function InformesPage({
   const esMesActual = mesIdx === now.getMonth() && anio === now.getFullYear()
 
   // Filters
+  // NOTA: 'enviado' y 'revision' son estados de revisión activa, por lo que un
+  // periodo histórico nunca los tiene — el guard !es_historico ahí es inocuo.
+  // En cambio 'aprobado'/'radicado' SÍ existen en periodos históricos (meses
+  // anteriores a la digitalización ya radicados): incluirlos hace que la
+  // pestaña "Aprobados" muestre los informes de meses pasados en vez de 0.
   const enviados = periodos.filter(p => p.estado === 'enviado' && !p.es_historico)
   const aprobadosAsesor = periodos.filter(p => p.estado === 'revision' && !p.es_historico)
   const sinRevisar = enviados.filter(p => (p.preaprobaciones?.length ?? 0) === 0)
-  const aprobados = periodos.filter(p => ['aprobado', 'radicado'].includes(p.estado) && !p.es_historico)
+  const aprobados = periodos.filter(p => ['aprobado', 'radicado'].includes(p.estado))
 
   const periodosVisibles = (() => {
     switch (filtro) {
