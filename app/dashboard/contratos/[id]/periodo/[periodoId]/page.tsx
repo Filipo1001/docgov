@@ -1,7 +1,7 @@
 import { requireContractAccess } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
-import PeriodoDetalleClient from './PeriodoDetalleClient'
+import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
 import type { Contrato, Periodo, Obligacion, Actividad } from '@/lib/types'
 
 /**
@@ -34,6 +34,7 @@ export default async function PeriodoDetallePage({
     { data: periodo },
     { data: obligaciones },
     { data: actividades },
+    { data: periodosHermanos },
   ] = await Promise.all([
     supabase
       .from('contratos')
@@ -68,6 +69,14 @@ export default async function PeriodoDetallePage({
       .select('*, evidencias(*)')
       .eq('periodo_id', periodoId)
       .order('orden'),
+
+    // Todos los periodos del contrato — para detectar repetición de número de
+    // planilla (alertas de mes vencido / cotización faltante) en la tarjeta.
+    supabase
+      .from('periodos')
+      .select('id, numero_periodo, mes, numero_planilla, cotizacion_mes')
+      .eq('contrato_id', id)
+      .order('numero_periodo'),
   ])
 
   // Safety: if the period doesn't belong to this contract or data is missing,
@@ -85,6 +94,7 @@ export default async function PeriodoDetallePage({
       initialPeriodo={periodo as unknown as Periodo}
       initialObligaciones={(obligaciones ?? []) as unknown as Obligacion[]}
       initialActividades={(actividades ?? []) as unknown as Actividad[]}
+      periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
     />
   )
 }

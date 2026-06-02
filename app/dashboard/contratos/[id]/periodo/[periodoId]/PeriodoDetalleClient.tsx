@@ -40,11 +40,21 @@ import { comprimirEvidencia } from '@/lib/compress'
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
+/** Periodo "hermano" del mismo contrato — usado para detectar repetición de planilla */
+export interface PeriodoHermano {
+  id: string
+  numero_periodo: number
+  mes: string
+  numero_planilla: string | null
+  cotizacion_mes: string | null
+}
+
 interface InitialData {
   initialContrato: Contrato
   initialPeriodo: Periodo
   initialObligaciones: Obligacion[]
   initialActividades: Actividad[]
+  periodosHermanos?: PeriodoHermano[]
 }
 
 export default function PeriodoDetallePage({
@@ -52,6 +62,7 @@ export default function PeriodoDetallePage({
   initialPeriodo,
   initialObligaciones,
   initialActividades,
+  periodosHermanos = [],
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -164,6 +175,7 @@ export default function PeriodoDetallePage({
 
   // Planilla dropdown state
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
+  const [tooltipAlertaAbierto, setTooltipAlertaAbierto] = useState(false)
   const [subiendoPlanilla, setSubiendoPlanilla] = useState(false)
 
   // Inline planilla rejection form (replaces window.prompt)
@@ -354,6 +366,36 @@ export default function PeriodoDetallePage({
   const esMesVencido = !!periodo && !!mesCotizacionActual &&
     mesCotizacionActual.toLowerCase() !== (periodo.mes ?? '').toLowerCase()
   const mesCotizacionSinVerificar = periodo?.cotizacion_origen !== 'confirmado'
+
+  // ── Alertas de planilla (2 niveles) ────────────────────────────────────────
+  // Cuenta cuántos periodos del contrato usan el MISMO número de planilla que el
+  // periodo actual. Una planilla PILA cubre un solo pago; reutilizarla está
+  // amparado por "mes vencido" hasta 2 periodos (pago al día + 1 mes de desfase).
+  // Un 3er uso implica un desfase ≥ 2 meses → un mes probablemente quedó sin cotizar.
+  const numPlanillaActual = (periodo?.numero_planilla ?? '').trim()
+  const repeticionesPlanilla = numPlanillaActual
+    ? periodosHermanos.filter(p => (p.numero_planilla ?? '').trim() === numPlanillaActual).length
+    : 0
+
+  // 🔴 Roja: el mismo número aparece en 3 o más periodos del contrato.
+  const alertaRojaPlanilla = repeticionesPlanilla >= 3
+  // 🟠 Naranja: mes vencido (la planilla cotiza un mes distinto al del informe),
+  //    o el número se reutiliza en 2 periodos. No se muestra si ya hay alerta roja.
+  const alertaNaranjaPlanilla = !alertaRojaPlanilla && (esMesVencido || repeticionesPlanilla === 2)
+
+  const nivelAlertaPlanilla: 'roja' | 'naranja' | null =
+    alertaRojaPlanilla ? 'roja' : alertaNaranjaPlanilla ? 'naranja' : null
+
+  const mensajeAlertaPlanilla = alertaRojaPlanilla
+    ? `La planilla N.° ${numPlanillaActual} se está usando en ${repeticionesPlanilla} periodos de este contrato. ` +
+      `El "mes vencido" solo cubre un desfase de un mes; reutilizarla más veces sugiere que un mes de cotización quedó sin pagar. ` +
+      `Verifica que no falte la planilla de un mes intermedio antes de aprobar.`
+    : alertaNaranjaPlanilla
+      ? (esMesVencido
+          ? `Esta planilla cotiza ${mesCotizacionActual}, distinto al mes del informe (${periodo?.mes}). ` +
+            `Corresponde a un pago de seguridad social por mes vencido, lo cual es válido. Verifica que sea correcto.`
+          : `La planilla N.° ${numPlanillaActual} se repite en dos periodos del contrato, lo que suele indicar un pago por mes vencido. Verifica que sea correcto.`)
+      : ''
 
   // Planilla: contratista puede gestionar hasta que esté aprobado o radicado
   const esPlanillaGestionable = !esHistorico && !periodoVencido && esContratista && periodo
@@ -843,49 +885,75 @@ export default function PeriodoDetallePage({
     setGuardandoMesCotizacion(false)
   }
 
-  // Bloque reutilizable: selector de mes de cotización para asesor/supervisor/admin.
-  // Aparece en los paneles de revisión. Asiste sin bloquear.
-  const panelMesCotizacion = periodo && periodo.planilla_ss_url ? (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🗓️</span>
-          <p className="text-sm font-medium text-gray-900">Mes de cotización de la planilla</p>
-        </div>
-        {esMesVencido && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-            ⚠️ Mes vencido detectado
+  // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
+  const puedeRevisarPlanilla = (esAsesor && !esSecretaria) // asesor o admin (no supervisor puro)
+
+  // Franja de alerta de planilla (naranja / roja) con tooltip on hover + tap.
+  // Visible para revisores (asesor/secretaría/admin). Informa sin saturar.
+  const franjaAlertaPlanilla = nivelAlertaPlanilla && (esAsesor || esSecretaria) ? (
+    <div className="px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setTooltipAlertaAbierto(v => !v)}
+        onMouseEnter={() => setTooltipAlertaAbierto(true)}
+        onMouseLeave={() => setTooltipAlertaAbierto(false)}
+        className={`relative w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${
+          nivelAlertaPlanilla === 'roja'
+            ? 'bg-red-50 border-red-200 hover:bg-red-100'
+            : 'bg-orange-50 border-orange-200 hover:bg-orange-100'
+        }`}
+      >
+        <span className="text-base flex-shrink-0">{nivelAlertaPlanilla === 'roja' ? '🔴' : '🟠'}</span>
+        <span className={`text-xs font-medium flex-1 ${nivelAlertaPlanilla === 'roja' ? 'text-red-700' : 'text-orange-700'}`}>
+          {nivelAlertaPlanilla === 'roja'
+            ? 'Posible cotización faltante — revisar'
+            : 'Pago por mes vencido — verificar'}
+        </span>
+        <span className="text-xs text-gray-400 flex-shrink-0">ⓘ</span>
+
+        {tooltipAlertaAbierto && (
+          <span
+            role="tooltip"
+            className={`absolute left-0 right-0 bottom-full mb-2 z-20 px-3 py-2 rounded-xl text-xs leading-relaxed shadow-lg border ${
+              nivelAlertaPlanilla === 'roja'
+                ? 'bg-white border-red-200 text-red-800'
+                : 'bg-white border-orange-200 text-orange-800'
+            }`}
+          >
+            {mensajeAlertaPlanilla}
           </span>
         )}
-        {mesCotizacionSinVerificar && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
-            Sugerido · sin verificar
-          </span>
-        )}
-        {!mesCotizacionSinVerificar && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-            ✓ Confirmado
-          </span>
+      </button>
+    </div>
+  ) : null
+
+  // Selector de mes de cotización (asesor / supervisor / admin) dentro de la tarjeta.
+  const selectorMesCotizacion = (esAsesor || esSecretaria) && periodo?.planilla_ss_url ? (
+    <div className="px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base">🗓️</span>
+        <p className="text-sm font-medium text-gray-900">Mes de cotización</p>
+        {mesCotizacionSinVerificar ? (
+          <span className="text-[10px] font-medium text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-full">sin verificar</span>
+        ) : (
+          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">✓ confirmado</span>
         )}
       </div>
-      <p className="text-xs text-gray-400 mb-3">
-        Mes del informe: <strong className="text-gray-600">{periodo.mes}</strong>.
-        Confirma a qué mes corresponde realmente la planilla presentada (puede diferir por mes vencido).
+      <p className="text-[11px] text-gray-400 mb-2">
+        Mes del informe: <strong className="text-gray-600">{periodo.mes}</strong>. Confirma el mes que realmente cubre la planilla.
       </p>
       <div className="flex items-center gap-2">
         <select
           value={mesCotizacion}
           onChange={(e) => handleGuardarMesCotizacion(e.target.value)}
           disabled={guardandoMesCotizacion}
-          className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:opacity-50"
+          className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none disabled:opacity-50"
         >
           {mesesContrato.map((m) => (
             <option key={m} value={m}>{m}</option>
           ))}
         </select>
-        {guardandoMesCotizacion && (
-          <span className="text-xs text-gray-400">Guardando…</span>
-        )}
+        {guardandoMesCotizacion && <span className="text-xs text-gray-400">Guardando…</span>}
       </div>
     </div>
   ) : null
@@ -1313,19 +1381,6 @@ export default function PeriodoDetallePage({
             </div>
           )}
 
-          {/* Planilla pending review notice for asesor */}
-          {periodo.planilla_ss_url && periodo.planilla_estado === 'pendiente' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-4 flex items-center gap-2">
-              <span className="text-base flex-shrink-0">🏥</span>
-              <p className="text-xs text-amber-800">
-                <strong>Planilla pendiente:</strong> el contratista ha subido la planilla de seguridad social — recuerda revisarla en la sección de documentos.
-              </p>
-            </div>
-          )}
-
-          {/* Mes de cotización — confirmación durante la revisión */}
-          {panelMesCotizacion}
-
           {!mostrarRechazo ? (
             <div className="flex gap-3">
               {periodo.estado === 'revision' ? (
@@ -1405,9 +1460,6 @@ export default function PeriodoDetallePage({
               ))}
             </div>
           )}
-
-          {/* Mes de cotización — confirmación durante la revisión */}
-          {panelMesCotizacion}
 
           {!mostrarRechazo ? (
             <div className="flex gap-3">
@@ -2280,20 +2332,31 @@ export default function PeriodoDetallePage({
             {/* Hidden in editable mode: contratista uses the inline fields in the submit card above */}
             {(esPlanillaGestionable || periodo.planilla_ss_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && (
               <div className="relative col-span-1 sm:col-span-2">
-                {/* Trigger button */}
+                {/* Trigger button — el borde refleja la alerta más grave aunque esté cerrado */}
                 <button
                   onClick={() => setPlanillaMenuAbierto(v => !v)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors border ${
-                    periodo.planilla_estado === 'aprobada'
-                      ? 'bg-green-50 border-green-200 hover:bg-green-100'
-                      : periodo.planilla_estado === 'rechazada'
-                        ? 'bg-red-50 border-red-200 hover:bg-red-100'
-                        : periodo.planilla_ss_url
-                          ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    nivelAlertaPlanilla === 'roja' && (esAsesor || esSecretaria)
+                      ? 'bg-red-50 border-red-300 hover:bg-red-100'
+                      : nivelAlertaPlanilla === 'naranja' && (esAsesor || esSecretaria)
+                        ? 'bg-orange-50 border-orange-300 hover:bg-orange-100'
+                        : periodo.planilla_estado === 'aprobada'
+                          ? 'bg-green-50 border-green-200 hover:bg-green-100'
+                          : periodo.planilla_estado === 'rechazada'
+                            ? 'bg-red-50 border-red-200 hover:bg-red-100'
+                            : periodo.planilla_ss_url
+                              ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                              : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
-                  <span className="text-lg">🏥</span>
+                  <span className="relative text-lg">
+                    🏥
+                    {nivelAlertaPlanilla && (esAsesor || esSecretaria) && (
+                      <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                        nivelAlertaPlanilla === 'roja' ? 'bg-red-500' : 'bg-orange-400'
+                      }`} />
+                    )}
+                  </span>
                   <div className="flex-1 text-left">
                     <p className="text-sm font-medium text-gray-900">Planilla de Seguridad Social</p>
                     <p className="text-xs text-gray-500">
@@ -2320,9 +2383,12 @@ export default function PeriodoDetallePage({
 
                 {/* Dropdown */}
                 <div className={`overflow-hidden transition-all duration-200 ease-in-out ${
-                  planillaMenuAbierto ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                  planillaMenuAbierto ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
                 }`}>
                   <div className="mt-2 bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100">
+
+                    {/* Franja de alerta (naranja / roja) con tooltip — solo revisores */}
+                    {franjaAlertaPlanilla}
 
                     {/* Ver documento */}
                     {periodo.planilla_ss_url && (
@@ -2336,6 +2402,9 @@ export default function PeriodoDetallePage({
                         <span className="text-sm text-gray-700 font-medium">Ver documento</span>
                       </a>
                     )}
+
+                    {/* Mes de cotización — confirmación del revisor */}
+                    {selectorMesCotizacion}
 
                     {/* Subir / Reemplazar (contratista, hasta aprobado) */}
                     {esPlanillaGestionable && (
@@ -2423,13 +2492,13 @@ export default function PeriodoDetallePage({
                             <button
                               onClick={async () => {
                                 setRechazandoPlanilla(true)
-                                await handleRevisarPlanilla('rechazada', motivoRechazoInline.trim() || undefined)
+                                await handleRevisarPlanilla('rechazada', motivoRechazoInline.trim())
                                 setMostrarFormRechazo(false)
                                 setMotivoRechazoInline('')
                                 setRechazandoPlanilla(false)
                               }}
-                              disabled={rechazandoPlanilla}
-                              className="flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                              disabled={rechazandoPlanilla || !motivoRechazoInline.trim()}
+                              className="flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                               {rechazandoPlanilla ? 'Rechazando...' : 'Confirmar rechazo'}
                             </button>
