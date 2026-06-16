@@ -1,6 +1,6 @@
 'use server'
 
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName } from '@/lib/format'
@@ -86,6 +86,69 @@ function serialToDate(serial: number): string {
   return d.toISOString().split('T')[0]
 }
 
+/** Date → YYYY-MM-DD usando componentes UTC (evita el desfase de un día por zona horaria) */
+function dateToYMD(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Aplana una celda de ExcelJS a un valor primitivo, equivalente a lo que
+ * devolvía XLSX.utils.sheet_to_json: string | number | Date.
+ * ExcelJS envuelve hipervínculos ({text, hyperlink}), fórmulas ({result})
+ * y texto enriquecido ({richText}); aquí los reducimos a su valor plano.
+ */
+function flattenCell(v: unknown): string | number | Date | '' {
+  if (v === null || v === undefined) return ''
+  if (v instanceof Date) return v
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    if ('text' in o) return String(o.text)                    // hipervínculo
+    if ('result' in o) return flattenCell(o.result)           // fórmula
+    if ('richText' in o && Array.isArray(o.richText)) {        // texto enriquecido
+      return o.richText.map((r: { text?: string }) => r.text ?? '').join('')
+    }
+    if ('error' in o) return ''                               // celda con error
+    return ''
+  }
+  return v as string | number
+}
+
+/**
+ * Lee la primera hoja de un .xlsx y devuelve filas como objetos
+ * { encabezado: valor }, replicando el comportamiento de sheet_to_json
+ * (defval: '' para celdas vacías). La primera fila se usa como encabezados.
+ */
+async function leerFilasExcel(buffer: Buffer): Promise<Record<string, unknown>[]> {
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer as unknown as ArrayBuffer)
+  const ws = wb.worksheets[0]
+  if (!ws) return []
+
+  // Encabezados desde la primera fila
+  const headerRow = ws.getRow(1)
+  const headers: string[] = []
+  headerRow.eachCell({ includeEmpty: true }, (cell, col) => {
+    headers[col] = String(flattenCell(cell.value)).trim()
+  })
+
+  const filas: Record<string, unknown>[] = []
+  ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return // saltar encabezados
+    const obj: Record<string, unknown> = {}
+    let tieneAlgo = false
+    for (let col = 1; col < headers.length; col++) {
+      const key = headers[col]
+      if (!key) continue
+      const val = flattenCell(row.getCell(col).value)
+      obj[key] = val === '' ? '' : val
+      if (val !== '') tieneAlgo = true
+    }
+    if (tieneAlgo) filas.push(obj)
+  })
+
+  return filas
+}
+
 function readCell(row: Record<string, unknown>, ...keys: string[]): string {
   for (const k of keys) {
     const v = row[k]
@@ -106,9 +169,7 @@ export async function parsearExcel(
   if (!file) return { error: 'No se encontró el archivo' }
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const wb = XLSX.read(buffer, { type: 'buffer' })
-  const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+  const rows = await leerFilasExcel(buffer)
 
   if (rows.length === 0) return { error: 'El archivo está vacío o no tiene el formato esperado' }
 
@@ -147,10 +208,18 @@ export async function parsearExcel(
     if (!objeto) errores_bloqueo.push('Objeto del contrato vacío')
 
     // ── Dates ────────────────────────────────────────────
+    // ExcelJS devuelve celdas de fecha como Date; toleramos también serial
+    // numérico (compatibilidad) y texto. Para Date usamos componentes UTC
+    // para no desplazar el día por la zona horaria del servidor.
     const fechaInicioRaw = row['FECHA DEL ACTA DE INICIO']
     const fechaFinRaw = row['FECHA FINALIZACIÓN (PROGRAMADA)'] ?? row['FECHA FINALIZACION (PROGRAMADA)']
-    const fecha_inicio = typeof fechaInicioRaw === 'number' ? serialToDate(fechaInicioRaw) : String(fechaInicioRaw || '')
-    const fecha_fin = typeof fechaFinRaw === 'number' ? serialToDate(fechaFinRaw as number) : String(fechaFinRaw || '')
+    const parseFecha = (raw: unknown): string => {
+      if (raw instanceof Date) return dateToYMD(raw)
+      if (typeof raw === 'number') return serialToDate(raw)
+      return String(raw || '')
+    }
+    const fecha_inicio = parseFecha(fechaInicioRaw)
+    const fecha_fin = parseFecha(fechaFinRaw)
 
     if (!fecha_inicio || fecha_inicio.startsWith('NaN')) errores_bloqueo.push('Fecha de inicio inválida')
     if (!fecha_fin || fecha_fin.startsWith('NaN')) errores_bloqueo.push('Fecha de fin inválida')
