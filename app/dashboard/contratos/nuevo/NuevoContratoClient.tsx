@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
 import { formatCedula } from '@/lib/format'
 import { numerosALetras } from '@/lib/numero-letras'
+import { crearContrato } from '@/app/actions/contratos'
 
 interface ExcelData {
   objeto: string
@@ -167,43 +168,42 @@ export default function NuevoContratoPage() {
     e.preventDefault()
     setGuardando(true)
 
-    const supabase = createClient()
-    const { data: muni } = await supabase.from('municipios').select('id').single()
-    if (!muni) { toast.error('No se encontró el municipio'); setGuardando(false); return }
-
-    const dias = parseInt(form.plazo_dias) || 0
-    const meses = Math.round(dias / 30) // approximate — kept for backwards compat
-
-    const { data, error } = await supabase
-      .from('contratos')
-      .insert({
-        municipio_id: muni.id,
+    // Server Action: autorización admin validada server-side (cookies httpOnly),
+    // no depende de que la sesión del navegador esté caliente. El try/finally
+    // garantiza que el botón nunca quede colgado en "Guardando...".
+    try {
+      const res = await crearContrato({
         dependencia_id: form.dependencia_id,
         contratista_id: form.contratista_id,
         supervisor_id: form.supervisor_id,
         numero: form.numero,
-        anio: form.anio,
+        anio: Number(form.anio),
         objeto: form.objeto,
         modalidad_seleccion: form.modalidad_seleccion,
-        valor_total: parseFloat(form.valor_total),
+        valor_total: parseFloat(form.valor_total) || 0,
         valor_mensual: parseFloat(form.valor_mensual) || 0,
         valor_letras_total: form.valor_letras_total,
         valor_letras_mensual: form.valor_letras_mensual,
-        plazo_dias: dias,
-        plazo_meses: meses,
+        plazo_dias: parseInt(form.plazo_dias) || 0,
         fecha_inicio: form.fecha_inicio,
         fecha_fin: form.fecha_fin,
         cdp: form.cdp || null,
         crp: form.crp || null,
         secop_url: form.secop_url?.trim() || null,
       })
-      .select()
-      .single()
 
-    if (error) { toast.error('Error: ' + error.message); setGuardando(false); return }
+      if (res.error) {
+        toast.error(res.error)
+        setGuardando(false)
+        return
+      }
 
-    toast.success('Contrato creado exitosamente')
-    router.push(`/dashboard/contratos/${data.id}`)
+      toast.success('Contrato creado exitosamente')
+      router.push(`/dashboard/contratos/${res.data!.id}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error inesperado')
+      setGuardando(false)
+    }
   }
 
   const contratistas = usuarios.filter(u => u.rol === 'contratista' || u.rol === 'admin')
