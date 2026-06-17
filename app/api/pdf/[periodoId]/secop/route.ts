@@ -20,6 +20,7 @@ import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 function normalizeNombre(nombre: string): string {
   return nombre
@@ -133,10 +134,12 @@ export async function GET(
     folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
   }
 
+  // STORE (sin compresión): los PDFs ya vienen comprimidos, así que DEFLATE
+  // gasta CPU sin reducir tamaño — y esa CPU cuenta contra maxDuration en el
+  // peor caso (cache miss). Alineado con paquete/route.ts.
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
+    compression: 'STORE',
   })
 
   return new NextResponse(zipBuffer as unknown as BodyInit, {
