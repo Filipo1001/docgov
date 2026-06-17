@@ -312,9 +312,9 @@ export default function ContratoDetallePage({
         {obligaciones.length > 0 && (
           <div className="space-y-2 mb-6">
             {obligaciones.map((obl, index) => (
-              <div key={obl.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl group">
+              <div key={obl.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl group min-w-0">
                 <span className="text-xs font-medium text-gray-400 mt-0.5 min-w-[20px]">{index + 1}.</span>
-                <p className="flex-1 text-sm text-gray-700">{obl.descripcion}</p>
+                <p className="flex-1 min-w-0 text-sm text-gray-700 break-words">{obl.descripcion}</p>
                 <div className="flex items-center gap-2">
                   {obl.es_permanente && (
                     <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Permanente</span>
