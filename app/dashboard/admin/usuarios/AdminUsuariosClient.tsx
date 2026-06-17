@@ -464,55 +464,57 @@ export default function AdminUsuariosClient({
           {usuariosFiltrados.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">Sin resultados.</div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-gray-50 text-left">
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Usuario</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Cédula</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Rol</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Cargo</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Dependencia</th>
-                  <th className="px-5 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {usuariosFiltrados.map(u => (
-                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <Avatar foto={u.foto_url} nombre={u.nombre_completo} />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{u.nombre_completo}</p>
-                          {u.telefono && <p className="text-xs text-gray-400">{u.telefono}</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{formatCedula(u.cedula)}</td>
-                    <td className="px-5 py-3.5">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROL_COLOR[u.rol] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {u.rol}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{u.cargo ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{u.dependencia?.nombre ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        <Link href={`/dashboard/admin/usuarios/${u.id}`}
-                          className="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                          Editar →
-                        </Link>
-                        <button
-                          onClick={() => setEliminando(u)}
-                          className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px]">
+                <thead>
+                  <tr className="border-b bg-gray-50 text-left">
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500">Usuario</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500">Rol</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Cargo</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Dependencia</th>
+                    <th className="px-5 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {usuariosFiltrados.map(u => (
+                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <Avatar foto={u.foto_url} nombre={u.nombre_completo} />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{u.nombre_completo}</p>
+                            {u.telefono && <p className="text-xs text-gray-400">{u.telefono}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600 hidden md:table-cell">{formatCedula(u.cedula)}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROL_COLOR[u.rol] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {u.rol}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600 hidden lg:table-cell">{u.cargo ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600 hidden sm:table-cell">{u.dependencia?.nombre ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-3">
+                          <Link href={`/dashboard/admin/usuarios/${u.id}`}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap">
+                            Editar →
+                          </Link>
+                          <button
+                            onClick={() => setEliminando(u)}
+                            className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -526,36 +528,38 @@ export default function AdminUsuariosClient({
               <p className="text-sm text-gray-500">Todos los contratistas han sido activados.</p>
             </div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-gray-50 text-left">
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Nombre</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Cédula</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500">Secretaría</th>
-                  <th className="px-5 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {pendientesFiltrados.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <p className="text-sm font-medium text-gray-900">{p.nombre_completo}</p>
-                      <p className="text-xs text-gray-400">{p.cargo}</p>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{formatCedula(p.cedula)}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{p.secretaria}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <button
-                        onClick={() => setActivando(p)}
-                        className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 font-medium"
-                      >
-                        Crear cuenta →
-                      </button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px]">
+                <thead>
+                  <tr className="border-b bg-gray-50 text-left">
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500">Nombre</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Secretaría</th>
+                    <th className="px-5 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pendientesFiltrados.map(p => (
+                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-gray-900">{p.nombre_completo}</p>
+                        <p className="text-xs text-gray-400">{p.cargo}</p>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600 hidden md:table-cell">{formatCedula(p.cedula)}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600 hidden sm:table-cell">{p.secretaria}</td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => setActivando(p)}
+                          className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 font-medium whitespace-nowrap"
+                        >
+                          Crear cuenta →
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
