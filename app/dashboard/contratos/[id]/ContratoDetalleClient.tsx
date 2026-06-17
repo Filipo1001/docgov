@@ -9,6 +9,7 @@ import { useUsuario } from '@/lib/user-context'
 import { formatCedula, formatDateMedium } from '@/lib/format'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from '@/app/actions/obligaciones'
+import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 
 export default function ContratoDetallePage({
   initialContrato,
@@ -129,10 +130,10 @@ export default function ContratoDetallePage({
     }
 
     setGenerandoPeriodos(true)
-    const supabase = createClient()
 
     // Distribución automática con primer/último mes proporcional y residuo ajustado
-    // al último periodo para que sum(valor_cobro) === valor_total.
+    // al último periodo para que sum(valor_cobro) === valor_total. (Cálculo puro,
+    // sin acceso a BD → se hace en cliente y se envía al servidor para insertar.)
     const distribucion = calcularDistribucionPeriodos({
       fechaInicio: contrato.fecha_inicio,
       fechaFin: contrato.fecha_fin,
@@ -147,36 +148,33 @@ export default function ContratoDetallePage({
     }
 
     const now = new Date()
-    const periodosNuevos = distribucion.map((p) => {
-      const esPasado =
+    const periodosNuevos = distribucion.map((p) => ({
+      numero_periodo: p.numero,
+      mes: p.mes,
+      anio: p.anio,
+      fecha_inicio: p.fechaInicio,
+      fecha_fin: p.fechaFin,
+      valor_cobro: p.valorCobro,
+      es_historico:
         p.anio < now.getFullYear() ||
-        (p.anio === now.getFullYear() && p.mesIndex < now.getMonth())
-      return {
-        contrato_id: id,
-        numero_periodo: p.numero,
-        mes: p.mes,
-        anio: p.anio,
-        fecha_inicio: p.fechaInicio,
-        fecha_fin: p.fechaFin,
-        valor_cobro: p.valorCobro,
-        estado: 'borrador',
-        es_historico: esPasado,
-        ...(esPasado && {
-          historico_marcado_at: new Date().toISOString(),
-          historico_nota: 'Periodo anterior a la digitalización del sistema — marcado automáticamente',
-        }),
+        (p.anio === now.getFullYear() && p.mesIndex < now.getMonth()),
+    }))
+
+    // Server Action: autorización admin server-side, sin depender de la sesión
+    // del navegador. try/finally garantiza que el botón nunca quede colgado.
+    try {
+      const res = await generarPeriodosAction(id as string, periodosNuevos)
+      if (res.error) {
+        toast.error(res.error)
+      } else {
+        toast.success(`${res.data!.generados} periodos generados`)
+        cargarDatos()
       }
-    })
-
-    const { error } = await supabase.from('periodos').insert(periodosNuevos)
-
-    if (error) {
-      toast.error('Error generando periodos: ' + error.message)
-    } else {
-      toast.success(`${periodosNuevos.length} periodos generados`)
-      cargarDatos()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error inesperado')
+    } finally {
+      setGenerandoPeriodos(false)
     }
-    setGenerandoPeriodos(false)
   }
 
   const estadoColor: Record<string, string> = {

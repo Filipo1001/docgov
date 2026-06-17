@@ -113,3 +113,66 @@ export async function crearContrato(
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }
+
+// ─── Generar periodos ───────────────────────────────────────────────────────
+
+export type PeriodoNuevo = {
+  numero_periodo: number
+  mes: string
+  anio: number
+  fecha_inicio: string
+  fecha_fin: string
+  valor_cobro: number
+  es_historico: boolean
+}
+
+/**
+ * Inserta los periodos de un contrato (calculados en cliente con
+ * calcularDistribucionPeriodos). Corre server-side para que el insert no
+ * dependa de la sesión del navegador (mismo bug "Generando..." colgado).
+ */
+export async function generarPeriodos(
+  contratoId: string,
+  periodos: PeriodoNuevo[],
+): Promise<ActionResult<{ generados: number }>> {
+  try {
+    const adminId = await requireAdminId()
+    if (!adminId) return { error: 'No autorizado' }
+
+    if (!periodos.length) return { error: 'No hay periodos para generar' }
+
+    const adminClient = createAdminSupabaseClient()
+
+    // Guard anti-duplicado: no regenerar si ya existen periodos.
+    const { count } = await adminClient
+      .from('periodos')
+      .select('id', { count: 'exact', head: true })
+      .eq('contrato_id', contratoId)
+
+    if ((count ?? 0) > 0) return { error: 'Los periodos ya fueron generados para este contrato' }
+
+    const filas = periodos.map((p) => ({
+      contrato_id: contratoId,
+      numero_periodo: p.numero_periodo,
+      mes: p.mes,
+      anio: p.anio,
+      fecha_inicio: p.fecha_inicio,
+      fecha_fin: p.fecha_fin,
+      valor_cobro: p.valor_cobro,
+      estado: 'borrador',
+      es_historico: p.es_historico,
+      ...(p.es_historico && {
+        historico_marcado_at: new Date().toISOString(),
+        historico_nota: 'Periodo anterior a la digitalización del sistema — marcado automáticamente',
+      }),
+    }))
+
+    const { error } = await adminClient.from('periodos').insert(filas)
+    if (error) return { error: `Error generando periodos: ${error.message}` }
+
+    revalidatePath(`/dashboard/contratos/${contratoId}`)
+    return { data: { generados: filas.length } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
