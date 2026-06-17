@@ -8,6 +8,7 @@ import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula, formatDateMedium } from '@/lib/format'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
+import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from '@/app/actions/obligaciones'
 
 export default function ContratoDetallePage({
   initialContrato,
@@ -88,18 +89,16 @@ export default function ContratoDetallePage({
     if (!nuevaObligacion.trim()) return
     setAgregando(true)
 
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('obligaciones')
-      .insert({
-        contrato_id: id,
-        descripcion: nuevaObligacion.trim(),
-        orden: obligaciones.length + 1,
-        es_permanente: esPermanente,
-      })
+    // Server Action: la autorización se valida server-side (cookies httpOnly),
+    // sin depender de que la sesión del navegador esté caliente.
+    const res = await crearObligacion({
+      contratoId: id as string,
+      descripcion: nuevaObligacion,
+      esPermanente,
+    })
 
-    if (error) {
-      toast.error('Error: ' + error.message)
+    if (res.error) {
+      toast.error('Error: ' + res.error)
     } else {
       toast.success('Obligación agregada')
       setNuevaObligacion('')
@@ -110,10 +109,13 @@ export default function ContratoDetallePage({
   }
 
   async function eliminarObligacion(oblId: string) {
-    const supabase = createClient()
-    await supabase.from('obligaciones').delete().eq('id', oblId)
-    toast.success('Obligación eliminada')
-    cargarDatos()
+    const res = await eliminarObligacionAction(oblId, id as string)
+    if (res.error) {
+      toast.error('Error: ' + res.error)
+    } else {
+      toast.success('Obligación eliminada')
+      cargarDatos()
+    }
   }
 
   async function generarPeriodos() {
