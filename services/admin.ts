@@ -120,6 +120,22 @@ export async function getDependencias(): Promise<Dependencia[]> {
   return (data ?? []) as Dependencia[]
 }
 
+/**
+ * Usuarios ligeros (id, nombre, cédula, rol) para poblar los selects de
+ * creación de contrato. Se ejecuta server-side, así que no depende de que la
+ * sesión del navegador esté caliente (evita listas vacías por RLS fría).
+ */
+export async function getUsuariosParaSelect(): Promise<
+  { id: string; nombre_completo: string; cedula: string; rol: string }[]
+> {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .from('usuarios')
+    .select('id, nombre_completo, cedula, rol')
+    .order('nombre_completo')
+  return (data ?? []) as { id: string; nombre_completo: string; cedula: string; rol: string }[]
+}
+
 // ─── Municipio ────────────────────────────────────────────────
 
 export async function getMunicipioAdmin(): Promise<MunicipioAdmin | null> {

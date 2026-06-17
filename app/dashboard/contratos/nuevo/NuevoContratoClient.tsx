@@ -24,11 +24,17 @@ interface ExcelData {
   secop_url: string | null
 }
 
-export default function NuevoContratoPage() {
+export default function NuevoContratoPage({
+  initialDependencias = [],
+  initialUsuarios = [],
+}: {
+  initialDependencias?: { id: string; nombre: string }[]
+  initialUsuarios?: { id: string; nombre_completo: string; cedula: string; rol: string }[]
+}) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
-  const [dependencias, setDependencias] = useState<{ id: string; nombre: string }[]>([])
-  const [usuarios, setUsuarios] = useState<{ id: string; nombre_completo: string; cedula: string; rol: string }[]>([])
+  const [dependencias] = useState(initialDependencias)
+  const [usuarios] = useState(initialUsuarios)
 
   // Excel lookup state
   const [buscandoExcel, setBuscandoExcel] = useState(false)
@@ -54,19 +60,8 @@ export default function NuevoContratoPage() {
     secop_url: '',
   })
 
-  // ── Load dropdowns ──────────────────────────────────────────
-  useEffect(() => {
-    async function cargar() {
-      const supabase = createClient()
-      const [{ data: deps }, { data: users }] = await Promise.all([
-        supabase.from('dependencias').select('id, nombre').order('nombre'),
-        supabase.from('usuarios').select('id, nombre_completo, cedula, rol').order('nombre_completo'),
-      ])
-      setDependencias(deps || [])
-      setUsuarios(users || [])
-    }
-    cargar()
-  }, [])
+  // Dropdowns (dependencias/usuarios) llegan como props desde el servidor —
+  // sin carga client-side que pueda fallar por sesión fría.
 
   // ── Auto-generate valor en letras ───────────────────────────
   useEffect(() => {
