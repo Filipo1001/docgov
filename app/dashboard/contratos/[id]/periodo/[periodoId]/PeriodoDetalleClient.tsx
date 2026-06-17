@@ -1629,8 +1629,8 @@ export default function PeriodoDetallePage({
                 <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
                 </span>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">{obl.descripcion}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 break-words">{obl.descripcion}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''} registrada{actsDeObl.length !== 1 ? 's' : ''}
                   </p>
@@ -1686,14 +1686,14 @@ export default function PeriodoDetallePage({
                         /* ── Read / normal mode ── */
                         <>
                           <div className="flex items-start justify-between">
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs text-gray-400">{actIndex + 1}.</span>
                                 <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
                                   {act.cantidad} {act.cantidad === 1 ? 'acción' : 'acciones'}
                                 </span>
                               </div>
-                              <p className="text-sm text-gray-700">{act.descripcion}</p>
+                              <p className="text-sm text-gray-700 break-words">{act.descripcion}</p>
                             </div>
                             {esEditable && (
                               <div className="flex items-center gap-0 ml-1 shrink-0">
