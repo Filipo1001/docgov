@@ -14,6 +14,18 @@ import { NextResponse } from 'next/server'
 
 const BUCKET = 'pdf-cache'
 
+/**
+ * Error de datos incompletos: lanzado por `generate()` cuando faltan campos
+ * obligatorios. getOrGeneratePDF lo convierte en un 422 con mensaje legible,
+ * en vez de un 500 críptico.
+ */
+export class PDFDatosIncompletosError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PDFDatosIncompletosError'
+  }
+}
+
 // States where PDF content won't change until the next state transition
 export const ESTADOS_CACHEABLES = new Set(['enviado', 'revision', 'aprobado', 'radicado'])
 
@@ -81,7 +93,17 @@ export async function getOrGeneratePDF({
 
   // Cache miss (or non-cacheable estado) — generate PDF now
   // buildPDFData is called inside generate(), so it's skipped on cache hits
-  const { buffer, filename } = await generate()
+  let buffer: Buffer
+  let filename: string
+  try {
+    ;({ buffer, filename } = await generate())
+  } catch (e) {
+    // Datos incompletos → 422 con mensaje legible (no un 500 críptico)
+    if (e instanceof PDFDatosIncompletosError) {
+      return NextResponse.json({ error: e.message }, { status: 422 })
+    }
+    throw e
+  }
 
   if (shouldCache) {
     // Fire and forget — don't block the response

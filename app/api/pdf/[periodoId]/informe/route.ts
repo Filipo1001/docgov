@@ -3,7 +3,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
-import { getOrGeneratePDF, invalidarCachePDF } from '@/lib/pdf/cache'
+import { getOrGeneratePDF, invalidarCachePDF, PDFDatosIncompletosError } from '@/lib/pdf/cache'
+import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -37,6 +38,8 @@ export async function GET(
     generate: async () => {
       const data = await buildPDFData(periodoId)
       if (!data) throw new Error('Periodo no encontrado')
+      const faltan = mensajeDatosFaltantes('informe', data)
+      if (faltan) throw new PDFDatosIncompletosError(faltan)
       const filename = `informe-actividades-${data.contrato.numero}-${data.contrato.anio}-periodo-${data.periodo.numero}.pdf`
       const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
         import('@react-pdf/renderer'),

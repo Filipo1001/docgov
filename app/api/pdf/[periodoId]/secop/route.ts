@@ -17,6 +17,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
+import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -55,6 +56,12 @@ export async function GET(
       { error: 'Los documentos SECOP solo están disponibles cuando el periodo ha sido aprobado por la secretaria' },
       { status: 403 }
     )
+  }
+
+  // Datos incompletos → 422 con mensaje claro (el ZIP incluye la Cuenta de Cobro)
+  const faltanDatos = mensajeDatosFaltantes('cuenta-cobro', data)
+  if (faltanDatos) {
+    return NextResponse.json({ error: faltanDatos }, { status: 422 })
   }
 
   // Fetch planilla in parallel with PDF generation

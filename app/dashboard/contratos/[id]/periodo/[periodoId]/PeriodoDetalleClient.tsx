@@ -905,7 +905,15 @@ export default function PeriodoDetallePage({
     const toastId = toast.loading('Generando documentos…')
     try {
       const res = await fetch(href)
-      if (!res.ok) throw new Error('No se pudo generar el paquete')
+      if (!res.ok) {
+        // Datos incompletos (422) u otro error: mostrar el mensaje real del servidor
+        let msg = 'No se pudo generar el paquete'
+        try {
+          const j = await res.json()
+          if (j?.error) msg = j.error
+        } catch { /* respuesta no-JSON: usar mensaje genérico */ }
+        throw new Error(msg)
+      }
       const blob = await res.blob()
 
       // Nombre de archivo desde Content-Disposition, con fallback razonable

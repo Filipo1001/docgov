@@ -20,6 +20,7 @@ import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { buildPDFData } from '@/lib/pdf/data'
+import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 
 export const runtime = 'nodejs'
@@ -63,6 +64,12 @@ export async function GET(
       { error: 'Las actas solo están disponibles cuando el periodo ha sido aprobado' },
       { status: 403 }
     )
+  }
+
+  // Datos incompletos → 422 con mensaje claro (el ZIP incluye el Acta de Pago)
+  const faltanDatos = mensajeDatosFaltantes('acta-pago', data)
+  if (faltanDatos) {
+    return NextResponse.json({ error: faltanDatos }, { status: 422 })
   }
 
   const estado = data.periodo.estado
