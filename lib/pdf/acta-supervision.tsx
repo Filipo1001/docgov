@@ -11,6 +11,7 @@ import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
 import { calcularBaseCotizacionSS } from '@/lib/constants'
+import { formatCedula } from '@/lib/format'
 
 // Disable automatic hyphenation — prevents words being split mid-line
 Font.registerHyphenationCallback(word => [word])
@@ -513,7 +514,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           </View>
           <View style={s.personRow}>
             <Text style={s.personName}>{contrato.contratista.nombre_completo.toUpperCase()}</Text>
-            <Text style={s.personId}>{contrato.contratista.cedula}</Text>
+            <Text style={s.personId}>{formatCedula(contrato.contratista.cedula)}</Text>
           </View>
 
           {/* SUPERVISOR */}
@@ -523,7 +524,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           </View>
           <View style={s.personRow}>
             <Text style={s.personName}>{contrato.supervisor.nombre_completo.toUpperCase()}</Text>
-            <Text style={s.personId}>{contrato.supervisor.cedula || '—'}</Text>
+            <Text style={s.personId}>{contrato.supervisor.cedula ? formatCedula(contrato.supervisor.cedula) : '—'}</Text>
           </View>
 
           {/* OBJETO */}

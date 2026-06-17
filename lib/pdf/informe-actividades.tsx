@@ -23,6 +23,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFObligacion, PDFActividad } from './types'
+import { formatCedula } from '@/lib/format'
 
 // ─── Date utilities ───────────────────────────────────────────
 
@@ -546,7 +547,7 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
             ? <InfoRow label="Representante legal:" value={municipio.representante_legal} />
             : null}
           {municipio.cedula_representante
-            ? <InfoRow label="Cédula de Ciudadanía:" value={municipio.cedula_representante} />
+            ? <InfoRow label="Cédula de Ciudadanía:" value={formatCedula(municipio.cedula_representante)} />
             : null}
           {municipio.nit
             ? <InfoRow label="NIT:" value={municipio.nit} />
@@ -554,12 +555,12 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
 
           <InfoSectionHeader>Supervisor</InfoSectionHeader>
           <InfoRow label="Supervisor:" value={contrato.supervisor.nombre_completo} />
-          <InfoRow label="Cédula de Ciudadanía:" value={contrato.supervisor.cedula} />
+          <InfoRow label="Cédula de Ciudadanía:" value={formatCedula(contrato.supervisor.cedula)} />
 
           <InfoSectionHeader>Contratista</InfoSectionHeader>
           <InfoRow label="Si es persona natural:" value="" />
           <InfoRow label="Nombre:" value={contrato.contratista.nombre_completo} />
-          <InfoRow label="Cédula de ciudadanía:" value={contrato.contratista.cedula} />
+          <InfoRow label="Cédula de ciudadanía:" value={formatCedula(contrato.contratista.cedula)} />
           <InfoRow
             label="Periodo para reportar la actividad:"
             value={periodoRangoMinusc(periodo.fecha_inicio, periodo.fecha_fin)}
@@ -687,7 +688,7 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
               </Text>
               <View style={s.sigLabelRow}>
                 <Text style={s.sigTag}>C.C.</Text>
-                <Text style={s.sigDetail}>No. {contrato.contratista.cedula}</Text>
+                <Text style={s.sigDetail}>No. {formatCedula(contrato.contratista.cedula)}</Text>
               </View>
               {contrato.contratista.telefono && (
                 <View style={s.sigLabelRow}>
@@ -742,7 +743,7 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
 
               <View style={s.sigLabelRow}>
                 <Text style={s.sigTag}>C.C.</Text>
-                <Text style={s.sigDetail}>No. {contrato.supervisor.cedula}</Text>
+                <Text style={s.sigDetail}>No. {formatCedula(contrato.supervisor.cedula)}</Text>
               </View>
             </View>
 

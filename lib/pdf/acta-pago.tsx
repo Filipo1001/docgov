@@ -10,6 +10,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
+import { formatCedula } from '@/lib/format'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
 
@@ -372,7 +373,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
           <View style={s.infoRow}>
             <View style={s.infoLabel}><Text>Contratista:</Text></View>
             <View style={s.infoVal}>
-              <Text>{contrato.contratista.nombre_completo.toUpperCase()} C.C. {contrato.contratista.cedula}</Text>
+              <Text>{contrato.contratista.nombre_completo.toUpperCase()} C.C. {formatCedula(contrato.contratista.cedula)}</Text>
             </View>
           </View>
           <View style={s.infoRow}>
