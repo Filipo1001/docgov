@@ -7,6 +7,7 @@ import { Toaster, toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion, guardarMesCotizacion } from '@/app/actions/periodos'
+import { getOtrosies, crearOtrosi, eliminarOtrosi, type Otrosi, type TipoOtrosi } from '@/app/actions/otrosies'
 import type { EstadoPeriodo } from '@/lib/types'
 import { DEFAULT_BASE_COTIZACION_SS, calcularBaseCotizacionSS, MESES } from '@/lib/constants'
 
@@ -91,7 +92,22 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [periodos, setPeriodos] = useState<PeriodoRow[]>([])
   const [distribucion, setDistribucion] = useState<DistribucionItem[]>([])
   const [cargando, setCargando] = useState(true)
-  const [tab, setTab] = useState<'pagos' | 'planillas' | 'base_ss'>('pagos')
+  const [tab, setTab] = useState<'pagos' | 'planillas' | 'base_ss' | 'otrosies'>('pagos')
+
+  // Otrosíes
+  const [otrosies, setOtrosies] = useState<Otrosi[]>([])
+  const [mostrarFormOtrosi, setMostrarFormOtrosi] = useState(false)
+  const [guardandoOtrosi, setGuardandoOtrosi] = useState(false)
+  const [eliminandoOtrosiId, setEliminandoOtrosiId] = useState<string | null>(null)
+  const [formOtrosi, setFormOtrosi] = useState({
+    tipo: 'adicion' as TipoOtrosi,
+    fecha_inicio: '',
+    valor_adicion: '',
+    plazo_dias_adicion: '',
+    cdp: '',
+    crp: '',
+    nota: '',
+  })
 
   // Plan de Pagos — edición inline por periodo
   const [valoresEdit, setValoresEdit] = useState<Record<string, string>>({})
@@ -158,10 +174,47 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
       setBaseEdit(bases)
     }
 
+    // Otrosíes (vía Server Action — auth server-side)
+    try {
+      setOtrosies(await getOtrosies(contratoId))
+    } catch { /* no bloquea la carga del resto */ }
+
     setCargando(false)
   }, [contratoId])
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
+
+  // ── Otrosíes handlers ───────────────────────────────────────
+
+  async function guardarOtrosi() {
+    if (!formOtrosi.fecha_inicio) { toast.error('La fecha de inicio del otrosí es obligatoria'); return }
+    setGuardandoOtrosi(true)
+    const res = await crearOtrosi({
+      contratoId,
+      tipo: formOtrosi.tipo,
+      fecha_inicio: formOtrosi.fecha_inicio,
+      valor_adicion: parseInt(formOtrosi.valor_adicion.replace(/\D/g, ''), 10) || 0,
+      plazo_dias_adicion: parseInt(formOtrosi.plazo_dias_adicion, 10) || 0,
+      cdp: formOtrosi.cdp || null,
+      crp: formOtrosi.crp || null,
+      nota: formOtrosi.nota || null,
+    })
+    setGuardandoOtrosi(false)
+    if (res.error) { toast.error(res.error); return }
+    toast.success('Otrosí registrado')
+    setMostrarFormOtrosi(false)
+    setFormOtrosi({ tipo: 'adicion', fecha_inicio: '', valor_adicion: '', plazo_dias_adicion: '', cdp: '', crp: '', nota: '' })
+    await cargarDatos()
+  }
+
+  async function borrarOtrosi(id: string) {
+    setEliminandoOtrosiId(id)
+    const res = await eliminarOtrosi(id, contratoId)
+    setEliminandoOtrosiId(null)
+    if (res.error) { toast.error(res.error); return }
+    toast.success('Otrosí eliminado')
+    await cargarDatos()
+  }
 
   // ── Plan de Pagos handlers ──────────────────────────────────
 
@@ -321,8 +374,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {(['pagos', 'planillas', 'base_ss'] as const).map((t) => (
+      <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+        {(['pagos', 'planillas', 'base_ss', 'otrosies'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -330,7 +383,10 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
               tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {t === 'pagos' ? '💰 Plan de Pagos' : t === 'planillas' ? '📋 Plan de Planillas' : '🏥 Base SS'}
+            {t === 'pagos' ? '💰 Plan de Pagos'
+              : t === 'planillas' ? '📋 Plan de Planillas'
+              : t === 'base_ss' ? '🏥 Base SS'
+              : `📑 Otrosíes${otrosies.length > 0 ? ` (${otrosies.length})` : ''}`}
           </button>
         ))}
       </div>
@@ -757,6 +813,156 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
         </div>
         )
       })()}
+
+      {/* ══ OTROSÍES ═══════════════════════════════════════════ */}
+      {tab === 'otrosies' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-gray-700 space-y-1.5">
+            <p className="font-semibold text-blue-900">Otrosíes del contrato</p>
+            <p>
+              Un otrosí modifica el contrato (valor, plazo) sin crear uno nuevo. Al registrarlo, los
+              documentos (cuenta de cobro y actas) reflejarán el valor adicionado.
+            </p>
+            <p className="text-amber-700">
+              ⚠️ Recuerda ajustar manualmente el <strong>valor mensual</strong> de los periodos afectados
+              en la pestaña <strong>Plan de Pagos</strong> (desde la fecha del otrosí en adelante).
+            </p>
+          </div>
+
+          {/* Lista de otrosíes */}
+          {otrosies.length > 0 && (
+            <div className="space-y-2">
+              {otrosies.map((o) => (
+                <div key={o.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-sm font-semibold text-gray-900">Otrosí N.° {o.numero}</span>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize">{o.tipo}</span>
+                      <span className="text-xs text-gray-400">Inicia: {o.fecha_inicio}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                      {o.valor_adicion > 0 && <span>Adición: <strong>$ {o.valor_adicion.toLocaleString('es-CO')}</strong></span>}
+                      {o.plazo_dias_adicion > 0 && <span>Plazo: <strong>{o.plazo_dias_adicion} días</strong></span>}
+                      {o.cdp && <span>CDP: {o.cdp}</span>}
+                      {o.crp && <span>CRP: {o.crp}</span>}
+                    </div>
+                    {o.nota && <p className="text-xs text-gray-500 italic mt-1.5 break-words">{o.nota}</p>}
+                  </div>
+                  <button
+                    onClick={() => borrarOtrosi(o.id)}
+                    disabled={eliminandoOtrosiId === o.id}
+                    className="text-xs text-red-500 hover:text-red-700 font-medium shrink-0 disabled:opacity-50"
+                  >
+                    {eliminandoOtrosiId === o.id ? '…' : 'Eliminar'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Formulario / botón */}
+          {!mostrarFormOtrosi ? (
+            <button
+              onClick={() => setMostrarFormOtrosi(true)}
+              className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              + Registrar otrosí
+            </button>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
+              <p className="text-sm font-semibold text-gray-900">Nuevo otrosí</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de modificación</label>
+                  <select
+                    value={formOtrosi.tipo}
+                    onChange={(e) => setFormOtrosi(f => ({ ...f, tipo: e.target.value as TipoOtrosi }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                  >
+                    <option value="adicion">Adición</option>
+                    <option value="prorroga">Prórroga</option>
+                    <option value="modificatorio">Modificatorio</option>
+                    <option value="aclaratorio">Aclaratorio</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Fecha de inicio del otrosí</label>
+                  <input
+                    type="date"
+                    value={formOtrosi.fecha_inicio}
+                    onChange={(e) => setFormOtrosi(f => ({ ...f, fecha_inicio: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Valor de la adición (0 si no aplica)</label>
+                  <input
+                    type="text" inputMode="numeric" placeholder="11200000"
+                    value={formOtrosi.valor_adicion}
+                    onChange={(e) => setFormOtrosi(f => ({ ...f, valor_adicion: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Plazo adicional en días (0 = NO APLICA)</label>
+                  <input
+                    type="text" inputMode="numeric" placeholder="0"
+                    value={formOtrosi.plazo_dias_adicion}
+                    onChange={(e) => setFormOtrosi(f => ({ ...f, plazo_dias_adicion: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">CDP del otrosí</label>
+                  <input
+                    type="text" placeholder="00402"
+                    value={formOtrosi.cdp}
+                    onChange={(e) => setFormOtrosi(f => ({ ...f, cdp: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">CRP del otrosí</label>
+                  <input
+                    type="text" placeholder="00550"
+                    value={formOtrosi.crp}
+                    onChange={(e) => setFormOtrosi(f => ({ ...f, crp: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nota / considerando (opcional)</label>
+                <textarea
+                  rows={2}
+                  value={formOtrosi.nota}
+                  onChange={(e) => setFormOtrosi(f => ({ ...f, nota: e.target.value }))}
+                  placeholder="Se adicionó el valor contractual en la suma de…"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={guardarOtrosi}
+                  disabled={guardandoOtrosi || !formOtrosi.fecha_inicio}
+                  className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                >
+                  {guardandoOtrosi ? 'Guardando…' : 'Guardar otrosí'}
+                </button>
+                <button
+                  onClick={() => setMostrarFormOtrosi(false)}
+                  className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Input oculto para subida de PDFs — un solo input compartido por todos los periodos */}
       <input
