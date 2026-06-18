@@ -77,11 +77,19 @@ export async function getOrGeneratePDF({
 
       if (fileList?.some((f: { name: string }) => f.name === `${periodoId}.pdf`)) {
         const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
-        // Redirect to Supabase CDN — instant delivery, zero server CPU
+        // Redirect to Supabase CDN — instant delivery, zero server CPU.
+        // IMPORTANTE: no-store en el REDIRECT (no en el PDF). Antes usaba
+        // max-age=3600, lo que hacía que el navegador recordara el redirect a
+        // la versión vieja hasta 1 h: tras editar un dato (planilla, mes de
+        // cotización…) e invalidar el caché del servidor, el usuario seguía
+        // viendo el PDF anterior. Con no-store el navegador revalida el redirect
+        // en cada apertura, así que la regeneración se ve de inmediato. El
+        // caché real (que ahorra CPU) sigue viviendo en Storage; esto solo
+        // afecta a que el navegador no memorice a dónde apuntaba el redirect.
         return NextResponse.redirect(publicUrl, {
           status: 302,
           headers: {
-            'Cache-Control': 'public, max-age=3600',
+            'Cache-Control': 'no-store, max-age=0',
             'X-PDF-Cache': 'HIT',
           },
         })
