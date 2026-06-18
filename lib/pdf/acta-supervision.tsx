@@ -219,6 +219,27 @@ const s = StyleSheet.create({
     fontSize: 9,
     textAlign: 'center',
   },
+  // Celda dividida (CDP/CRP con otrosí): original | otrosí
+  infoSplitCell: {
+    flex: 1,
+    flexDirection: 'row',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+  },
+  infoSplitSub: {
+    flex: 1,
+    padding: '3 2',
+    fontSize: 9,
+    textAlign: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+  },
+  infoSplitSubLast: {
+    flex: 1,
+    padding: '3 2',
+    fontSize: 9,
+    textAlign: 'center',
+  },
   // Contratista/Supervisor row
   personRow: {
     flexDirection: 'row',
@@ -515,8 +536,24 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <Text style={s.infoDataCell}>{periodoNum}</Text>
             <Text style={s.infoDataCell}>{formatDate(periodo.fecha_fin)}</Text>
             <Text style={s.infoDataCell}>{contrato.numero}-{contrato.anio}</Text>
-            <Text style={s.infoDataCell}>{pad5(contrato.cdp)}</Text>
-            <Text style={s.infoDataCellLast}>{pad5(contrato.crp)}</Text>
+            {/* CDP — con otrosí se divide en dos: original | otrosí */}
+            {ot && ot.cdp ? (
+              <View style={s.infoSplitCell}>
+                <Text style={s.infoSplitSub}>{pad5(contrato.cdp)}</Text>
+                <Text style={s.infoSplitSubLast}>{pad5(ot.cdp)}</Text>
+              </View>
+            ) : (
+              <Text style={s.infoDataCell}>{pad5(contrato.cdp)}</Text>
+            )}
+            {/* CRP — con otrosí se divide en dos: original | otrosí */}
+            {ot && ot.crp ? (
+              <View style={{ ...s.infoSplitCell, borderRightWidth: 0 }}>
+                <Text style={s.infoSplitSub}>{pad5(contrato.crp)}</Text>
+                <Text style={s.infoSplitSubLast}>{pad5(ot.crp)}</Text>
+              </View>
+            ) : (
+              <Text style={s.infoDataCellLast}>{pad5(contrato.crp)}</Text>
+            )}
           </View>
 
           {/* CONTRATISTA */}
