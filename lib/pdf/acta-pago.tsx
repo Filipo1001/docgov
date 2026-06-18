@@ -155,6 +155,23 @@ const s = StyleSheet.create({
     fontSize: 9.5,
     lineHeight: 1.5,
   },
+  // Valor dividido en dos celdas (CDP/CRP con otrosí: contrato | otrosí)
+  infoValSplit: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  infoValSub: {
+    flex: 1,
+    padding: '4 6',
+    fontSize: 9.5,
+    borderRightWidth: 1,
+    borderRightColor: '#000',
+  },
+  infoValSubLast: {
+    flex: 1,
+    padding: '4 6',
+    fontSize: 9.5,
+  },
   // CONSIDERANDO
   considerandoTitle: {
     fontFamily: 'Helvetica-Bold',
@@ -396,13 +413,28 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
                 <View style={s.infoLabel}><Text>Valor Total del Contrato:</Text></View>
                 <View style={s.infoVal}><Text>{valorContratoTexto}.</Text></View>
               </View>
+              {/* CDP/CRP — con otrosí, el valor se divide en dos celdas: contrato | otrosí */}
               <View style={s.infoRow}>
                 <View style={s.infoLabel}><Text>No. CDP</Text></View>
-                <View style={s.infoVal}><Text>{contrato.cdp || '—'}   {ot.cdp ?? ''}</Text></View>
+                {ot.cdp ? (
+                  <View style={s.infoValSplit}>
+                    <Text style={s.infoValSub}>{contrato.cdp || '—'}</Text>
+                    <Text style={s.infoValSubLast}>{ot.cdp}</Text>
+                  </View>
+                ) : (
+                  <View style={s.infoVal}><Text>{contrato.cdp || '—'}</Text></View>
+                )}
               </View>
               <View style={s.infoRowLast}>
                 <View style={s.infoLabel}><Text>No. CRP</Text></View>
-                <View style={s.infoVal}><Text>{contrato.crp || '—'}   {ot.crp ?? ''}</Text></View>
+                {ot.crp ? (
+                  <View style={s.infoValSplit}>
+                    <Text style={s.infoValSub}>{contrato.crp || '—'}</Text>
+                    <Text style={s.infoValSubLast}>{ot.crp}</Text>
+                  </View>
+                ) : (
+                  <View style={s.infoVal}><Text>{contrato.crp || '—'}</Text></View>
+                )}
               </View>
             </>
           ) : (
