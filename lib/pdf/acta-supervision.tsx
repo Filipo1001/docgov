@@ -452,7 +452,14 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
       ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
       : formatCOP(contrato.valor_total)
 
-  const baseValor = periodo.base_cotizacion_ss ?? calcularBaseCotizacionSS(contrato.valor_mensual)
+  // Base de cotización (IBC) = 40% del valor mensual del periodo, con piso SMLMV.
+  // Prioridad:
+  //  1) base_cotizacion_ss manual del periodo (si el admin la fijó en Avanzados).
+  //  2) 40% del valor mensual EFECTIVO del periodo: el mayor entre valor_cobro
+  //     (refleja el otrosí: $5.800.000 → IBC $2.320.000) y valor_mensual (evita
+  //     que un mes proporcional baje el IBC por debajo del valor mensual real).
+  const valorMensualEfectivo = Math.max(periodo.valor_cobro, contrato.valor_mensual)
+  const baseValor = periodo.base_cotizacion_ss ?? calcularBaseCotizacionSS(valorMensualEfectivo)
   const baseCotizacionTexto = `${numeroALetrasLargo(baseValor)} PESOS ($ ${baseValor.toLocaleString('es-CO')})`
 
   // Pagos anteriores al mes actual → filas de la tabla de pagos
