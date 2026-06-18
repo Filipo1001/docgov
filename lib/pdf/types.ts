@@ -32,6 +32,22 @@ export interface PDFPeriodo {
   base_cotizacion_ss?: number | null   // Admin-overridable; falls back to DEFAULT_BASE_COTIZACION_SS
 }
 
+/** Datos del otrosí — solo presente si el contrato tiene al menos uno. */
+export interface PDFOtrosi {
+  valor_inicial: number
+  valor_adicion: number
+  valor_total_con_adicion: number
+  valor_inicial_letras: string
+  valor_adicion_letras: string
+  valor_total_letras: string
+  dias_adicion: number
+  fecha_inicio: string
+  tipo: string            // adicion | prorroga | modificatorio | aclaratorio
+  cdp?: string
+  crp?: string
+  nota?: string
+}
+
 export interface PDFContrato {
   numero: string
   anio: number
@@ -51,6 +67,7 @@ export interface PDFContrato {
   fecha_fin_contrato?: string
   cdp?: string
   crp?: string
+  otrosi?: PDFOtrosi      // presente solo si hay otrosí
   contratista: PDFPartner
   supervisor: PDFPartner
 }

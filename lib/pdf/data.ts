@@ -98,11 +98,12 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const contrato = periodo.contrato as any
   if (!contrato) return null
 
-  // Queries 2, 3, 4 — run in parallel (independent of each other)
+  // Queries 2, 3, 4, 5 — run in parallel (independent of each other)
   const [
     { data: allPeriodos },
     { data: obligacionesRaw },
     { data: actividadesDelPeriodo },
+    { data: otrosiesRaw },
   ] = await Promise.all([
     // All periods for payment history + planilla table
     supabase
@@ -124,7 +125,20 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       .select('id, obligacion_id, descripcion, cantidad, evidencias(id, url, nombre_archivo)')
       .eq('periodo_id', periodoId)
       .order('orden'),
+
+    // Otrosíes del contrato (para reflejar valor adicionado, plazo, CDP/CRP, etc.)
+    supabase
+      .from('otrosies')
+      .select('numero, tipo, fecha_inicio, valor_adicion, plazo_dias_adicion, cdp, crp, nota')
+      .eq('contrato_id', contrato.id)
+      .order('numero'),
   ])
+
+  // Valor total efectivo del contrato = inicial + adiciones de otrosíes.
+  // Sin otrosíes, es igual al valor_total actual (cero cambio para esos contratos).
+  const adicionesTotal = ((otrosiesRaw ?? []) as Array<{ valor_adicion: number }>)
+    .reduce((acc, o) => acc + (o.valor_adicion ?? 0), 0)
+  const valorTotalEfectivo = contrato.valor_total + adicionesTotal
 
   // Build payment history (up to current period)
   const pagosHistorial: PDFPagoHistorial[] = []
@@ -137,10 +151,10 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       mes: p.mes,
       cotizacion_mes: p.cotizacion_mes ?? p.mes,  // mes real cotizado (fallback al mes del informe)
       fecha_pago: calcFechaPago(p.fecha_fin),
-      valor_contrato: contrato.valor_total,
+      valor_contrato: valorTotalEfectivo,
       valor_pagado_acumulado: acumulado - p.valor_cobro,
       valor_acta: p.valor_cobro,
-      saldo_pendiente: contrato.valor_total - acumulado,
+      saldo_pendiente: valorTotalEfectivo - acumulado,
       numero_planilla: p.numero_planilla ?? null,
     })
   }
@@ -198,6 +212,37 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
 
   const municipio = contrato.municipio ?? {}
 
+  // ── Otrosíes ────────────────────────────────────────────────────────────
+  // El valor_total del contrato se mantiene como el valor INICIAL. El "valor
+  // total" del documento se deriva sumando las adiciones. Si no hay otrosíes,
+  // otrosiInfo queda undefined y los PDFs NO muestran ningún campo extra —
+  // los contratos sin otrosí salen exactamente igual que hoy.
+  const otrosiesList = (otrosiesRaw ?? []) as Array<{
+    numero: number; tipo: string; fecha_inicio: string; valor_adicion: number
+    plazo_dias_adicion: number; cdp: string | null; crp: string | null; nota: string | null
+  }>
+  const valorInicial = contrato.valor_total
+  const totalAdiciones = otrosiesList.reduce((acc, o) => acc + (o.valor_adicion ?? 0), 0)
+  const diasAdicion = otrosiesList.reduce((acc, o) => acc + (o.plazo_dias_adicion ?? 0), 0)
+  const otrosiInfo = otrosiesList.length > 0
+    ? {
+        valor_inicial: valorInicial,
+        valor_adicion: totalAdiciones,
+        valor_total_con_adicion: valorInicial + totalAdiciones,
+        valor_inicial_letras: numeroALetras(valorInicial),
+        valor_adicion_letras: numeroALetras(totalAdiciones),
+        valor_total_letras: numeroALetras(valorInicial + totalAdiciones),
+        dias_adicion: diasAdicion,
+        // Datos del primer otrosí (el caso típico es uno; si hay varios, se
+        // muestran los del más reciente para fecha/CDP/CRP/tipo).
+        fecha_inicio: otrosiesList[otrosiesList.length - 1].fecha_inicio,
+        tipo: otrosiesList[otrosiesList.length - 1].tipo,
+        cdp: otrosiesList[otrosiesList.length - 1].cdp ?? undefined,
+        crp: otrosiesList[otrosiesList.length - 1].crp ?? undefined,
+        nota: otrosiesList[otrosiesList.length - 1].nota ?? undefined,
+      }
+    : undefined
+
   return {
     municipio: {
       nombre: municipio.nombre ?? 'Municipio',
@@ -227,6 +272,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_fin_contrato: contrato.fecha_fin ?? undefined,
       cdp: contrato.cdp ?? undefined,
       crp: contrato.crp ?? undefined,
+      otrosi: otrosiInfo,
       contratista: {
         nombre_completo: contrato.contratista?.nombre_completo ?? '',
         cedula: contrato.contratista?.cedula ?? '',

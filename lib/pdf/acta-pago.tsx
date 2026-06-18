@@ -310,9 +310,15 @@ const s = StyleSheet.create({
 export function ActaPagoPDF({ data }: { data: PDFData }) {
   const { contrato, periodo, pagosHistorial = [] } = data
 
-  const valorContratoTexto = contrato.valor_letras_total
-    ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
-    : formatCOP(contrato.valor_total)
+  const ot = contrato.otrosi
+  const fmtValorOt = (letras: string, monto: number) =>
+    `${sinSufijoMoneda(letras.toUpperCase())} DE PESOS M/L (${formatCOP(monto)})`
+  // Con otrosí, el "valor del contrato" es el total con adición.
+  const valorContratoTexto = ot
+    ? fmtValorOt(ot.valor_total_letras, ot.valor_total_con_adicion)
+    : contrato.valor_letras_total
+      ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
+      : formatCOP(contrato.valor_total)
 
   const valorMensualTexto = contrato.valor_letras_mensual
     ? `${sinSufijoMoneda(contrato.valor_letras_mensual.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_mensual)})`
@@ -376,22 +382,49 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
               <Text>{contrato.contratista.nombre_completo.toUpperCase()} C.C. {formatCedula(contrato.contratista.cedula)}</Text>
             </View>
           </View>
-          <View style={s.infoRow}>
-            <View style={s.infoLabel}><Text>Valor Contrato</Text></View>
-            <View style={s.infoVal}><Text>{valorContratoTexto}</Text></View>
-          </View>
-          <View style={s.infoRow}>
-            <View style={s.infoLabel}><Text>Duración</Text></View>
-            <View style={s.infoVal}><Text>{plazoTexto}</Text></View>
-          </View>
-          <View style={s.infoRow}>
-            <View style={s.infoLabel}><Text>No. CDP</Text></View>
-            <View style={s.infoVal}><Text>{contrato.cdp || '—'}</Text></View>
-          </View>
-          <View style={s.infoRowLast}>
-            <View style={s.infoLabel}><Text>No. CRP</Text></View>
-            <View style={s.infoVal}><Text>{contrato.crp || '—'}</Text></View>
-          </View>
+          {ot ? (
+            <>
+              <View style={s.infoRow}>
+                <View style={s.infoLabel}><Text>Valor Inicial:</Text></View>
+                <View style={s.infoVal}><Text>{fmtValorOt(ot.valor_inicial_letras, ot.valor_inicial)}.</Text></View>
+              </View>
+              <View style={s.infoRow}>
+                <View style={s.infoLabel}><Text>Valor Adición:</Text></View>
+                <View style={s.infoVal}><Text>{fmtValorOt(ot.valor_adicion_letras, ot.valor_adicion)}.</Text></View>
+              </View>
+              <View style={s.infoRow}>
+                <View style={s.infoLabel}><Text>Valor Total del Contrato:</Text></View>
+                <View style={s.infoVal}><Text>{valorContratoTexto}.</Text></View>
+              </View>
+              <View style={s.infoRow}>
+                <View style={s.infoLabel}><Text>No. CDP</Text></View>
+                <View style={s.infoVal}><Text>{contrato.cdp || '—'}   {ot.cdp ?? ''}</Text></View>
+              </View>
+              <View style={s.infoRowLast}>
+                <View style={s.infoLabel}><Text>No. CRP</Text></View>
+                <View style={s.infoVal}><Text>{contrato.crp || '—'}   {ot.crp ?? ''}</Text></View>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={s.infoRow}>
+                <View style={s.infoLabel}><Text>Valor Contrato</Text></View>
+                <View style={s.infoVal}><Text>{valorContratoTexto}</Text></View>
+              </View>
+              <View style={s.infoRow}>
+                <View style={s.infoLabel}><Text>Duración</Text></View>
+                <View style={s.infoVal}><Text>{plazoTexto}</Text></View>
+              </View>
+              <View style={s.infoRow}>
+                <View style={s.infoLabel}><Text>No. CDP</Text></View>
+                <View style={s.infoVal}><Text>{contrato.cdp || '—'}</Text></View>
+              </View>
+              <View style={s.infoRowLast}>
+                <View style={s.infoLabel}><Text>No. CRP</Text></View>
+                <View style={s.infoVal}><Text>{contrato.crp || '—'}</Text></View>
+              </View>
+            </>
+          )}
         </View>
 
         {/* CONSIDERANDO */}
@@ -402,9 +435,19 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
         <View style={s.bullet} wrap={false}>
           <Text style={s.bulletDot}>•</Text>
           <Text style={s.bulletText}>
-            Que, entre el Municipio de Fredonia, Antioquia y {contrato.contratista.nombre_completo}, se celebró el contrato: {contrato.numero}-{contrato.anio}, por un valor de: {valorContratoTexto.toUpperCase()} y un plazo de {plazoTexto}.
+            Que, entre el Municipio de Fredonia, Antioquia y {contrato.contratista.nombre_completo}, se celebró el contrato: {contrato.numero}-{contrato.anio}, por un valor de: {(ot ? fmtValorOt(ot.valor_inicial_letras, ot.valor_inicial) : valorContratoTexto).toUpperCase()} y un plazo de {plazoTexto}.
           </Text>
         </View>
+
+        {/* Considerando del otrosí — solo si el contrato tiene otrosí */}
+        {ot && (
+          <View style={s.bullet} wrap={false}>
+            <Text style={s.bulletDot}>•</Text>
+            <Text style={s.bulletText}>
+              Que entre el Municipio de Fredonia, Antioquia, y el contratista {contrato.contratista.nombre_completo} se suscribió un Otrosí al Contrato No. {contrato.numero}-{contrato.anio}, mediante el cual se adicionó el valor contractual en la suma de {fmtValorOt(ot.valor_adicion_letras, ot.valor_adicion).toUpperCase()}, para un valor total del contrato de {fmtValorOt(ot.valor_total_letras, ot.valor_total_con_adicion).toUpperCase()}{ot.dias_adicion > 0 ? `, adicionando el plazo en ${ot.dias_adicion} días` : ', sin que dicha modificación implicara ampliación o adición al plazo de ejecución inicialmente pactado'}.
+            </Text>
+          </View>
+        )}
 
         <View style={s.bullet} wrap={false}>
           <Text style={s.bulletDot}>•</Text>

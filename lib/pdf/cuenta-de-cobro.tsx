@@ -287,10 +287,17 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
     ? `${sinSufijoMoneda(valorLetras.toUpperCase())} DE PESOS M/L (${formatCOP(periodo.valor_cobro)})`
     : formatCOP(periodo.valor_cobro)
 
-  // Total contract value — same standard
-  const valorTotal = contrato.valor_letras_total
-    ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
-    : formatCOP(contrato.valor_total)
+  // Total contract value — same standard.
+  // Con otrosí: el "valor total" es inicial + adición; además se muestran filas
+  // de "Valor inicial" y "Valor de la adición". Sin otrosí: comportamiento actual.
+  const ot = contrato.otrosi
+  const fmtValor = (letras: string, monto: number) =>
+    `${sinSufijoMoneda(letras.toUpperCase())} DE PESOS M/L (${formatCOP(monto)})`
+  const valorTotal = ot
+    ? fmtValor(ot.valor_total_letras, ot.valor_total_con_adicion)
+    : contrato.valor_letras_total
+      ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
+      : formatCOP(contrato.valor_total)
 
   // Plazo — calendar days between contract start and end
   const plazo = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
@@ -355,6 +362,19 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
             <View style={s.lbl}><Text>Objeto del contrato:</Text></View>
             <View style={s.val}><Text>{contrato.objeto.toUpperCase()}</Text></View>
           </View>
+
+          {ot && (
+            <>
+              <View style={s.row}>
+                <View style={s.lbl}><Text>Valor Inicial del Contrato</Text></View>
+                <View style={s.val}><Text>{fmtValor(ot.valor_inicial_letras, ot.valor_inicial)}</Text></View>
+              </View>
+              <View style={s.row}>
+                <View style={s.lbl}><Text>Valor de la adición</Text></View>
+                <View style={s.val}><Text>{fmtValor(ot.valor_adicion_letras, ot.valor_adicion)}</Text></View>
+              </View>
+            </>
+          )}
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Valor total del contrato:</Text></View>

@@ -443,9 +443,14 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
     plazoTexto = `${contrato.duracion_letras || contrato.plazo_meses} (${contrato.plazo_meses}) MESES`
   }
 
-  const valorContratoTexto = contrato.valor_letras_total
-    ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
-    : formatCOP(contrato.valor_total)
+  const ot = contrato.otrosi
+  const fmtValorOt = (letras: string, monto: number) => `${letras.toUpperCase()} (${formatCOP(monto)})`
+  // Con otrosí, "Valor del contrato" es el total con adición.
+  const valorContratoTexto = ot
+    ? fmtValorOt(ot.valor_total_letras, ot.valor_total_con_adicion)
+    : contrato.valor_letras_total
+      ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
+      : formatCOP(contrato.valor_total)
 
   const baseValor = periodo.base_cotizacion_ss ?? calcularBaseCotizacionSS(contrato.valor_mensual)
   const baseCotizacionTexto = `${numeroALetrasLargo(baseValor)} PESOS ($ ${baseValor.toLocaleString('es-CO')})`
@@ -545,6 +550,13 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <View style={s.val}><Text>{contrato.fecha_inicio_contrato ? formatDateLargo(contrato.fecha_inicio_contrato) : '—'}</Text></View>
           </View>
 
+          {ot && (
+            <View style={s.row}>
+              <View style={s.lbl}><Text>Fecha de inicio otrosí</Text></View>
+              <View style={s.val}><Text>{formatDateLargo(ot.fecha_inicio)}</Text></View>
+            </View>
+          )}
+
           <View style={s.periodoRow}>
             <View style={s.periodoLabel}><Text>Período del informe</Text></View>
             <Text style={s.periodoDesde}>Desde</Text>
@@ -553,10 +565,27 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             <Text style={{ ...s.periodoVal, borderRightWidth: 0 }}>{formatDate(periodo.fecha_fin)}</Text>
           </View>
 
-          <View style={s.row}>
-            <View style={s.lbl}><Text>Valor del contrato</Text></View>
-            <View style={s.val}><Text>{valorContratoTexto}</Text></View>
-          </View>
+          {ot ? (
+            <>
+              <View style={s.row}>
+                <View style={s.lbl}><Text>Valor inicial del contrato</Text></View>
+                <View style={s.val}><Text>{fmtValorOt(ot.valor_inicial_letras, ot.valor_inicial)}</Text></View>
+              </View>
+              <View style={s.row}>
+                <View style={s.lbl}><Text>Valor Adición</Text></View>
+                <View style={s.val}><Text>{fmtValorOt(ot.valor_adicion_letras, ot.valor_adicion)}.</Text></View>
+              </View>
+              <View style={s.row}>
+                <View style={s.lbl}><Text>Valor Total del Contrato</Text></View>
+                <View style={s.val}><Text>{valorContratoTexto}.</Text></View>
+              </View>
+            </>
+          ) : (
+            <View style={s.row}>
+              <View style={s.lbl}><Text>Valor del contrato</Text></View>
+              <View style={s.val}><Text>{valorContratoTexto}</Text></View>
+            </View>
+          )}
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Plazo de ejecución del contrato</Text></View>
@@ -619,9 +648,9 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                     </Text>
                   ))}
                 </View>
-                {/* Empty value row */}
+                {/* Value row — marca "X" en el tipo del otrosí si existe */}
                 <View style={{ flexDirection: 'row' }}>
-                  {[0, 1, 2, 3].map(i => (
+                  {(['prorroga', 'adicion', 'modificatorio', 'aclaratorio'] as const).map((tipoOpt, i) => (
                     <View
                       key={i}
                       style={{
@@ -631,12 +660,18 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                         borderTopColor: '#000',
                         borderRightWidth: i < 3 ? 1 : 0,
                         borderRightColor: '#000',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       } as any}
-                    />
+                    >
+                      {ot && ot.tipo === tipoOpt && (
+                        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5 }}>(X)</Text>
+                      )}
+                    </View>
                   ))}
                 </View>
               </View>
-              <Text style={{ textAlign: 'center', fontSize: 8.5 }}>Ninguna</Text>
+              <Text style={{ textAlign: 'center', fontSize: 8.5 }}>{ot ? '' : 'Ninguna'}</Text>
             </View>
           </View>
 
@@ -709,7 +744,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                   <Text>Valor total contrato</Text>
                 </View>
                 <View style={{ width: '36%', padding: '3 5', fontSize: 9, textAlign: 'right' }}>
-                  <Text>{formatCOP(contrato.valor_total)}</Text>
+                  <Text>{formatCOP(ot ? ot.valor_total_con_adicion : contrato.valor_total)}</Text>
                 </View>
               </View>
               {/* Pago N — solo pagos anteriores al informe actual */}
