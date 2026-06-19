@@ -12,8 +12,22 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { invalidarCachePDF } from '@/lib/pdf/cache'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
+
+async function invalidarCacheContrato(
+  adminClient: ReturnType<typeof createAdminSupabaseClient>,
+  contratoId: string,
+) {
+  const { data: periodos } = await adminClient
+    .from('periodos')
+    .select('id')
+    .eq('contrato_id', contratoId)
+  await Promise.all(
+    (periodos ?? []).map((p: { id: string }) => invalidarCachePDF(adminClient, p.id).catch(() => {})),
+  )
+}
 
 /** Verifica que el solicitante sea admin. Devuelve null si no lo es. */
 async function requireAdminId(): Promise<string | null> {
@@ -34,6 +48,7 @@ export async function crearObligacion(params: {
   contratoId: string
   descripcion: string
   esPermanente: boolean
+  otrosiId?: string | null
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const adminId = await requireAdminId()
@@ -63,12 +78,14 @@ export async function crearObligacion(params: {
         descripcion,
         orden: siguienteOrden,
         es_permanente: params.esPermanente,
+        otrosi_id: params.otrosiId ?? null,
       })
       .select('id')
       .single()
 
     if (error) return { error: `Error al guardar: ${error.message}` }
 
+    await invalidarCacheContrato(adminClient, params.contratoId)
     revalidatePath(`/dashboard/contratos/${params.contratoId}`)
     return { data: { id: data.id as string } }
   } catch (e: unknown) {
@@ -94,6 +111,7 @@ export async function eliminarObligacion(
 
     if (error) return { error: `Error al eliminar: ${error.message}` }
 
+    await invalidarCacheContrato(adminClient, contratoId)
     revalidatePath(`/dashboard/contratos/${contratoId}`)
     return {}
   } catch (e: unknown) {

@@ -115,7 +115,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     // Obligations for this contract
     supabase
       .from('obligaciones')
-      .select('id, descripcion, es_permanente')
+      .select('id, descripcion, es_permanente, otrosi_id')
       .eq('contrato_id', contrato.id ?? '')
       .order('orden'),
 
@@ -129,7 +129,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     // Otrosíes del contrato (para reflejar valor adicionado, plazo, CDP/CRP, etc.)
     supabase
       .from('otrosies')
-      .select('numero, tipo, fecha_inicio, valor_adicion, plazo_dias_adicion, cdp, crp, nota')
+      .select('id, numero, tipo, fecha_inicio, valor_adicion, plazo_dias_adicion, cdp, crp, nota')
       .eq('contrato_id', contrato.id)
       .order('numero'),
   ])
@@ -218,9 +218,12 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   // otrosiInfo queda undefined y los PDFs NO muestran ningún campo extra —
   // los contratos sin otrosí salen exactamente igual que hoy.
   const otrosiesList = (otrosiesRaw ?? []) as Array<{
-    numero: number; tipo: string; fecha_inicio: string; valor_adicion: number
+    id: string; numero: number; tipo: string; fecha_inicio: string; valor_adicion: number
     plazo_dias_adicion: number; cdp: string | null; crp: string | null; nota: string | null
   }>
+
+  // Map otrosi id → fecha_inicio para filtrar obligaciones por vigencia
+  const otrosiDateMap = new Map(otrosiesList.map(o => [o.id, o.fecha_inicio]))
   const valorInicial = contrato.valor_total
   const totalAdiciones = otrosiesList.reduce((acc, o) => acc + (o.valor_adicion ?? 0), 0)
   const diasAdicion = otrosiesList.reduce((acc, o) => acc + (o.plazo_dias_adicion ?? 0), 0)
@@ -303,11 +306,19 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       observacion_supervisor: (periodo as any).observacion_supervisor ?? null,
       base_cotizacion_ss: (periodo as any).base_cotizacion_ss ?? null,
     },
-    obligaciones: (obligacionesRaw ?? []).map((obl: any) => ({
-      descripcion: obl.descripcion,
-      es_permanente: obl.es_permanente,
-      actividades: actsPorObligacion.get(obl.id) ?? [],
-    })),
+    obligaciones: (obligacionesRaw ?? [])
+      .filter((obl: any) => {
+        if (!obl.otrosi_id) return true
+        const fechaOtrosi = otrosiDateMap.get(obl.otrosi_id)
+        // Si no se encuentra el otrosí (dato inconsistente) se incluye por seguridad.
+        // Se incluye si el otrosí inició antes o durante este período.
+        return !fechaOtrosi || fechaOtrosi <= periodo.fecha_fin
+      })
+      .map((obl: any) => ({
+        descripcion: obl.descripcion,
+        es_permanente: obl.es_permanente,
+        actividades: actsPorObligacion.get(obl.id) ?? [],
+      })),
     fechaGeneracion,
     pagosHistorial,
   }

@@ -10,6 +10,7 @@ import { formatCedula, formatDateMedium } from '@/lib/format'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from '@/app/actions/obligaciones'
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
+import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
 
 export default function ContratoDetallePage({
   initialContrato,
@@ -34,7 +35,11 @@ export default function ContratoDetallePage({
   // Form para nueva obligación
   const [nuevaObligacion, setNuevaObligacion] = useState('')
   const [esPermanente, setEsPermanente] = useState(false)
+  const [otrosiIdNuevaObl, setOtrosiIdNuevaObl] = useState<string>('')
   const [agregando, setAgregando] = useState(false)
+
+  // Otrosíes del contrato (para asociar obligaciones)
+  const [otrosies, setOtrosies] = useState<Otrosi[]>([])
 
   // Form para generar periodos
   const [generandoPeriodos, setGenerandoPeriodos] = useState(false)
@@ -75,6 +80,9 @@ export default function ContratoDetallePage({
       setContrato(cont)
       setObligaciones(obls || [])
       setPeriodos(pers || [])
+      try {
+        setOtrosies(await getOtrosies(id as string))
+      } catch { /* no bloquea la carga del resto */ }
     } catch {
       // Queries failed — contrato stays null, render shows "Contrato no encontrado"
     } finally {
@@ -96,6 +104,7 @@ export default function ContratoDetallePage({
       contratoId: id as string,
       descripcion: nuevaObligacion,
       esPermanente,
+      otrosiId: otrosiIdNuevaObl || null,
     })
 
     if (res.error) {
@@ -104,6 +113,7 @@ export default function ContratoDetallePage({
       toast.success('Obligación agregada')
       setNuevaObligacion('')
       setEsPermanente(false)
+      setOtrosiIdNuevaObl('')
       cargarDatos()
     }
     setAgregando(false)
@@ -309,25 +319,38 @@ export default function ContratoDetallePage({
 
         {obligaciones.length > 0 && (
           <div className="space-y-2 mb-6">
-            {obligaciones.map((obl, index) => (
-              <div key={obl.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl group min-w-0">
-                <span className="text-xs font-medium text-gray-400 mt-0.5 min-w-[20px]">{index + 1}.</span>
-                <p className="flex-1 min-w-0 text-sm text-gray-700 break-words">{obl.descripcion}</p>
-                <div className="flex items-center gap-2">
-                  {obl.es_permanente && (
-                    <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Permanente</span>
-                  )}
-                  {esAdmin && (
-                    <button
-                      onClick={() => eliminarObligacion(obl.id)}
-                      className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
-                    >
-                      ✕
-                    </button>
-                  )}
+            {obligaciones.map((obl, index) => {
+              const otrosiVinculado = obl.otrosi_id
+                ? otrosies.find((o) => o.id === obl.otrosi_id)
+                : null
+              return (
+                <div key={obl.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl group min-w-0">
+                  <span className="text-xs font-medium text-gray-400 mt-0.5 min-w-[20px]">{index + 1}.</span>
+                  <p className="flex-1 min-w-0 text-sm text-gray-700 break-words">{obl.descripcion}</p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {obl.es_permanente && (
+                      <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Permanente</span>
+                    )}
+                    {otrosiVinculado && (
+                      <span
+                        title={`Vigente desde el otrosí N.° ${otrosiVinculado.numero} (${otrosiVinculado.fecha_inicio})`}
+                        className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full"
+                      >
+                        Otrosí {otrosiVinculado.numero}
+                      </span>
+                    )}
+                    {esAdmin && (
+                      <button
+                        onClick={() => eliminarObligacion(obl.id)}
+                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -341,15 +364,34 @@ export default function ContratoDetallePage({
                 placeholder="Escribir nueva obligación..."
                 className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none"
               />
-              <label className="flex items-center gap-2 mt-2 ml-1">
-                <input
-                  type="checkbox"
-                  checked={esPermanente}
-                  onChange={(e) => setEsPermanente(e.target.checked)}
-                  className="rounded"
-                />
-                <span className="text-xs text-gray-500">Es actividad permanente</span>
-              </label>
+              <div className="flex flex-wrap items-center gap-4 mt-2 ml-1">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={esPermanente}
+                    onChange={(e) => setEsPermanente(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="text-xs text-gray-500">Es actividad permanente</span>
+                </label>
+                {otrosies.length > 0 && (
+                  <label className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Incorporada mediante:</span>
+                    <select
+                      value={otrosiIdNuevaObl}
+                      onChange={(e) => setOtrosiIdNuevaObl(e.target.value)}
+                      className="px-2 py-0.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                    >
+                      <option value="">Contrato original</option>
+                      {otrosies.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          Otrosí N.° {o.numero} ({o.fecha_inicio})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
             </div>
             <button
               type="submit"
