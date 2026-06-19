@@ -24,8 +24,9 @@ export async function getPeriodoConContrato(
   const [
     { data: contrato },
     { data: periodo },
-    { data: obligaciones },
+    { data: obligacionesRaw },
     { data: actividades },
+    { data: otrosies },
   ] = await Promise.all([
     supabase
       .from('contratos')
@@ -51,7 +52,7 @@ export async function getPeriodoConContrato(
 
     supabase
       .from('obligaciones')
-      .select('*')
+      .select('*, otrosi_id')
       .eq('contrato_id', contratoId)
       .order('orden'),
 
@@ -60,7 +61,25 @@ export async function getPeriodoConContrato(
       .select('*, evidencias(*)')
       .eq('periodo_id', periodoId)
       .order('orden'),
+
+    supabase
+      .from('otrosies')
+      .select('id, fecha_inicio')
+      .eq('contrato_id', contratoId),
   ])
+
+  // Filtrar obligaciones: solo las vigentes para este período.
+  // Una obligación sin otrosi_id aplica desde el inicio del contrato.
+  // Una con otrosi_id solo aplica a partir de fecha_inicio del otrosí.
+  const fechaFinPeriodo = (periodo as any)?.fecha_fin as string | undefined
+  const otrosiDateMap = new Map(
+    (otrosies ?? []).map((o: { id: string; fecha_inicio: string }) => [o.id, o.fecha_inicio])
+  )
+  const obligaciones = (obligacionesRaw ?? []).filter((obl: any) => {
+    if (!obl.otrosi_id) return true
+    const fechaOtrosi = otrosiDateMap.get(obl.otrosi_id)
+    return !fechaOtrosi || !fechaFinPeriodo || fechaOtrosi <= fechaFinPeriodo
+  })
 
   return {
     contrato: (contrato as Contrato) ?? null,

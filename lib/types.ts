@@ -126,6 +126,7 @@ export interface Obligacion {
   descripcion: string
   orden: number
   es_permanente: boolean
+  otrosi_id?: string | null
 }
 
 export interface Periodo {
