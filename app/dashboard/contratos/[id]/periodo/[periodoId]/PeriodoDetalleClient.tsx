@@ -2023,7 +2023,7 @@ export default function PeriodoDetallePage({
                 }}
                 onBlur={handleGuardarNumeroPlanilla}
                 placeholder="Ej. 6016087440"
-                inputMode="numeric"
+                inputMode="text"
                 className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-900 outline-none focus:ring-2 transition-colors ${
                   erroresCampos.numero || errorFormatoPlanilla
                     ? 'bg-red-50 border-red-400 focus:ring-red-300 placeholder-red-400'
@@ -2525,7 +2525,7 @@ export default function PeriodoDetallePage({
                             value={numPlanilla}
                             onChange={(e) => { setNumPlanilla(e.target.value); setErrorFormatoPlanilla(null) }}
                             placeholder="Ej. 6016087440"
-                            inputMode="numeric"
+                            inputMode="text"
                             className={`flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400 ${errorFormatoPlanilla ? 'bg-red-50 border-red-400' : 'bg-gray-50 border-gray-200'}`}
                           />
                           <button
