@@ -92,8 +92,12 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
   async function cerrarSesion() {
     const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      // Session may have already expired — redirect regardless
+    }
+    window.location.href = '/login'
   }
 
   return (
