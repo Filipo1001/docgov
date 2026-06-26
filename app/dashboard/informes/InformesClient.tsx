@@ -42,7 +42,7 @@ function InformeCard({
 }: {
   periodo: Periodo
   rol: string
-  onUpdate: () => void
+  onUpdate: () => void | Promise<void>
 }) {
   const [procesando, setProcesando] = useState(false)
   const [mostrarRechazo, setMostrarRechazo] = useState(false)
@@ -59,7 +59,7 @@ function InformeCard({
     setProcesando(true)
     const res = await aprobarComoAsesor(periodo.id)
     if (res.error) toast.error(res.error)
-    else { toast.success('Informe aprobado como asesor'); onUpdate() }
+    else { toast.success('Informe aprobado como asesor'); await onUpdate() }
     setProcesando(false)
   }
 
@@ -67,7 +67,7 @@ function InformeCard({
     setProcesando(true)
     const res = await rechazarComoAsesor(periodo.id, 'Aprobacion revocada por asesor')
     if (res.error) toast.error(res.error)
-    else { toast.success('Aprobacion revocada'); onUpdate() }
+    else { toast.success('Aprobacion revocada'); await onUpdate() }
     setProcesando(false)
   }
 
@@ -75,7 +75,7 @@ function InformeCard({
     setProcesando(true)
     const res = await aprobarPeriodos([periodo.id])
     if (res.error) toast.error(res.error)
-    else { toast.success('Informe aprobado'); onUpdate() }
+    else { toast.success('Informe aprobado'); await onUpdate() }
     setProcesando(false)
   }
 
@@ -84,7 +84,7 @@ function InformeCard({
     setProcesando(true)
     const res = await rechazarComoAsesor(periodo.id, motivo)
     if (res.error) toast.error(res.error)
-    else { toast.success('Devuelto al contratista'); setMostrarRechazo(false); setMotivo(''); onUpdate() }
+    else { toast.success('Devuelto al contratista'); setMostrarRechazo(false); setMotivo(''); await onUpdate() }
     setProcesando(false)
   }
 
@@ -93,7 +93,7 @@ function InformeCard({
     setProcesando(true)
     const res = await rechazarPeriodos([periodo.id], motivo)
     if (res.error) toast.error(res.error)
-    else { toast.success('Devuelto a asesores'); setMostrarRechazo(false); setMotivo(''); onUpdate() }
+    else { toast.success('Devuelto a asesores'); setMostrarRechazo(false); setMotivo(''); await onUpdate() }
     setProcesando(false)
   }
 
@@ -449,9 +449,21 @@ export default function InformesPage({
     initialDataUpdatedAt: isInitialMonth ? ssrTimestamp : undefined,
   })
 
-  // Invalidate both queries — used after server actions
-  function refrescar() {
-    queryClient.invalidateQueries({ queryKey: ['informes'] })
+  // Refetch determinista tras una acción del servidor.
+  //
+  // Antes esto solo hacía invalidateQueries(['informes']), que (a) depende de
+  // que la query esté "activa" para refetchear y (b) NO cubría la lista de
+  // borradores (su key es ['informes-borrador', …], que no matchea por prefijo
+  // con ['informes']). Además el server revalida vía revalidatePath, pero esa
+  // data fresca solo llega como `initialData` de React Query —una semilla de un
+  // solo uso que se ignora en re-renders—, así que la actualización en sitio
+  // depende EXCLUSIVAMENTE de este refetch. Por eso lo hacemos explícito y
+  // esperable: refetchQueries fuerza la recarga de ambas listas de inmediato.
+  async function refrescar() {
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ['informes'] }),
+      queryClient.refetchQueries({ queryKey: ['informes-borrador'] }),
+    ])
   }
 
   // Reset reminder sent state + filter tab when month changes.
@@ -527,7 +539,7 @@ export default function InformesPage({
       toast.error(res.error)
     } else {
       toast.success(`${res.data?.aprobados ?? 0} informes aprobados`)
-      refrescar()
+      await refrescar()
     }
 
     setProcesandoMasivo(false)
@@ -542,7 +554,7 @@ export default function InformesPage({
       toast.success(`${res.data?.rechazados ?? 0} informes devueltos a asesores`)
       setMostrarRechazoMasivo(false)
       setMotivoMasivo('')
-      refrescar()
+      await refrescar()
     }
     setProcesandoMasivo(false)
   }
