@@ -39,10 +39,12 @@ function InformeCard({
   periodo,
   rol,
   onUpdate,
+  onPatch,
 }: {
   periodo: Periodo
   rol: string
   onUpdate: () => void | Promise<void>
+  onPatch: (periodoId: string, patch: Partial<Periodo>) => void
 }) {
   const [procesando, setProcesando] = useState(false)
   const [mostrarRechazo, setMostrarRechazo] = useState(false)
@@ -59,7 +61,11 @@ function InformeCard({
     setProcesando(true)
     const res = await aprobarComoAsesor(periodo.id)
     if (res.error) toast.error(res.error)
-    else { toast.success('Informe aprobado como asesor'); await onUpdate() }
+    else {
+      toast.success('Informe aprobado como asesor')
+      onPatch(periodo.id, { estado: 'revision', motivo_rechazo: null })
+      void onUpdate()
+    }
     setProcesando(false)
   }
 
@@ -67,7 +73,11 @@ function InformeCard({
     setProcesando(true)
     const res = await rechazarComoAsesor(periodo.id, 'Aprobacion revocada por asesor')
     if (res.error) toast.error(res.error)
-    else { toast.success('Aprobacion revocada'); await onUpdate() }
+    else {
+      toast.success('Aprobacion revocada')
+      onPatch(periodo.id, { estado: 'rechazado', motivo_rechazo: 'Aprobacion revocada por asesor' })
+      void onUpdate()
+    }
     setProcesando(false)
   }
 
@@ -75,7 +85,11 @@ function InformeCard({
     setProcesando(true)
     const res = await aprobarPeriodos([periodo.id])
     if (res.error) toast.error(res.error)
-    else { toast.success('Informe aprobado'); await onUpdate() }
+    else {
+      toast.success('Informe aprobado')
+      onPatch(periodo.id, { estado: 'aprobado', motivo_rechazo: null })
+      void onUpdate()
+    }
     setProcesando(false)
   }
 
@@ -84,7 +98,11 @@ function InformeCard({
     setProcesando(true)
     const res = await rechazarComoAsesor(periodo.id, motivo)
     if (res.error) toast.error(res.error)
-    else { toast.success('Devuelto al contratista'); setMostrarRechazo(false); setMotivo(''); await onUpdate() }
+    else {
+      toast.success('Devuelto al contratista')
+      onPatch(periodo.id, { estado: 'rechazado', motivo_rechazo: motivo })
+      setMostrarRechazo(false); setMotivo(''); void onUpdate()
+    }
     setProcesando(false)
   }
 
@@ -93,7 +111,11 @@ function InformeCard({
     setProcesando(true)
     const res = await rechazarPeriodos([periodo.id], motivo)
     if (res.error) toast.error(res.error)
-    else { toast.success('Devuelto a asesores'); setMostrarRechazo(false); setMotivo(''); await onUpdate() }
+    else {
+      toast.success('Devuelto a asesores')
+      onPatch(periodo.id, { estado: 'enviado', motivo_rechazo: motivo })
+      setMostrarRechazo(false); setMotivo(''); void onUpdate()
+    }
     setProcesando(false)
   }
 
@@ -449,16 +471,24 @@ export default function InformesPage({
     initialDataUpdatedAt: isInitialMonth ? ssrTimestamp : undefined,
   })
 
-  // Refetch determinista tras una acción del servidor.
+  // Actualización OPTIMISTA del estado en el caché local.
   //
-  // Antes esto solo hacía invalidateQueries(['informes']), que (a) depende de
-  // que la query esté "activa" para refetchear y (b) NO cubría la lista de
-  // borradores (su key es ['informes-borrador', …], que no matchea por prefijo
-  // con ['informes']). Además el server revalida vía revalidatePath, pero esa
-  // data fresca solo llega como `initialData` de React Query —una semilla de un
-  // solo uso que se ignora en re-renders—, así que la actualización en sitio
-  // depende EXCLUSIVAMENTE de este refetch. Por eso lo hacemos explícito y
-  // esperable: refetchQueries fuerza la recarga de ambas listas de inmediato.
+  // Es la fuente de verdad inmediata de la UI: cambia el estado en pantalla al
+  // instante, SIN depender de que un refetch de red responda. Antes la vista
+  // dependía de invalidateQueries/refetch para actualizarse; si ese refetch
+  // tardaba o fallaba (p. ej. red intermitente), la tarjeta se quedaba con el
+  // estado viejo hasta un F5. Con este parche el badge cambia de inmediato y el
+  // refetch posterior solo reconcilia con el servidor en segundo plano.
+  function patchPeriodoLocal(periodoId: string, patch: Partial<Periodo>) {
+    queryClient.setQueryData<Periodo[]>(informesKey, (old) =>
+      (old ?? []).map((p) => (p.id === periodoId ? { ...p, ...patch } : p)),
+    )
+  }
+
+  // Refetch de reconciliación tras una acción del servidor. Cubre AMBAS listas
+  // (la principal y la de borradores, cuya key no matchea por prefijo con
+  // ['informes']). Ya no es la vía crítica de actualización —el parche optimista
+  // lo es— sino la que asegura consistencia con el servidor.
   async function refrescar() {
     await Promise.all([
       queryClient.refetchQueries({ queryKey: ['informes'] }),
@@ -539,7 +569,8 @@ export default function InformesPage({
       toast.error(res.error)
     } else {
       toast.success(`${res.data?.aprobados ?? 0} informes aprobados`)
-      await refrescar()
+      ids.forEach(id => patchPeriodoLocal(id, { estado: 'aprobado', motivo_rechazo: null }))
+      void refrescar()
     }
 
     setProcesandoMasivo(false)
@@ -552,9 +583,10 @@ export default function InformesPage({
     if (res.error) toast.error(res.error)
     else {
       toast.success(`${res.data?.rechazados ?? 0} informes devueltos a asesores`)
+      idsParaAprobar.forEach(id => patchPeriodoLocal(id, { estado: 'enviado', motivo_rechazo: motivoMasivo }))
       setMostrarRechazoMasivo(false)
       setMotivoMasivo('')
-      await refrescar()
+      void refrescar()
     }
     setProcesandoMasivo(false)
   }
@@ -787,7 +819,7 @@ export default function InformesPage({
           {periodosVisibles.map(p => (
             filtro === 'sin_enviar'
               ? <SinEnviarCard key={p.id} periodo={p} />
-              : <InformeCard key={p.id} periodo={p} rol={usuario.rol} onUpdate={refrescar} />
+              : <InformeCard key={p.id} periodo={p} rol={usuario.rol} onUpdate={refrescar} onPatch={patchPeriodoLocal} />
           ))}
         </div>
       )}
