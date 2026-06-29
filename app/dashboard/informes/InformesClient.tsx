@@ -120,7 +120,6 @@ function InformeCard({
     setProcesando(false)
   }
 
-  const esHistorico = periodo.es_historico === true
   const cardBorder = esHistorico
     ? 'border-amber-200 bg-amber-50/40'
     : tieneNotaSecretaria

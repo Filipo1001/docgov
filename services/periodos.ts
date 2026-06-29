@@ -199,7 +199,7 @@ export async function getMisInformesMensuales(
 
   if (!contratos?.length) return []
 
-  const contratoIds = contratos.map(c => c.id)
+  const contratoIds = contratos.map((c: { id: string }) => c.id)
 
   const { data } = await supabase
     .from('periodos')
@@ -269,7 +269,7 @@ export async function getPeriodosPendientesParaRol(
       .from('contratos')
       .select('id')
       .eq('supervisor_id', userId)
-    const contratoIds = ids?.map((c) => c.id) ?? []
+    const contratoIds = ids?.map((c: { id: string }) => c.id) ?? []
     if (contratoIds.length === 0) return []
     query = query.in('contrato_id', contratoIds)
   }

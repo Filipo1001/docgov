@@ -93,7 +93,7 @@ export default function NotificacionesBell() {
     // Si suscribimos el canal ANTES de que getSession() resuelva, el WebSocket
     // sale con solo el apikey (sin JWT) y el servidor responde 401.
     // Solución: esperar la sesión, inyectarla con setAuth(), luego suscribir.
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: { access_token?: string } | null } }) => {
       if (!mounted) return // componente desmontado antes de que resolviera
 
       // Inyectar el JWT para que postgres_changes pueda verificar RLS

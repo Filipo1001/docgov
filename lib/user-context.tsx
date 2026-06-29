@@ -71,7 +71,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     load()
 
     // React to auth state changes (token refresh, sign-out, sign-in from another tab)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: string, session: { user?: { id: string } } | null) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setSesionExpirada(false)
         if (session?.user) {
