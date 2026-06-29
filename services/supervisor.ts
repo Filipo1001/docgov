@@ -181,7 +181,7 @@ export async function getPeriodosPendientesSupervisor(
     .select('id')
     .eq('supervisor_id', supervisorId)
 
-  const ids = contratos?.map((c) => c.id) ?? []
+  const ids = contratos?.map((c: { id: string }) => c.id) ?? []
   if (ids.length === 0) return []
 
   const { data } = await supabase
@@ -229,7 +229,7 @@ export async function getStatsSupervisor(supervisorId: string): Promise<StatsSup
     .select('id')
     .eq('supervisor_id', supervisorId)
 
-  const ids = contratos?.map((c) => c.id) ?? []
+  const ids = contratos?.map((c: { id: string }) => c.id) ?? []
 
   if (ids.length === 0) {
     return { totalContratos: 0, porRevisar: 0, aprobadosMes: 0, totalAprobados: 0, valorPendiente: 0 }
@@ -272,7 +272,7 @@ export async function getStatsSupervisor(supervisorId: string): Promise<StatsSup
     porRevisar: porRevisar ?? 0,
     aprobadosMes: aprobadosMes ?? 0,
     totalAprobados: totalAprobados ?? 0,
-    valorPendiente: pendientesValor?.reduce((s, p) => s + (p.valor_cobro ?? 0), 0) ?? 0,
+    valorPendiente: pendientesValor?.reduce((s: number, p: { valor_cobro: number | null }) => s + (p.valor_cobro ?? 0), 0) ?? 0,
   }
 }
 
