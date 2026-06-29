@@ -207,6 +207,29 @@ export default function PeriodoDetallePage({
   const [procesandoDevolver, setProcesandoDevolver] = useState(false)
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
 
+  // ── Accordion: qué obligaciones están expandidas ───────────────
+  // Vista colapsada por defecto (lista limpia, sin descargar imágenes hasta
+  // que el usuario expande). Excepción: el contratista con informe rechazado
+  // arranca expandido porque su tarea es justamente corregir actividades.
+  const [obligacionesAbiertas, setObligacionesAbiertas] = useState<Set<string>>(() => {
+    if (usuario?.rol === 'contratista' && initialPeriodo.estado === 'rechazado') {
+      return new Set(initialObligaciones.map((o) => o.id))
+    }
+    return new Set()
+  })
+  const toggleObligacion = (oblId: string) => {
+    setObligacionesAbiertas((prev) => {
+      const next = new Set(prev)
+      if (next.has(oblId)) next.delete(oblId)
+      else next.add(oblId)
+      return next
+    })
+  }
+  const todasAbiertas = obligaciones.length > 0 && obligaciones.every((o) => obligacionesAbiertas.has(o.id))
+  const toggleTodas = () => {
+    setObligacionesAbiertas(todasAbiertas ? new Set() : new Set(obligaciones.map((o) => o.id)))
+  }
+
   // Scroll anchors for rejection guidance
   const seccionActividadesRef = useRef<HTMLDivElement>(null)
 
@@ -432,6 +455,13 @@ export default function PeriodoDetallePage({
 
   function actividadesPorObligacion(obligacionId: string) {
     return actividades.filter((a) => a.obligacion_id === obligacionId)
+  }
+
+  function evidenciasPorObligacion(obligacionId: string) {
+    return actividadesPorObligacion(obligacionId).reduce(
+      (sum, a) => sum + (a.evidencias?.length ?? 0),
+      0,
+    )
   }
 
   function totalAcciones() {
@@ -1629,11 +1659,37 @@ export default function PeriodoDetallePage({
           </div>
         )}
 
+        {/* Control global expandir/colapsar — solo si hay obligaciones */}
+        {obligaciones.length > 0 && (
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs text-gray-400">
+              {obligaciones.length} obligación{obligaciones.length !== 1 ? 'es' : ''}
+            </p>
+            <button
+              type="button"
+              onClick={toggleTodas}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              {todasAbiertas ? 'Colapsar todo' : 'Expandir todo'}
+            </button>
+          </div>
+        )}
+
         {obligaciones.map((obl, oblIndex) => {
           const actsDeObl = actividadesPorObligacion(obl.id)
+          const numEvidencias = evidenciasPorObligacion(obl.id)
+          const abierta = obligacionesAbiertas.has(obl.id)
           return (
             <div key={obl.id} className="bg-white rounded-2xl border p-6">
-              <div className="flex items-start gap-3 mb-4">
+              {/* Cabecera clickable — expande/colapsa la obligación.
+                  Colapsada por defecto: las actividades y evidencias (imágenes)
+                  no se montan hasta abrir, evitando descargar fotos innecesarias. */}
+              <button
+                type="button"
+                onClick={() => toggleObligacion(obl.id)}
+                aria-expanded={abierta}
+                className={`w-full flex items-start gap-3 text-left ${abierta ? 'mb-4' : ''}`}
+              >
                 <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
                 </span>
@@ -1641,10 +1697,19 @@ export default function PeriodoDetallePage({
                   <p className="text-sm font-medium text-gray-900 break-words">{obl.descripcion}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''} registrada{actsDeObl.length !== 1 ? 's' : ''}
+                    {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
                   </p>
                 </div>
-              </div>
+                <svg
+                  className={`w-5 h-5 text-gray-400 shrink-0 mt-1 transition-transform ${abierta ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
+              {abierta && (
+              <>
               {/* Activity list */}
               {actsDeObl.length > 0 && (
                 <div className="space-y-3 mb-4 ml-0 sm:ml-10">
@@ -1764,6 +1829,8 @@ export default function PeriodoDetallePage({
                                       <img
                                         src={ev.url}
                                         alt={ev.nombre_archivo}
+                                        loading="lazy"
+                                        decoding="async"
                                         className="w-20 h-20 object-cover rounded-xl border border-gray-200 transition-opacity group-hover:opacity-80"
                                       />
                                     </button>
@@ -1919,6 +1986,8 @@ export default function PeriodoDetallePage({
                     </button>
                   )}
                 </div>
+              )}
+              </>
               )}
             </div>
           )
