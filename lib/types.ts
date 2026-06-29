@@ -129,6 +129,21 @@ export interface Obligacion {
   otrosi_id?: string | null
 }
 
+/**
+ * Revisión que asesor/supervisor hacen de una obligación dentro de un período.
+ * Solo existe fila si se desvió del default (aprobada=true, sin nota): es decir,
+ * al desmarcar la obligación o agregar una nota.
+ */
+export interface ObligacionRevision {
+  id: string
+  periodo_id: string
+  obligacion_id: string
+  aprobada: boolean
+  nota: string | null
+  revisado_por: string | null
+  revisado_at: string | null
+}
+
 export interface Periodo {
   id: string
   contrato_id: string

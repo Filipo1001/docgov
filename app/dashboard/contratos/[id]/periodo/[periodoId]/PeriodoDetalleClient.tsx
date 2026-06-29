@@ -38,7 +38,11 @@ import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
+import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
+
+/** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
+type RevisionLocal = { aprobada: boolean; nota: string | null }
 
 /** Periodo "hermano" del mismo contrato — usado para detectar repetición de planilla */
 export interface PeriodoHermano {
@@ -54,6 +58,7 @@ interface InitialData {
   initialPeriodo: Periodo
   initialObligaciones: Obligacion[]
   initialActividades: Actividad[]
+  initialRevisiones?: Record<string, RevisionLocal>
   periodosHermanos?: PeriodoHermano[]
 }
 
@@ -62,6 +67,7 @@ export default function PeriodoDetallePage({
   initialPeriodo,
   initialObligaciones,
   initialActividades,
+  initialRevisiones = {},
   periodosHermanos = [],
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
@@ -228,6 +234,57 @@ export default function PeriodoDetallePage({
   const todasAbiertas = obligaciones.length > 0 && obligaciones.every((o) => obligacionesAbiertas.has(o.id))
   const toggleTodas = () => {
     setObligacionesAbiertas(todasAbiertas ? new Set() : new Set(obligaciones.map((o) => o.id)))
+  }
+
+  // ── Revisión por obligación (asesor/supervisor): ✓ aprobar + nota ─────────
+  const [revisiones, setRevisiones] = useState<Record<string, RevisionLocal>>(initialRevisiones)
+  // Default sin fila = aprobada, sin nota.
+  const getRevision = (oblId: string): RevisionLocal => revisiones[oblId] ?? { aprobada: true, nota: null }
+  const [notaModal, setNotaModal] = useState<{ obligacionId: string; texto: string } | null>(null)
+  const [guardandoNota, setGuardandoNota] = useState(false)
+  const [obligacionProcesando, setObligacionProcesando] = useState<string | null>(null)
+
+  async function handleToggleAprobacion(obligacionId: string) {
+    const actual = getRevision(obligacionId)
+    const nuevoValor = !actual.aprobada
+    // Optimista
+    setRevisiones((prev) => ({
+      ...prev,
+      [obligacionId]: { aprobada: nuevoValor, nota: prev[obligacionId]?.nota ?? actual.nota },
+    }))
+    setObligacionProcesando(obligacionId)
+    const res = await toggleAprobacionObligacion(periodoId, obligacionId, nuevoValor)
+    if (res.error) {
+      // Revertir
+      setRevisiones((prev) => ({
+        ...prev,
+        [obligacionId]: { aprobada: actual.aprobada, nota: prev[obligacionId]?.nota ?? actual.nota },
+      }))
+      toast.error(res.error)
+    }
+    setObligacionProcesando(null)
+  }
+
+  async function handleGuardarNota() {
+    if (!notaModal) return
+    const { obligacionId, texto } = notaModal
+    const previa = getRevision(obligacionId)
+    const limpio = texto.trim()
+    setGuardandoNota(true)
+    const res = await guardarNotaObligacion(periodoId, obligacionId, limpio)
+    if (res.error) {
+      toast.error(res.error)
+      setGuardandoNota(false)
+      return
+    }
+    // Optimista: la nota no cambia la aprobación.
+    setRevisiones((prev) => ({
+      ...prev,
+      [obligacionId]: { aprobada: prev[obligacionId]?.aprobada ?? previa.aprobada, nota: limpio || null },
+    }))
+    setGuardandoNota(false)
+    setNotaModal(null)
+    toast.success(limpio ? 'Nota guardada' : 'Nota eliminada')
   }
 
   // Scroll anchors for rejection guidance
@@ -1679,34 +1736,83 @@ export default function PeriodoDetallePage({
           const actsDeObl = actividadesPorObligacion(obl.id)
           const numEvidencias = evidenciasPorObligacion(obl.id)
           const abierta = obligacionesAbiertas.has(obl.id)
+          const rev = getRevision(obl.id)
+          const tieneNota = !!rev.nota?.trim()
+          const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico
           return (
             <div key={obl.id} className="bg-white rounded-2xl border p-6">
-              {/* Cabecera clickable — expande/colapsa la obligación.
+              {/* Cabecera — zona clickable (expandir) + acciones de revisión.
                   Colapsada por defecto: las actividades y evidencias (imágenes)
                   no se montan hasta abrir, evitando descargar fotos innecesarias. */}
-              <button
-                type="button"
-                onClick={() => toggleObligacion(obl.id)}
-                aria-expanded={abierta}
-                className={`w-full flex items-start gap-3 text-left ${abierta ? 'mb-4' : ''}`}
-              >
-                <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 break-words">{obl.descripcion}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''} registrada{actsDeObl.length !== 1 ? 's' : ''}
-                    {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
-                  </p>
-                </div>
-                <svg
-                  className={`w-5 h-5 text-gray-400 shrink-0 mt-1 transition-transform ${abierta ? 'rotate-180' : ''}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              <div className={`flex items-start gap-3 ${abierta ? 'mb-4' : ''}`}>
+                {/* Zona clickable: expande/colapsa */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleObligacion(obl.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleObligacion(obl.id) }
+                  }}
+                  aria-expanded={abierta}
+                  className="flex items-start gap-3 flex-1 min-w-0 text-left cursor-pointer"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+                  <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 break-words">{obl.descripcion}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''} registrada{actsDeObl.length !== 1 ? 's' : ''}
+                      {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
+                      {!rev.aprobada && <span className="text-amber-600 font-medium"> · Sin aprobar</span>}
+                      {tieneNota && <span className="text-blue-600 font-medium"> · Con nota</span>}
+                    </p>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-400 shrink-0 mt-1 transition-transform ${abierta ? 'rotate-180' : ''}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+
+                {/* Acciones de revisión — solo asesor/supervisor, período no histórico */}
+                {puedeRevisar && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Aprobar / desmarcar */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAprobacion(obl.id)}
+                      disabled={obligacionProcesando === obl.id}
+                      title={rev.aprobada ? 'Obligación aprobada — clic para desmarcar' : 'Marcar obligación como aprobada'}
+                      aria-label={rev.aprobada ? 'Desmarcar obligación' : 'Aprobar obligación'}
+                      className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors disabled:opacity-40
+                        ${rev.aprobada
+                          ? 'bg-green-500 border-green-500 text-white hover:bg-green-600'
+                          : 'bg-white border-gray-200 text-gray-300 hover:text-green-500 hover:border-green-300'}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    {/* Agregar / editar nota */}
+                    <button
+                      type="button"
+                      onClick={() => setNotaModal({ obligacionId: obl.id, texto: rev.nota ?? '' })}
+                      title={tieneNota ? 'Editar nota de supervisión' : 'Agregar nota de supervisión'}
+                      aria-label="Nota de supervisión"
+                      className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors
+                        ${tieneNota
+                          ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'
+                          : 'bg-white border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-300'}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {abierta && (
               <>
@@ -2708,6 +2814,53 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
+
+      {/* ── Modal: nota de supervisión por obligación ─────────── */}
+      {notaModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !guardandoNota && setNotaModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nota de supervisión"
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-lg p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Nota de la supervisión</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Esta nota reemplaza el texto automático de esta obligación en el Acta de Supervisión.
+              Déjala vacía para volver al texto por defecto.
+            </p>
+            <textarea
+              value={notaModal.texto}
+              onChange={(e) => setNotaModal({ ...notaModal, texto: e.target.value })}
+              rows={5}
+              autoFocus
+              maxLength={2000}
+              placeholder="Ej: Se verificó el cumplimiento de la obligación conforme a las actividades reportadas durante el periodo."
+              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+            />
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button
+                onClick={() => setNotaModal(null)}
+                disabled={guardandoNota}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 bg-white border border-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleGuardarNota}
+                disabled={guardandoNota}
+                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+              >
+                {guardandoNota ? 'Guardando...' : 'Guardar nota'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Lightbox ──────────────────────────────────────────── */}
       {lightbox && (

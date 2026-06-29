@@ -36,6 +36,7 @@ export default async function PeriodoDetallePage({
     { data: actividades },
     { data: periodosHermanos },
     { data: otrosies },
+    { data: revisionesRaw },
   ] = await Promise.all([
     supabase
       .from('contratos')
@@ -83,6 +84,11 @@ export default async function PeriodoDetallePage({
       .from('otrosies')
       .select('id, fecha_inicio')
       .eq('contrato_id', id),
+
+    supabase
+      .from('obligacion_revisiones')
+      .select('obligacion_id, aprobada, nota')
+      .eq('periodo_id', periodoId),
   ])
 
   // Safety: if the period doesn't belong to this contract or data is missing,
@@ -104,6 +110,12 @@ export default async function PeriodoDetallePage({
     return !fechaOtrosi || fechaOtrosi <= fechaFinPeriodo
   })
 
+  // Revisión por obligación (✓ + nota). Sin fila → aprobada por defecto, sin nota.
+  const initialRevisiones: Record<string, { aprobada: boolean; nota: string | null }> = {}
+  for (const r of (revisionesRaw ?? []) as Array<{ obligacion_id: string; aprobada: boolean; nota: string | null }>) {
+    initialRevisiones[r.obligacion_id] = { aprobada: r.aprobada, nota: r.nota }
+  }
+
   return (
     // key={periodoId} forces a full remount when navigating between periods
     // so useState initialises fresh from the new props on every SPA navigation.
@@ -113,6 +125,7 @@ export default async function PeriodoDetallePage({
       initialPeriodo={periodo as unknown as Periodo}
       initialObligaciones={(obligaciones ?? []) as unknown as Obligacion[]}
       initialActividades={(actividades ?? []) as unknown as Actividad[]}
+      initialRevisiones={initialRevisiones}
       periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
     />
   )

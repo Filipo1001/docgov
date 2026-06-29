@@ -469,7 +469,7 @@ const s = StyleSheet.create({
 // ─── Component ────────────────────────────────────────────────
 
 export function ActaSupervisionPDF({ data }: { data: PDFData }) {
-  const { contrato, periodo, pagosHistorial } = data
+  const { contrato, periodo, pagosHistorial, obligaciones } = data
 
   // Plazo en días
   let plazoTexto = '—'
@@ -675,12 +675,41 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
           <View style={s.row}>
             <View style={s.lbl}><Text>Aceptación de las actividades realizadas</Text></View>
             <View style={s.val}>
-              <Text style={{ lineHeight: 1.3 }}>
-                Cumplió satisfactoriamente con todas las responsabilidades asignadas y dedicó toda su capacidad en la realización de las actividades en el periodo, por lo cual su aporte en el componente de gestión del talento humano permitió que la entidad generara capacidades para el desarrollo de las acciones misionales.
+              {obligaciones.length === 0 ? (
+                <Text style={{ lineHeight: 1.3, fontStyle: 'italic', color: '#555' }}>
+                  El contrato no tiene obligaciones registradas para este periodo.
+                </Text>
+              ) : (
+                obligaciones.map((obl, i) => {
+                  const nota = obl.nota?.trim()
+                  // Precedencia: nota → aprobada (default) → desmarcada (neutro).
+                  const textoSupervision = nota
+                    ? nota
+                    : obl.aprobada
+                      ? `De acuerdo con la verificación realizada por la supervisión, el contratista dio cumplimiento a la obligación contractual relacionada con "${obl.descripcion}".`
+                      : `La obligación contractual relacionada con "${obl.descripcion}" se encuentra pendiente de verificación por parte de la supervisión.`
+                  return (
+                    <View
+                      key={i}
+                      wrap={false}
+                      style={{ marginBottom: i === obligaciones.length - 1 ? 0 : 5 }}
+                    >
+                      <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5, lineHeight: 1.3 }}>
+                        {i + 1}. {obl.descripcion}
+                      </Text>
+                      <Text style={{ marginTop: 1, lineHeight: 1.3 }}>
+                        <Text style={{ fontFamily: 'Helvetica-Bold' }}>Supervisión: </Text>
+                        <Text style={nota ? { fontStyle: 'italic' } : undefined}>{textoSupervision}</Text>
+                      </Text>
+                    </View>
+                  )
+                })
+              )}
+
+              <Text style={{ marginTop: 6, lineHeight: 1.3 }}>
+                Además acreditó el pago de la seguridad social.
               </Text>
-              <Text style={{ marginTop: 3, lineHeight: 1.3 }}>
-                Además acreditó el pago de la seguridad social
-              </Text>
+
               {periodo.observacion_supervisor ? (
                 <View style={{ marginTop: 6, borderTopWidth: 0.5, borderTopColor: '#bbb', paddingTop: 5 }}>
                   <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#444', marginBottom: 2 }}>
