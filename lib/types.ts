@@ -197,6 +197,19 @@ export interface Evidencia {
   actividad_id: string
   url: string
   nombre_archivo: string
+  file_hash?: string | null
+  phash?: string | null
+  created_at?: string | null
+}
+
+/** A matching evidencia found in a previous period of the same contrato. */
+export interface DuplicadoMatch {
+  tipo: 'exacto' | 'similar'
+  periodoMes: string
+  periodoAnio: number
+  numeroPeriodo: number
+  actividadDescripcion: string
+  fechaCarga: string | null
 }
 
 // ─── Action result types ─────────────────────

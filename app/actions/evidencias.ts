@@ -143,6 +143,8 @@ export async function registrarEvidencia(
   publicUrl: string,
   storagePath: string,
   nombreArchivo: string,
+  fileHash?: string,
+  phash?: string,
 ): Promise<ActionResult<{ url: string; nombre: string }>> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -168,6 +170,8 @@ export async function registrarEvidencia(
         url: publicUrl,
         storage_path: storagePath,
         nombre_archivo: nombreArchivo,
+        ...(fileHash ? { file_hash: fileHash } : {}),
+        ...(phash ? { phash } : {}),
       })
 
     if (insertError) {

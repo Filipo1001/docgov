@@ -12,7 +12,7 @@ import {
   DEFAULT_BASE_COTIZACION_SS,
   MESES,
 } from '@/lib/constants'
-import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo } from '@/lib/types'
+import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import {
@@ -37,6 +37,7 @@ import {
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
+import { computeFileHash, computePerceptualHash } from '@/lib/pHash'
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
 import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
 import { devolverPeriodoAContratista } from '@/app/actions/periodos'
@@ -61,6 +62,7 @@ interface InitialData {
   initialActividades: Actividad[]
   initialRevisiones?: Record<string, RevisionLocal>
   periodosHermanos?: PeriodoHermano[]
+  initialDuplicados?: Record<string, DuplicadoMatch[]>
 }
 
 export default function PeriodoDetallePage({
@@ -70,6 +72,7 @@ export default function PeriodoDetallePage({
   initialActividades,
   initialRevisiones = {},
   periodosHermanos = [],
+  initialDuplicados = {},
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -244,6 +247,18 @@ export default function PeriodoDetallePage({
   const toggleTodas = () => {
     setObligacionesAbiertas(todasAbiertas ? new Set() : new Set(obligaciones.map((o) => o.id)))
   }
+
+  // ── Duplicate-evidence detection (asesor/supervisor only) ─────────────────
+  const [duplicados, setDuplicados] = useState<Record<string, DuplicadoMatch[]>>(initialDuplicados)
+  const [duplicadoModal, setDuplicadoModal] = useState<{ evId: string; matches: DuplicadoMatch[] } | null>(null)
+
+  const prevInitialDuplicadosRef = useRef(initialDuplicados)
+  useEffect(() => {
+    if (prevInitialDuplicadosRef.current !== initialDuplicados) {
+      prevInitialDuplicadosRef.current = initialDuplicados
+      setDuplicados(initialDuplicados)
+    }
+  }, [initialDuplicados])
 
   // ── Revisión por obligación (asesor/supervisor): ✓ aprobar + nota ─────────
   const [revisiones, setRevisiones] = useState<Record<string, RevisionLocal>>(initialRevisiones)
@@ -830,8 +845,14 @@ export default function PeriodoDetallePage({
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: limited.length }))
 
     try {
-      // A: Compress all files in parallel (pure Canvas — no server calls)
-      const compressed = await Promise.all(limited.map(f => comprimirEvidencia(f)))
+      // A: Compress files and compute hashes in parallel (all pure Canvas / Web Crypto)
+      const [compressed, hashes] = await Promise.all([
+        Promise.all(limited.map(f => comprimirEvidencia(f))),
+        Promise.all(limited.map(async f => ({
+          fileHash: await computeFileHash(f).catch(() => ''),
+          phash: await computePerceptualHash(f).catch(() => ''),
+        }))),
+      ])
 
       // B+D: For each file, request its signed URL and start the XHR upload immediately,
       //      all in parallel. Each file tracks its own byte-level progress (M-1) and
@@ -909,7 +930,11 @@ export default function PeriodoDetallePage({
         }
 
         const { publicUrl, storagePath, nombre } = res.value
-        const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, storagePath, nombre)
+        const reg = await registrarEvidencia(
+          actividadId, periodoId, publicUrl, storagePath, nombre,
+          hashes[i]?.fileHash || undefined,
+          hashes[i]?.phash || undefined,
+        )
         if (reg.error) {
           setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, storagePath, nombre } }))
           toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
@@ -1909,8 +1934,25 @@ export default function PeriodoDetallePage({
                           <div className="mt-3">
                             {act.evidencias && act.evidencias.length > 0 && (
                               <div className="flex flex-wrap gap-2 mb-2">
-                                {act.evidencias.map((ev) => (
+                                {act.evidencias.map((ev) => {
+                                  const evMatches = (esAsesor || esSecretaria) ? (duplicados[ev.id] ?? []) : []
+                                  const tieneDuplicado = evMatches.length > 0
+                                  return (
                                   <div key={ev.id} className="relative group">
+                                    {/* Duplicate alert badge — only visible to asesor/supervisor */}
+                                    {tieneDuplicado && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setDuplicadoModal({ evId: ev.id, matches: evMatches }) }}
+                                        className="absolute -top-1.5 -left-1.5 z-20 w-5 h-5 bg-amber-500 hover:bg-amber-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
+                                        title="Posible evidencia reutilizada — clic para ver detalles"
+                                        aria-label="Alerta: posible evidencia duplicada"
+                                      >
+                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                        </svg>
+                                      </button>
+                                    )}
                                     {/* Thumbnail — abre lightbox (con evId para poder eliminar desde ahí) */}
                                     <button
                                       type="button"
@@ -1923,7 +1965,7 @@ export default function PeriodoDetallePage({
                                         alt={ev.nombre_archivo}
                                         loading="lazy"
                                         decoding="async"
-                                        className="w-20 h-20 object-cover rounded-xl border border-gray-200 transition-opacity group-hover:opacity-80"
+                                        className={`w-20 h-20 object-cover rounded-xl border transition-opacity group-hover:opacity-80 ${tieneDuplicado ? 'border-amber-300' : 'border-gray-200'}`}
                                       />
                                     </button>
                                     {/* Botón eliminar:
@@ -1946,7 +1988,8 @@ export default function PeriodoDetallePage({
                                       </button>
                                     )}
                                   </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             )}
 
@@ -3007,6 +3050,79 @@ export default function PeriodoDetallePage({
       )}
 
       {/* ── Modal: nota de supervisión por obligación ─────────── */}
+      {/* ── Duplicate evidence alert modal ───────────────────────────────── */}
+      {duplicadoModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setDuplicadoModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Alerta de posible evidencia duplicada"
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm">Posible evidencia reutilizada</h3>
+                <p className="text-xs text-gray-500">Esta imagen podría haber sido utilizada anteriormente</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {duplicadoModal.matches.map((match, idx) => (
+                <div
+                  key={idx}
+                  className={`rounded-xl px-4 py-3 border text-sm ${
+                    match.tipo === 'exacto'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-amber-50 border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      match.tipo === 'exacto'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {match.tipo === 'exacto' ? 'Duplicado exacto' : 'Muy similar'}
+                    </span>
+                  </div>
+                  <p className="font-medium text-gray-800">
+                    Periodo {match.numeroPeriodo} — {match.periodoMes} {match.periodoAnio}
+                  </p>
+                  {match.fechaCarga && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Cargada el {new Date(match.fechaCarga).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                    Actividad: {match.actividadDescripcion}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-gray-400 mt-4">
+              Esta es una alerta informativa. No impide la aprobación del informe.
+            </p>
+
+            <button
+              onClick={() => setDuplicadoModal(null)}
+              className="mt-4 w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
       {notaModal && (
         <div
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"

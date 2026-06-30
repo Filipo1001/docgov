@@ -2,7 +2,8 @@ import { requireContractAccess } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
-import type { Contrato, Periodo, Obligacion, Actividad } from '@/lib/types'
+import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch } from '@/lib/types'
+import { buscarDuplicados } from '@/lib/duplicados'
 
 /**
  * Server component — runs with full server-side auth (httpOnly cookies).
@@ -29,6 +30,63 @@ export default async function PeriodoDetallePage({
   // ── Data fetch (server-side, guaranteed authenticated) ───────
   const supabase = await createServerSupabaseClient()
 
+  const [mainData, initialDuplicados] = await Promise.all([
+    Promise.all([
+      supabase
+        .from('contratos')
+        .select(`
+          *,
+          contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, telefono, cargo, direccion, firma_url),
+          supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo, cedula, cargo, firma_url),
+          dependencia:dependencias(nombre, abreviatura)
+        `)
+        .eq('id', id)
+        .single(),
+
+      supabase
+        .from('periodos')
+        .select(`
+          *,
+          preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo)),
+          historial_periodos(id, estado_anterior, estado_nuevo, usuario_id, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(id, nombre_completo, rol))
+        `)
+        .eq('id', periodoId)
+        .order('created_at', { referencedTable: 'historial_periodos', ascending: true })
+        .single(),
+
+      supabase
+        .from('obligaciones')
+        .select('*, otrosi_id')
+        .eq('contrato_id', id)
+        .order('orden'),
+
+      supabase
+        .from('actividades')
+        .select('*, evidencias(*)')
+        .eq('periodo_id', periodoId)
+        .order('orden'),
+
+      // Todos los periodos del contrato — para detectar repetición de número de
+      // planilla (alertas de mes vencido / cotización faltante) en la tarjeta.
+      supabase
+        .from('periodos')
+        .select('id, numero_periodo, mes, numero_planilla, cotizacion_mes')
+        .eq('contrato_id', id)
+        .order('numero_periodo'),
+
+      supabase
+        .from('otrosies')
+        .select('id, fecha_inicio')
+        .eq('contrato_id', id),
+
+      supabase
+        .from('obligacion_revisiones')
+        .select('obligacion_id, aprobada, nota')
+        .eq('periodo_id', periodoId),
+    ]),
+    buscarDuplicados(periodoId, id, supabase),
+  ])
+
   const [
     { data: contrato },
     { data: periodo },
@@ -37,59 +95,7 @@ export default async function PeriodoDetallePage({
     { data: periodosHermanos },
     { data: otrosies },
     { data: revisionesRaw },
-  ] = await Promise.all([
-    supabase
-      .from('contratos')
-      .select(`
-        *,
-        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, telefono, cargo, direccion, firma_url),
-        supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo, cedula, cargo, firma_url),
-        dependencia:dependencias(nombre, abreviatura)
-      `)
-      .eq('id', id)
-      .single(),
-
-    supabase
-      .from('periodos')
-      .select(`
-        *,
-        preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo)),
-        historial_periodos(id, estado_anterior, estado_nuevo, usuario_id, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(id, nombre_completo, rol))
-      `)
-      .eq('id', periodoId)
-      .order('created_at', { referencedTable: 'historial_periodos', ascending: true })
-      .single(),
-
-    supabase
-      .from('obligaciones')
-      .select('*, otrosi_id')
-      .eq('contrato_id', id)
-      .order('orden'),
-
-    supabase
-      .from('actividades')
-      .select('*, evidencias(*)')
-      .eq('periodo_id', periodoId)
-      .order('orden'),
-
-    // Todos los periodos del contrato — para detectar repetición de número de
-    // planilla (alertas de mes vencido / cotización faltante) en la tarjeta.
-    supabase
-      .from('periodos')
-      .select('id, numero_periodo, mes, numero_planilla, cotizacion_mes')
-      .eq('contrato_id', id)
-      .order('numero_periodo'),
-
-    supabase
-      .from('otrosies')
-      .select('id, fecha_inicio')
-      .eq('contrato_id', id),
-
-    supabase
-      .from('obligacion_revisiones')
-      .select('obligacion_id, aprobada, nota')
-      .eq('periodo_id', periodoId),
-  ])
+  ] = mainData
 
   // Safety: if the period doesn't belong to this contract or data is missing,
   // redirect rather than rendering a broken page.
@@ -127,6 +133,7 @@ export default async function PeriodoDetallePage({
       initialActividades={(actividades ?? []) as unknown as Actividad[]}
       initialRevisiones={initialRevisiones}
       periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
+      initialDuplicados={initialDuplicados as Record<string, DuplicadoMatch[]>}
     />
   )
 }
