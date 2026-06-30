@@ -618,6 +618,68 @@ export async function rechazarPeriodos(
 }
 
 /**
+ * Secretary returns a period directly to the contratista (→ rechazado).
+ * Unlike rechazarPeriodos (which returns to enviado for asesor re-review),
+ * this skips asesor and puts the ball back in the contratista's court.
+ */
+export async function devolverPeriodoAContratista(
+  periodoId: string,
+  motivo: string,
+): Promise<ActionResult> {
+  try {
+    if (!motivo?.trim()) return { error: 'El motivo es obligatorio al devolver al contratista' }
+
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo la secretaria puede devolver directamente al contratista' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+    if (periodo.estado !== 'enviado' && periodo.estado !== 'revision') {
+      return { error: `No se puede devolver un periodo en estado "${periodo.estado}"` }
+    }
+
+    const estadoAnterior = periodo.estado
+    const { data: updated, error } = await supabase
+      .from('periodos')
+      .update({ estado: 'rechazado', motivo_rechazo: motivo.trim() })
+      .eq('id', periodoId)
+      .select('id')
+
+    if (error) return { error: `Error al devolver: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo devolver el informe. Recarga e intenta de nuevo.' }
+
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivo.trim())
+
+    try {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.contratista_id) {
+        await enviarNotificacion({
+          destinatarioId: contrato.contratista_id,
+          tipo: 'rechazado',
+          titulo: 'Tu informe requiere correcciones',
+          mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto por la secretaría. Motivo: ${motivo.trim()}`,
+          periodoId,
+          mes: periodo.mes,
+          anio: periodo.anio,
+          contrato: contrato.numero || '',
+          motivo: motivo.trim(),
+          nombreRemitente: usuario.nombre_completo,
+        })
+      }
+    } catch { /* non-blocking */ }
+
+    await invalidarCachePDF(createAdminSupabaseClient(), periodoId).catch(() => {})
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
  * Asesor or secretary marks an approved period as radicado (physically filed).
  * Optionally stores the radicado number and notifies the contratista.
  */

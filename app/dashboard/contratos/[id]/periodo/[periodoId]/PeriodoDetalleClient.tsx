@@ -39,6 +39,7 @@ import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '
 import { comprimirEvidencia } from '@/lib/compress'
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
 import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
+import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
 
 /** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
@@ -212,6 +213,14 @@ export default function PeriodoDetallePage({
   const [motivoDevolver, setMotivoDevolver] = useState('')
   const [procesandoDevolver, setProcesandoDevolver] = useState(false)
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
+
+  // Secretaria: modal de devolución con elección de destino
+  const [mostrarDevolverModal, setMostrarDevolverModal] = useState(false)
+  const [destinoDevolucion, setDestinoDevolucion] = useState<'asesores' | 'contratista' | null>(null)
+  const [motivoDevolucion, setMotivoDevolucion] = useState('')
+  const [procesandoDevolucion, setProcesandoDevolucion] = useState(false)
+  // Secretaria: confirmación de aprobación cuando faltan obligaciones por revisar
+  const [mostrarConfirmacionAprobacion, setMostrarConfirmacionAprobacion] = useState(false)
 
   // ── Accordion: qué obligaciones están expandidas ───────────────
   // Vista colapsada por defecto (lista limpia, sin descargar imágenes hasta
@@ -406,6 +415,12 @@ export default function PeriodoDetallePage({
   const esSecretaria = usuario?.rol === 'supervisor' || usuario?.rol === 'admin'
   const esContratista = usuario?.rol === 'contratista'
 
+  // Progreso de revisión por obligación — usado en el panel de secretaria
+  const obligacionesConRevision = obligaciones.filter(obl => revisiones[obl.id] !== undefined)
+  const obligacionesSinRevisar = obligaciones.filter(obl => revisiones[obl.id] === undefined)
+  const todasRevisadas = obligaciones.length > 0 && obligacionesSinRevisar.length === 0
+  const progresoRevision = obligaciones.length > 0 ? obligacionesConRevision.length / obligaciones.length : 0
+
   // Past-month lock: contratistas cannot edit borrador periods from previous months
   // (rechazado periods remain editable regardless of date)
   const MES_INDEX: Record<string, number> = {
@@ -576,11 +591,47 @@ export default function PeriodoDetallePage({
   }
 
   async function handleAprobarSecretaria() {
+    // Si hay obligaciones sin revisar, pedir confirmación antes de aprobar
+    if (!todasRevisadas && obligaciones.length > 0) {
+      setMostrarConfirmacionAprobacion(true)
+      return
+    }
     setProcesando(true)
     const result = await aprobarPeriodos([periodoId])
     if (result.error) toast.error(result.error)
     else { toast.success('Informe aprobado'); router.refresh(); cargarDatos() }
     setProcesando(false)
+  }
+
+  async function handleConfirmarAprobacion() {
+    setMostrarConfirmacionAprobacion(false)
+    setProcesando(true)
+    const result = await aprobarPeriodos([periodoId])
+    if (result.error) toast.error(result.error)
+    else { toast.success('Informe aprobado'); router.refresh(); cargarDatos() }
+    setProcesando(false)
+  }
+
+  async function handleDevolverSecretaria(destino: 'asesores' | 'contratista', motivo: string) {
+    if (!motivo.trim()) {
+      toast.error('El motivo es obligatorio')
+      return
+    }
+    setProcesandoDevolucion(true)
+    const result = destino === 'asesores'
+      ? await rechazarPeriodos([periodoId], motivo.trim())
+      : await devolverPeriodoAContratista(periodoId, motivo.trim())
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(destino === 'asesores' ? 'Informe devuelto a los asesores' : 'Informe devuelto al contratista')
+      setMostrarDevolverModal(false)
+      setDestinoDevolucion(null)
+      setMotivoDevolucion('')
+      router.refresh()
+      cargarDatos()
+    }
+    setProcesandoDevolucion(false)
   }
 
   async function handleRechazarSecretaria() {
@@ -1610,73 +1661,7 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
-      {/* ── Secretaria panel (approve / reject) ── */}
-      {(periodo.estado === 'revision' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
-        <div className="bg-white rounded-2xl border border-amber-200 p-4 sm:p-6 mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-base">📋</div>
-            <div>
-              <h3 className="font-medium text-gray-900">Aprobación como secretaria</h3>
-              <p className="text-xs text-gray-400">
-                Revisa el informe. Al aprobar, los documentos firmados estarán disponibles para descarga.
-              </p>
-            </div>
-          </div>
-
-          {tienePreaprobaciones && (
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-              {preaprobaciones.map(pa => (
-                <span key={pa.id} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                  ✓ Pre-aprobado por {pa.asesor?.nombre_completo || 'Asesor'}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {!mostrarRechazo ? (
-            <div className="flex gap-3">
-              <button
-                onClick={handleAprobarSecretaria}
-                disabled={procesando}
-                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-              >
-                {procesando ? 'Aprobando...' : '✓ Aprobar'}
-              </button>
-              <button
-                onClick={() => setMostrarRechazo(true)}
-                className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
-              >
-                ↩ Devolver a asesores
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <textarea
-                value={motivoRechazo}
-                onChange={(e) => setMotivoRechazo(e.target.value)}
-                placeholder="Escribe el motivo por el cual devuelves este informe a los asesores..."
-                rows={3}
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={handleRechazarSecretaria}
-                  disabled={procesando || !motivoRechazo.trim()}
-                  className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  {procesando ? 'Procesando...' : 'Confirmar devolución'}
-                </button>
-                <button
-                  onClick={() => { setMostrarRechazo(false); setMotivoRechazo('') }}
-                  className="px-4 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Panel de secretaria movido a debajo de actividades — ver sección antes de Documentos del periodo */}
 
       {/* Mark as radicado — asesor/supervisor/admin when aprobado */}
       {!esHistorico && periodo.estado === 'aprobado' && (esAsesor || esSecretaria) && (
@@ -1738,7 +1723,8 @@ export default function PeriodoDetallePage({
           const abierta = obligacionesAbiertas.has(obl.id)
           const rev = getRevision(obl.id)
           const tieneNota = !!rev.nota?.trim()
-          const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico
+          const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico &&
+            !!periodo && ['enviado', 'revision', 'rechazado'].includes(periodo.estado)
           return (
             <div key={obl.id} className="bg-white rounded-2xl border p-6">
               {/* Cabecera — zona clickable (expandir) + acciones de revisión.
@@ -2363,6 +2349,73 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
+      {/* ── Panel de revisión de secretaria ── */}
+      {(periodo.estado === 'revision' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
+        <div className="bg-white rounded-2xl border border-amber-100 p-5 mb-6">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-lg flex-shrink-0">📋</div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">Revisión de supervisión</h3>
+              {tienePreaprobaciones && (
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {preaprobaciones.map(pa => (
+                    <span key={pa.id} className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                      ✓ {pa.asesor?.nombre_completo || 'Asesor'}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Barra de progreso de revisión de obligaciones */}
+          {obligaciones.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-gray-500">Obligaciones revisadas</span>
+                <span className={`text-xs font-semibold ${todasRevisadas ? 'text-green-600' : 'text-amber-600'}`}>
+                  {obligacionesConRevision.length} de {obligaciones.length}
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-1.5 rounded-full transition-all duration-300 ${todasRevisadas ? 'bg-green-500' : 'bg-amber-400'}`}
+                  style={{ width: `${Math.round(progresoRevision * 100)}%` }}
+                />
+              </div>
+              {!todasRevisadas && (
+                <p className="text-[11px] text-amber-600 mt-1.5">
+                  Usa los botones ✓ en cada obligación del acordeón de arriba para registrar tu seguimiento.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Botones de acción */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleAprobarSecretaria}
+              disabled={procesando}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
+                todasRevisadas
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-green-100 hover:bg-green-200 text-green-700 border border-green-200'
+              }`}
+            >
+              {procesando ? 'Aprobando...' : '✓ Aprobar informe'}
+            </button>
+            <button
+              onClick={() => { setMostrarDevolverModal(true); setDestinoDevolucion(null); setMotivoDevolucion('') }}
+              disabled={procesando}
+              className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              ↩ Devolver
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Documents section ── */}
       {puedeVerDocumentos && (
         <div className="bg-white rounded-2xl border p-4 sm:p-6 mt-4">
@@ -2814,6 +2867,144 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
+
+      {/* ── Modal: confirmación de aprobación con obligaciones sin revisar ── */}
+      {mostrarConfirmacionAprobacion && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !procesando && setMostrarConfirmacionAprobacion(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center text-lg flex-shrink-0">⚠️</div>
+              <h3 className="text-sm font-semibold text-gray-900">Obligaciones sin revisar</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Las siguientes obligaciones aún no tienen seguimiento registrado:
+            </p>
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-4 space-y-1 max-h-40 overflow-y-auto">
+              {obligacionesSinRevisar.map((obl, i) => (
+                <p key={obl.id} className="text-xs text-amber-800 leading-relaxed">
+                  {i + 1}. {obl.descripcion}
+                </p>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mb-4">¿Deseas aprobar el informe de todas formas?</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMostrarConfirmacionAprobacion(false)}
+                disabled={procesando}
+                className="flex-1 px-4 py-2.5 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarAprobacion}
+                disabled={procesando}
+                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {procesando ? 'Aprobando...' : 'Aprobar de todas formas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: devolución con elección de destino ─────────── */}
+      {mostrarDevolverModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !procesandoDevolucion && setMostrarDevolverModal(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Devolver informe</h3>
+            <p className="text-xs text-gray-500 mb-4">¿A quién deseas devolver este informe?</p>
+
+            {/* Opciones de destino */}
+            <div className="flex flex-col gap-2 mb-4">
+              <button
+                onClick={() => setDestinoDevolucion('asesores')}
+                disabled={procesandoDevolucion}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors disabled:opacity-50 ${
+                  destinoDevolucion === 'asesores'
+                    ? 'bg-blue-50 border-blue-300 text-blue-700'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-lg flex-shrink-0">🔍</span>
+                <div>
+                  <p className="text-sm font-medium">Devolver a asesor</p>
+                  <p className="text-xs text-gray-400 mt-0.5">El asesor revisará y reenviará a secretaría</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setDestinoDevolucion('contratista')}
+                disabled={procesandoDevolucion}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors disabled:opacity-50 ${
+                  destinoDevolucion === 'contratista'
+                    ? 'bg-orange-50 border-orange-300 text-orange-700'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-lg flex-shrink-0">↩</span>
+                <div>
+                  <p className="text-sm font-medium">Devolver a contratista</p>
+                  <p className="text-xs text-gray-400 mt-0.5">El contratista corregirá y volverá a enviar</p>
+                </div>
+              </button>
+            </div>
+
+            {destinoDevolucion && (
+              <>
+                <textarea
+                  value={motivoDevolucion}
+                  onChange={(e) => setMotivoDevolucion(e.target.value)}
+                  placeholder="Motivo de la devolución (obligatorio)..."
+                  rows={3}
+                  autoFocus
+                  disabled={procesandoDevolucion}
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none resize-none mb-3 disabled:opacity-50"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => handleDevolverSecretaria(destinoDevolucion, motivoDevolucion)}
+                    disabled={procesandoDevolucion || !motivoDevolucion.trim()}
+                    className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                  >
+                    {procesandoDevolucion ? 'Procesando...' : 'Confirmar devolución'}
+                  </button>
+                  <button
+                    onClick={() => { setMostrarDevolverModal(false); setDestinoDevolucion(null); setMotivoDevolucion('') }}
+                    disabled={procesandoDevolucion}
+                    className="px-4 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {!destinoDevolucion && (
+              <button
+                onClick={() => setMostrarDevolverModal(false)}
+                className="w-full py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Modal: nota de supervisión por obligación ─────────── */}
       {notaModal && (
