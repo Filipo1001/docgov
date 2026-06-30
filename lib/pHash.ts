@@ -71,6 +71,47 @@ export function computePerceptualHash(file: File): Promise<string> {
 }
 
 /**
+ * Compute aHash from a public image URL.
+ * Sets crossOrigin = 'anonymous' so Canvas can read the pixel data.
+ * Used for silent backfill of historical evidencias.
+ */
+export function computePerceptualHashFromUrl(url: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+
+    img.onload = () => {
+      const SIZE = 8
+      const canvas = document.createElement('canvas')
+      canvas.width = SIZE
+      canvas.height = SIZE
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, SIZE, SIZE)
+
+      const data = ctx.getImageData(0, 0, SIZE, SIZE).data
+      const gray = new Float32Array(SIZE * SIZE)
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        gray[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]
+      }
+      const mean = gray.reduce((a, b) => a + b, 0) / gray.length
+
+      let hex = ''
+      for (let byte = 0; byte < 8; byte++) {
+        let val = 0
+        for (let bit = 0; bit < 8; bit++) {
+          if (gray[byte * 8 + bit] >= mean) val |= (1 << bit)
+        }
+        hex += val.toString(16).padStart(2, '0')
+      }
+      resolve(hex)
+    }
+
+    img.onerror = () => resolve('')
+    img.src = url
+  })
+}
+
+/**
  * Number of bits that differ between two 16-char hex hashes (Hamming distance).
  * Processes byte-by-byte — no BigInt, compatible with ES2017.
  * Returns 64 on invalid input.

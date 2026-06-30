@@ -9,12 +9,15 @@
  *   - aHash   (phash):     Hamming distance ≤ 10  → 'similar'
  *     (catches screenshots, re-encodings, rescaled copies of the same image)
  *
+ * Also returns paraBackfill: historical evidencias without phash, so the client
+ * can compute their pHashes silently and save them for future comparisons.
+ *
  * Hamming distance is computed byte-by-byte — no BigInt, compatible with ES2017.
  */
 
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { DuplicadoMatch } from './types'
+import type { DuplicadoMatch, DuplicadosResult } from './types'
 
 const PHASH_THRESHOLD = 10
 
@@ -28,7 +31,7 @@ function hammingDistance(hexA: string, hexB: string): number {
   return count
 }
 
-type EvidenciaRow = { id: string; file_hash: string | null; phash: string | null; created_at: string | null }
+type EvidenciaRow = { id: string; file_hash: string | null; phash: string | null; url: string; created_at: string | null }
 type ActividadRow = { id: string; descripcion: string; periodo_id: string; evidencias: EvidenciaRow[] }
 type PeriodoRow   = { id: string; mes: string; anio: number; numero_periodo: number }
 
@@ -36,7 +39,7 @@ export async function buscarDuplicados(
   periodoIdActual: string,
   contratoId: string,
   supabase: SupabaseClient,
-): Promise<Record<string, DuplicadoMatch[]>> {
+): Promise<DuplicadosResult> {
   try {
     // All periods of this contrato except the one being reviewed
     const { data: periodosHistoricos } = await supabase
@@ -45,7 +48,7 @@ export async function buscarDuplicados(
       .eq('contrato_id', contratoId)
       .neq('id', periodoIdActual)
 
-    if (!periodosHistoricos?.length) return {}
+    if (!periodosHistoricos?.length) return { matches: {}, paraBackfill: [] }
 
     const periodoMap = new Map<string, PeriodoRow>(
       (periodosHistoricos as PeriodoRow[]).map(p => [p.id, p])
@@ -56,11 +59,11 @@ export async function buscarDuplicados(
     const [{ data: actActuales }, { data: actHistoricas }] = await Promise.all([
       supabase
         .from('actividades')
-        .select('id, descripcion, periodo_id, evidencias(id, file_hash, phash, created_at)')
+        .select('id, descripcion, periodo_id, evidencias(id, file_hash, phash, url, created_at)')
         .eq('periodo_id', periodoIdActual),
       supabase
         .from('actividades')
-        .select('id, descripcion, periodo_id, evidencias(id, file_hash, phash, created_at)')
+        .select('id, descripcion, periodo_id, evidencias(id, file_hash, phash, url, created_at)')
         .in('periodo_id', periodoIds),
     ])
 
@@ -71,7 +74,13 @@ export async function buscarDuplicados(
         .map(e => ({ ...e, actDesc: a.descripcion }))
     )
 
-    if (!currentEvidencias.length) return {}
+    // Historical evidencias without phash → client needs to backfill them
+    const paraBackfill = ((actHistoricas ?? []) as ActividadRow[])
+      .flatMap(a => a.evidencias ?? [])
+      .filter(e => !e.phash && e.url)
+      .map(e => ({ id: e.id, url: e.url }))
+
+    if (!currentEvidencias.length) return { matches: {}, paraBackfill }
 
     // Build lookup structures for historical evidencias
     const byHash = new Map<string, { actDesc: string; periodoId: string; createdAt: string | null }[]>()
@@ -90,10 +99,10 @@ export async function buscarDuplicados(
       }
     }
 
-    const result: Record<string, DuplicadoMatch[]> = {}
+    const matches: Record<string, DuplicadoMatch[]> = {}
 
     for (const ev of currentEvidencias) {
-      const matches: DuplicadoMatch[] = []
+      const evMatches: DuplicadoMatch[] = []
       const seen = new Set<string>()
 
       // Exact SHA-256 match
@@ -104,7 +113,7 @@ export async function buscarDuplicados(
           const key = `${hist.periodoId}:${hist.actDesc}`
           if (seen.has(key)) continue
           seen.add(key)
-          matches.push({
+          evMatches.push({
             tipo: 'exacto',
             periodoMes: periodo.mes,
             periodoAnio: periodo.anio,
@@ -115,7 +124,7 @@ export async function buscarDuplicados(
         }
       }
 
-      // Perceptual hash match (aHash Hamming distance ≤ threshold)
+      // Perceptual hash match
       if (ev.phash) {
         for (const hist of withPhash) {
           if (hammingDistance(ev.phash, hist.phash) > PHASH_THRESHOLD) continue
@@ -124,7 +133,7 @@ export async function buscarDuplicados(
           const key = `${hist.periodoId}:${hist.actDesc}`
           if (seen.has(key)) continue
           seen.add(key)
-          matches.push({
+          evMatches.push({
             tipo: 'similar',
             periodoMes: periodo.mes,
             periodoAnio: periodo.anio,
@@ -135,11 +144,11 @@ export async function buscarDuplicados(
         }
       }
 
-      if (matches.length) result[ev.id] = matches
+      if (evMatches.length) matches[ev.id] = evMatches
     }
 
-    return result
+    return { matches, paraBackfill }
   } catch {
-    return {}
+    return { matches: {}, paraBackfill: [] }
   }
 }

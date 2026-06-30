@@ -12,7 +12,7 @@ import {
   DEFAULT_BASE_COTIZACION_SS,
   MESES,
 } from '@/lib/constants'
-import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch } from '@/lib/types'
+import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import {
@@ -35,9 +35,9 @@ import {
   adminDevolverPeriodo,
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
-import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
+import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia, guardarHashesBatch } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
-import { computeFileHash, computePerceptualHash } from '@/lib/pHash'
+import { computeFileHash, computePerceptualHash, computePerceptualHashFromUrl } from '@/lib/pHash'
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
 import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
 import { devolverPeriodoAContratista } from '@/app/actions/periodos'
@@ -63,6 +63,7 @@ interface InitialData {
   initialRevisiones?: Record<string, RevisionLocal>
   periodosHermanos?: PeriodoHermano[]
   initialDuplicados?: Record<string, DuplicadoMatch[]>
+  initialParaBackfill?: EvidenciaParaBackfill[]
 }
 
 export default function PeriodoDetallePage({
@@ -73,6 +74,7 @@ export default function PeriodoDetallePage({
   initialRevisiones = {},
   periodosHermanos = [],
   initialDuplicados = {},
+  initialParaBackfill = [],
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -259,6 +261,30 @@ export default function PeriodoDetallePage({
       setDuplicados(initialDuplicados)
     }
   }, [initialDuplicados])
+
+  // Silent background backfill: compute pHash for historical evidencias that didn't
+  // have it at upload time, save to DB, then refresh to run the comparison again.
+  useEffect(() => {
+    if (!initialParaBackfill.length) return
+    // Only run for reviewers — contratistas don't need duplicate detection
+    if (!usuario) return
+
+    async function runBackfill() {
+      const updates: { id: string; phash: string }[] = []
+      for (const ev of initialParaBackfill) {
+        const phash = await computePerceptualHashFromUrl(ev.url).catch(() => '')
+        if (phash) updates.push({ id: ev.id, phash })
+      }
+      if (updates.length) {
+        await guardarHashesBatch(updates)
+        // Refresh so page.tsx re-runs buscarDuplicados with the newly-stored hashes
+        if (mountedRef.current) router.refresh()
+      }
+    }
+
+    runBackfill()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialParaBackfill])
 
   // ── Revisión por obligación (asesor/supervisor): ✓ aprobar + nota ─────────
   const [revisiones, setRevisiones] = useState<Record<string, RevisionLocal>>(initialRevisiones)

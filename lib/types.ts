@@ -212,6 +212,18 @@ export interface DuplicadoMatch {
   fechaCarga: string | null
 }
 
+/** Historical evidencia that needs its phash computed client-side (silent backfill). */
+export interface EvidenciaParaBackfill {
+  id: string
+  url: string
+}
+
+/** Full result from buscarDuplicados. */
+export interface DuplicadosResult {
+  matches: Record<string, DuplicadoMatch[]>
+  paraBackfill: EvidenciaParaBackfill[]
+}
+
 // ─── Action result types ─────────────────────
 
 export interface ActionResult<T = void> {

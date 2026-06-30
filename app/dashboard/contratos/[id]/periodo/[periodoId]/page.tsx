@@ -2,7 +2,7 @@ import { requireContractAccess } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
-import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch } from '@/lib/types'
+import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { buscarDuplicados } from '@/lib/duplicados'
 
 /**
@@ -133,7 +133,8 @@ export default async function PeriodoDetallePage({
       initialActividades={(actividades ?? []) as unknown as Actividad[]}
       initialRevisiones={initialRevisiones}
       periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
-      initialDuplicados={initialDuplicados as Record<string, DuplicadoMatch[]>}
+      initialDuplicados={(initialDuplicados as { matches: Record<string, DuplicadoMatch[]>; paraBackfill: EvidenciaParaBackfill[] }).matches ?? {}}
+      initialParaBackfill={(initialDuplicados as { matches: Record<string, DuplicadoMatch[]>; paraBackfill: EvidenciaParaBackfill[] }).paraBackfill ?? []}
     />
   )
 }

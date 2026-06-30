@@ -184,6 +184,31 @@ export async function registrarEvidencia(
   }
 }
 
+// ── Hash backfill ─────────────────────────────────────────────────────────────
+
+/**
+ * Batch-save phash values for existing evidencias that didn't have one at upload time.
+ * Called client-side by asesor/supervisor after computing pHashes from image URLs.
+ */
+export async function guardarHashesBatch(
+  updates: { id: string; phash: string }[],
+): Promise<ActionResult> {
+  if (!updates.length) return {}
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { error: 'No autorizado' }
+
+    const admin = createAdminSupabaseClient()
+    for (const { id, phash } of updates) {
+      await admin.from('evidencias').update({ phash }).eq('id', id).is('phash', null)
+    }
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
 // ── Delete ───────────────────────────────────────────────────────────────────
 
 export async function eliminarEvidencia(evidenciaId: string): Promise<ActionResult> {
