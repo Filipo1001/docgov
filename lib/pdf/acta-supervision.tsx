@@ -468,8 +468,11 @@ const s = StyleSheet.create({
 
 // ─── Component ────────────────────────────────────────────────
 
+const ESTADOS_FIRMA_SUPERVISOR = new Set(['aprobado', 'radicado'])
+
 export function ActaSupervisionPDF({ data }: { data: PDFData }) {
   const { contrato, periodo, pagosHistorial, obligaciones } = data
+  const mostrarFirmaSupervisor = ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
   // Plazo en días
   let plazoTexto = '—'
@@ -927,8 +930,8 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
             {/* Signature */}
             <View style={s.sigBlock}>
-              {contrato.supervisor.firma_url ? (
-                <Image src={contrato.supervisor.firma_url} style={{ width: 150, height: 50, objectFit: 'contain' }} />
+              {mostrarFirmaSupervisor ? (
+                <Image src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} />
               ) : (
                 <View style={s.sigSpace} />
               )}

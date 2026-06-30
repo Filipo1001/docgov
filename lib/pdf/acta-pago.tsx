@@ -324,8 +324,11 @@ const s = StyleSheet.create({
 
 // ─── Component ────────────────────────────────────────────────
 
+const ESTADOS_FIRMA_SUPERVISOR = new Set(['aprobado', 'radicado'])
+
 export function ActaPagoPDF({ data }: { data: PDFData }) {
   const { contrato, periodo, pagosHistorial = [] } = data
+  const mostrarFirmaSupervisor = ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
   const ot = contrato.otrosi
   const fmtValorOt = (letras: string, monto: number) =>
@@ -532,8 +535,8 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
 
           {/* Signature */}
           <View style={s.sigBlock}>
-            {contrato.supervisor.firma_url ? (
-              <Image src={contrato.supervisor.firma_url} style={{ width: 150, height: 50, objectFit: 'contain' }} />
+            {mostrarFirmaSupervisor ? (
+              <Image src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} />
             ) : (
               <View style={s.sigSpace} />
             )}
