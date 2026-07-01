@@ -79,7 +79,7 @@ export async function prepararUploadEvidencia(
     }
 
     const [{ data: periodo }, { data: usuarioData }, { data: actividad }] = await Promise.all([
-      supabase.from('periodos').select('estado, es_historico, mes, anio').eq('id', periodoId).single(),
+      supabase.from('periodos').select('estado, es_historico, mes, anio, habilitado_tardio').eq('id', periodoId).single(),
       supabase.from('usuarios').select('rol').eq('id', user.id).single(),
       supabase.from('actividades').select('id').eq('id', actividadId).eq('periodo_id', periodoId).single(),
     ])
@@ -91,7 +91,8 @@ export async function prepararUploadEvidencia(
     }
 
     // Block evidence upload on past months for non-admin contratistas
-    if (usuarioData?.rol === 'contratista') {
+    // habilitado_tardio lets supervisor/admin unlock a specific past-month period
+    if (usuarioData?.rol === 'contratista' && !(periodo as any).habilitado_tardio) {
       const now = new Date()
       const mesIdx = MES_IDX[(periodo.mes as string).toUpperCase()] ?? -1
       const vencido = periodo.estado !== 'rechazado' && (

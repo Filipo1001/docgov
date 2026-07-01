@@ -33,6 +33,7 @@ import {
   actualizarObservacionSupervisor,
   actualizarBaseCotizacion,
   adminDevolverPeriodo,
+  habilitarEnvioTardio,
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia, guardarHashesBatch } from '@/app/actions/evidencias'
@@ -87,6 +88,7 @@ export default function PeriodoDetallePage({
   const [obligaciones, setObligaciones] = useState<Obligacion[]>(initialObligaciones)
   const [actividades, setActividades] = useState<Actividad[]>(initialActividades)
   const [cargando, setCargando] = useState(false)
+  const [tardioLoading, setTardioLoading] = useState(false)
 
   // ── Sync SSR props → state when router.refresh() delivers new server data ──
   // router.refresh() re-runs the server component (page.tsx) which fetches fresh
@@ -472,6 +474,17 @@ export default function PeriodoDetallePage({
   const periodoVencido = (() => {
     if (!esContratista || !periodo) return false
     if (periodo.estado === 'rechazado') return false
+    if (periodo.habilitado_tardio) return false
+    const now = new Date()
+    const mesIdx = MES_INDEX[(periodo.mes as string).toUpperCase()] ?? -1
+    if ((periodo.anio as number) < now.getFullYear()) return true
+    if ((periodo.anio as number) === now.getFullYear() && mesIdx < now.getMonth()) return true
+    return false
+  })()
+
+  // Same check, but visible to all roles — used to show supervisor's late-unlock panel
+  const esPeriodoPasado = (() => {
+    if (!periodo || periodo.estado === 'rechazado' || periodo.es_historico) return false
     const now = new Date()
     const mesIdx = MES_INDEX[(periodo.mes as string).toUpperCase()] ?? -1
     if ((periodo.anio as number) < now.getFullYear()) return true
@@ -1127,6 +1140,19 @@ export default function PeriodoDetallePage({
     }
   }
 
+  async function handleHabilitarTardio(habilitar: boolean) {
+    if (!periodo) return
+    setTardioLoading(true)
+    const result = await habilitarEnvioTardio(periodo.id, habilitar)
+    setTardioLoading(false)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(habilitar ? 'Envío tardío habilitado' : 'Envío tardío deshabilitado')
+      router.refresh()
+    }
+  }
+
   // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
   const puedeRevisarPlanilla = (esAsesor && !esSecretaria) // asesor o admin (no supervisor puro)
 
@@ -1317,7 +1343,44 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
-      {/* ── Past-month lock banner (contratista only) ────────── */}
+      {/* ── Past-month supervisor control panel ───────────────── */}
+      {esPeriodoPasado && (esSecretaria || esAsesor) && (
+        <div className={`border rounded-2xl px-5 py-4 mb-6 flex items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
+          <span className="text-xl flex-shrink-0">{periodo.habilitado_tardio ? '🔓' : '🔒'}</span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-semibold ${periodo.habilitado_tardio ? 'text-emerald-800' : 'text-blue-800'}`}>
+              {periodo.habilitado_tardio ? 'Envío tardío activo' : 'Periodo vencido'}
+            </p>
+            <p className={`text-xs mt-0.5 ${periodo.habilitado_tardio ? 'text-emerald-700' : 'text-blue-700'}`}>
+              El plazo del informe de <strong>{periodo.mes} {periodo.anio}</strong> ya venció.
+              {periodo.habilitado_tardio
+                ? ' El contratista puede completarlo y enviarlo.'
+                : ' Puedes habilitarlo para que el contratista lo complete y envíe.'}
+            </p>
+          </div>
+          <div className="flex-shrink-0">
+            {!periodo.habilitado_tardio ? (
+              <button
+                disabled={tardioLoading}
+                onClick={() => handleHabilitarTardio(true)}
+                className="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+              >
+                {tardioLoading ? 'Habilitando…' : 'Habilitar envío tardío'}
+              </button>
+            ) : (
+              <button
+                disabled={tardioLoading}
+                onClick={() => handleHabilitarTardio(false)}
+                className="px-3 py-1.5 text-xs font-semibold bg-white border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 disabled:opacity-50 whitespace-nowrap"
+              >
+                {tardioLoading ? 'Deshabilitando…' : 'Deshabilitar'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Past-month lock banner (contratista, not unlocked) ── */}
       {periodoVencido && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
           <span className="text-xl flex-shrink-0">📅</span>
@@ -1326,6 +1389,20 @@ export default function PeriodoDetallePage({
             <p className="text-xs text-orange-700 mt-0.5">
               El plazo para enviar el informe de <strong>{periodo.mes} {periodo.anio}</strong> ya venció.
               Solo puedes enviar el informe del mes actual. Si tienes alguna inquietud, contacta a tu supervisor.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Late submission unlocked banner (contratista only) ── */}
+      {esContratista && periodo.habilitado_tardio && !esHistorico && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
+          <span className="text-xl flex-shrink-0">✅</span>
+          <div>
+            <p className="text-sm font-semibold text-emerald-800">Envío tardío habilitado</p>
+            <p className="text-xs text-emerald-700 mt-0.5">
+              Tu supervisor habilitó el envío tardío del informe de <strong>{periodo.mes} {periodo.anio}</strong>.
+              Ya puedes completarlo y enviarlo.
             </p>
           </div>
         </div>

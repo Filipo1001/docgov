@@ -179,6 +179,8 @@ export interface Periodo {
   historico_marcado_por: string | null
   historico_marcado_at: string | null
   historico_nota: string | null
+  // Late-submission unlock (supervisor/admin only)
+  habilitado_tardio: boolean
 }
 
 export interface Actividad {

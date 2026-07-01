@@ -64,9 +64,11 @@ const MES_INDEX: Record<string, number> = {
   SEPTIEMBRE: 8, OCTUBRE: 9, NOVIEMBRE: 10, DICIEMBRE: 11,
 }
 
-function isPeriodoVencido(periodo: { mes: string; anio: number; estado: EstadoPeriodo }): boolean {
+function isPeriodoVencido(periodo: { mes: string; anio: number; estado: EstadoPeriodo; habilitado_tardio?: boolean }): boolean {
   // rechazado periods must always remain editable
   if (periodo.estado === 'rechazado') return false
+  // Supervisor/admin explicitly unlocked this period for late submission
+  if (periodo.habilitado_tardio) return false
   const now = new Date()
   const mesIdx = MES_INDEX[periodo.mes.toUpperCase()] ?? -1
   if (periodo.anio < now.getFullYear()) return true
@@ -1745,6 +1747,89 @@ export async function desmarcarHistorico(periodoId: string): Promise<ActionResul
     await insertHistorial(supabase, periodoId, null, null, usuario.id, 'Periodo desmarcado como histórico')
     revalidatePath('/dashboard/admin/historicos')
     revalidatePath('/dashboard/informes')
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Late-submission unlock ─────────────────────────────────────────────────
+
+/**
+ * Enable or disable late submission for a past-month period.
+ * Only supervisor of the contract or admin may call this.
+ * Records the change in historial_periodos and notifies the contratista.
+ */
+export async function habilitarEnvioTardio(
+  periodoId: string,
+  habilitar: boolean,
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo el supervisor o el administrador pueden habilitar envíos tardíos' }
+    }
+
+    // Load period + contrato in one query
+    const { data: periodoRaw } = await supabase
+      .from('periodos')
+      .select('id, mes, anio, estado, es_historico, habilitado_tardio, contrato_id, contrato:contratos(numero, supervisor_id, contratista_id, dependencia_id)')
+      .eq('id', periodoId)
+      .single()
+
+    if (!periodoRaw) return { error: 'Periodo no encontrado' }
+    if (periodoRaw.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+
+    // Supervisor scope check
+    const contrato = periodoRaw.contrato as unknown as {
+      numero: string; supervisor_id: string | null; contratista_id: string | null; dependencia_id: string | null
+    } | null
+    if (!contrato) return { error: 'Contrato no encontrado' }
+    if (usuario.rol === 'supervisor' && contrato.supervisor_id !== usuario.id) {
+      return { error: 'No eres el supervisor de este contrato' }
+    }
+
+    // Must be a borrador/rechazado period to enable; any editable state to disable
+    if (habilitar && !['borrador', 'rechazado'].includes(periodoRaw.estado)) {
+      return { error: 'Solo se puede habilitar el envío tardío en periodos en borrador o rechazado' }
+    }
+
+    // No-op if already in the desired state
+    if (periodoRaw.habilitado_tardio === habilitar) return {}
+
+    const adminClient = createAdminSupabaseClient()
+    const { error: updateError } = await adminClient
+      .from('periodos')
+      .update({ habilitado_tardio: habilitar })
+      .eq('id', periodoId)
+
+    if (updateError) return { error: `Error al actualizar: ${updateError.message}` }
+
+    const accion = habilitar ? 'habilitó envío tardío' : 'deshabilitó envío tardío'
+    await insertHistorial(supabase, periodoId, null, null, usuario.id,
+      `${usuario.nombre_completo} ${accion} para el periodo de ${periodoRaw.mes} ${periodoRaw.anio}`)
+
+    // Notify the contratista
+    if (contrato.contratista_id) {
+      await enviarNotificacion({
+        destinatarioId: contrato.contratista_id,
+        tipo: habilitar ? 'enviado' : 'rechazado',
+        titulo: habilitar
+          ? `Informe de ${periodoRaw.mes} ${periodoRaw.anio} habilitado para envío tardío`
+          : `Habilitación tardía de ${periodoRaw.mes} ${periodoRaw.anio} cancelada`,
+        mensaje: habilitar
+          ? `Tu supervisor habilitó el envío tardío del informe de ${periodoRaw.mes} ${periodoRaw.anio}. Ya puedes completarlo y enviarlo.`
+          : `La habilitación de envío tardío del informe de ${periodoRaw.mes} ${periodoRaw.anio} fue cancelada.`,
+        periodoId,
+        mes: periodoRaw.mes,
+        anio: periodoRaw.anio,
+        contrato: contrato.numero || '',
+        nombreRemitente: usuario.nombre_completo,
+      })
+    }
+
+    revalidar(periodoRaw.contrato_id, periodoId)
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
