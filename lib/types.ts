@@ -129,6 +129,21 @@ export interface Obligacion {
   otrosi_id?: string | null
 }
 
+/**
+ * Revisión que asesor/supervisor hacen de una obligación dentro de un período.
+ * Solo existe fila si se desvió del default (aprobada=true, sin nota): es decir,
+ * al desmarcar la obligación o agregar una nota.
+ */
+export interface ObligacionRevision {
+  id: string
+  periodo_id: string
+  obligacion_id: string
+  aprobada: boolean
+  nota: string | null
+  revisado_por: string | null
+  revisado_at: string | null
+}
+
 export interface Periodo {
   id: string
   contrato_id: string
@@ -164,6 +179,8 @@ export interface Periodo {
   historico_marcado_por: string | null
   historico_marcado_at: string | null
   historico_nota: string | null
+  // Late-submission unlock (supervisor/admin only)
+  habilitado_tardio: boolean
 }
 
 export interface Actividad {
@@ -182,6 +199,31 @@ export interface Evidencia {
   actividad_id: string
   url: string
   nombre_archivo: string
+  file_hash?: string | null
+  phash?: string | null
+  created_at?: string | null
+}
+
+/** A matching evidencia found in a previous period of the same contrato. */
+export interface DuplicadoMatch {
+  tipo: 'exacto' | 'similar'
+  periodoMes: string
+  periodoAnio: number
+  numeroPeriodo: number
+  actividadDescripcion: string
+  fechaCarga: string | null
+}
+
+/** Historical evidencia that needs its phash computed client-side (silent backfill). */
+export interface EvidenciaParaBackfill {
+  id: string
+  url: string
+}
+
+/** Full result from buscarDuplicados. */
+export interface DuplicadosResult {
+  matches: Record<string, DuplicadoMatch[]>
+  paraBackfill: EvidenciaParaBackfill[]
 }
 
 // ─── Action result types ─────────────────────

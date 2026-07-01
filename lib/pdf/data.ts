@@ -104,6 +104,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     { data: obligacionesRaw },
     { data: actividadesDelPeriodo },
     { data: otrosiesRaw },
+    { data: revisionesRaw },
   ] = await Promise.all([
     // All periods for payment history + planilla table
     supabase
@@ -132,7 +133,19 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       .select('id, numero, tipo, fecha_inicio, valor_adicion, plazo_dias_adicion, cdp, crp, nota')
       .eq('contrato_id', contrato.id)
       .order('numero'),
+
+    // Revisión por obligación (✓ + nota) de este período. Sin fila → default.
+    supabase
+      .from('obligacion_revisiones')
+      .select('obligacion_id, aprobada, nota')
+      .eq('periodo_id', periodoId),
   ])
+
+  // Map obligacion_id → revisión. Ausencia = aprobada por defecto, sin nota.
+  const revisionMap = new Map<string, { aprobada: boolean; nota: string | null }>(
+    ((revisionesRaw ?? []) as Array<{ obligacion_id: string; aprobada: boolean; nota: string | null }>)
+      .map(r => [r.obligacion_id, { aprobada: r.aprobada, nota: r.nota }]),
+  )
 
   // Valor total efectivo del contrato = inicial + adiciones de otrosíes.
   // Sin otrosíes, es igual al valor_total actual (cero cambio para esos contratos).
@@ -314,11 +327,16 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
         // Se incluye si el otrosí inició antes o durante este período.
         return !fechaOtrosi || fechaOtrosi <= periodo.fecha_fin
       })
-      .map((obl: any) => ({
-        descripcion: obl.descripcion,
-        es_permanente: obl.es_permanente,
-        actividades: actsPorObligacion.get(obl.id) ?? [],
-      })),
+      .map((obl: any) => {
+        const rev = revisionMap.get(obl.id)
+        return {
+          descripcion: obl.descripcion,
+          es_permanente: obl.es_permanente,
+          actividades: actsPorObligacion.get(obl.id) ?? [],
+          aprobada: rev?.aprobada ?? true,
+          nota: rev?.nota ?? null,
+        }
+      }),
     fechaGeneracion,
     pagosHistorial,
   }

@@ -87,6 +87,9 @@ export interface PDFObligacion {
   descripcion: string
   es_permanente: boolean
   actividades: PDFActividad[]
+  /** Revisión de la supervisión. Sin fila en DB → aprobada=true, nota=null. */
+  aprobada: boolean
+  nota?: string | null
 }
 
 /** Payment history row for Acta de Pago / Acta de Supervisión */

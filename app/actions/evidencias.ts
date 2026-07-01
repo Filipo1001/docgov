@@ -79,7 +79,7 @@ export async function prepararUploadEvidencia(
     }
 
     const [{ data: periodo }, { data: usuarioData }, { data: actividad }] = await Promise.all([
-      supabase.from('periodos').select('estado, es_historico, mes, anio').eq('id', periodoId).single(),
+      supabase.from('periodos').select('estado, es_historico, mes, anio, habilitado_tardio').eq('id', periodoId).single(),
       supabase.from('usuarios').select('rol').eq('id', user.id).single(),
       supabase.from('actividades').select('id').eq('id', actividadId).eq('periodo_id', periodoId).single(),
     ])
@@ -91,7 +91,8 @@ export async function prepararUploadEvidencia(
     }
 
     // Block evidence upload on past months for non-admin contratistas
-    if (usuarioData?.rol === 'contratista') {
+    // habilitado_tardio lets supervisor/admin unlock a specific past-month period
+    if (usuarioData?.rol === 'contratista' && !(periodo as any).habilitado_tardio) {
       const now = new Date()
       const mesIdx = MES_IDX[(periodo.mes as string).toUpperCase()] ?? -1
       const vencido = periodo.estado !== 'rechazado' && (
@@ -143,6 +144,8 @@ export async function registrarEvidencia(
   publicUrl: string,
   storagePath: string,
   nombreArchivo: string,
+  fileHash?: string,
+  phash?: string,
 ): Promise<ActionResult<{ url: string; nombre: string }>> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -168,6 +171,8 @@ export async function registrarEvidencia(
         url: publicUrl,
         storage_path: storagePath,
         nombre_archivo: nombreArchivo,
+        ...(fileHash ? { file_hash: fileHash } : {}),
+        ...(phash ? { phash } : {}),
       })
 
     if (insertError) {
@@ -177,6 +182,31 @@ export async function registrarEvidencia(
     return { data: { url: publicUrl, nombre: nombreArchivo } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado al registrar evidencia' }
+  }
+}
+
+// ── Hash backfill ─────────────────────────────────────────────────────────────
+
+/**
+ * Batch-save phash values for existing evidencias that didn't have one at upload time.
+ * Called client-side by asesor/supervisor after computing pHashes from image URLs.
+ */
+export async function guardarHashesBatch(
+  updates: { id: string; phash: string }[],
+): Promise<ActionResult> {
+  if (!updates.length) return {}
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { error: 'No autorizado' }
+
+    const admin = createAdminSupabaseClient()
+    for (const { id, phash } of updates) {
+      await admin.from('evidencias').update({ phash }).eq('id', id).is('phash', null)
+    }
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }
 

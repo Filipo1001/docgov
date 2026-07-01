@@ -12,7 +12,7 @@ import {
   DEFAULT_BASE_COTIZACION_SS,
   MESES,
 } from '@/lib/constants'
-import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo } from '@/lib/types'
+import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import {
@@ -33,12 +33,19 @@ import {
   actualizarObservacionSupervisor,
   actualizarBaseCotizacion,
   adminDevolverPeriodo,
+  habilitarEnvioTardio,
 } from '@/app/actions/periodos'
 import { validarNumeroPlanilla } from '@/lib/validaciones'
-import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia } from '@/app/actions/evidencias'
+import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia, guardarHashesBatch } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
+import { computeFileHash, computePerceptualHash, computePerceptualHashFromUrl } from '@/lib/pHash'
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
+import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
+import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 // import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
+
+/** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
+type RevisionLocal = { aprobada: boolean; nota: string | null }
 
 /** Periodo "hermano" del mismo contrato — usado para detectar repetición de planilla */
 export interface PeriodoHermano {
@@ -54,7 +61,10 @@ interface InitialData {
   initialPeriodo: Periodo
   initialObligaciones: Obligacion[]
   initialActividades: Actividad[]
+  initialRevisiones?: Record<string, RevisionLocal>
   periodosHermanos?: PeriodoHermano[]
+  initialDuplicados?: Record<string, DuplicadoMatch[]>
+  initialParaBackfill?: EvidenciaParaBackfill[]
 }
 
 export default function PeriodoDetallePage({
@@ -62,7 +72,10 @@ export default function PeriodoDetallePage({
   initialPeriodo,
   initialObligaciones,
   initialActividades,
+  initialRevisiones = {},
   periodosHermanos = [],
+  initialDuplicados = {},
+  initialParaBackfill = [],
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -75,6 +88,7 @@ export default function PeriodoDetallePage({
   const [obligaciones, setObligaciones] = useState<Obligacion[]>(initialObligaciones)
   const [actividades, setActividades] = useState<Actividad[]>(initialActividades)
   const [cargando, setCargando] = useState(false)
+  const [tardioLoading, setTardioLoading] = useState(false)
 
   // ── Sync SSR props → state when router.refresh() delivers new server data ──
   // router.refresh() re-runs the server component (page.tsx) which fetches fresh
@@ -207,6 +221,124 @@ export default function PeriodoDetallePage({
   const [procesandoDevolver, setProcesandoDevolver] = useState(false)
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
 
+  // Secretaria: modal de devolución con elección de destino
+  const [mostrarDevolverModal, setMostrarDevolverModal] = useState(false)
+  const [destinoDevolucion, setDestinoDevolucion] = useState<'asesores' | 'contratista' | null>(null)
+  const [motivoDevolucion, setMotivoDevolucion] = useState('')
+  const [procesandoDevolucion, setProcesandoDevolucion] = useState(false)
+  // Secretaria: confirmación de aprobación cuando faltan obligaciones por revisar
+  const [mostrarConfirmacionAprobacion, setMostrarConfirmacionAprobacion] = useState(false)
+
+  // ── Accordion: qué obligaciones están expandidas ───────────────
+  // Vista colapsada por defecto (lista limpia, sin descargar imágenes hasta
+  // que el usuario expande). Excepción: el contratista con informe rechazado
+  // arranca expandido porque su tarea es justamente corregir actividades.
+  const [obligacionesAbiertas, setObligacionesAbiertas] = useState<Set<string>>(() => {
+    if (usuario?.rol === 'contratista' && initialPeriodo.estado === 'rechazado') {
+      return new Set(initialObligaciones.map((o) => o.id))
+    }
+    return new Set()
+  })
+  const toggleObligacion = (oblId: string) => {
+    setObligacionesAbiertas((prev) => {
+      const next = new Set(prev)
+      if (next.has(oblId)) next.delete(oblId)
+      else next.add(oblId)
+      return next
+    })
+  }
+  const todasAbiertas = obligaciones.length > 0 && obligaciones.every((o) => obligacionesAbiertas.has(o.id))
+  const toggleTodas = () => {
+    setObligacionesAbiertas(todasAbiertas ? new Set() : new Set(obligaciones.map((o) => o.id)))
+  }
+
+  // ── Duplicate-evidence detection (asesor/supervisor only) ─────────────────
+  const [duplicados, setDuplicados] = useState<Record<string, DuplicadoMatch[]>>(initialDuplicados)
+  const [duplicadoModal, setDuplicadoModal] = useState<{ evId: string; matches: DuplicadoMatch[] } | null>(null)
+
+  const prevInitialDuplicadosRef = useRef(initialDuplicados)
+  useEffect(() => {
+    if (prevInitialDuplicadosRef.current !== initialDuplicados) {
+      prevInitialDuplicadosRef.current = initialDuplicados
+      setDuplicados(initialDuplicados)
+    }
+  }, [initialDuplicados])
+
+  // Silent background backfill: compute pHash for historical evidencias that didn't
+  // have it at upload time, save to DB, then refresh to run the comparison again.
+  useEffect(() => {
+    if (!initialParaBackfill.length) return
+    // Only run for reviewers — contratistas don't need duplicate detection
+    if (!usuario) return
+
+    async function runBackfill() {
+      const updates: { id: string; phash: string }[] = []
+      for (const ev of initialParaBackfill) {
+        const phash = await computePerceptualHashFromUrl(ev.url).catch(() => '')
+        if (phash) updates.push({ id: ev.id, phash })
+      }
+      if (updates.length) {
+        await guardarHashesBatch(updates)
+        // Refresh so page.tsx re-runs buscarDuplicados with the newly-stored hashes
+        if (mountedRef.current) router.refresh()
+      }
+    }
+
+    runBackfill()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialParaBackfill])
+
+  // ── Revisión por obligación (asesor/supervisor): ✓ aprobar + nota ─────────
+  const [revisiones, setRevisiones] = useState<Record<string, RevisionLocal>>(initialRevisiones)
+  // Default sin fila = aprobada, sin nota.
+  const getRevision = (oblId: string): RevisionLocal => revisiones[oblId] ?? { aprobada: true, nota: null }
+  const [notaModal, setNotaModal] = useState<{ obligacionId: string; texto: string } | null>(null)
+  const [guardandoNota, setGuardandoNota] = useState(false)
+  const [obligacionProcesando, setObligacionProcesando] = useState<string | null>(null)
+
+  async function handleToggleAprobacion(obligacionId: string) {
+    const actual = getRevision(obligacionId)
+    const nuevoValor = !actual.aprobada
+    // Optimista
+    setRevisiones((prev) => ({
+      ...prev,
+      [obligacionId]: { aprobada: nuevoValor, nota: prev[obligacionId]?.nota ?? actual.nota },
+    }))
+    setObligacionProcesando(obligacionId)
+    const res = await toggleAprobacionObligacion(periodoId, obligacionId, nuevoValor)
+    if (res.error) {
+      // Revertir
+      setRevisiones((prev) => ({
+        ...prev,
+        [obligacionId]: { aprobada: actual.aprobada, nota: prev[obligacionId]?.nota ?? actual.nota },
+      }))
+      toast.error(res.error)
+    }
+    setObligacionProcesando(null)
+  }
+
+  async function handleGuardarNota() {
+    if (!notaModal) return
+    const { obligacionId, texto } = notaModal
+    const previa = getRevision(obligacionId)
+    const limpio = texto.trim()
+    setGuardandoNota(true)
+    const res = await guardarNotaObligacion(periodoId, obligacionId, limpio)
+    if (res.error) {
+      toast.error(res.error)
+      setGuardandoNota(false)
+      return
+    }
+    // Optimista: la nota no cambia la aprobación.
+    setRevisiones((prev) => ({
+      ...prev,
+      [obligacionId]: { aprobada: prev[obligacionId]?.aprobada ?? previa.aprobada, nota: limpio || null },
+    }))
+    setGuardandoNota(false)
+    setNotaModal(null)
+    toast.success(limpio ? 'Nota guardada' : 'Nota eliminada')
+  }
+
   // Scroll anchors for rejection guidance
   const seccionActividadesRef = useRef<HTMLDivElement>(null)
 
@@ -326,6 +458,12 @@ export default function PeriodoDetallePage({
   const esSecretaria = usuario?.rol === 'supervisor' || usuario?.rol === 'admin'
   const esContratista = usuario?.rol === 'contratista'
 
+  // Progreso de revisión por obligación — usado en el panel de secretaria
+  const obligacionesConRevision = obligaciones.filter(obl => revisiones[obl.id] !== undefined)
+  const obligacionesSinRevisar = obligaciones.filter(obl => revisiones[obl.id] === undefined)
+  const todasRevisadas = obligaciones.length > 0 && obligacionesSinRevisar.length === 0
+  const progresoRevision = obligaciones.length > 0 ? obligacionesConRevision.length / obligaciones.length : 0
+
   // Past-month lock: contratistas cannot edit borrador periods from previous months
   // (rechazado periods remain editable regardless of date)
   const MES_INDEX: Record<string, number> = {
@@ -336,6 +474,17 @@ export default function PeriodoDetallePage({
   const periodoVencido = (() => {
     if (!esContratista || !periodo) return false
     if (periodo.estado === 'rechazado') return false
+    if (periodo.habilitado_tardio) return false
+    const now = new Date()
+    const mesIdx = MES_INDEX[(periodo.mes as string).toUpperCase()] ?? -1
+    if ((periodo.anio as number) < now.getFullYear()) return true
+    if ((periodo.anio as number) === now.getFullYear() && mesIdx < now.getMonth()) return true
+    return false
+  })()
+
+  // Same check, but visible to all roles — used to show supervisor's late-unlock panel
+  const esPeriodoPasado = (() => {
+    if (!periodo || periodo.estado === 'rechazado' || periodo.es_historico) return false
     const now = new Date()
     const mesIdx = MES_INDEX[(periodo.mes as string).toUpperCase()] ?? -1
     if ((periodo.anio as number) < now.getFullYear()) return true
@@ -434,6 +583,13 @@ export default function PeriodoDetallePage({
     return actividades.filter((a) => a.obligacion_id === obligacionId)
   }
 
+  function evidenciasPorObligacion(obligacionId: string) {
+    return actividadesPorObligacion(obligacionId).reduce(
+      (sum, a) => sum + (a.evidencias?.length ?? 0),
+      0,
+    )
+  }
+
   function totalAcciones() {
     return actividades.reduce((sum, a) => sum + (a.cantidad || 1), 0)
   }
@@ -489,11 +645,47 @@ export default function PeriodoDetallePage({
   }
 
   async function handleAprobarSecretaria() {
+    // Si hay obligaciones sin revisar, pedir confirmación antes de aprobar
+    if (!todasRevisadas && obligaciones.length > 0) {
+      setMostrarConfirmacionAprobacion(true)
+      return
+    }
     setProcesando(true)
     const result = await aprobarPeriodos([periodoId])
     if (result.error) toast.error(result.error)
     else { toast.success('Informe aprobado'); router.refresh(); cargarDatos() }
     setProcesando(false)
+  }
+
+  async function handleConfirmarAprobacion() {
+    setMostrarConfirmacionAprobacion(false)
+    setProcesando(true)
+    const result = await aprobarPeriodos([periodoId])
+    if (result.error) toast.error(result.error)
+    else { toast.success('Informe aprobado'); router.refresh(); cargarDatos() }
+    setProcesando(false)
+  }
+
+  async function handleDevolverSecretaria(destino: 'asesores' | 'contratista', motivo: string) {
+    if (!motivo.trim()) {
+      toast.error('El motivo es obligatorio')
+      return
+    }
+    setProcesandoDevolucion(true)
+    const result = destino === 'asesores'
+      ? await rechazarPeriodos([periodoId], motivo.trim())
+      : await devolverPeriodoAContratista(periodoId, motivo.trim())
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(destino === 'asesores' ? 'Informe devuelto a los asesores' : 'Informe devuelto al contratista')
+      setMostrarDevolverModal(false)
+      setDestinoDevolucion(null)
+      setMotivoDevolucion('')
+      router.refresh()
+      cargarDatos()
+    }
+    setProcesandoDevolucion(false)
   }
 
   async function handleRechazarSecretaria() {
@@ -692,8 +884,14 @@ export default function PeriodoDetallePage({
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: limited.length }))
 
     try {
-      // A: Compress all files in parallel (pure Canvas — no server calls)
-      const compressed = await Promise.all(limited.map(f => comprimirEvidencia(f)))
+      // A: Compress files and compute hashes in parallel (all pure Canvas / Web Crypto)
+      const [compressed, hashes] = await Promise.all([
+        Promise.all(limited.map(f => comprimirEvidencia(f))),
+        Promise.all(limited.map(async f => ({
+          fileHash: await computeFileHash(f).catch(() => ''),
+          phash: await computePerceptualHash(f).catch(() => ''),
+        }))),
+      ])
 
       // B+D: For each file, request its signed URL and start the XHR upload immediately,
       //      all in parallel. Each file tracks its own byte-level progress (M-1) and
@@ -771,7 +969,11 @@ export default function PeriodoDetallePage({
         }
 
         const { publicUrl, storagePath, nombre } = res.value
-        const reg = await registrarEvidencia(actividadId, periodoId, publicUrl, storagePath, nombre)
+        const reg = await registrarEvidencia(
+          actividadId, periodoId, publicUrl, storagePath, nombre,
+          hashes[i]?.fileHash || undefined,
+          hashes[i]?.phash || undefined,
+        )
         if (reg.error) {
           setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, storagePath, nombre } }))
           toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
@@ -935,6 +1137,19 @@ export default function PeriodoDetallePage({
       toast.error(e instanceof Error ? e.message : 'Error al descargar', { id: toastId })
     } finally {
       setDescargandoPaquete(false)
+    }
+  }
+
+  async function handleHabilitarTardio(habilitar: boolean) {
+    if (!periodo) return
+    setTardioLoading(true)
+    const result = await habilitarEnvioTardio(periodo.id, habilitar)
+    setTardioLoading(false)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(habilitar ? 'Envío tardío habilitado' : 'Envío tardío deshabilitado')
+      router.refresh()
     }
   }
 
@@ -1128,7 +1343,44 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
-      {/* ── Past-month lock banner (contratista only) ────────── */}
+      {/* ── Past-month supervisor control panel ───────────────── */}
+      {esPeriodoPasado && (esSecretaria || esAsesor) && (
+        <div className={`border rounded-2xl px-5 py-4 mb-6 flex items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
+          <span className="text-xl flex-shrink-0">{periodo.habilitado_tardio ? '🔓' : '🔒'}</span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-semibold ${periodo.habilitado_tardio ? 'text-emerald-800' : 'text-blue-800'}`}>
+              {periodo.habilitado_tardio ? 'Envío tardío activo' : 'Periodo vencido'}
+            </p>
+            <p className={`text-xs mt-0.5 ${periodo.habilitado_tardio ? 'text-emerald-700' : 'text-blue-700'}`}>
+              El plazo del informe de <strong>{periodo.mes} {periodo.anio}</strong> ya venció.
+              {periodo.habilitado_tardio
+                ? ' El contratista puede completarlo y enviarlo.'
+                : ' Puedes habilitarlo para que el contratista lo complete y envíe.'}
+            </p>
+          </div>
+          <div className="flex-shrink-0">
+            {!periodo.habilitado_tardio ? (
+              <button
+                disabled={tardioLoading}
+                onClick={() => handleHabilitarTardio(true)}
+                className="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+              >
+                {tardioLoading ? 'Habilitando…' : 'Habilitar envío tardío'}
+              </button>
+            ) : (
+              <button
+                disabled={tardioLoading}
+                onClick={() => handleHabilitarTardio(false)}
+                className="px-3 py-1.5 text-xs font-semibold bg-white border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 disabled:opacity-50 whitespace-nowrap"
+              >
+                {tardioLoading ? 'Deshabilitando…' : 'Deshabilitar'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Past-month lock banner (contratista, not unlocked) ── */}
       {periodoVencido && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
           <span className="text-xl flex-shrink-0">📅</span>
@@ -1137,6 +1389,20 @@ export default function PeriodoDetallePage({
             <p className="text-xs text-orange-700 mt-0.5">
               El plazo para enviar el informe de <strong>{periodo.mes} {periodo.anio}</strong> ya venció.
               Solo puedes enviar el informe del mes actual. Si tienes alguna inquietud, contacta a tu supervisor.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Late submission unlocked banner (contratista only) ── */}
+      {esContratista && periodo.habilitado_tardio && !esHistorico && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
+          <span className="text-xl flex-shrink-0">✅</span>
+          <div>
+            <p className="text-sm font-semibold text-emerald-800">Envío tardío habilitado</p>
+            <p className="text-xs text-emerald-700 mt-0.5">
+              Tu supervisor habilitó el envío tardío del informe de <strong>{periodo.mes} {periodo.anio}</strong>.
+              Ya puedes completarlo y enviarlo.
             </p>
           </div>
         </div>
@@ -1523,73 +1789,7 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
-      {/* ── Secretaria panel (approve / reject) ── */}
-      {(periodo.estado === 'revision' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
-        <div className="bg-white rounded-2xl border border-amber-200 p-4 sm:p-6 mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-base">📋</div>
-            <div>
-              <h3 className="font-medium text-gray-900">Aprobación como secretaria</h3>
-              <p className="text-xs text-gray-400">
-                Revisa el informe. Al aprobar, los documentos firmados estarán disponibles para descarga.
-              </p>
-            </div>
-          </div>
-
-          {tienePreaprobaciones && (
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-              {preaprobaciones.map(pa => (
-                <span key={pa.id} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                  ✓ Pre-aprobado por {pa.asesor?.nombre_completo || 'Asesor'}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {!mostrarRechazo ? (
-            <div className="flex gap-3">
-              <button
-                onClick={handleAprobarSecretaria}
-                disabled={procesando}
-                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-              >
-                {procesando ? 'Aprobando...' : '✓ Aprobar'}
-              </button>
-              <button
-                onClick={() => setMostrarRechazo(true)}
-                className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
-              >
-                ↩ Devolver a asesores
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <textarea
-                value={motivoRechazo}
-                onChange={(e) => setMotivoRechazo(e.target.value)}
-                placeholder="Escribe el motivo por el cual devuelves este informe a los asesores..."
-                rows={3}
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={handleRechazarSecretaria}
-                  disabled={procesando || !motivoRechazo.trim()}
-                  className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  {procesando ? 'Procesando...' : 'Confirmar devolución'}
-                </button>
-                <button
-                  onClick={() => { setMostrarRechazo(false); setMotivoRechazo('') }}
-                  className="px-4 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Panel de secretaria movido a debajo de actividades — ver sección antes de Documentos del periodo */}
 
       {/* Mark as radicado — asesor/supervisor/admin when aprobado */}
       {!esHistorico && periodo.estado === 'aprobado' && (esAsesor || esSecretaria) && (
@@ -1629,22 +1829,107 @@ export default function PeriodoDetallePage({
           </div>
         )}
 
+        {/* Control global expandir/colapsar — solo si hay obligaciones */}
+        {obligaciones.length > 0 && (
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs text-gray-400">
+              {obligaciones.length} obligación{obligaciones.length !== 1 ? 'es' : ''}
+            </p>
+            <button
+              type="button"
+              onClick={toggleTodas}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              {todasAbiertas ? 'Colapsar todo' : 'Expandir todo'}
+            </button>
+          </div>
+        )}
+
         {obligaciones.map((obl, oblIndex) => {
           const actsDeObl = actividadesPorObligacion(obl.id)
+          const numEvidencias = evidenciasPorObligacion(obl.id)
+          const abierta = obligacionesAbiertas.has(obl.id)
+          const rev = getRevision(obl.id)
+          const tieneNota = !!rev.nota?.trim()
+          const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico &&
+            !!periodo && ['enviado', 'revision', 'rechazado'].includes(periodo.estado)
           return (
             <div key={obl.id} className="bg-white rounded-2xl border p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 break-words">{obl.descripcion}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''} registrada{actsDeObl.length !== 1 ? 's' : ''}
-                  </p>
+              {/* Cabecera — zona clickable (expandir) + acciones de revisión.
+                  Colapsada por defecto: las actividades y evidencias (imágenes)
+                  no se montan hasta abrir, evitando descargar fotos innecesarias. */}
+              <div className={`flex items-start gap-3 ${abierta ? 'mb-4' : ''}`}>
+                {/* Zona clickable: expande/colapsa */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleObligacion(obl.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleObligacion(obl.id) }
+                  }}
+                  aria-expanded={abierta}
+                  className="flex items-start gap-3 flex-1 min-w-0 text-left cursor-pointer"
+                >
+                  <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 break-words">{obl.descripcion}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''} registrada{actsDeObl.length !== 1 ? 's' : ''}
+                      {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
+                      {!rev.aprobada && <span className="text-amber-600 font-medium"> · Sin aprobar</span>}
+                      {tieneNota && <span className="text-blue-600 font-medium"> · Con nota</span>}
+                    </p>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-400 shrink-0 mt-1 transition-transform ${abierta ? 'rotate-180' : ''}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </div>
+
+                {/* Acciones de revisión — solo asesor/supervisor, período no histórico */}
+                {puedeRevisar && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Aprobar / desmarcar */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAprobacion(obl.id)}
+                      disabled={obligacionProcesando === obl.id}
+                      title={rev.aprobada ? 'Obligación aprobada — clic para desmarcar' : 'Marcar obligación como aprobada'}
+                      aria-label={rev.aprobada ? 'Desmarcar obligación' : 'Aprobar obligación'}
+                      className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors disabled:opacity-40
+                        ${rev.aprobada
+                          ? 'bg-green-500 border-green-500 text-white hover:bg-green-600'
+                          : 'bg-white border-gray-200 text-gray-300 hover:text-green-500 hover:border-green-300'}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    {/* Agregar / editar nota */}
+                    <button
+                      type="button"
+                      onClick={() => setNotaModal({ obligacionId: obl.id, texto: rev.nota ?? '' })}
+                      title={tieneNota ? 'Editar nota de supervisión' : 'Agregar nota de supervisión'}
+                      aria-label="Nota de supervisión"
+                      className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors
+                        ${tieneNota
+                          ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'
+                          : 'bg-white border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-300'}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
 
+              {abierta && (
+              <>
               {/* Activity list */}
               {actsDeObl.length > 0 && (
                 <div className="space-y-3 mb-4 ml-0 sm:ml-10">
@@ -1752,8 +2037,25 @@ export default function PeriodoDetallePage({
                           <div className="mt-3">
                             {act.evidencias && act.evidencias.length > 0 && (
                               <div className="flex flex-wrap gap-2 mb-2">
-                                {act.evidencias.map((ev) => (
+                                {act.evidencias.map((ev) => {
+                                  const evMatches = (esAsesor || esSecretaria) ? (duplicados[ev.id] ?? []) : []
+                                  const tieneDuplicado = evMatches.length > 0
+                                  return (
                                   <div key={ev.id} className="relative group">
+                                    {/* Duplicate alert badge — only visible to asesor/supervisor */}
+                                    {tieneDuplicado && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setDuplicadoModal({ evId: ev.id, matches: evMatches }) }}
+                                        className="absolute -top-1.5 -left-1.5 z-20 w-5 h-5 bg-amber-500 hover:bg-amber-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
+                                        title="Posible evidencia reutilizada — clic para ver detalles"
+                                        aria-label="Alerta: posible evidencia duplicada"
+                                      >
+                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                        </svg>
+                                      </button>
+                                    )}
                                     {/* Thumbnail — abre lightbox (con evId para poder eliminar desde ahí) */}
                                     <button
                                       type="button"
@@ -1764,7 +2066,9 @@ export default function PeriodoDetallePage({
                                       <img
                                         src={ev.url}
                                         alt={ev.nombre_archivo}
-                                        className="w-20 h-20 object-cover rounded-xl border border-gray-200 transition-opacity group-hover:opacity-80"
+                                        loading="lazy"
+                                        decoding="async"
+                                        className={`w-20 h-20 object-cover rounded-xl border transition-opacity group-hover:opacity-80 ${tieneDuplicado ? 'border-amber-300' : 'border-gray-200'}`}
                                       />
                                     </button>
                                     {/* Botón eliminar:
@@ -1787,7 +2091,8 @@ export default function PeriodoDetallePage({
                                       </button>
                                     )}
                                   </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             )}
 
@@ -1919,6 +2224,8 @@ export default function PeriodoDetallePage({
                     </button>
                   )}
                 </div>
+              )}
+              </>
               )}
             </div>
           )
@@ -2184,6 +2491,73 @@ export default function PeriodoDetallePage({
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Panel de revisión de secretaria ── */}
+      {(periodo.estado === 'revision' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
+        <div className="bg-white rounded-2xl border border-amber-100 p-5 mb-6">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-lg flex-shrink-0">📋</div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">Revisión de supervisión</h3>
+              {tienePreaprobaciones && (
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {preaprobaciones.map(pa => (
+                    <span key={pa.id} className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                      ✓ {pa.asesor?.nombre_completo || 'Asesor'}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Barra de progreso de revisión de obligaciones */}
+          {obligaciones.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-gray-500">Obligaciones revisadas</span>
+                <span className={`text-xs font-semibold ${todasRevisadas ? 'text-green-600' : 'text-amber-600'}`}>
+                  {obligacionesConRevision.length} de {obligaciones.length}
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-1.5 rounded-full transition-all duration-300 ${todasRevisadas ? 'bg-green-500' : 'bg-amber-400'}`}
+                  style={{ width: `${Math.round(progresoRevision * 100)}%` }}
+                />
+              </div>
+              {!todasRevisadas && (
+                <p className="text-[11px] text-amber-600 mt-1.5">
+                  Usa los botones ✓ en cada obligación del acordeón de arriba para registrar tu seguimiento.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Botones de acción */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleAprobarSecretaria}
+              disabled={procesando}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
+                todasRevisadas
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-green-100 hover:bg-green-200 text-green-700 border border-green-200'
+              }`}
+            >
+              {procesando ? 'Aprobando...' : '✓ Aprobar informe'}
+            </button>
+            <button
+              onClick={() => { setMostrarDevolverModal(true); setDestinoDevolucion(null); setMotivoDevolucion('') }}
+              disabled={procesando}
+              className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              ↩ Devolver
+            </button>
           </div>
         </div>
       )}
@@ -2639,6 +3013,264 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
+
+      {/* ── Modal: confirmación de aprobación con obligaciones sin revisar ── */}
+      {mostrarConfirmacionAprobacion && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !procesando && setMostrarConfirmacionAprobacion(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center text-lg flex-shrink-0">⚠️</div>
+              <h3 className="text-sm font-semibold text-gray-900">Obligaciones sin revisar</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Las siguientes obligaciones aún no tienen seguimiento registrado:
+            </p>
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-4 space-y-1 max-h-40 overflow-y-auto">
+              {obligacionesSinRevisar.map((obl, i) => (
+                <p key={obl.id} className="text-xs text-amber-800 leading-relaxed">
+                  {i + 1}. {obl.descripcion}
+                </p>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mb-4">¿Deseas aprobar el informe de todas formas?</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMostrarConfirmacionAprobacion(false)}
+                disabled={procesando}
+                className="flex-1 px-4 py-2.5 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarAprobacion}
+                disabled={procesando}
+                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {procesando ? 'Aprobando...' : 'Aprobar de todas formas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: devolución con elección de destino ─────────── */}
+      {mostrarDevolverModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !procesandoDevolucion && setMostrarDevolverModal(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Devolver informe</h3>
+            <p className="text-xs text-gray-500 mb-4">¿A quién deseas devolver este informe?</p>
+
+            {/* Opciones de destino */}
+            <div className="flex flex-col gap-2 mb-4">
+              <button
+                onClick={() => setDestinoDevolucion('asesores')}
+                disabled={procesandoDevolucion}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors disabled:opacity-50 ${
+                  destinoDevolucion === 'asesores'
+                    ? 'bg-blue-50 border-blue-300 text-blue-700'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-lg flex-shrink-0">🔍</span>
+                <div>
+                  <p className="text-sm font-medium">Devolver a asesor</p>
+                  <p className="text-xs text-gray-400 mt-0.5">El asesor revisará y reenviará a secretaría</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setDestinoDevolucion('contratista')}
+                disabled={procesandoDevolucion}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors disabled:opacity-50 ${
+                  destinoDevolucion === 'contratista'
+                    ? 'bg-orange-50 border-orange-300 text-orange-700'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-lg flex-shrink-0">↩</span>
+                <div>
+                  <p className="text-sm font-medium">Devolver a contratista</p>
+                  <p className="text-xs text-gray-400 mt-0.5">El contratista corregirá y volverá a enviar</p>
+                </div>
+              </button>
+            </div>
+
+            {destinoDevolucion && (
+              <>
+                <textarea
+                  value={motivoDevolucion}
+                  onChange={(e) => setMotivoDevolucion(e.target.value)}
+                  placeholder="Motivo de la devolución (obligatorio)..."
+                  rows={3}
+                  autoFocus
+                  disabled={procesandoDevolucion}
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none resize-none mb-3 disabled:opacity-50"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => handleDevolverSecretaria(destinoDevolucion, motivoDevolucion)}
+                    disabled={procesandoDevolucion || !motivoDevolucion.trim()}
+                    className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                  >
+                    {procesandoDevolucion ? 'Procesando...' : 'Confirmar devolución'}
+                  </button>
+                  <button
+                    onClick={() => { setMostrarDevolverModal(false); setDestinoDevolucion(null); setMotivoDevolucion('') }}
+                    disabled={procesandoDevolucion}
+                    className="px-4 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {!destinoDevolucion && (
+              <button
+                onClick={() => setMostrarDevolverModal(false)}
+                className="w-full py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: nota de supervisión por obligación ─────────── */}
+      {/* ── Duplicate evidence alert modal ───────────────────────────────── */}
+      {duplicadoModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setDuplicadoModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Alerta de posible evidencia duplicada"
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm">Posible evidencia reutilizada</h3>
+                <p className="text-xs text-gray-500">Esta imagen podría haber sido utilizada anteriormente</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {duplicadoModal.matches.map((match, idx) => (
+                <div
+                  key={idx}
+                  className={`rounded-xl px-4 py-3 border text-sm ${
+                    match.tipo === 'exacto'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-amber-50 border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      match.tipo === 'exacto'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {match.tipo === 'exacto' ? 'Duplicado exacto' : 'Muy similar'}
+                    </span>
+                  </div>
+                  <p className="font-medium text-gray-800">
+                    Periodo {match.numeroPeriodo} — {match.periodoMes} {match.periodoAnio}
+                  </p>
+                  {match.fechaCarga && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Cargada el {new Date(match.fechaCarga).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                    Actividad: {match.actividadDescripcion}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-gray-400 mt-4">
+              Esta es una alerta informativa. No impide la aprobación del informe.
+            </p>
+
+            <button
+              onClick={() => setDuplicadoModal(null)}
+              className="mt-4 w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {notaModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !guardandoNota && setNotaModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nota de supervisión"
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-lg p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Nota de la supervisión</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Esta nota reemplaza el texto automático de esta obligación en el Acta de Supervisión.
+              Déjala vacía para volver al texto por defecto.
+            </p>
+            <textarea
+              value={notaModal.texto}
+              onChange={(e) => setNotaModal({ ...notaModal, texto: e.target.value })}
+              rows={5}
+              autoFocus
+              maxLength={2000}
+              placeholder="Ej: Se verificó el cumplimiento de la obligación conforme a las actividades reportadas durante el periodo."
+              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+            />
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button
+                onClick={() => setNotaModal(null)}
+                disabled={guardandoNota}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 bg-white border border-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleGuardarNota}
+                disabled={guardandoNota}
+                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+              >
+                {guardandoNota ? 'Guardando...' : 'Guardar nota'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Lightbox ──────────────────────────────────────────── */}
       {lightbox && (
