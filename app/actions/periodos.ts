@@ -265,8 +265,8 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
-      return { error: 'Solo los asesores pueden aprobar informes' }
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo asesores o supervisores pueden aprobar informes' }
     }
 
     const periodo = await getPeriodo(supabase, periodoId)
@@ -277,11 +277,17 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
       return { error: 'Solo se pueden aprobar periodos en estado "enviado" o "rechazado"' }
     }
 
-    // Asesores can only act on contracts belonging to their own dependencia
+    // Scope: asesor → su dependencia; supervisor → su contrato
     if (usuario.rol === 'asesor' && usuario.dependencia_id) {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.dependencia_id && contrato.dependencia_id !== usuario.dependencia_id) {
         return { error: 'No tienes permisos para gestionar contratos de otra dependencia' }
+      }
+    }
+    if (usuario.rol === 'supervisor') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.supervisor_id !== usuario.id) {
+        return { error: 'No eres el supervisor de este contrato' }
       }
     }
 
@@ -338,8 +344,8 @@ export async function rechazarComoAsesor(
 
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
-      return { error: 'Solo los asesores pueden rechazar informes' }
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo asesores o supervisores pueden rechazar informes' }
     }
 
     const periodo = await getPeriodo(supabase, periodoId)
@@ -350,11 +356,17 @@ export async function rechazarComoAsesor(
       return { error: 'Solo se pueden rechazar periodos en estado "enviado" o "revision"' }
     }
 
-    // Asesores can only act on contracts belonging to their own dependencia
+    // Scope: asesor → su dependencia; supervisor → su contrato
     if (usuario.rol === 'asesor' && usuario.dependencia_id) {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.dependencia_id && contrato.dependencia_id !== usuario.dependencia_id) {
         return { error: 'No tienes permisos para gestionar contratos de otra dependencia' }
+      }
+    }
+    if (usuario.rol === 'supervisor') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.supervisor_id !== usuario.id) {
+        return { error: 'No eres el supervisor de este contrato' }
       }
     }
 
@@ -413,8 +425,8 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
-      return { error: 'Solo los asesores pueden revocar pre-aprobaciones' }
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo asesores o supervisores pueden revocar revisiones' }
     }
 
     const periodo = await getPeriodo(supabase, periodoId)
@@ -423,6 +435,14 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
 
     if (periodo.estado !== 'revision') {
       return { error: 'Solo se puede revocar la revisión de periodos en estado "revision"' }
+    }
+
+    // Scope: supervisor → su contrato
+    if (usuario.rol === 'supervisor') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.supervisor_id !== usuario.id) {
+        return { error: 'No eres el supervisor de este contrato' }
+      }
     }
 
     const estadoAnterior = periodo.estado
@@ -435,7 +455,7 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
     if (error) return { error: `Error al revocar: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo revocar la aprobación. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
-    await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id, 'Aprobación revocada por asesor')
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id, 'Revisión revocada')
 
     revalidar(periodo.contrato_id, periodoId)
     return {}
@@ -781,8 +801,8 @@ export async function revisarPlanilla(
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
-      return { error: 'Solo los asesores pueden revisar la planilla' }
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo asesores o supervisores pueden revisar la planilla' }
     }
 
     const periodo = await getPeriodo(supabase, periodoId)
@@ -790,6 +810,14 @@ export async function revisarPlanilla(
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
     if (!['enviado', 'revision', 'aprobado'].includes(periodo.estado)) {
       return { error: 'La planilla solo puede revisarse cuando el periodo ha sido enviado' }
+    }
+
+    // Scope: supervisor → su contrato
+    if (usuario.rol === 'supervisor') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.supervisor_id !== usuario.id) {
+        return { error: 'No eres el supervisor de este contrato' }
+      }
     }
 
     const { data: updated, error } = await supabase
@@ -1637,13 +1665,13 @@ export async function enviarRecordatorioInforme(periodoId: string): Promise<Acti
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
-      return { error: 'Solo los asesores pueden enviar recordatorios' }
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo asesores o supervisores pueden enviar recordatorios' }
     }
 
     const { data: periodo } = await supabase
       .from('periodos')
-      .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, contratista_id)')
+      .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, contratista_id, supervisor_id)')
       .eq('id', periodoId)
       .single()
 
@@ -1652,8 +1680,13 @@ export async function enviarRecordatorioInforme(periodoId: string): Promise<Acti
       return { error: 'Solo se puede recordar a contratistas con informes pendientes de envío' }
     }
 
-    const contrato = periodo.contrato as unknown as { numero: string; contratista_id: string } | null
+    const contrato = periodo.contrato as unknown as { numero: string; contratista_id: string; supervisor_id: string | null } | null
     if (!contrato?.contratista_id) return { error: 'No se encontró el contratista' }
+
+    // Scope: supervisor → su contrato
+    if (usuario.rol === 'supervisor' && contrato.supervisor_id !== usuario.id) {
+      return { error: 'No eres el supervisor de este contrato' }
+    }
 
     await enviarNotificacion({
       destinatarioId: contrato.contratista_id,
@@ -1685,13 +1718,13 @@ export async function enviarRecordatoriosMasivos(
 
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'asesor' && usuario.rol !== 'admin') {
-      return { error: 'Solo los asesores pueden enviar recordatorios' }
+    if (usuario.rol !== 'asesor' && usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
+      return { error: 'Solo asesores o supervisores pueden enviar recordatorios' }
     }
 
     const { data: periodos } = await supabase
       .from('periodos')
-      .select('id, mes, anio, contrato:contratos(numero, contratista_id)')
+      .select('id, mes, anio, contrato:contratos(numero, contratista_id, supervisor_id)')
       .in('id', periodoIds)
       .eq('estado', 'borrador')
 

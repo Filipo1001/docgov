@@ -1156,7 +1156,7 @@ export default function PeriodoDetallePage({
   }
 
   // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
-  const puedeRevisarPlanilla = (esAsesor && !esSecretaria) // asesor o admin (no supervisor puro)
+  const puedeRevisarPlanilla = (esAsesor || esSecretaria)
 
   // Franja de alerta de planilla (naranja / roja). Visible para revisores.
   // Mensaje completo siempre visible (sin depender de hover) — claro y directo.
@@ -1709,15 +1709,15 @@ export default function PeriodoDetallePage({
       )}
 
       {/* ── Asesor panel (approve / reject) ── */}
-      {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && esAsesor && usuario?.rol !== 'supervisor' && (
+      {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && (esAsesor || esSecretaria) && (
         <div className="bg-white rounded-2xl border border-blue-200 p-4 sm:p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-base">🔍</div>
             <div>
-              <h3 className="font-medium text-gray-900">Revisión como asesor</h3>
+              <h3 className="font-medium text-gray-900">Revisión del informe</h3>
               <p className="text-xs text-gray-400">
                 {periodo.estado === 'revision'
-                  ? 'Has marcado este informe como revisado. Puedes revocar si detectas un problema.'
+                  ? 'Este informe está marcado como revisado. Puedes revocar si detectas un problema.'
                   : periodo.estado === 'rechazado'
                     ? 'Este informe fue rechazado. Puedes volver a aprobarlo si el contratista corrigió los problemas.'
                     : 'Revisa las actividades y evidencias. Aprueba para avanzar a la secretaria.'}
@@ -2919,7 +2919,7 @@ export default function PeriodoDetallePage({
                     )}
 
                     {/* Asesor: Aprobar */}
-                    {esAsesor && !esSecretaria && periodo.planilla_ss_url && (
+                    {(esAsesor || esSecretaria) && periodo.planilla_ss_url && (
                       <button
                         onClick={() => handleRevisarPlanilla('aprobada')}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-green-50 transition-colors text-left"
@@ -2937,7 +2937,7 @@ export default function PeriodoDetallePage({
                     )}
 
                     {/* Asesor: Rechazar — inline form (replaces window.prompt) */}
-                    {esAsesor && !esSecretaria && periodo.planilla_ss_url && (
+                    {(esAsesor || esSecretaria) && periodo.planilla_ss_url && (
                       mostrarFormRechazo ? (
                         <div className="px-4 py-3 space-y-2 bg-red-50 rounded-b-xl">
                           <p className="text-sm font-semibold text-red-700">Motivo del rechazo</p>
