@@ -49,12 +49,12 @@ async function getAuthContext() {
 async function getPeriodo(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, periodoId: string) {
   const { data, error } = await supabase
     .from('periodos')
-    .select('id, estado, contrato_id, mes, anio, es_historico')
+    .select('id, estado, contrato_id, mes, anio, es_historico, habilitado_tardio')
     .eq('id', periodoId)
     .single()
 
   if (error || !data) return null
-  return data as { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number; es_historico: boolean }
+  return data as { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number; es_historico: boolean; habilitado_tardio: boolean }
 }
 
 // ── Past-month lock ───────────────────────────────────────────

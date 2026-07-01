@@ -482,9 +482,11 @@ export default function PeriodoDetallePage({
     return false
   })()
 
-  // Same check, but visible to all roles — used to show supervisor's late-unlock panel
+  // Same check, but visible to all roles — used to show supervisor's late-unlock panel.
+  // Only relevant when the period can still be acted on (borrador/rechazado).
   const esPeriodoPasado = (() => {
-    if (!periodo || periodo.estado === 'rechazado' || periodo.es_historico) return false
+    if (!periodo || periodo.es_historico) return false
+    if (!['borrador', 'rechazado'].includes(periodo.estado)) return false
     const now = new Date()
     const mesIdx = MES_INDEX[(periodo.mes as string).toUpperCase()] ?? -1
     if ((periodo.anio as number) < now.getFullYear()) return true
@@ -1344,7 +1346,7 @@ export default function PeriodoDetallePage({
       )}
 
       {/* ── Past-month supervisor control panel ───────────────── */}
-      {esPeriodoPasado && (esSecretaria || esAsesor) && (
+      {esPeriodoPasado && esSecretaria && !esAsesor && (
         <div className={`border rounded-2xl px-5 py-4 mb-6 flex items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
           <span className="text-xl flex-shrink-0">{periodo.habilitado_tardio ? '🔓' : '🔒'}</span>
           <div className="flex-1 min-w-0">
