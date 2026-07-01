@@ -53,6 +53,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   // Auth redirect is handled by DashboardContent — Sidebar is purely presentational
   const { usuario, municipio, cargando } = useUsuario()
   const [pendientes, setPendientes] = useState(0)
+  const [cerrando, setCerrando] = useState(false)
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {
@@ -91,12 +92,30 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const menuItems = usuario ? getMenuPorRol(usuario.rol) : []
 
   async function cerrarSesion() {
+    if (cerrando) return
+    setCerrando(true)
+
     const supabase = createClient()
+
+    // signOut() acquires a Navigator Lock internally. If the lock is stuck
+    // (e.g. after a background tab freezes mid-token-refresh), the promise
+    // never settles — no resolve, no reject — and the user is silently blocked.
+    // We race against a 3 s timeout so the redirect always happens regardless
+    // of the lock state. signOut() continues in background and may eventually
+    // invalidate the server-side session; the middleware and server auth checks
+    // will reject any lingering token on the next request either way.
     try {
-      await supabase.auth.signOut()
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise<void>(resolve => setTimeout(resolve, 3000)),
+      ])
     } catch {
-      // Session may have already expired — redirect regardless
+      // Network error or already-expired session — redirect regardless
     }
+
+    // Full page reload: destroys all JS state, clears the singleton browser
+    // client and any stuck Navigator Locks, then lets the server redirect
+    // unauthenticated requests back to /login via middleware.
     window.location.href = '/login'
   }
 
@@ -203,9 +222,10 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           )}
           <button
             onClick={cerrarSesion}
-            className="w-full text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            disabled={cerrando}
+            className="w-full text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Cerrar sesion
+            {cerrando ? 'Cerrando sesión...' : 'Cerrar sesión'}
           </button>
         </div>
       </aside>
