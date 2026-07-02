@@ -89,6 +89,43 @@ export async function firmarUrl(
 }
 
 /**
+ * Batch-sign a list of stored URLs with an on-the-fly resize transform
+ * (Supabase Storage image transformations, Pro plan). Used for thumbnail
+ * grids: a 3-8 MB evidencia photo becomes a ~10-20 KB 160×160 JPEG instead of
+ * shipping the full-resolution file to paint an 80×80 px thumbnail.
+ *
+ * createSignedUrls (plural) has no transform parameter, so each URL is
+ * signed individually via createSignedUrl — but all requests run in
+ * parallel (Promise.all), so wall-clock cost stays close to one round-trip
+ * regardless of how many images are on the page.
+ */
+export async function firmarUrlsMiniatura(
+  bucket: string,
+  urls: (string | null | undefined)[],
+  transform: { width: number; height: number; resize?: 'cover' | 'contain' | 'fill'; quality?: number },
+  expiresIn: number = EXPIRACION_FIRMA_SEG,
+): Promise<Record<string, string>> {
+  const unicas = [...new Set(urls.filter((u): u is string => !!u))]
+  if (!unicas.length) return {}
+
+  const admin = createAdminSupabaseClient()
+  const entries = await Promise.all(
+    unicas.map(async (u): Promise<[string, string] | null> => {
+      const path = extraerPath(u, bucket)
+      if (!path) return null
+      try {
+        const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, expiresIn, { transform })
+        if (error || !data?.signedUrl) return null
+        return [u, data.signedUrl]
+      } catch {
+        return null
+      }
+    }),
+  )
+  return Object.fromEntries(entries.filter((e): e is [string, string] => e !== null))
+}
+
+/**
  * Download an object from a private bucket given its stored URL.
  * Server-side replacement for `fetch(publicUrl)`. Returns null on any failure
  * so callers can treat the file as optional.
