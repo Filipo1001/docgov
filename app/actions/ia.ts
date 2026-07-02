@@ -1,6 +1,7 @@
 'use server'
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -15,6 +16,12 @@ const client = new Anthropic({
 export async function mejorarDescripcion(
   descripcion: string
 ): Promise<{ texto?: string; error?: string }> {
+  // Server actions are public POST endpoints: without this guard anyone
+  // could invoke the action and consume Anthropic API credits.
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado.' }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return { error: 'Función de IA no configurada. Contacta al administrador.' }
   }
