@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
 import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { buscarDuplicados } from '@/lib/duplicados'
-import { firmarUrls } from '@/lib/storage-firmado'
+import { firmarUrls, firmarUrlsMiniatura } from '@/lib/storage-firmado'
 
 /**
  * Server component — runs with full server-side auth (httpOnly cookies).
@@ -125,16 +125,23 @@ export default async function PeriodoDetallePage({
 
   // ── Signed URLs (private buckets) ──────────────────────────────
   // The DB stores canonical public-form URLs; the buckets are private, so we
-  // convert everything the client will render into signed URLs here. ONE
-  // storage API call per bucket regardless of image count (createSignedUrls).
+  // convert everything the client will render into signed URLs here.
   const duplicadosResult = initialDuplicados as { matches: Record<string, DuplicadoMatch[]>; paraBackfill: EvidenciaParaBackfill[] }
-  const urlsEvidencias = (actividades ?? []).flatMap(
+  // Grid-rendered evidencias (thumbnails) vs. backfill-only URLs (never shown,
+  // only read pixel-by-pixel for pHash) — kept separate so only the former
+  // pays for thumbnail transforms.
+  const urlsEvidenciasGrid = (actividades ?? []).flatMap(
     (a: { evidencias?: { url: string }[] }) => (a.evidencias ?? []).map(e => e.url)
   )
-  urlsEvidencias.push(...(duplicadosResult.paraBackfill ?? []).map(e => e.url))
-  const [firmadasEvidencias, firmadasDocumentos] = await Promise.all([
-    firmarUrls('evidencias', urlsEvidencias),
+  const urlsParaBackfill = (duplicadosResult.paraBackfill ?? []).map(e => e.url)
+  const [firmadasEvidencias, firmadasDocumentos, miniaturasEvidencias] = await Promise.all([
+    // Full-resolution: ONE storage API call regardless of image count
+    // (createSignedUrls). Used by the lightbox and the pHash backfill.
+    firmarUrls('evidencias', [...urlsEvidenciasGrid, ...urlsParaBackfill]),
     firmarUrls('documentos', [(periodo as { planilla_ss_url?: string | null }).planilla_ss_url]),
+    // 160×160 resized JPEGs for the thumbnail grid — a 3-8 MB photo becomes
+    // ~10-20 KB to paint an 80×80 px thumbnail (Supabase image transforms).
+    firmarUrlsMiniatura('evidencias', urlsEvidenciasGrid, { width: 160, height: 160, resize: 'cover', quality: 70 }),
   ])
   const initialUrlsFirmadas: Record<string, string> = { ...firmadasEvidencias, ...firmadasDocumentos }
 
@@ -152,6 +159,7 @@ export default async function PeriodoDetallePage({
       initialDuplicados={duplicadosResult.matches ?? {}}
       initialParaBackfill={duplicadosResult.paraBackfill ?? []}
       initialUrlsFirmadas={initialUrlsFirmadas}
+      initialUrlsMiniatura={miniaturasEvidencias}
     />
   )
 }

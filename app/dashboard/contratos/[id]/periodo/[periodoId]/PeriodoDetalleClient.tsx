@@ -68,6 +68,10 @@ interface InitialData {
   /** URL canónica (BD) → URL firmada. Los buckets son privados: toda imagen/PDF
    *  de evidencias o documentos se renderiza a través de este mapa. */
   initialUrlsFirmadas?: Record<string, string>
+  /** URL canónica → URL firmada de una miniatura 160×160 (Storage image
+   *  transform). Usada solo en la grilla de thumbnails; el lightbox y el PDF
+   *  siguen usando la resolución completa via initialUrlsFirmadas. */
+  initialUrlsMiniatura?: Record<string, string>
 }
 
 export default function PeriodoDetallePage({
@@ -80,6 +84,7 @@ export default function PeriodoDetallePage({
   initialDuplicados = {},
   initialParaBackfill = [],
   initialUrlsFirmadas = {},
+  initialUrlsMiniatura = {},
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -111,6 +116,24 @@ export default function PeriodoDetallePage({
     (url: string | null | undefined) => (url ? (urlsFirmadas[url] ?? url) : ''),
     [urlsFirmadas],
   )
+
+  // Miniaturas 160×160 (Storage image transform) para la grilla de evidencias.
+  // El lightbox y el PDF siguen usando resolverUrl (resolución completa).
+  const [urlsMiniatura, setUrlsMiniatura] = useState<Record<string, string>>(initialUrlsMiniatura)
+  const prevUrlsMiniaturaRef = useRef(initialUrlsMiniatura)
+  useEffect(() => {
+    if (prevUrlsMiniaturaRef.current !== initialUrlsMiniatura) {
+      prevUrlsMiniaturaRef.current = initialUrlsMiniatura
+      setUrlsMiniatura(prev => ({ ...prev, ...initialUrlsMiniatura }))
+    }
+  }, [initialUrlsMiniatura])
+  // Fallback a resolución completa si aún no hay miniatura (p.ej. imagen recién
+  // subida, antes del próximo SSR que genera su thumbnail).
+  const resolverMiniatura = useCallback(
+    (url: string | null | undefined) => (url ? (urlsMiniatura[url] ?? urlsFirmadas[url] ?? url) : ''),
+    [urlsMiniatura, urlsFirmadas],
+  )
+
   // Si una imagen falla (URL firmada expirada tras >6 h con la página abierta),
   // un refresh re-firma todo. Throttled para no ciclar.
   const ultimoRefreshImgRef = useRef(0)
@@ -2107,7 +2130,7 @@ export default function PeriodoDetallePage({
                                       aria-label="Ver imagen ampliada"
                                     >
                                       <img
-                                        src={resolverUrl(ev.url)}
+                                        src={resolverMiniatura(ev.url)}
                                         alt={ev.nombre_archivo}
                                         loading="lazy"
                                         decoding="async"
