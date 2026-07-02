@@ -65,6 +65,9 @@ interface InitialData {
   periodosHermanos?: PeriodoHermano[]
   initialDuplicados?: Record<string, DuplicadoMatch[]>
   initialParaBackfill?: EvidenciaParaBackfill[]
+  /** URL canónica (BD) → URL firmada. Los buckets son privados: toda imagen/PDF
+   *  de evidencias o documentos se renderiza a través de este mapa. */
+  initialUrlsFirmadas?: Record<string, string>
 }
 
 export default function PeriodoDetallePage({
@@ -76,6 +79,7 @@ export default function PeriodoDetallePage({
   periodosHermanos = [],
   initialDuplicados = {},
   initialParaBackfill = [],
+  initialUrlsFirmadas = {},
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -89,6 +93,33 @@ export default function PeriodoDetallePage({
   const [actividades, setActividades] = useState<Actividad[]>(initialActividades)
   const [cargando, setCargando] = useState(false)
   const [tardioLoading, setTardioLoading] = useState(false)
+
+  // ── URLs firmadas (buckets privados) ───────────────────────────────────────
+  // El SSR firma todas las URLs de evidencias/planilla; las subidas nuevas
+  // agregan su propia entrada desde la respuesta del server action.
+  const [urlsFirmadas, setUrlsFirmadas] = useState<Record<string, string>>(initialUrlsFirmadas)
+  const prevUrlsFirmadasRef = useRef(initialUrlsFirmadas)
+  useEffect(() => {
+    if (prevUrlsFirmadasRef.current !== initialUrlsFirmadas) {
+      prevUrlsFirmadasRef.current = initialUrlsFirmadas
+      // Merge (no replace): conserva entradas de subidas recientes que el
+      // nuevo SSR podría no incluir todavía.
+      setUrlsFirmadas(prev => ({ ...prev, ...initialUrlsFirmadas }))
+    }
+  }, [initialUrlsFirmadas])
+  const resolverUrl = useCallback(
+    (url: string | null | undefined) => (url ? (urlsFirmadas[url] ?? url) : ''),
+    [urlsFirmadas],
+  )
+  // Si una imagen falla (URL firmada expirada tras >6 h con la página abierta),
+  // un refresh re-firma todo. Throttled para no ciclar.
+  const ultimoRefreshImgRef = useRef(0)
+  const onImgError = useCallback(() => {
+    const now = Date.now()
+    if (now - ultimoRefreshImgRef.current < 30_000) return
+    ultimoRefreshImgRef.current = now
+    router.refresh()
+  }, [router])
 
   // ── Sync SSR props → state when router.refresh() delivers new server data ──
   // router.refresh() re-runs the server component (page.tsx) which fetches fresh
@@ -274,7 +305,8 @@ export default function PeriodoDetallePage({
     async function runBackfill() {
       const updates: { id: string; phash: string }[] = []
       for (const ev of initialParaBackfill) {
-        const phash = await computePerceptualHashFromUrl(ev.url).catch(() => '')
+        // resolverUrl: el bucket es privado — el Canvas necesita la URL firmada
+        const phash = await computePerceptualHashFromUrl(resolverUrl(ev.url)).catch(() => '')
         if (phash) updates.push({ id: ev.id, phash })
       }
       if (updates.length) {
@@ -976,6 +1008,11 @@ export default function PeriodoDetallePage({
           hashes[i]?.fileHash || undefined,
           hashes[i]?.phash || undefined,
         )
+        // La imagen recién subida se renderiza con la URL firmada devuelta por
+        // el registro (el bucket es privado; router.refresh() la renovará).
+        if (reg.data?.urlFirmada) {
+          setUrlsFirmadas(prev => ({ ...prev, [publicUrl]: reg.data!.urlFirmada! }))
+        }
         if (reg.error) {
           setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, storagePath, nombre } }))
           toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
@@ -1050,6 +1087,10 @@ export default function PeriodoDetallePage({
       // Step 3 — register the URL in the DB
       const confirm = await confirmarUploadPlanilla(periodoId, publicUrl)
       if (confirm.error) { toast.error(confirm.error); return }
+      // URL firmada para que el enlace "ver planilla" funcione de inmediato
+      if (confirm.data?.urlFirmada) {
+        setUrlsFirmadas(prev => ({ ...prev, [publicUrl]: confirm.data!.urlFirmada! }))
+      }
 
       toast.success('Planilla subida exitosamente')
       setPlanillaMenuAbierto(false)
@@ -2061,15 +2102,16 @@ export default function PeriodoDetallePage({
                                     {/* Thumbnail — abre lightbox (con evId para poder eliminar desde ahí) */}
                                     <button
                                       type="button"
-                                      onClick={() => setLightbox({ url: ev.url, alt: ev.nombre_archivo, evId: esEditable ? ev.id : undefined })}
+                                      onClick={() => setLightbox({ url: resolverUrl(ev.url), alt: ev.nombre_archivo, evId: esEditable ? ev.id : undefined })}
                                       className="block focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-xl"
                                       aria-label="Ver imagen ampliada"
                                     >
                                       <img
-                                        src={ev.url}
+                                        src={resolverUrl(ev.url)}
                                         alt={ev.nombre_archivo}
                                         loading="lazy"
                                         decoding="async"
+                                        onError={onImgError}
                                         className={`w-20 h-20 object-cover rounded-xl border transition-opacity group-hover:opacity-80 ${tieneDuplicado ? 'border-amber-300' : 'border-gray-200'}`}
                                       />
                                     </button>
@@ -2305,7 +2347,7 @@ export default function PeriodoDetallePage({
                 {/* Eye icon — preview without opening the file picker */}
                 {periodo.planilla_ss_url && (
                   <a
-                    href={periodo.planilla_ss_url}
+                    href={resolverUrl(periodo.planilla_ss_url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Ver planilla cargada"
@@ -2854,7 +2896,7 @@ export default function PeriodoDetallePage({
                     {/* Ver documento */}
                     {periodo.planilla_ss_url && (
                       <a
-                        href={periodo.planilla_ss_url}
+                        href={resolverUrl(periodo.planilla_ss_url)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"

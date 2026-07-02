@@ -11,6 +11,8 @@
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { firmarUrl } from '@/lib/storage-firmado'
 import type { Usuario, Municipio } from '@/lib/types'
 
 export async function obtenerPerfilUsuario(): Promise<{
@@ -24,8 +26,11 @@ export async function obtenerPerfilUsuario(): Promise<{
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { usuario: null, municipio: null }
 
+    // Fila propia via admin client: las columnas bancarias no tienen SELECT
+    // para authenticated, pero el dueño sí debe ver sus propios datos en /perfil.
+    const admin = createAdminSupabaseClient()
     const [{ data: u }, { data: m }] = await Promise.all([
-      supabase.from('usuarios').select('*').eq('id', user.id).single(),
+      admin.from('usuarios').select('*').eq('id', user.id).single(),
       supabase.from('municipios').select('*').single(),
     ])
 
@@ -35,5 +40,29 @@ export async function obtenerPerfilUsuario(): Promise<{
     }
   } catch {
     return { usuario: null, municipio: null }
+  }
+}
+
+/**
+ * URL firmada de la firma manuscrita del usuario autenticado.
+ * El bucket `documentos` es privado: /perfil no puede renderizar firma_url
+ * directamente y pide aquí una URL temporal (6 h).
+ */
+export async function obtenerFirmaFirmada(): Promise<string | null> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data: u } = await supabase
+      .from('usuarios')
+      .select('firma_url')
+      .eq('id', user.id)
+      .single()
+
+    if (!u?.firma_url) return null
+    return firmarUrl('documentos', u.firma_url)
+  } catch {
+    return null
   }
 }

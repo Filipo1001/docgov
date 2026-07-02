@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
 import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { buscarDuplicados } from '@/lib/duplicados'
+import { firmarUrls } from '@/lib/storage-firmado'
 
 /**
  * Server component — runs with full server-side auth (httpOnly cookies).
@@ -122,6 +123,21 @@ export default async function PeriodoDetallePage({
     initialRevisiones[r.obligacion_id] = { aprobada: r.aprobada, nota: r.nota }
   }
 
+  // ── Signed URLs (private buckets) ──────────────────────────────
+  // The DB stores canonical public-form URLs; the buckets are private, so we
+  // convert everything the client will render into signed URLs here. ONE
+  // storage API call per bucket regardless of image count (createSignedUrls).
+  const duplicadosResult = initialDuplicados as { matches: Record<string, DuplicadoMatch[]>; paraBackfill: EvidenciaParaBackfill[] }
+  const urlsEvidencias = (actividades ?? []).flatMap(
+    (a: { evidencias?: { url: string }[] }) => (a.evidencias ?? []).map(e => e.url)
+  )
+  urlsEvidencias.push(...(duplicadosResult.paraBackfill ?? []).map(e => e.url))
+  const [firmadasEvidencias, firmadasDocumentos] = await Promise.all([
+    firmarUrls('evidencias', urlsEvidencias),
+    firmarUrls('documentos', [(periodo as { planilla_ss_url?: string | null }).planilla_ss_url]),
+  ])
+  const initialUrlsFirmadas: Record<string, string> = { ...firmadasEvidencias, ...firmadasDocumentos }
+
   return (
     // key={periodoId} forces a full remount when navigating between periods
     // so useState initialises fresh from the new props on every SPA navigation.
@@ -133,8 +149,9 @@ export default async function PeriodoDetallePage({
       initialActividades={(actividades ?? []) as unknown as Actividad[]}
       initialRevisiones={initialRevisiones}
       periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
-      initialDuplicados={(initialDuplicados as { matches: Record<string, DuplicadoMatch[]>; paraBackfill: EvidenciaParaBackfill[] }).matches ?? {}}
-      initialParaBackfill={(initialDuplicados as { matches: Record<string, DuplicadoMatch[]>; paraBackfill: EvidenciaParaBackfill[] }).paraBackfill ?? []}
+      initialDuplicados={duplicadosResult.matches ?? {}}
+      initialParaBackfill={duplicadosResult.paraBackfill ?? []}
+      initialUrlsFirmadas={initialUrlsFirmadas}
     />
   )
 }
