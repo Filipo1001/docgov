@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { firmarUrls } from '@/lib/storage-firmado'
 import FirmasAdminClient from './FirmasAdminClient'
 
 export interface ContratistaFirma {
@@ -36,13 +37,21 @@ export default async function FirmasAdminPage() {
     .eq('activo', true)
     .order('numero')
 
+  // Bucket documentos privado: firmar todas las firmas en un solo batch
+  const firmadas = await firmarUrls(
+    'documentos',
+    (data ?? []).map((c: any) => c.contratista?.firma_url as string | undefined),
+  )
+
   const contratistas: ContratistaFirma[] = (data ?? [])
     .map((c: any) => ({
       id: c.contratista?.id ?? '',
       nombre_completo: c.contratista?.nombre_completo ?? '',
       contrato_numero: c.numero,
       contrato_anio: c.anio,
-      firma_url: c.contratista?.firma_url ?? null,
+      firma_url: c.contratista?.firma_url
+        ? (firmadas[c.contratista.firma_url] ?? c.contratista.firma_url)
+        : null,
     }))
     .filter((c) => c.id && !c.nombre_completo.toLowerCase().includes('prueba'))
     .sort((a, b) => a.nombre_completo.localeCompare(b.nombre_completo))

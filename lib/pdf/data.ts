@@ -3,7 +3,8 @@
  * Runs server-side only (called from API routes).
  */
 
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { firmarUrls } from '@/lib/storage-firmado'
 import { numeroALetras } from '@/lib/format'
 import type { PDFData, PDFPagoHistorial } from './types'
 
@@ -49,7 +50,10 @@ function calcFechaPago(fechaFin: string): string {
 }
 
 export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
-  const supabase = await createServerSupabaseClient()
+  // Admin client: (a) the caller (PDF routes) already enforced access via
+  // verificarAccesoPeriodo, and (b) the query needs the contratista's bank
+  // columns on usuarios, which are not SELECT-granted to authenticated.
+  const supabase = createAdminSupabaseClient()
 
   const { data: periodo, error } = await supabase
     .from('periodos')
@@ -182,6 +186,24 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
 
   const actividadesArr = (actividadesDelPeriodo ?? []) as ActRow[]
 
+  // ── Signed URLs (private buckets) ────────────────────────────
+  // @react-pdf fetches every image URL during render; the buckets are private,
+  // so evidencias and firmas must be signed here. One batch call per bucket.
+  const firmasRaw = [
+    contrato.contratista?.firma_url as string | undefined,
+    contrato.supervisor?.firma_url as string | undefined,
+  ]
+  const [firmadasEv, firmadasDoc] = await Promise.all([
+    firmarUrls('evidencias', actividadesArr.flatMap(a => (a.evidencias ?? []).map(e => e.url)), 600),
+    firmarUrls('documentos', firmasRaw, 600),
+  ])
+  if (contrato.contratista?.firma_url) {
+    contrato.contratista.firma_url = firmadasDoc[contrato.contratista.firma_url] ?? contrato.contratista.firma_url
+  }
+  if (contrato.supervisor?.firma_url) {
+    contrato.supervisor.firma_url = firmadasDoc[contrato.supervisor.firma_url] ?? contrato.supervisor.firma_url
+  }
+
   // Collect every evidencia URL that needs format conversion (WebP → JPEG).
   // Run all fetches + conversions in parallel — only WebP images hit the network
   // here; JPEG/PNG are resolved immediately via the fast-path in resolverImagenParaPDF.
@@ -189,7 +211,8 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const evRefs: EvRef[] = []
   for (const act of actividadesArr) {
     for (let i = 0; i < (act.evidencias ?? []).length; i++) {
-      evRefs.push({ actId: act.id, evIdx: i, url: act.evidencias[i].url })
+      const raw = act.evidencias[i].url
+      evRefs.push({ actId: act.id, evIdx: i, url: firmadasEv[raw] ?? raw })
     }
   }
   const resolvedUrls = await Promise.all(evRefs.map(r => resolverImagenParaPDF(r.url)))

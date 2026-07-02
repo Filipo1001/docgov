@@ -33,11 +33,27 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Marcar tuvoSesion SINCRÓNICAMENTE antes del await, para que si load()
       // (Ruta B) completa en paralelo con null, no sobreescriba al usuario real.
       tuvoSesion.current = true
+      // Columnas explícitas: las columnas bancarias (banco, tipo_cuenta,
+      // numero_cuenta) no tienen SELECT para authenticated — un select('*')
+      // fallaría completo. Los datos bancarios propios llegan por la Ruta B
+      // (obtenerPerfilUsuario, admin client); aquí se preservan si ya estaban.
       const [{ data: u }, { data: m }] = await Promise.all([
-        supabase.from('usuarios').select('*').eq('id', userId).single(),
+        supabase
+          .from('usuarios')
+          .select('id, municipio_id, dependencia_id, nombre_completo, cedula, email, telefono, rol, activo, cargo, direccion, foto_url, rh, tipo_documento, firma_url')
+          .eq('id', userId)
+          .single(),
         supabase.from('municipios').select('*').single(),
       ])
-      setUsuario((u as Usuario) ?? null)
+      setUsuario(prev => {
+        if (!u) return null
+        const nuevo = u as Usuario
+        // Conservar datos bancarios cargados por la Ruta B (no vienen en esta query)
+        if (prev && prev.id === nuevo.id) {
+          return { ...nuevo, banco: prev.banco, tipo_cuenta: prev.tipo_cuenta, numero_cuenta: prev.numero_cuenta }
+        }
+        return nuevo
+      })
       setMunicipio((m as Municipio) ?? null)
     }
 

@@ -20,6 +20,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { firmarUrl } from '@/lib/storage-firmado'
 import { FILE_UPLOAD, ESTADOS_EDITABLES } from '@/lib/constants'
 import type { ActionResult } from '@/lib/types'
 
@@ -107,9 +108,12 @@ export async function prepararUploadEvidencia(
     // ── Step 3: issue a presigned upload URL (valid for 300 s) ─
     // Increased from 60 s: with HEIC conversion + sequential URL prep for 5 files,
     // the 60 s window could expire before XHR starts on slower devices.
+    // Admin client: the bucket is private with no authenticated policies —
+    // all storage access is server-mediated (auth was already validated above).
     const path = `evidencias/${periodoId}/${actividadId}/${Date.now()}.${fileExt || 'jpg'}`
+    const adminStorage = createAdminSupabaseClient()
 
-    const { data: signedData, error: signedError } = await supabase.storage
+    const { data: signedData, error: signedError } = await adminStorage.storage
       .from('evidencias')
       .createSignedUploadUrl(path, { upsert: false })
 
@@ -117,7 +121,9 @@ export async function prepararUploadEvidencia(
       return { error: `Error al preparar la subida: ${signedError?.message}` }
     }
 
-    const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(path)
+    // publicUrl remains the canonical identifier stored in the DB; display
+    // surfaces convert it to a signed URL (see lib/storage-firmado.ts).
+    const { data: urlData } = adminStorage.storage.from('evidencias').getPublicUrl(path)
 
     return {
       data: {
@@ -146,7 +152,7 @@ export async function registrarEvidencia(
   nombreArchivo: string,
   fileHash?: string,
   phash?: string,
-): Promise<ActionResult<{ url: string; nombre: string }>> {
+): Promise<ActionResult<{ url: string; nombre: string; urlFirmada?: string }>> {
   try {
     const supabase = await createServerSupabaseClient()
 
@@ -179,7 +185,11 @@ export async function registrarEvidencia(
       return { error: `Error al registrar la evidencia: ${insertError.message}` }
     }
 
-    return { data: { url: publicUrl, nombre: nombreArchivo } }
+    // Signed URL so the just-uploaded image renders immediately (private bucket).
+    // The file exists at this point, so signing succeeds.
+    const urlFirmada = await firmarUrl('evidencias', publicUrl) ?? undefined
+
+    return { data: { url: publicUrl, nombre: nombreArchivo, urlFirmada } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado al registrar evidencia' }
   }

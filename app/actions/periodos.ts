@@ -17,6 +17,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
@@ -923,7 +924,7 @@ export async function prepararUploadPlanilla(
 export async function confirmarUploadPlanilla(
   periodoId: string,
   publicUrl: string,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ urlFirmada?: string }>> {
   try {
     const { usuario } = await getAuthContext()
 
@@ -941,7 +942,9 @@ export async function confirmarUploadPlanilla(
     if (updateError) return { error: `Error al guardar: ${updateError.message}` }
     if (!updated?.length) return { error: 'No se pudo guardar. Periodo no encontrado.' }
 
-    return {}
+    // Signed URL so the "ver planilla" link works immediately (private bucket)
+    const urlFirmada = await firmarUrl('documentos', publicUrl) ?? undefined
+    return { data: { urlFirmada } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado al registrar la planilla' }
   }
@@ -1401,18 +1404,21 @@ export async function subirFirma(
     const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/jpeg' ? 'jpg' : 'png'
     const path = `firmas/${uploadForId}/${Date.now()}.${ext}`
 
+    // Admin client for storage: the documentos bucket is private with no
+    // authenticated policies (auth + role were already validated above).
     const buffer = Buffer.from(await file.arrayBuffer())
-    const { error: uploadError } = await supabase.storage
+    const adminClient = createAdminSupabaseClient()
+    const { error: uploadError } = await adminClient.storage
       .from('documentos')
       .upload(path, buffer, { contentType: file.type, upsert: true })
 
     if (uploadError) return { error: `Error al subir: ${uploadError.message}` }
 
-    const { data: { publicUrl } } = supabase.storage
+    // Canonical public-form URL stored in the DB; display goes through signing
+    const { data: { publicUrl } } = adminClient.storage
       .from('documentos')
       .getPublicUrl(path)
 
-    const adminClient = createAdminSupabaseClient()
     const { data: updatedUser, error: updateError } = await adminClient
       .from('usuarios')
       .update({ firma_url: publicUrl })
@@ -1423,7 +1429,9 @@ export async function subirFirma(
     if (!updatedUser?.length) return { error: 'No se pudo guardar la firma. El usuario no fue encontrado.' }
 
     revalidatePath('/dashboard')
-    return { data: { url: publicUrl } }
+    // Signed URL so the caller can render the signature immediately
+    const urlFirmada = await firmarUrl('documentos', publicUrl)
+    return { data: { url: urlFirmada ?? publicUrl } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }

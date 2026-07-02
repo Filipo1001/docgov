@@ -11,8 +11,13 @@
  */
 
 import { NextResponse } from 'next/server'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 
 const BUCKET = 'pdf-cache'
+
+// The pdf-cache bucket is private (contains actas with cédulas and bank data).
+// All storage operations run through the admin client; the calling routes have
+// already enforced access via verificarAccesoPeriodo.
 
 /**
  * Error de datos incompletos: lanzado por `generate()` cuando faltan campos
@@ -66,27 +71,19 @@ export async function getOrGeneratePDF({
 
   if (shouldCache) {
     try {
-      // Use storage.list() instead of a CDN HEAD request.
-      // A HEAD to the public CDN URL can return stale 200s for minutes after
-      // the file is deleted (CDN cache TTL), causing us to redirect to an old
-      // PDF even after invalidarCachePDF has run.  storage.list() queries the
-      // storage service directly — no CDN layer, always reflects true state.
-      const { data: fileList } = await supabase.storage
+      // createSignedUrl doubles as existence check (errors on missing objects)
+      // AND produces the redirect target. Bucket is private: the browser needs
+      // a signed URL. Short expiry — the redirect is consumed immediately.
+      // no-store on the REDIRECT so the browser re-validates on every open and
+      // regenerations are visible at once (the real CPU-saving cache lives in
+      // Storage, not in the browser's memory of the redirect target).
+      const admin = createAdminSupabaseClient()
+      const { data: signedData } = await admin.storage
         .from(BUCKET)
-        .list(tipo, { limit: 1, search: `${periodoId}.pdf` })
+        .createSignedUrl(cacheKey, 300)
 
-      if (fileList?.some((f: { name: string }) => f.name === `${periodoId}.pdf`)) {
-        const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
-        // Redirect to Supabase CDN — instant delivery, zero server CPU.
-        // IMPORTANTE: no-store en el REDIRECT (no en el PDF). Antes usaba
-        // max-age=3600, lo que hacía que el navegador recordara el redirect a
-        // la versión vieja hasta 1 h: tras editar un dato (planilla, mes de
-        // cotización…) e invalidar el caché del servidor, el usuario seguía
-        // viendo el PDF anterior. Con no-store el navegador revalida el redirect
-        // en cada apertura, así que la regeneración se ve de inmediato. El
-        // caché real (que ahorra CPU) sigue viviendo en Storage; esto solo
-        // afecta a que el navegador no memorice a dónde apuntaba el redirect.
-        return NextResponse.redirect(publicUrl, {
+      if (signedData?.signedUrl) {
+        return NextResponse.redirect(signedData.signedUrl, {
           status: 302,
           headers: {
             'Cache-Control': 'no-store, max-age=0',
@@ -115,7 +112,7 @@ export async function getOrGeneratePDF({
 
   if (shouldCache) {
     // Fire and forget — don't block the response
-    supabase.storage
+    createAdminSupabaseClient().storage
       .from(BUCKET)
       .upload(cacheKey, buffer, { contentType: 'application/pdf', upsert: true })
       .catch(() => { /* non-critical — next request will regenerate */ })
@@ -154,13 +151,14 @@ export async function getOrGeneratePDFBuffer({
 }): Promise<Buffer> {
   const cacheKey = `${tipo}/${periodoId}.pdf`
   const shouldCache = ESTADOS_CACHEABLES.has(estado)
+  const admin = createAdminSupabaseClient()
 
   if (shouldCache) {
-    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(cacheKey)
     try {
-      // Single GET: existence check + content fetch combined (no storage.list() needed)
-      const res = await fetch(publicUrl)
-      if (res.ok) return Buffer.from(await res.arrayBuffer())
+      // Direct storage download: existence check + content fetch in one call,
+      // no CDN staleness, works on the private bucket.
+      const { data: blob } = await admin.storage.from(BUCKET).download(cacheKey)
+      if (blob) return Buffer.from(await blob.arrayBuffer())
     } catch {
       // Cache fetch failed — fall through to regenerate
     }
@@ -169,7 +167,7 @@ export async function getOrGeneratePDFBuffer({
   const buffer = await generate()
 
   if (shouldCache) {
-    supabase.storage
+    admin.storage
       .from(BUCKET)
       .upload(cacheKey, buffer, { contentType: 'application/pdf', upsert: true })
       .catch(() => { /* non-critical */ })

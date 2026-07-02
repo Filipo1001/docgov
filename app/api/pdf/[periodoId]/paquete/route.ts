@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
+import { descargarObjeto } from '@/lib/storage-firmado'
 import { buildPDFData } from '@/lib/pdf/data'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
@@ -152,22 +153,16 @@ export async function GET(
       planillaPromise,
     ])
 
-  // ── Fetch planilla file if available ─────────────────────────
+  // ── Fetch planilla file if available (private bucket → storage.download) ──
   let planillaBuffer: Buffer | null = null
   let planillaExt = 'pdf'
   const planillaUrl = planillaResult.data?.planilla_ss_url
   if (planillaUrl) {
-    try {
-      const res = await fetch(planillaUrl)
-      if (res.ok) {
-        planillaBuffer = Buffer.from(await res.arrayBuffer())
-        const ext = new URL(planillaUrl).pathname.split('.').pop()?.toLowerCase()
-        if (ext && ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
-          planillaExt = ext === 'jpeg' ? 'jpg' : ext
-        }
-      }
-    } catch {
-      // Non-fatal — ZIP will be generated without planilla
+    // Non-fatal — ZIP will be generated without planilla
+    planillaBuffer = await descargarObjeto('documentos', planillaUrl)
+    const ext = new URL(planillaUrl).pathname.split('.').pop()?.toLowerCase()
+    if (ext && ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+      planillaExt = ext === 'jpeg' ? 'jpg' : ext
     }
   }
 

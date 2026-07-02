@@ -8,6 +8,7 @@ import Badge from '@/components/ui/Badge'
 import type { Contrato } from '@/lib/types'
 import { formatCedula } from '@/lib/format'
 import { subirFirma } from '@/app/actions/periodos'
+import { obtenerFirmaFirmada } from '@/app/actions/usuario'
 import { normalizarFirma } from '@/lib/compress'
 
 // ─── Display maps ──────────────────────────────────────────────
@@ -126,6 +127,12 @@ export default function PerfilPage() {
 
   // Firma upload state — local override after successful upload
   const [firmaUrl,       setFirmaUrl]       = useState<string | null>(null)
+  // URL firmada de la firma guardada (el bucket documentos es privado)
+  const [firmaFirmada,   setFirmaFirmada]   = useState<string | null>(null)
+  useEffect(() => {
+    if (usuario?.firma_url) obtenerFirmaFirmada().then(setFirmaFirmada)
+    else setFirmaFirmada(null)
+  }, [usuario?.firma_url])
   const [subiendoFirma,  setSubiendoFirma]  = useState(false)
   const [firmaError,     setFirmaError]     = useState<string | null>(null)
   const firmaInputRef = useRef<HTMLInputElement>(null)
@@ -217,8 +224,9 @@ export default function PerfilPage() {
     }
   }
 
-  // Effective firma URL: local override takes precedence after upload
-  const firmaActual = firmaUrl ?? usuario.firma_url ?? null
+  // Effective firma URL: local override (recién subida, ya firmada) →
+  // URL firmada de la firma guardada. Nunca la URL cruda: el bucket es privado.
+  const firmaActual = firmaUrl ?? firmaFirmada ?? null
 
   const rol          = usuario.rol
   const rolLabel     = ROL_LABEL[rol]     ?? rol

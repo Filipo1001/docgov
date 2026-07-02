@@ -20,10 +20,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula } from '@/lib/format'
-import {
-  getTodosContratos,
-  type ContratoListItem,
-} from '@/services/contratos'
+import { type ContratoListItem } from '@/services/contratos'
+import { getTodosContratosConBanco } from '@/app/actions/contratos-lista'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -216,7 +214,9 @@ export default function ContratosPage() {
     refetch,
   } = useQuery({
     queryKey: ['contratos-todos', usuario?.id, usuario?.rol],
-    queryFn: () => getTodosContratos({ rol: usuario!.rol, userId: usuario!.id }),
+    // Server action: deriva rol/usuario de la sesión e incluye los datos
+    // bancarios del contratista (no legibles via browser client).
+    queryFn: () => getTodosContratosConBanco(),
     enabled: !!usuario,
     staleTime: 2 * 60_000, // 2 min: volver a la lista no re-consulta
   })

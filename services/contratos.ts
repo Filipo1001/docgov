@@ -82,7 +82,7 @@ export async function getContratosPagina(params: {
       fecha_inicio, fecha_fin,
       contratista:usuarios!contratos_contratista_id_fkey(
         id, nombre_completo, cedula, email, telefono, foto_url,
-        firma_url, cargo, banco, tipo_cuenta, numero_cuenta
+        firma_url, cargo
       ),
       supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
       dependencia:dependencias(id, nombre, abreviatura)
@@ -145,7 +145,7 @@ export async function getTodosContratos(params: {
       fecha_inicio, fecha_fin,
       contratista:usuarios!contratos_contratista_id_fkey(
         id, nombre_completo, cedula, email, telefono, foto_url,
-        firma_url, cargo, banco, tipo_cuenta, numero_cuenta
+        firma_url, cargo
       ),
       supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
       dependencia:dependencias(id, nombre, abreviatura)

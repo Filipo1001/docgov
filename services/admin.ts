@@ -3,6 +3,7 @@
  * All functions run server-side via Server Actions or API routes.
  */
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import type { Rol } from '@/lib/types'
 
 // ─── Types ────────────────────────────────────────────────────
@@ -88,7 +89,9 @@ export async function getUsuariosAdmin(): Promise<UsuarioAdmin[]> {
 }
 
 export async function getUsuarioAdmin(id: string): Promise<UsuarioAdmin | null> {
-  const supabase = await createServerSupabaseClient()
+  // Admin client: select('*') incluye las columnas bancarias, que no tienen
+  // SELECT para authenticated. La página que llama ya verificó rol admin.
+  const supabase = createAdminSupabaseClient()
   const { data } = await supabase
     .from('usuarios')
     .select('*, dependencia:dependencias(id, nombre)')
