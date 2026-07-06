@@ -410,8 +410,8 @@ export default function ContratistaHome({
                       <span className="text-xs font-medium text-gray-700">
                         {p.mes.charAt(0).toUpperCase() + p.mes.slice(1, 3).toLowerCase()}
                       </span>
-                      <span className={`mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${estadoBadgeColor(p.estado)}`}>
-                        {ESTADO_LABEL[p.estado as EstadoPeriodo] ?? p.estado}
+                      <span className={`mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${p.es_historico ? 'bg-amber-100 text-amber-700' : estadoBadgeColor(p.estado)}`}>
+                        {p.es_historico ? 'Histórico' : (ESTADO_LABEL[p.estado as EstadoPeriodo] ?? p.estado)}
                       </span>
                     </Link>
                   )
