@@ -17,6 +17,7 @@ import {
 } from '@/app/actions/periodos'
 import type { Periodo } from '@/lib/types'
 import RadicacionRapida from './RadicacionRapida'
+import DescargaMasiva from './DescargaMasiva'
 
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
@@ -438,6 +439,9 @@ export default function InformesPage({
   // Radicación rápida (masiva)
   const [mostrarRadicacion, setMostrarRadicacion] = useState(false)
 
+  // Descarga masiva del mes (ZIP organizado)
+  const [mostrarDescargaMasiva, setMostrarDescargaMasiva] = useState(false)
+
   const mesNombre = MESES[mesIdx]
 
   // Asesor only sees their dependencia
@@ -537,6 +541,9 @@ export default function InformesPage({
   const aprobados = periodos.filter(p => ['aprobado', 'radicado'].includes(p.estado))
   // Radicación rápida: solo aprobados aún sin radicar (excluye históricos)
   const pendientesRadicar = periodos.filter(p => p.estado === 'aprobado' && !p.es_historico)
+  // Descarga masiva: aprobados+radicados no históricos (los históricos no
+  // tienen actividades digitalizadas — sus PDFs saldrían vacíos)
+  const descargables = aprobados.filter(p => !p.es_historico)
 
   const periodosVisibles = (() => {
     switch (filtro) {
@@ -719,18 +726,31 @@ export default function InformesPage({
           </div>
         )}
 
-        {/* Radicación rápida — pestaña Aprobados, para asesor/secretaria/admin */}
-        {filtro === 'aprobados' && pendientesRadicar.length > 0 && (
-          <div className="sm:ml-auto">
-            <button
-              onClick={() => setMostrarRadicacion(true)}
-              className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Radicación rápida ({pendientesRadicar.length})
-            </button>
+        {/* Radicación rápida + Descarga masiva — pestaña Aprobados, asesor/secretaria/admin */}
+        {filtro === 'aprobados' && (pendientesRadicar.length > 0 || descargables.length > 0) && (
+          <div className="sm:ml-auto flex items-center gap-2 flex-wrap">
+            {descargables.length > 0 && (
+              <button
+                onClick={() => setMostrarDescargaMasiva(true)}
+                className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Descargar mes ({descargables.length})
+              </button>
+            )}
+            {pendientesRadicar.length > 0 && (
+              <button
+                onClick={() => setMostrarRadicacion(true)}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Radicación rápida ({pendientesRadicar.length})
+              </button>
+            )}
           </div>
         )}
 
@@ -816,6 +836,16 @@ export default function InformesPage({
             </button>
           </div>
         </Card>
+      )}
+
+      {/* Descarga masiva del mes — modal con selección de documentos */}
+      {mostrarDescargaMasiva && (
+        <DescargaMasiva
+          mesNombre={mesNombre}
+          anio={anio}
+          totalCuentas={descargables.length}
+          onClose={() => setMostrarDescargaMasiva(false)}
+        />
       )}
 
       {/* Radicación rápida — modal masivo */}
