@@ -16,6 +16,7 @@ import {
   enviarRecordatoriosMasivos,
 } from '@/app/actions/periodos'
 import type { Periodo } from '@/lib/types'
+import RadicacionRapida from './RadicacionRapida'
 
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
@@ -434,6 +435,9 @@ export default function InformesPage({
   const [enviandoRecordatorios, setEnviandoRecordatorios] = useState(false)
   const [recordatoriosEnviados, setRecordatoriosEnviados] = useState(false)
 
+  // Radicación rápida (masiva)
+  const [mostrarRadicacion, setMostrarRadicacion] = useState(false)
+
   const mesNombre = MESES[mesIdx]
 
   // Asesor only sees their dependencia
@@ -531,6 +535,8 @@ export default function InformesPage({
   const aprobadosAsesor = periodos.filter(p => p.estado === 'revision' && !p.es_historico)
   const sinRevisar = enviados.filter(p => (p.preaprobaciones?.length ?? 0) === 0)
   const aprobados = periodos.filter(p => ['aprobado', 'radicado'].includes(p.estado))
+  // Radicación rápida: solo aprobados aún sin radicar (excluye históricos)
+  const pendientesRadicar = periodos.filter(p => p.estado === 'aprobado' && !p.es_historico)
 
   const periodosVisibles = (() => {
     switch (filtro) {
@@ -713,6 +719,21 @@ export default function InformesPage({
           </div>
         )}
 
+        {/* Radicación rápida — pestaña Aprobados, para asesor/secretaria/admin */}
+        {filtro === 'aprobados' && pendientesRadicar.length > 0 && (
+          <div className="sm:ml-auto">
+            <button
+              onClick={() => setMostrarRadicacion(true)}
+              className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Radicación rápida ({pendientesRadicar.length})
+            </button>
+          </div>
+        )}
+
         {/* Secretary mass action button */}
         {(esSecretaria || esAdmin) && idsParaAprobar.length > 0 && (
           <div className="sm:ml-auto relative">
@@ -795,6 +816,24 @@ export default function InformesPage({
             </button>
           </div>
         </Card>
+      )}
+
+      {/* Radicación rápida — modal masivo */}
+      {mostrarRadicacion && (
+        <RadicacionRapida
+          periodos={pendientesRadicar}
+          mesNombre={mesNombre}
+          anio={anio}
+          onRadicados={(radicados) => {
+            // Parche optimista: badge y número cambian al instante; el refetch
+            // posterior reconcilia con el servidor en segundo plano.
+            radicados.forEach(({ periodoId, numeroRadicado }) =>
+              patchPeriodoLocal(periodoId, { estado: 'radicado', numero_radicado: numeroRadicado }),
+            )
+            void refrescar()
+          }}
+          onClose={() => setMostrarRadicacion(false)}
+        />
       )}
 
       {/* Content */}
