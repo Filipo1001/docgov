@@ -1,46 +1,22 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
-import { createClient } from '@/lib/supabase'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion, guardarMesCotizacion } from '@/app/actions/periodos'
-import { getOtrosies, crearOtrosi, eliminarOtrosi, type Otrosi, type TipoOtrosi } from '@/app/actions/otrosies'
+import { crearOtrosi, eliminarOtrosi, type Otrosi, type TipoOtrosi } from '@/app/actions/otrosies'
+import { getAvanzadoData, type PeriodoAvanzado, type ContratoAvanzado } from '@/app/actions/avanzado'
 import type { EstadoPeriodo } from '@/lib/types'
 import { DEFAULT_BASE_COTIZACION_SS, calcularBaseCotizacionSS, MESES } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
 
-type PeriodoRow = {
-  id: string
-  numero_periodo: number
-  mes: string
-  anio: number
-  fecha_inicio: string
-  fecha_fin: string
-  valor_cobro: number
-  estado: EstadoPeriodo
-  es_historico: boolean
-  planilla_ss_url: string | null
-  numero_planilla: string | null
-  planilla_estado: 'pendiente' | 'aprobada' | 'rechazada' | null
-  base_cotizacion_ss: number | null
-  cotizacion_mes: string | null
-  cotizacion_origen: 'inferido' | 'confirmado' | null
-}
-
-type ContratoRow = {
-  id: string
-  numero: string
-  anio: number
-  objeto: string
-  valor_total: number
-  valor_mensual: number
-  fecha_inicio: string
-  fecha_fin: string
-}
+// Los datos llegan del server action getAvanzadoData: lecturas y escrituras
+// comparten el mismo camino de auth (cookies httpOnly), así la relectura
+// post-mutación nunca depende de la sesión del browser client.
+type PeriodoRow = PeriodoAvanzado
+type ContratoRow = ContratoAvanzado
 
 type DistribucionItem = ReturnType<typeof calcularDistribucionPeriodos>[number]
 
@@ -87,7 +63,6 @@ function exportarCSV(nombre: string, filas: string[][], cabeceras: string[]) {
 // ─── Component ────────────────────────────────────────────────
 
 export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
-  const router = useRouter()
   const [contrato, setContrato] = useState<ContratoRow | null>(null)
   const [periodos, setPeriodos] = useState<PeriodoRow[]>([])
   const [distribucion, setDistribucion] = useState<DistribucionItem[]>([])
@@ -132,33 +107,27 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [subiendoPdfId, setSubiendoPdfId] = useState<string | null>(null)
 
   const cargarDatos = useCallback(async () => {
-    const supabase = createClient()
-    const [{ data: ctr }, { data: pers }] = await Promise.all([
-      supabase
-        .from('contratos')
-        .select('id, numero, anio, objeto, valor_total, valor_mensual, fecha_inicio, fecha_fin')
-        .eq('id', contratoId)
-        .single(),
-      supabase
-        .from('periodos')
-        .select('id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, es_historico, planilla_ss_url, numero_planilla, planilla_estado, base_cotizacion_ss, cotizacion_mes, cotizacion_origen')
-        .eq('contrato_id', contratoId)
-        .order('numero_periodo'),
-    ])
+    // Una sola ida y vuelta por server action (antes: 2 queries del browser
+    // client + 1 action). Si falla, se avisa y se CONSERVA el estado anterior
+    // — nunca más un fallo silencioso que deja la UI desincronizada.
+    try {
+      const res = await getAvanzadoData(contratoId)
+      if (res.error || !res.data) {
+        toast.error(res.error ?? 'No se pudieron actualizar los datos. Intenta de nuevo.')
+        setCargando(false)
+        return
+      }
 
-    if (ctr) {
-      setContrato(ctr as ContratoRow)
-      const dist = calcularDistribucionPeriodos({
+      const { contrato: ctr, periodos: rows, otrosies: ots } = res.data
+
+      setContrato(ctr)
+      setDistribucion(calcularDistribucionPeriodos({
         fechaInicio: ctr.fecha_inicio,
         fechaFin: ctr.fecha_fin,
         valorTotal: ctr.valor_total,
         valorMensual: ctr.valor_mensual,
-      })
-      setDistribucion(dist)
-    }
+      }))
 
-    if (pers) {
-      const rows = pers as PeriodoRow[]
       setPeriodos(rows)
       // Pre-poblar edits con valores actuales
       const vals: Record<string, string> = {}
@@ -172,14 +141,13 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
       setValoresEdit(vals)
       setPlanillasEdit(plans)
       setBaseEdit(bases)
+
+      setOtrosies(ots)
+    } catch {
+      toast.error('No se pudieron actualizar los datos. Verifica tu conexión e intenta de nuevo.')
+    } finally {
+      setCargando(false)
     }
-
-    // Otrosíes (vía Server Action — auth server-side)
-    try {
-      setOtrosies(await getOtrosies(contratoId))
-    } catch { /* no bloquea la carga del resto */ }
-
-    setCargando(false)
   }, [contratoId])
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
@@ -285,10 +253,19 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   }
 
   async function guardarMes(periodoId: string, mes: string) {
+    // Optimista: el select refleja la elección de inmediato (sin "rebote" al
+    // valor anterior mientras guarda). Si falla, cargarDatos restaura la verdad.
+    setPeriodos(prev => prev.map(p =>
+      p.id === periodoId ? { ...p, cotizacion_mes: mes, cotizacion_origen: 'confirmado' as const } : p
+    ))
     setGuardandoMesId(periodoId)
     const res = await guardarMesCotizacion(periodoId, mes)
     setGuardandoMesId(null)
-    if (res.error) { toast.error(res.error); return }
+    if (res.error) {
+      toast.error(res.error)
+      await cargarDatos() // revertir al estado real de la BD
+      return
+    }
     toast.success('Mes de cotización actualizado')
     await cargarDatos()
   }
@@ -662,7 +639,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                         <div className="flex items-center gap-2">
                           {p.planilla_ss_url ? (
                             <a
-                              href={p.planilla_ss_url}
+                              // URL firmada: el bucket documentos es privado
+                              href={p.planilla_url_firmada ?? p.planilla_ss_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs text-blue-600 hover:underline"
