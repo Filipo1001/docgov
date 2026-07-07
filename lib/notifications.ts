@@ -16,7 +16,8 @@ export interface NotificationPayload {
   tipo: string
   titulo: string
   mensaje: string
-  periodoId: string
+  /** Opcional: las alertas de contrato (vencimiento) o agregadas no tienen periodo */
+  periodoId?: string
   // Context for external channels
   mes?: string
   anio?: number
@@ -24,6 +25,8 @@ export interface NotificationPayload {
   motivo?: string
   numeroRadicado?: string
   nombreRemitente?: string
+  /** Texto libre para plantillas de alertas agregadas */
+  detalle?: string
 }
 
 /**
@@ -39,7 +42,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
     tipo: payload.tipo,
     titulo: payload.titulo,
     mensaje: payload.mensaje,
-    periodo_id: payload.periodoId,
+    periodo_id: payload.periodoId ?? null,
     leida: false,
   })
 
@@ -70,6 +73,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
     motivo: payload.motivo,
     numeroRadicado: payload.numeroRadicado,
     nombreRemitente: payload.nombreRemitente,
+    detalle: payload.detalle,
   }
 
   // 3. Send email (if enabled and configured)
