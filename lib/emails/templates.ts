@@ -11,6 +11,8 @@ interface TemplateData {
   motivo?: string
   numeroRadicado?: string
   nombreRemitente?: string
+  /** Texto libre para alertas agregadas (lista de cuentas, días restantes, etc.) */
+  detalle?: string
 }
 
 const APP_URL = 'https://contratistadigital.com/'
@@ -167,6 +169,82 @@ export function emailRecordatorioInforme(data: TemplateData) {
   }
 }
 
+export function emailRecordatorioUrgente(data: TemplateData) {
+  return {
+    subject: `⏰ Quedan pocos días — informe de ${data.mes} ${data.anio}`,
+    html: baseHtml(
+      'El plazo está por vencer',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         El mes está por terminar y aún no has enviado tu informe de
+         <strong>${data.mes} ${data.anio}</strong> del contrato <strong>${data.contrato}</strong>.
+       </p>
+       <div style="background:#fff7ed;border-left:4px solid #ea580c;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;">
+         <p style="color:#9a3412;font-size:13px;margin:0;">
+           Si no lo envías antes de fin de mes, el periodo se cerrará y necesitarás
+           que tu supervisor habilite el envío tardío.
+         </p>
+       </div>`,
+      '#ea580c'
+    ),
+  }
+}
+
+export function emailRecordatorioVencido(data: TemplateData) {
+  return {
+    subject: `Informe vencido — ${data.mes} ${data.anio}`,
+    html: baseHtml(
+      'El plazo de tu informe venció',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         El plazo para enviar tu informe de <strong>${data.mes} ${data.anio}</strong>
+         del contrato <strong>${data.contrato}</strong> ya venció y el periodo quedó cerrado.
+       </p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Contacta a tu supervisor para que habilite el <strong>envío tardío</strong> y
+         puedas completar tu informe.
+       </p>`,
+      '#dc2626'
+    ),
+  }
+}
+
+export function emailRadicacionPendiente(data: TemplateData) {
+  return {
+    subject: `Cuentas aprobadas esperando radicación`,
+    html: baseHtml(
+      'Cuentas pendientes de radicar',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         ${data.detalle ?? 'Hay cuentas aprobadas que llevan varios días esperando radicación.'}
+       </p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Puedes radicarlas todas de una vez con <strong>Radicación rápida</strong> en la
+         pestaña Aprobados de Informes.
+       </p>`,
+      '#4f46e5'
+    ),
+  }
+}
+
+export function emailContratoVencimiento(data: TemplateData) {
+  return {
+    subject: `Contrato ${data.contrato} próximo a vencer`,
+    html: baseHtml(
+      'Contrato próximo a vencer',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         ${data.detalle ?? `El contrato ${data.contrato} está próximo a su fecha de finalización.`}
+       </p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Si el contrato continuará, es momento de tramitar la prórroga u otrosí
+         correspondiente para no interrumpir la ejecución.
+       </p>`,
+      '#b45309'
+    ),
+  }
+}
+
 export type EmailTemplate = (data: TemplateData) => { subject: string; html: string }
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
@@ -177,4 +255,8 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   rechazado: emailPeriodoRechazado,
   radicado: emailPeriodoRadicado,
   recordatorio: emailRecordatorioInforme,
+  recordatorio_urgente: emailRecordatorioUrgente,
+  recordatorio_vencido: emailRecordatorioVencido,
+  radicacion_pendiente: emailRadicacionPendiente,
+  contrato_vencimiento: emailContratoVencimiento,
 }
