@@ -1876,3 +1876,131 @@ export async function habilitarEnvioTardio(
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }
+
+// ─── Radicación rápida (masiva) ─────────────────────────────────────────────
+
+export interface RadicadoMasivoItem {
+  periodoId: string
+  numeroRadicado: string
+}
+
+/**
+ * Batch version of marcarRadicado: files many approved periods at once, each
+ * with its own radicado number ("Radicación rápida" in /dashboard/informes).
+ *
+ * Same guarantees as the single version — role check, asesor dependencia
+ * scoping, optimistic lock on estado='aprobado', historial entry, contratista
+ * notification and PDF-cache invalidation — but with batch-friendly I/O:
+ * ONE query validates all periods, then the per-period updates and side
+ * effects run in parallel. Partial failures are reported per period instead
+ * of aborting the whole batch.
+ */
+export async function marcarRadicadosMasivo(
+  items: RadicadoMasivoItem[],
+): Promise<ActionResult<{ radicados: number; errores: { periodoId: string; error: string }[] }>> {
+  try {
+    if (!items.length) return { error: 'No hay periodos para radicar' }
+
+    // Normalize + basic validation before touching the DB
+    const limpios = items.map(i => ({ periodoId: i.periodoId, numeroRadicado: i.numeroRadicado.trim() }))
+    if (limpios.some(i => !i.numeroRadicado)) {
+      return { error: 'Todos los números de radicado son obligatorios' }
+    }
+    const numerosVistos = new Set<string>()
+    for (const i of limpios) {
+      if (numerosVistos.has(i.numeroRadicado)) {
+        return { error: `El número de radicado "${i.numeroRadicado}" está repetido en el formulario` }
+      }
+      numerosVistos.add(i.numeroRadicado)
+    }
+
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'admin' && usuario.rol !== 'asesor' && usuario.rol !== 'supervisor') {
+      return { error: 'Solo el asesor, la secretaria o el admin pueden radicar periodos' }
+    }
+
+    // ONE query: all periods + contrato data needed for scoping and notifications
+    const ids = limpios.map(i => i.periodoId)
+    const { data: periodosRaw } = await supabase
+      .from('periodos')
+      .select('id, estado, es_historico, mes, anio, contrato_id, contrato:contratos(numero, contratista_id, dependencia_id)')
+      .in('id', ids)
+
+    type Row = {
+      id: string; estado: EstadoPeriodo; es_historico: boolean; mes: string; anio: number; contrato_id: string
+      contrato: { numero: string; contratista_id: string | null; dependencia_id: string | null } | null
+    }
+    const porId = new Map(((periodosRaw ?? []) as unknown as Row[]).map(p => [p.id, p]))
+
+    const adminClient = createAdminSupabaseClient()
+    const errores: { periodoId: string; error: string }[] = []
+    const validos: { item: (typeof limpios)[number]; periodo: Row }[] = []
+
+    for (const item of limpios) {
+      const periodo = porId.get(item.periodoId)
+      if (!periodo) { errores.push({ periodoId: item.periodoId, error: 'Periodo no encontrado' }); continue }
+      if (periodo.es_historico) { errores.push({ periodoId: item.periodoId, error: 'Periodo histórico — no modificable' }); continue }
+      if (periodo.estado !== 'aprobado') { errores.push({ periodoId: item.periodoId, error: `Estado "${periodo.estado}" — solo se radican aprobados` }); continue }
+      if (
+        usuario.rol === 'asesor' && usuario.dependencia_id &&
+        periodo.contrato?.dependencia_id && periodo.contrato.dependencia_id !== usuario.dependencia_id
+      ) {
+        errores.push({ periodoId: item.periodoId, error: 'Contrato de otra dependencia' })
+        continue
+      }
+      validos.push({ item, periodo })
+    }
+
+    // Per-period updates in parallel (each has a distinct numero_radicado).
+    // Optimistic lock: WHERE estado='aprobado' — a concurrent radicado makes
+    // the update match 0 rows and the period is reported, not overwritten.
+    const resultados = await Promise.all(
+      validos.map(async ({ item, periodo }) => {
+        const { error, data: updated } = await adminClient
+          .from('periodos')
+          .update({ estado: 'radicado', numero_radicado: item.numeroRadicado })
+          .eq('id', item.periodoId)
+          .eq('estado', 'aprobado')
+          .select('id')
+        if (error) return { item, periodo, error: error.message }
+        if (!updated?.length) return { item, periodo, error: 'Ya fue radicado por otra acción simultánea' }
+        return { item, periodo, error: null }
+      }),
+    )
+
+    const exitosos = resultados.filter(r => !r.error)
+    for (const r of resultados) {
+      if (r.error) errores.push({ periodoId: r.item.periodoId, error: r.error })
+    }
+
+    // Side effects in parallel, non-blocking: historial + notification + cache
+    await Promise.allSettled(
+      exitosos.map(async ({ item, periodo }) => {
+        await insertHistorial(
+          supabase, item.periodoId, 'aprobado', 'radicado', usuario.id,
+          `Radicado con No. ${item.numeroRadicado} (radicación rápida)`,
+        )
+        invalidarCachePDF(adminClient, item.periodoId).catch(() => {})
+        if (periodo.contrato?.contratista_id) {
+          await enviarNotificacion({
+            destinatarioId: periodo.contrato.contratista_id,
+            tipo: 'radicado',
+            titulo: 'Informe radicado',
+            mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} ha sido radicado con el No. ${item.numeroRadicado}.`,
+            periodoId: item.periodoId,
+            mes: periodo.mes,
+            anio: periodo.anio,
+            contrato: periodo.contrato.numero || '',
+            numeroRadicado: item.numeroRadicado,
+            nombreRemitente: usuario.nombre_completo,
+          }).catch(() => {})
+        }
+      }),
+    )
+
+    revalidar() // ya incluye /dashboard/informes
+    return { data: { radicados: exitosos.length, errores } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
