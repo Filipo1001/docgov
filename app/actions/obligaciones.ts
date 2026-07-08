@@ -29,7 +29,7 @@ async function invalidarCacheContrato(
   )
 }
 
-/** Verifica que el solicitante sea admin. Devuelve null si no lo es. */
+/** Verifica que el solicitante sea admin o contratación. Devuelve null si no lo es. */
 async function requireAdminId(): Promise<string | null> {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -39,7 +39,8 @@ async function requireAdminId(): Promise<string | null> {
     .select('rol')
     .eq('id', user.id)
     .single()
-  return data?.rol === 'admin' ? user.id : null
+  // Contratación gestiona obligaciones contractuales igual que admin
+  return data?.rol === 'admin' || data?.rol === 'contratacion' ? user.id : null
 }
 
 // ─── Crear obligación ───────────────────────────────────────────────────────

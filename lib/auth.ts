@@ -68,7 +68,10 @@ export async function requireContractAccess(
 
   const authUser = usuario as AuthUser
 
-  if (authUser.rol === 'admin') return authUser
+  // admin: acceso total. contratación: acceso a todos los contratos —
+  // la vista de periodos es solo lectura para este rol (sin botones de acción,
+  // y todas las actions del flujo de informes lo rechazan por rol).
+  if (authUser.rol === 'admin' || authUser.rol === 'contratacion') return authUser
 
   const { data: contrato } = await supabase
     .from('contratos')

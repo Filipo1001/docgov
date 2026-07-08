@@ -14,7 +14,7 @@ export default async function NuevoUsuarioPage() {
     .eq('id', session.user.id)
     .single()
 
-  if (me?.rol !== 'admin') redirect('/dashboard')
+  if (me?.rol !== 'admin' && me?.rol !== 'contratacion') redirect('/dashboard')
 
   const dependencias = await getDependencias()
 

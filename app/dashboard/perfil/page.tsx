@@ -14,6 +14,7 @@ import { normalizarFirma } from '@/lib/compress'
 // ─── Display maps ──────────────────────────────────────────────
 
 const ROL_LABEL: Record<string, string> = {
+  contratacion: 'Contratación',
   contratista: 'Contratista',
   asesor:      'Asesor Jurídico',
   supervisor:  'Secretaría',
@@ -21,6 +22,7 @@ const ROL_LABEL: Record<string, string> = {
 }
 
 const ROL_BADGE: Record<string, 'blue' | 'indigo' | 'emerald' | 'amber'> = {
+  contratacion: 'indigo',
   contratista: 'blue',
   asesor:      'indigo',
   supervisor:  'emerald',
@@ -29,6 +31,7 @@ const ROL_BADGE: Record<string, 'blue' | 'indigo' | 'emerald' | 'amber'> = {
 
 // Top stripe color per role
 const ROL_STRIPE: Record<string, string> = {
+  contratacion: 'bg-indigo-500',
   contratista: 'bg-blue-500',
   asesor:      'bg-indigo-500',
   supervisor:  'bg-emerald-500',

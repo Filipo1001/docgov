@@ -23,7 +23,7 @@ export default async function FirmasAdminPage() {
     .eq('id', session.user.id)
     .single()
 
-  if (me?.rol !== 'admin') redirect('/dashboard')
+  if (me?.rol !== 'admin' && me?.rol !== 'contratacion') redirect('/dashboard')
 
   const adminClient = createAdminSupabaseClient()
 

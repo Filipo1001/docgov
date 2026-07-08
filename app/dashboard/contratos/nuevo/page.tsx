@@ -3,7 +3,7 @@ import { getDependencias, getUsuariosParaSelect } from '@/services/admin'
 import NuevoContratoClient from './NuevoContratoClient'
 
 export default async function NuevoContratoPage() {
-  await requireRole(['admin'])
+  await requireRole(['admin', 'contratacion'])
 
   // Cargamos las listas en el servidor (auth garantizada por cookies httpOnly)
   // y las pasamos como props, para que los selects nunca queden vacíos por una

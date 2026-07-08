@@ -33,6 +33,39 @@ async function requireAdmin() {
   return { userId: session.user.id, municipioId: data.municipio_id as string }
 }
 
+/**
+ * Admin o Contratación — gestión de cuentas de usuario.
+ * Contratación SOLO puede gestionar cuentas de contratistas: toda función que
+ * use este guard debe verificar el rol del usuario objetivo con
+ * targetEsContratista() cuando gestor.rol === 'contratacion'. Esto evita la
+ * escalada de privilegios (p. ej. resetear la contraseña de un admin).
+ */
+async function requireGestorUsuarios() {
+  const supabase = await createServerSupabaseClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return null
+  const { data } = await supabase
+    .from('usuarios')
+    .select('rol, municipio_id')
+    .eq('id', session.user.id)
+    .single()
+  if (data?.rol !== 'admin' && data?.rol !== 'contratacion') return null
+  return {
+    userId: session.user.id,
+    municipioId: data.municipio_id as string,
+    rol: data.rol as 'admin' | 'contratacion',
+  }
+}
+
+/** true si el usuario objetivo existe y es contratista. */
+async function targetEsContratista(userId: string): Promise<boolean> {
+  const adminClient = createAdminSupabaseClient()
+  const { data } = await adminClient.from('usuarios').select('rol').eq('id', userId).single()
+  return data?.rol === 'contratista'
+}
+
+const ERROR_SOLO_CONTRATISTAS = 'Contratación solo puede gestionar cuentas de contratistas'
+
 // ─── Create user (auth + usuarios row) ───────────────────────
 
 export async function crearUsuario(formData: {
@@ -47,8 +80,12 @@ export async function crearUsuario(formData: {
   tipo_documento?: string
   dependencia_id?: string
 }): Promise<ActionResult<{ id: string; passwordInicial: string }>> {
-  const admin = await requireAdmin()
+  const admin = await requireGestorUsuarios()
   if (!admin) return { error: 'No autorizado' }
+  // Contratación solo crea contratistas — nunca roles internos ni admin
+  if (admin.rol === 'contratacion' && formData.rol !== 'contratista') {
+    return { error: 'Contratación solo puede crear usuarios con rol contratista' }
+  }
 
   const adminClient = createAdminSupabaseClient()
 
@@ -113,7 +150,7 @@ export async function activarContratista(
   email: string,
   extraData: { cargo?: string; cedula?: string; telefono?: string; direccion?: string; rh?: string; dependencia_id?: string }
 ): Promise<ActionResult<{ id: string; passwordInicial: string }>> {
-  const admin = await requireAdmin()
+  const admin = await requireGestorUsuarios()
   if (!admin) return { error: 'No autorizado' }
 
   const supabase = await createServerSupabaseClient()
@@ -128,6 +165,10 @@ export async function activarContratista(
 
   if (!imp) return { error: 'Contratista no encontrado' }
   if (imp.activado) return { error: 'Este contratista ya fue activado' }
+  // Contratación solo activa cuentas de contratistas
+  if (admin.rol === 'contratacion' && (imp.rol ?? 'contratista') !== 'contratista') {
+    return { error: ERROR_SOLO_CONTRATISTAS }
+  }
 
   const emailNorm    = normalizeEmail(email)
   const nombreNorm   = normalizeName(imp.nombre_completo)
@@ -202,8 +243,15 @@ export async function actualizarUsuario(
     numero_cuenta?: string
   }
 ): Promise<ActionResult<void>> {
-  const admin = await requireAdmin()
+  const admin = await requireGestorUsuarios()
   if (!admin) return { error: 'No autorizado' }
+  // Contratación: solo edita contratistas y no puede cambiarles el rol
+  if (admin.rol === 'contratacion') {
+    if (!(await targetEsContratista(id))) return { error: ERROR_SOLO_CONTRATISTAS }
+    if (data.rol && data.rol !== 'contratista') {
+      return { error: 'Contratación no puede cambiar el rol de un usuario' }
+    }
+  }
 
   const adminClient = createAdminSupabaseClient()
 
@@ -260,8 +308,11 @@ export async function prepararUploadFoto(
   fileSize: number,
   fileMime: string,
 ): Promise<ActionResult<{ signedUrl: string; path: string; publicUrl: string }>> {
-  const admin = await requireAdmin()
+  const admin = await requireGestorUsuarios()
   if (!admin) return { error: 'No autorizado' }
+  if (admin.rol === 'contratacion' && !(await targetEsContratista(userId))) {
+    return { error: ERROR_SOLO_CONTRATISTAS }
+  }
 
   const mime = fileMime?.toLowerCase() || ''
   if (!FOTO_ALLOWED.includes(mime)) {
@@ -296,8 +347,11 @@ export async function confirmarFotoUsuario(
   userId: string,
   publicUrl: string,
 ): Promise<ActionResult<{ url: string }>> {
-  const admin = await requireAdmin()
+  const admin = await requireGestorUsuarios()
   if (!admin) return { error: 'No autorizado' }
+  if (admin.rol === 'contratacion' && !(await targetEsContratista(userId))) {
+    return { error: ERROR_SOLO_CONTRATISTAS }
+  }
 
   const adminClient = createAdminSupabaseClient()
   const { error } = await adminClient
@@ -318,8 +372,13 @@ export async function cambiarContrasena(
   userId: string,
   password: string
 ): Promise<ActionResult<{ email: string }>> {
-  const admin = await requireAdmin()
+  const admin = await requireGestorUsuarios()
   if (!admin) return { error: 'No autorizado' }
+  // CRÍTICO: sin este check, contratación podría resetear la contraseña de un
+  // admin y escalar privilegios. Solo puede tocar cuentas de contratistas.
+  if (admin.rol === 'contratacion' && !(await targetEsContratista(userId))) {
+    return { error: ERROR_SOLO_CONTRATISTAS }
+  }
 
   const pw = password.trim()
   if (pw.length < 8) {
@@ -498,8 +557,11 @@ export async function eliminarUsuario(
  * Admin: clear the firma_url for a user.
  */
 export async function eliminarFirmaAdmin(userId: string): Promise<ActionResult> {
-  const admin = await requireAdmin()
+  const admin = await requireGestorUsuarios()
   if (!admin) return { error: 'No autorizado' }
+  if (admin.rol === 'contratacion' && !(await targetEsContratista(userId))) {
+    return { error: ERROR_SOLO_CONTRATISTAS }
+  }
 
   const adminClient = createAdminSupabaseClient()
   const { error } = await adminClient

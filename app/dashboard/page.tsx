@@ -5,6 +5,7 @@ import SupervisorHome from './SupervisorHome'
 import ContratistaHome from './ContratistaHome'
 import AdminHome from './AdminHome'
 import ReviewerHome from './ReviewerHome'
+import ContratacionHome from './ContratacionHome'
 
 export default function DashboardPage() {
   const { usuario, cargando } = useUsuario()
@@ -32,6 +33,9 @@ export default function DashboardPage() {
 
     case 'admin':
       return <AdminHome nombre={usuario.nombre_completo} />
+
+    case 'contratacion':
+      return <ContratacionHome nombre={usuario.nombre_completo} />
 
     case 'asesor':
       return <ReviewerHome nombre={usuario.nombre_completo} dependenciaId={usuario.dependencia_id ?? null} />

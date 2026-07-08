@@ -5,20 +5,26 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { crearUsuario } from '@/app/actions/admin'
+import { useUsuario } from '@/lib/user-context'
 import type { Dependencia } from '@/services/admin'
 
 const ROLES = [
-  { value: 'contratista', label: 'Contratista' },
-  { value: 'supervisor',  label: 'Supervisor' },
-  { value: 'asesor',      label: 'Asesor jurídico' },
-  { value: 'gobierno',    label: 'Gobierno' },
-  { value: 'hacienda',    label: 'Hacienda' },
-  { value: 'admin',       label: 'Administrador' },
+  { value: 'contratista',  label: 'Contratista' },
+  { value: 'supervisor',   label: 'Supervisor' },
+  { value: 'asesor',       label: 'Asesor jurídico' },
+  { value: 'contratacion', label: 'Contratación' },
+  { value: 'gobierno',     label: 'Gobierno' },
+  { value: 'hacienda',     label: 'Hacienda' },
+  { value: 'admin',        label: 'Administrador' },
 ]
 const TIPOS_DOC = ['CC', 'CE', 'NIT', 'PAS']
 
 export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dependencia[] }) {
   const router = useRouter()
+  const { usuario: editor } = useUsuario()
+  // Contratación solo crea contratistas — el selector queda fijo (el server
+  // action también lo valida; esto evita el error tardío al guardar)
+  const soloContratistas = editor?.rol === 'contratacion'
   const [loading, setLoading] = useState(false)
   const [passwordCreado, setPasswordCreado] = useState<string | null>(null)
   const [nombreCreado, setNombreCreado] = useState('')
@@ -149,12 +155,17 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={rol}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-500"
+              value={soloContratistas ? 'contratista' : rol}
               onChange={e => setRol(e.target.value)}
+              disabled={soloContratistas}
             >
-              {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              {(soloContratistas ? ROLES.filter(r => r.value === 'contratista') : ROLES)
+                .map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
+            {soloContratistas && (
+              <p className="text-xs text-gray-400 mt-1">Contratación crea únicamente usuarios contratistas</p>
+            )}
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
