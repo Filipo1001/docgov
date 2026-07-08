@@ -42,7 +42,7 @@ import { computeFileHash, computePerceptualHash, computePerceptualHashFromUrl } 
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
 import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
 import { devolverPeriodoAContratista } from '@/app/actions/periodos'
-// import { mejorarDescripcion } from '@/app/actions/ia'  // Próximamente
+import MejorarRedaccion from '@/components/MejorarRedaccion'
 
 /** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
 type RevisionLocal = { aprobada: boolean; nota: string | null }
@@ -2012,6 +2012,8 @@ export default function PeriodoDetallePage({
                             maxLength={1500}
                             className="w-full px-3 py-2.5 bg-white border border-blue-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                           />
+                          {/* Redacción asistida (LanguageTool) */}
+                          <MejorarRedaccion texto={editDesc} onAceptar={setEditDesc} />
                           <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
                             <div className="flex items-center gap-2">
                               <label className="text-xs text-gray-500">Cantidad:</label>
@@ -2249,12 +2251,8 @@ export default function PeriodoDetallePage({
                         className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                       />
 
-                      {/* ── Próximamente: Redacción Asistida por IA ── */}
-                      <div className="flex justify-end mt-1.5">
-                        <span className="inline-flex items-center gap-1.5 text-xs text-purple-400 bg-purple-50 border border-purple-100 px-3 py-1.5 rounded-lg select-none cursor-default">
-                          ✨ Redacción asistida por IA — <span className="font-semibold">Próximamente</span>
-                        </span>
-                      </div>
+                      {/* ── Redacción asistida (LanguageTool) ── */}
+                      <MejorarRedaccion texto={nuevaActividad} onAceptar={setNuevaActividad} />
 
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-2">
