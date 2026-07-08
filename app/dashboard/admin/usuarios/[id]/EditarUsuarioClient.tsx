@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { actualizarUsuario, prepararUploadFoto, confirmarFotoUsuario, cambiarContrasena } from '@/app/actions/admin'
 import { comprimirFoto } from '@/lib/compress'
+import { useUsuario } from '@/lib/user-context'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 
-const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'gobierno', 'hacienda']
+const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'gobierno', 'hacienda']
 const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
 const TIPOS_CUENTA = ['Ahorros', 'Corriente']
 const BANCOS = [
@@ -36,6 +37,10 @@ export default function EditarUsuarioClient({
   usuario: UsuarioAdmin
   dependencias: Dependencia[]
 }) {
+  const { usuario: editor } = useUsuario()
+  // Contratación edita datos pero no puede cambiar el rol (el server action
+  // también lo rechaza; esto evita el error tardío al guardar)
+  const editorEsContratacion = editor?.rol === 'contratacion'
   const fileRef = useRef<HTMLInputElement>(null)
   const [fotoUrl, setFotoUrl]     = useState(usuario.foto_url)
   const [uploading, setUploading] = useState(false)
@@ -231,12 +236,16 @@ export default function EditarUsuarioClient({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-500"
               value={rol}
               onChange={e => setRol(e.target.value as typeof rol)}
+              disabled={editorEsContratacion}
             >
               {ROLES.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
             </select>
+            {editorEsContratacion && (
+              <p className="text-xs text-gray-400 mt-1">Contratación no puede cambiar el rol de un usuario</p>
+            )}
           </div>
 
         </div>

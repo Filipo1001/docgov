@@ -18,7 +18,7 @@ export default async function EditarUsuarioPage({
     .eq('id', session.user.id)
     .single()
 
-  if (me?.rol !== 'admin') redirect('/dashboard')
+  if (me?.rol !== 'admin' && me?.rol !== 'contratacion') redirect('/dashboard')
 
   const { id } = await params
   const [usuario, dependencias] = await Promise.all([
@@ -27,6 +27,13 @@ export default async function EditarUsuarioPage({
   ])
 
   if (!usuario) notFound()
+
+  // Contratación solo puede editar cuentas de contratistas — nunca roles
+  // internos ni admin (las actions también lo rechazan; esto evita mostrar
+  // el formulario que fallaría al guardar).
+  if (me?.rol === 'contratacion' && usuario.rol !== 'contratista') {
+    redirect('/dashboard/admin/usuarios')
+  }
 
   return <EditarUsuarioClient usuario={usuario} dependencias={dependencias} />
 }

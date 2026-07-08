@@ -1383,10 +1383,18 @@ export async function subirFirma(
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    // Only contratista (own) or admin (anyone) can upload
+    // Own signature: anyone. Others' signatures: admin or contratación
+    // (contratación gestiona las firmas de los contratistas en admin/firmas).
     const uploadForId = targetUserId || usuario.id
-    if (usuario.rol !== 'admin' && uploadForId !== usuario.id) {
+    if (usuario.rol !== 'admin' && usuario.rol !== 'contratacion' && uploadForId !== usuario.id) {
       return { error: 'Solo puedes subir tu propia firma' }
+    }
+    if (usuario.rol === 'contratacion' && uploadForId !== usuario.id) {
+      const { data: target } = await createAdminSupabaseClient()
+        .from('usuarios').select('rol').eq('id', uploadForId).single()
+      if (target?.rol !== 'contratista') {
+        return { error: 'Contratación solo puede gestionar firmas de contratistas' }
+      }
     }
 
     const file = formData.get('file') as File

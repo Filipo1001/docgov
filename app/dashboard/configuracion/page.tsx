@@ -14,6 +14,7 @@ const DEFAULTS: Record<Canal, boolean> = { app: true, email: true, whatsapp: fal
 // ─── Display maps ─────────────────────────────────────────────
 
 const ROL_LABEL: Record<string, string> = {
+  contratacion: 'Contratación',
   contratista: 'Contratista',
   asesor:      'Asesor Jurídico',
   supervisor:  'Secretaría',

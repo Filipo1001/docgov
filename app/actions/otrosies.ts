@@ -50,7 +50,8 @@ async function requireAdminId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
   const { data } = await supabase.from('usuarios').select('rol').eq('id', user.id).single()
-  return data?.rol === 'admin' ? user.id : null
+  // Contratación registra otrosíes — es función natural de esa dependencia
+  return data?.rol === 'admin' || data?.rol === 'contratacion' ? user.id : null
 }
 
 /** Invalida el caché de PDF de todos los periodos del contrato. */

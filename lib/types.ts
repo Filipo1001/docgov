@@ -7,6 +7,7 @@ export type Rol =
   | 'supervisor'   // Secretaria (Sara, Yorledy, Lucas, Ivan)
   | 'contratista'
   | 'asesor'       // Daniel Marín, Karen
+  | 'contratacion' // Dependencia de Contratación: crea usuarios contratistas y gestiona contratos/otrosíes. Sin acceso al flujo de informes.
 
 export type EstadoPeriodo =
   | 'borrador'          // Contratista editing

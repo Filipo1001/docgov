@@ -203,7 +203,8 @@ export async function GET(req: NextRequest) {
     const contratos = ((porVencer ?? []) as unknown as ContratoVence[])
 
     if (contratos.length) {
-      const { data: admins } = await admin.from('usuarios').select('id').eq('rol', 'admin')
+      // Admin + Contratación (esta última tramita las prórrogas/otrosíes)
+      const { data: admins } = await admin.from('usuarios').select('id').in('rol', ['admin', 'contratacion'])
       const adminIds = (admins ?? []).map(a => a.id)
 
       await Promise.allSettled(

@@ -129,6 +129,16 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/contratos', label: 'Mis contratos', icon: '📄' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
+    // Dependencia de Contratación: gestión de usuarios contratistas y contratos.
+    // Sin acceso al flujo de informes (aprobar/rechazar/radicar) ni a config admin.
+    contratacion: [
+      { href: '/dashboard', label: 'Inicio', icon: '🏠' },
+      { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: '👥' },
+      { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
+      { href: '/dashboard/admin/importar', label: 'Importar', icon: '📥' },
+      { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
+    ],
   }
 
   return menus[rol] ?? menus.contratista

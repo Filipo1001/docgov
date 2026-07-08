@@ -2,6 +2,6 @@ import { requireRole } from '@/lib/auth'
 import ContratistasClient from './ContratistasClient'
 
 export default async function ContratistasPage() {
-  await requireRole(['admin', 'asesor'])
+  await requireRole(['admin', 'asesor', 'contratacion'])
   return <ContratistasClient />
 }

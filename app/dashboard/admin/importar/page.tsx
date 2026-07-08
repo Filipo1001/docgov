@@ -13,7 +13,7 @@ export default async function ImportarPage() {
     .eq('id', session.user.id)
     .single()
 
-  if (me?.rol !== 'admin') redirect('/dashboard')
+  if (me?.rol !== 'admin' && me?.rol !== 'contratacion') redirect('/dashboard')
 
   return <ImportarClient />
 }

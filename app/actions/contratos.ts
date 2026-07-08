@@ -24,7 +24,8 @@ async function requireAdminId(): Promise<string | null> {
     .select('rol')
     .eq('id', user.id)
     .single()
-  return data?.rol === 'admin' ? user.id : null
+  // Contratación gestiona contratos igual que admin (crear, editar, generar periodos)
+  return data?.rol === 'admin' || data?.rol === 'contratacion' ? user.id : null
 }
 
 export type CrearContratoInput = {
