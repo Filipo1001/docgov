@@ -25,10 +25,9 @@ function fmtFecha(iso: string): string {
 }
 
 const ACCESOS = [
-  { href: '/dashboard/admin/usuarios/nuevo', icon: '➕', titulo: 'Nuevo usuario', desc: 'Crear cuenta de contratista' },
-  { href: '/dashboard/contratos/nuevo', icon: '📝', titulo: 'Nuevo contrato', desc: 'Registrar contrato y plan de pagos' },
-  { href: '/dashboard/admin/importar', icon: '📥', titulo: 'Importar Excel', desc: 'Carga masiva de contratos' },
-  { href: '/dashboard/admin/firmas', icon: '✍️', titulo: 'Firmas', desc: 'Gestionar firmas de contratistas' },
+  { href: '/dashboard/contratos/nuevo', icon: '📝', titulo: 'Nuevo contrato', desc: 'Registra el contrato y crea al contratista en un solo paso' },
+  { href: '/dashboard/contratos', icon: '📄', titulo: 'Ver contratos', desc: 'Listado, edición y exportación' },
+  { href: '/dashboard/admin/usuarios', icon: '👥', titulo: 'Contratistas', desc: 'Editar datos de las cuentas' },
 ]
 
 export default function ContratacionHome({ nombre }: { nombre: string }) {

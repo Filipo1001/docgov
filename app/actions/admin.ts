@@ -557,11 +557,9 @@ export async function eliminarUsuario(
  * Admin: clear the firma_url for a user.
  */
 export async function eliminarFirmaAdmin(userId: string): Promise<ActionResult> {
-  const admin = await requireGestorUsuarios()
+  // Gestión de firmas: exclusiva de admin (contratación no accede a firmas)
+  const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
-  if (admin.rol === 'contratacion' && !(await targetEsContratista(userId))) {
-    return { error: ERROR_SOLO_CONTRATISTAS }
-  }
 
   const adminClient = createAdminSupabaseClient()
   const { error } = await adminClient

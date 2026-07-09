@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
 import { formatCedula } from '@/lib/format'
 import { numerosALetras } from '@/lib/numero-letras'
-import { crearContrato } from '@/app/actions/contratos'
+import { crearContratoConContratista } from '@/app/actions/contratos'
 
 interface ExcelData {
   objeto: string
@@ -39,6 +39,23 @@ export default function NuevoContratoPage({
   // Excel lookup state
   const [buscandoExcel, setBuscandoExcel] = useState(false)
   const [excelEncontrado, setExcelEncontrado] = useState(false)
+
+  // Contratista: seleccionar uno existente o crearlo en el mismo flujo
+  const [modoContratista, setModoContratista] = useState<'existente' | 'nuevo'>('existente')
+  const [nuevoContratista, setNuevoContratista] = useState({
+    nombre_completo: '', cedula: '', email: '', telefono: '', direccion: '',
+    banco: '', tipo_cuenta: '', numero_cuenta: '',
+  })
+  // Resultado de éxito (muestra la contraseña temporal si se creó el contratista)
+  const [resultado, setResultado] = useState<{ contratoId: string; password?: string; nombre?: string } | null>(null)
+  const [copiado, setCopiado] = useState(false)
+
+  const BANCOS = [
+    'Bancolombia', 'Davivienda', 'Banco de Bogotá', 'BBVA', 'Banco Popular',
+    'Banco Agrario', 'Nequi', 'Daviplata', 'Banco Caja Social', 'Banco de Occidente',
+    'Banco Falabella', 'Banco Pichincha', 'Banco Finandina', 'Banco Mundo Mujer',
+    'Coopcentral', 'Bancamía', 'Otro',
+  ]
 
   const [form, setForm] = useState({
     numero: '',
@@ -161,15 +178,37 @@ export default function NuevoContratoPage({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    // Validación previa según el modo de contratista
+    const creandoNuevo = modoContratista === 'nuevo'
+    if (creandoNuevo) {
+      if (!nuevoContratista.nombre_completo.trim() || !nuevoContratista.cedula.trim() || !nuevoContratista.email.trim()) {
+        toast.error('Nombre, cédula y correo del contratista son obligatorios')
+        return
+      }
+    } else if (!form.contratista_id) {
+      toast.error('Selecciona el contratista')
+      return
+    }
+
     setGuardando(true)
 
-    // Server Action: autorización admin validada server-side (cookies httpOnly),
-    // no depende de que la sesión del navegador esté caliente. El try/finally
-    // garantiza que el botón nunca quede colgado en "Guardando...".
+    // Server Action atómica: crea el contratista (si es nuevo) + el contrato.
+    // Si el contrato falla, el usuario recién creado se elimina (rollback).
     try {
-      const res = await crearContrato({
+      const res = await crearContratoConContratista({
         dependencia_id: form.dependencia_id,
-        contratista_id: form.contratista_id,
+        contratista_id: creandoNuevo ? undefined : form.contratista_id,
+        nuevoContratista: creandoNuevo ? {
+          nombre_completo: nuevoContratista.nombre_completo,
+          cedula: nuevoContratista.cedula,
+          email: nuevoContratista.email,
+          telefono: nuevoContratista.telefono || undefined,
+          direccion: nuevoContratista.direccion || undefined,
+          banco: nuevoContratista.banco || undefined,
+          tipo_cuenta: nuevoContratista.tipo_cuenta || undefined,
+          numero_cuenta: nuevoContratista.numero_cuenta || undefined,
+        } : undefined,
         supervisor_id: form.supervisor_id,
         numero: form.numero,
         anio: Number(form.anio),
@@ -193,8 +232,15 @@ export default function NuevoContratoPage({
         return
       }
 
-      toast.success('Contrato creado exitosamente')
-      router.push(`/dashboard/contratos/${res.data!.id}`)
+      // Si se creó un contratista nuevo, mostrar la contraseña temporal antes
+      // de salir. Si no, ir directo al contrato como siempre.
+      if (res.data?.passwordInicial) {
+        setResultado({ contratoId: res.data.id, password: res.data.passwordInicial, nombre: res.data.contratistaNombre })
+        setGuardando(false)
+      } else {
+        toast.success('Contrato creado exitosamente')
+        router.push(`/dashboard/contratos/${res.data!.id}`)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error inesperado')
       setGuardando(false)
@@ -207,6 +253,49 @@ export default function NuevoContratoPage({
   const inputClass =
     'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
   const autoClass = inputClass + ' bg-emerald-50 border-emerald-200'
+
+  // Pantalla de éxito con la contraseña temporal del contratista recién creado
+  if (resultado?.password) {
+    return (
+      <div className="max-w-lg mx-auto">
+        <Toaster position="top-center" richColors />
+        <div className="bg-white rounded-2xl border p-6 text-center">
+          <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">Contrato y contratista creados</h2>
+          <p className="text-sm text-gray-500 mb-5">
+            {resultado.nombre ? `Se creó la cuenta de ${resultado.nombre}. ` : ''}
+            Comparte esta contraseña temporal; podrá cambiarla al ingresar.
+          </p>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5">
+            <p className="text-xs text-gray-400 mb-1">Contraseña temporal</p>
+            <p className="text-2xl font-mono font-bold text-gray-900 tracking-wider select-all">{resultado.password}</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(resultado.password!)
+                setCopiado(true)
+                setTimeout(() => setCopiado(false), 2000)
+              }}
+              className="flex-1 border border-gray-300 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              {copiado ? '✓ Copiada' : 'Copiar contraseña'}
+            </button>
+            <button
+              onClick={() => router.push(`/dashboard/contratos/${resultado.contratoId}`)}
+              className="flex-1 bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              Ir al contrato
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-3xl">
@@ -274,28 +363,127 @@ export default function NuevoContratoPage({
           <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
             Contratista y supervisor
           </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contratista</label>
-              <select name="contratista_id" value={form.contratista_id} onChange={handleChange} required
-                className={excelEncontrado && form.contratista_id ? autoClass : inputClass}>
-                <option value="">Seleccionar...</option>
-                {contratistas.map(u => (
-                  <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor</label>
-              <select name="supervisor_id" value={form.supervisor_id} onChange={handleChange} required
-                className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
-                <option value="">Seleccionar...</option>
-                {supervisores.map(u => (
-                  <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                ))}
-              </select>
-            </div>
+
+          {/* Toggle: seleccionar existente o crear nuevo */}
+          <div className="inline-flex bg-gray-100 rounded-xl p-1 mb-4">
+            <button
+              type="button"
+              onClick={() => setModoContratista('existente')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                modoContratista === 'existente' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Contratista existente
+            </button>
+            <button
+              type="button"
+              onClick={() => setModoContratista('nuevo')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                modoContratista === 'nuevo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              ➕ Crear nuevo
+            </button>
           </div>
+
+          {modoContratista === 'existente' ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contratista</label>
+                <select name="contratista_id" value={form.contratista_id} onChange={handleChange}
+                  className={excelEncontrado && form.contratista_id ? autoClass : inputClass}>
+                  <option value="">Seleccionar...</option>
+                  {contratistas.map(u => (
+                    <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor</label>
+                <select name="supervisor_id" value={form.supervisor_id} onChange={handleChange} required
+                  className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
+                  <option value="">Seleccionar...</option>
+                  {supervisores.map(u => (
+                    <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-800">
+                Se creará la cuenta del contratista junto con el contrato. Al guardar se generará
+                una <strong>contraseña temporal</strong> para compartirle.
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
+                  <input value={nuevoContratista.nombre_completo}
+                    onChange={e => setNuevoContratista(n => ({ ...n, nombre_completo: e.target.value }))}
+                    placeholder="Ej. Juan Pérez Gómez" className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
+                  <input value={nuevoContratista.cedula}
+                    onChange={e => setNuevoContratista(n => ({ ...n, cedula: e.target.value }))}
+                    placeholder="1036..." className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Correo *</label>
+                  <input type="email" value={nuevoContratista.email}
+                    onChange={e => setNuevoContratista(n => ({ ...n, email: e.target.value }))}
+                    placeholder="correo@ejemplo.com" className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                  <input value={nuevoContratista.telefono}
+                    onChange={e => setNuevoContratista(n => ({ ...n, telefono: e.target.value }))}
+                    placeholder="300..." className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                  <input value={nuevoContratista.direccion}
+                    onChange={e => setNuevoContratista(n => ({ ...n, direccion: e.target.value }))}
+                    className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+                  <select value={nuevoContratista.banco}
+                    onChange={e => setNuevoContratista(n => ({ ...n, banco: e.target.value }))}
+                    className={inputClass}>
+                    <option value="">— Seleccionar —</option>
+                    {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de cuenta</label>
+                  <select value={nuevoContratista.tipo_cuenta}
+                    onChange={e => setNuevoContratista(n => ({ ...n, tipo_cuenta: e.target.value }))}
+                    className={inputClass}>
+                    <option value="">— Seleccionar —</option>
+                    <option value="Ahorros">Ahorros</option>
+                    <option value="Corriente">Corriente</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">N.° de cuenta</label>
+                  <input value={nuevoContratista.numero_cuenta}
+                    onChange={e => setNuevoContratista(n => ({ ...n, numero_cuenta: e.target.value }))}
+                    className={inputClass} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor *</label>
+                  <select name="supervisor_id" value={form.supervisor_id} onChange={handleChange} required
+                    className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
+                    <option value="">Seleccionar...</option>
+                    {supervisores.map(u => (
+                      <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Valores */}

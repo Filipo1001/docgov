@@ -190,7 +190,9 @@ function useDebounced<T>(value: T, ms = 300): T {
 
 export default function ContratosPage() {
   const { usuario, cargando: cargandoUser } = useUsuario()
-  const esAdmin = usuario?.rol === 'admin'
+  // Vista de gestión: admin y contratación ven todos los contratos, buscador,
+  // filtros, crear y exportar. Contratista/supervisor ven solo los suyos.
+  const esGestor = usuario?.rol === 'admin' || usuario?.rol === 'contratacion'
   const hoy = new Date().toISOString().split('T')[0]
 
   // ── Modal state ────────────────────────────────────────────────
@@ -225,7 +227,7 @@ export default function ContratosPage() {
   const total = todosCargados.length
 
   function datosFaltantes(c: ContratoListItem): string[] {
-    if (!esAdmin || !c.contratista) return []
+    if (!esGestor || !c.contratista) return []
     const f: string[] = []
     const u = c.contratista
     if (!u.email || u.email.endsWith('@pendiente.local')) f.push('Email')
@@ -266,7 +268,7 @@ export default function ContratosPage() {
       return true
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todosCargados, busquedaDebounced, filtroDep, filtroSup, filtroRango, filtroVigencia, soloIncompletos, esAdmin, hoy])
+  }, [todosCargados, busquedaDebounced, filtroDep, filtroSup, filtroRango, filtroVigencia, soloIncompletos, esGestor, hoy])
 
   // ── Opciones de filtro derivadas de TODO el dataset ───────────
   const dependencias = useMemo(() => {
@@ -312,7 +314,7 @@ export default function ContratosPage() {
     return (
       <div className="space-y-3 animate-pulse">
         <div className="h-8 bg-gray-200 rounded-xl w-48 mb-6" />
-        {esAdmin && <div className="h-24 bg-gray-200 rounded-2xl" />}
+        {esGestor && <div className="h-24 bg-gray-200 rounded-2xl" />}
         {[...Array(5)].map((_, i) => (
           <div key={i} className="h-28 bg-gray-200 rounded-2xl" />
         ))}
@@ -340,20 +342,31 @@ export default function ContratosPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
-          {esAdmin ? 'Contratos' : 'Mis contratos'}
+          {esGestor ? 'Contratos' : 'Mis contratos'}
         </h2>
-        {esAdmin && (
-          <Link
-            href="/dashboard/contratos/nuevo"
-            className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
-          >
-            + Nuevo contrato
-          </Link>
+        {esGestor && (
+          <div className="flex items-center gap-2">
+            <a
+              href="/api/contratos/export"
+              className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Exportar
+            </a>
+            <Link
+              href="/dashboard/contratos/nuevo"
+              className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              + Nuevo contrato
+            </Link>
+          </div>
         )}
       </div>
 
       {/* ── Search + Filters (admin only) ───────────────────────── */}
-      {esAdmin && (
+      {esGestor && (
         <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 space-y-3">
           {/* Search bar */}
           <div className="relative">
@@ -457,14 +470,14 @@ export default function ContratosPage() {
             <span className="text-2xl">📄</span>
           </div>
           <h3 className="font-medium text-gray-900 mb-2">
-            {esAdmin ? 'No hay contratos registrados' : 'No tienes contratos asignados'}
+            {esGestor ? 'No hay contratos registrados' : 'No tienes contratos asignados'}
           </h3>
           <p className="text-sm text-gray-500 mb-4">
-            {esAdmin
+            {esGestor
               ? 'Registra el primer contrato para comenzar a gestionar los pagos.'
               : 'Cuando el administrador te asigne un contrato, aparecerá aquí.'}
           </p>
-          {esAdmin && (
+          {esGestor && (
             <Link
               href="/dashboard/contratos/nuevo"
               className="inline-block bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
@@ -577,7 +590,7 @@ export default function ContratosPage() {
                       </Link>
 
                       {/* Admin quick-action: ver usuario */}
-                      {esAdmin && contrato.contratista && (
+                      {esGestor && contrato.contratista && (
                         <div className="px-5 pb-3.5 flex justify-end -mt-1">
                           <button
                             onClick={() => setViendoUsuario(contrato.contratista!)}

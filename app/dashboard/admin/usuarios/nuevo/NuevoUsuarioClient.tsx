@@ -35,6 +35,10 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
   const [tipoDoc, setTipoDoc]     = useState('CC')
   const [cedula, setCedula]       = useState('')
   const [rol, setRol]             = useState('contratista')
+  // Contratación es transversal (crea contratos para todas las secretarías):
+  // no se le asigna cargo ni dependencia.
+  const rolEfectivo = soloContratistas ? 'contratista' : rol
+  const esContratacion = rolEfectivo === 'contratacion'
   const [cargo, setCargo]         = useState('')
   const [telefono, setTelefono]   = useState('')
   const [direccion, setDireccion] = useState('')
@@ -52,11 +56,11 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
       nombre_completo: nombre,
       cedula,
       tipo_documento: tipoDoc,
-      rol,
-      cargo,
+      rol: rolEfectivo,
+      cargo: esContratacion ? undefined : cargo,
       telefono,
       direccion,
-      dependencia_id: depId || undefined,
+      dependencia_id: esContratacion ? undefined : (depId || undefined),
     })
     setLoading(false)
     if (result.error) {
@@ -217,7 +221,8 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           </div>
         </div>
 
-        {/* Cargo y dependencia */}
+        {/* Cargo y dependencia — no aplica a Contratación (rol transversal) */}
+        {!esContratacion && (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
           <h2 className="text-base font-semibold text-gray-900">Cargo y dependencia</h2>
 
@@ -243,6 +248,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             </select>
           </div>
         </div>
+        )}
 
         {/* Contacto */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">

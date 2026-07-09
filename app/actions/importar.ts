@@ -57,8 +57,7 @@ async function requireAdmin() {
     .select('rol, municipio_id')
     .eq('id', session.user.id)
     .single()
-  // Contratación importa contratos/contratistas igual que admin
-  if (data?.rol !== 'admin' && data?.rol !== 'contratacion') return null
+  if (data?.rol !== 'admin') return null
   return { userId: session.user.id, municipioId: data.municipio_id as string }
 }
 

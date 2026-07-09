@@ -55,6 +55,8 @@ export default function EditarUsuarioClient({
   const [email, setEmail]               = useState(usuario.email ?? '')
   const [tipoDoc, setTipoDoc]           = useState(usuario.tipo_documento ?? 'CC')
   const [rol, setRol]                   = useState(usuario.rol)
+  // Contratación es transversal: no tiene cargo ni dependencia asignada
+  const esContratacion = rol === 'contratacion'
   const [cargo, setCargo]               = useState(usuario.cargo ?? '')
   const [telefono, setTelefono]         = useState(usuario.telefono ?? '')
   const [direccion, setDireccion]       = useState(usuario.direccion ?? '')
@@ -75,10 +77,11 @@ export default function EditarUsuarioClient({
       email,
       tipo_documento: tipoDoc,
       rol,
-      cargo,
+      // Contratación es transversal: se limpian cargo y dependencia
+      cargo: esContratacion ? '' : cargo,
       telefono,
       direccion,
-      dependencia_id: depId || undefined,
+      dependencia_id: esContratacion ? undefined : (depId || undefined),
       banco,
       tipo_cuenta: tipoCuenta,
       numero_cuenta: numeroCuenta,
@@ -250,6 +253,9 @@ export default function EditarUsuarioClient({
 
         </div>
 
+        {/* Cargo y dependencia — no aplica a Contratación (rol transversal) */}
+        {!esContratacion && (
+        <>
         <hr className="border-gray-100" />
         <h2 className="text-base font-semibold text-gray-900">Cargo y dependencia</h2>
 
@@ -276,6 +282,8 @@ export default function EditarUsuarioClient({
             </select>
           </div>
         </div>
+        </>
+        )}
 
         <hr className="border-gray-100" />
         <h2 className="text-base font-semibold text-gray-900">Contacto</h2>
