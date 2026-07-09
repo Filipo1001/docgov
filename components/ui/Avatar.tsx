@@ -1,5 +1,7 @@
 'use client'
 
+import { avatarThumb } from '@/lib/avatar'
+
 interface AvatarProps {
   nombre: string
   foto?: string | null
@@ -24,8 +26,10 @@ export default function Avatar({ nombre, foto, size = 'md' }: AvatarProps) {
   if (foto) {
     return (
       <img
-        src={foto}
+        src={avatarThumb(foto) ?? foto}
         alt={nombre}
+        loading="lazy"
+        decoding="async"
         className={`${sizeClasses[size]} rounded-full object-cover flex-shrink-0`}
       />
     )

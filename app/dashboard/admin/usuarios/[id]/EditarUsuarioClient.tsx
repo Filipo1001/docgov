@@ -6,6 +6,7 @@ import { Toaster, toast } from 'sonner'
 import { actualizarUsuario, prepararUploadFoto, confirmarFotoUsuario, cambiarContrasena } from '@/app/actions/admin'
 import { comprimirFoto } from '@/lib/compress'
 import { useUsuario } from '@/lib/user-context'
+import { avatarThumb } from '@/lib/avatar'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'gobierno', 'hacienda']
@@ -26,7 +27,8 @@ function Avatar({ foto, nombre, size = 'xl' }: { foto?: string; nombre: string; 
   const fallback = size === 'xl'
     ? 'w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-500 ring-4 ring-white shadow-md'
     : 'w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-lg font-bold text-gray-500 ring-2 ring-white shadow'
-  if (foto) return <img src={foto} alt={nombre} className={cls} />
+  // 192 px: avatar grande (96 px de display) nítido en pantallas retina
+  if (foto) return <img src={avatarThumb(foto, 192) ?? foto} alt={nombre} loading="lazy" decoding="async" className={cls} />
   return <div className={fallback}>{initials}</div>
 }
 

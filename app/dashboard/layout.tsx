@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { UserProvider, useUsuario } from '@/lib/user-context'
 import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
+import { avatarThumb } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
 
 // ─── User avatar (photo or initials) ─────────────────────────
@@ -21,8 +22,10 @@ function UserAvatar({ nombre, fotoUrl, size = 9 }: { nombre: string; fotoUrl?: s
   if (fotoUrl) {
     return (
       <img
-        src={fotoUrl}
+        src={avatarThumb(fotoUrl) ?? fotoUrl}
         alt={nombre}
+        loading="lazy"
+        decoding="async"
         className={`${dim} rounded-full object-cover flex-shrink-0`}
       />
     )
