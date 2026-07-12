@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
             tipo,
             periodoId: p.id,
             estado: p.estado,
-            generate: async () => {
+            generate: async (verif) => {
               const data = await getData()
               if (!data) throw new Error('datos del periodo no disponibles')
               const [{ renderToBuffer }, React, Componente] = await Promise.all([
@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
                 import('react'),
                 DOCS_PDF[tipo].componente(),
               ])
-              return renderToBuffer(React.createElement(Componente, { data }) as never) as unknown as Promise<Buffer>
+              return renderToBuffer(React.createElement(Componente, { data: { ...data, verificacion: verif ?? undefined } }) as never) as unknown as Promise<Buffer>
             },
           })
           carpeta.file(DOCS_PDF[tipo].archivo, buffer)

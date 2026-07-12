@@ -23,6 +23,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFObligacion, PDFActividad } from './types'
+import { SelloVerificacion } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 
 // ─── Date utilities ───────────────────────────────────────────
@@ -752,6 +753,7 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
 
         {/* ── Footer — page number only (centered) ──────── */}
         <View style={s.footer} fixed>
+          <SelloVerificacion v={data.verificacion} />
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}

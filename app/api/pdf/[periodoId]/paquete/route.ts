@@ -99,13 +99,13 @@ export async function GET(
         tipo: 'informe',
         periodoId,
         estado,
-        generate: async () => {
+        generate: async (verif) => {
           const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
             import('@react-pdf/renderer'),
             import('react'),
             import('@/lib/pdf/informe-actividades'),
           ])
-          return renderToBuffer(React.createElement(InformeActividadesPDF, { data }) as any) as unknown as Promise<Buffer>
+          return renderToBuffer(React.createElement(InformeActividadesPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
         },
       }),
       getOrGeneratePDFBuffer({
@@ -113,13 +113,13 @@ export async function GET(
         tipo: 'cuenta-cobro',
         periodoId,
         estado,
-        generate: async () => {
+        generate: async (verif) => {
           const [{ renderToBuffer }, React, { CuentaDeCobroPDF }] = await Promise.all([
             import('@react-pdf/renderer'),
             import('react'),
             import('@/lib/pdf/cuenta-de-cobro'),
           ])
-          return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data }) as any) as unknown as Promise<Buffer>
+          return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
         },
       }),
       getOrGeneratePDFBuffer({
@@ -127,13 +127,13 @@ export async function GET(
         tipo: 'acta-supervision',
         periodoId,
         estado,
-        generate: async () => {
+        generate: async (verif) => {
           const [{ renderToBuffer }, React, { ActaSupervisionPDF }] = await Promise.all([
             import('@react-pdf/renderer'),
             import('react'),
             import('@/lib/pdf/acta-supervision'),
           ])
-          return renderToBuffer(React.createElement(ActaSupervisionPDF, { data }) as any) as unknown as Promise<Buffer>
+          return renderToBuffer(React.createElement(ActaSupervisionPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
         },
       }),
       getOrGeneratePDFBuffer({
@@ -141,13 +141,13 @@ export async function GET(
         tipo: 'acta-pago',
         periodoId,
         estado,
-        generate: async () => {
+        generate: async (verif) => {
           const [{ renderToBuffer }, React, { ActaPagoPDF }] = await Promise.all([
             import('@react-pdf/renderer'),
             import('react'),
             import('@/lib/pdf/acta-pago'),
           ])
-          return renderToBuffer(React.createElement(ActaPagoPDF, { data }) as any) as unknown as Promise<Buffer>
+          return renderToBuffer(React.createElement(ActaPagoPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
         },
       }),
       planillaPromise,

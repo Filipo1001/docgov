@@ -32,7 +32,7 @@ export async function GET(
     supabase,
     tipo: 'cuenta-cobro',
     periodoId,
-    generate: async () => {
+    generate: async (verif) => {
       const data = await buildPDFData(periodoId)
       if (!data) throw new Error('Periodo no encontrado')
       const faltan = mensajeDatosFaltantes('cuenta-cobro', data)
@@ -43,7 +43,7 @@ export async function GET(
         import('react'),
         import('@/lib/pdf/cuenta-de-cobro'),
       ])
-      const buffer = await renderToBuffer(React.createElement(CuentaDeCobroPDF, { data }) as any) as unknown as Buffer
+      const buffer = await renderToBuffer(React.createElement(CuentaDeCobroPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Buffer
       return { buffer, filename }
     },
   })
