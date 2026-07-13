@@ -537,7 +537,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
           {/* Signature */}
           <View style={s.sigBlock}>
             {mostrarFirmaSupervisor ? (
-              <FirmaSellada src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} />
+              <FirmaSellada src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} documento={`EL ACTA DE PAGO N.° ${periodoNum}`} firmante={contrato.supervisor.nombre_completo} />
             ) : (
               <View style={s.sigSpace} />
             )}

@@ -435,7 +435,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
 
           {/* Firma image when estado lo permite, espacio en blanco si no */}
           {mostrarFirmaContratista ? (
-            <FirmaSellada src={contrato.contratista.firma_url!} style={s.firmaImgContratista} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} />
+            <FirmaSellada src={contrato.contratista.firma_url!} style={s.firmaImgContratista} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} documento={`LA CUENTA DE COBRO N.° ${ccNum}`} firmante={contrato.contratista.nombre_completo} />
           ) : (
             <View style={s.sigSpace} />
           )}
@@ -458,7 +458,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
             {mostrarFirmaSupervisor ? (
               <>
                 {/* Firma image del supervisor */}
-                <FirmaSellada src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} />
+                <FirmaSellada src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} documento={`LA CUENTA DE COBRO N.° ${ccNum}`} firmante={contrato.supervisor.nombre_completo} />
                 <View style={s.voBoUnderline} />
                 <Text style={s.voBoName}>{contrato.supervisor.nombre_completo.toUpperCase()}</Text>
                 {contrato.supervisor.cargo && (

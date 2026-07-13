@@ -2,8 +2,11 @@
  * lib/pdf/verificacion-componentes.tsx — Componentes react-pdf de verificación.
  *
  * - SelloVerificacion: bloque QR + código para el pie de cada documento.
- * - FirmaSellada: firma con un sello de texto superpuesto (código + contrato)
- *   que la ata visualmente a ESTE documento; recortarla arrastra la marca.
+ * - FirmaSellada: la superficie de la firma ES el sello — el 100% del área
+ *   bajo la tinta está tejida con microtexto diagonal repetido con los datos
+ *   del documento (marca de agua inteligente). La firma (PNG con fondo
+ *   transparente) se compone ENCIMA de esa textura: extraer la firma implica
+ *   llevarse la información del documento al que pertenece.
  */
 
 import { View, Text, Image } from '@react-pdf/renderer'
@@ -38,41 +41,86 @@ export function SelloVerificacion({ v }: { v?: PDFVerificacion }) {
   )
 }
 
+/** DD/MM/AAAA en hora de Colombia — fecha de emisión del PDF (render). */
+function fechaEmisionHoy(): string {
+  const parts = new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric',
+  }).format(new Date())
+  return parts
+}
+
 /**
- * Firma con sello superpuesto. El texto va centrado sobre la imagen mediante
- * una capa absoluta (funciona con cualquier alto de firma). Si no hay
- * verificación, se comporta como una <Image> normal.
+ * Firma con fondo tejido (marca de agua inteligente).
+ *
+ * Composición: un contenedor con las dimensiones de la firma y overflow
+ * oculto; dentro, una capa sobredimensionada rotada -10° con filas de
+ * microtexto repetido (tono azul tenue, lenguaje visual de papel de
+ * seguridad); encima, la imagen de la firma en posición absoluta.
+ *
+ * El microtexto (4pt) se percibe como textura a distancia de lectura y se
+ * lee con zoom o de cerca. Sin marcos ni recuadros: la textura llena el
+ * área y termina donde termina el espacio de la firma.
  */
 export function FirmaSellada({
   src,
   style,
   v,
+  documento,
   contratoNumero,
+  firmante,
 }: {
   src: string
   style: Style
   v?: PDFVerificacion
+  /** Nombre completo del documento con artículo, ej. "EL ACTA DE PAGO N.° 05" */
+  documento: string
+  /** Ej. "023-2026" */
   contratoNumero: string
+  /** Nombre del propietario de la firma */
+  firmante: string
 }) {
   if (!v) return <Image src={src} style={style} />
+
+  // Unidad de información que se repite tejida en el fondo
+  const unidad =
+    `FIRMA VÁLIDA ÚNICAMENTE PARA ${documento}, CORRESPONDIENTE AL CONTRATO ${contratoNumero}` +
+    ` · ${firmante.toUpperCase()} · MUNICIPIO DE FREDONIA · ${v.codigo} · EMITIDO ${fechaEmisionHoy()} · `
+  // Línea larga: cubre el ancho rotado sin importar el tamaño del área
+  const linea = unidad.repeat(4)
+
   return (
-    <View style={{ position: 'relative' }}>
-      <Image src={src} style={style} />
+    <View style={[style, { position: 'relative', overflow: 'hidden' }]}>
+      {/* Capa de textura: sobredimensionada y rotada para cubrir el 100% del
+          área incluso en las esquinas tras la rotación */}
       <View
         style={{
           position: 'absolute',
-          top: 0,
-          bottom: 0,
-          left: 0,
-          right: 0,
-          justifyContent: 'center',
-          alignItems: 'center',
+          top: -40,
+          left: -80,
+          width: 560,
+          transform: 'rotate(-10deg)',
         }}
       >
-        <Text style={{ fontSize: 4.5, color: '#4361ee', opacity: 0.5 }}>
-          {v.codigo} · Contrato {contratoNumero}
-        </Text>
+        {Array.from({ length: 16 }).map((_, i) => (
+          <Text
+            key={i}
+            style={{
+              fontSize: 4,
+              color: '#b6c6e0',
+              marginBottom: 1.5,
+              // Desfase alterno tipo ladrillo: evita columnas verticales de texto
+              marginLeft: i % 2 === 0 ? 0 : -18,
+            }}
+          >
+            {linea}
+          </Text>
+        ))}
       </View>
+      {/* La tinta de la firma (PNG transparente) va ENCIMA de la textura */}
+      <Image
+        src={src}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, objectFit: 'contain' }}
+      />
     </View>
   )
 }
