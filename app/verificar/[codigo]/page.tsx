@@ -69,6 +69,7 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
                 </span>
               </div>
 
+              {resultado.datos.municipio && <Fila label="Municipio" value={resultado.datos.municipio} />}
               <Fila label="Contrato" value={`N.° ${resultado.datos.contratoNumero}-${resultado.datos.contratoAnio}`} />
               <Fila label="Contratista" value={resultado.datos.contratistaNombre} />
               <Fila label="Documento" value={resultado.datos.cedulaMasked} />

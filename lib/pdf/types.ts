@@ -111,6 +111,8 @@ export interface PDFVerificacion {
   url: string
   /** Fecha en que el supervisor aprobó el informe (ISO). Null si aún no se aprueba. */
   fechaAprobacion: string | null
+  /** Nombre del municipio emisor (ej. "FREDONIA") — para el microtexto de la firma. */
+  municipio: string
 }
 
 export interface PDFData {

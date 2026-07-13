@@ -14,6 +14,7 @@
  */
 
 import 'server-only'
+import { randomInt } from 'crypto'
 import QRCode from 'qrcode'
 import { createAdminSupabaseClient } from './supabase-admin'
 
@@ -52,14 +53,17 @@ export interface DatosVerificacion {
   valor: number
   estado: string
   fechaEmision: string          // ISO
+  municipio?: string            // ej. "Fredonia (Antioquia)" — ausente en registros antiguos
 }
 
 // Crockford base32 sin caracteres ambiguos (sin I, L, O, U)
 const ALFABETO = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 
 function generarCodigo(): string {
+  // crypto.randomInt: los códigos son la única llave de acceso a la página
+  // pública — deben ser impredecibles, no solo únicos.
   const rnd = (n: number) =>
-    Array.from({ length: n }, () => ALFABETO[Math.floor(Math.random() * ALFABETO.length)]).join('')
+    Array.from({ length: n }, () => ALFABETO[randomInt(ALFABETO.length)]).join('')
   return `CD-${rnd(4)}-${rnd(4)}`
 }
 
@@ -136,15 +140,33 @@ export async function getVerificacion(codigo: string): Promise<{
   const admin = createAdminSupabaseClient()
   const { data } = await admin
     .from('documentos_emitidos')
-    .select('codigo, datos_verificacion, hash_sha256, updated_at')
+    .select('codigo, periodo_id, datos_verificacion, hash_sha256, created_at')
     .eq('codigo', codigo.trim().toUpperCase())
     .maybeSingle()
   if (!data) return null
+
+  const datos = data.datos_verificacion as DatosVerificacion
+
+  // Estado VIVO del periodo: el snapshot solo se refresca cuando el PDF se
+  // regenera — si el acta pasó a "radicado" y nadie la volvió a abrir, el
+  // snapshot quedaría diciendo "aprobado". La página pública debe reflejar
+  // el estado actual del sistema, no el del último render.
+  if (data.periodo_id) {
+    const { data: p } = await admin
+      .from('periodos')
+      .select('estado')
+      .eq('id', data.periodo_id)
+      .maybeSingle()
+    if (p?.estado) datos.estado = p.estado
+  }
+
   return {
     codigo: data.codigo,
-    datos: data.datos_verificacion as DatosVerificacion,
+    datos,
     hash: data.hash_sha256,
-    emitidoEn: data.updated_at,
+    // created_at (primera emisión) y no updated_at: la fecha mostrada debe
+    // ser estable — no cambiar cada vez que alguien re-descarga el PDF.
+    emitidoEn: data.created_at,
   }
 }
 

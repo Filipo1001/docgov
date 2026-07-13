@@ -21,6 +21,8 @@ export interface VerificacionPDF {
   url: string
   /** Fecha en que el supervisor aprobó el informe (ISO). Null si aún no se aprueba. */
   fechaAprobacion: string | null
+  /** Nombre del municipio emisor (ej. "FREDONIA") — para el microtexto de la firma. */
+  municipio: string
 }
 
 /**
@@ -59,7 +61,8 @@ export async function prepararVerificacionPDF(
           numero, anio,
           contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula),
           supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo),
-          dependencia:dependencias(nombre)
+          dependencia:dependencias(nombre),
+          municipio:municipios(nombre, departamento)
         )
       `)
       .eq('id', periodoId)
@@ -71,8 +74,11 @@ export async function prepararVerificacionPDF(
       contratista: { nombre_completo: string; cedula: string } | null
       supervisor: { nombre_completo: string } | null
       dependencia: { nombre: string } | null
+      municipio: { nombre: string; departamento: string | null } | null
     } | null
     if (!c) return null
+
+    const municipioNombre = c.municipio?.nombre ?? 'Municipio'
 
     const fechaAprobacion = await resolverFechaAprobacion(admin, periodoId, p.fecha_aprobacion as string | null)
 
@@ -89,11 +95,14 @@ export async function prepararVerificacionPDF(
       valor: (p.valor_cobro as number) ?? 0,
       estado: p.estado as string,
       fechaEmision: fechaAprobacion ?? new Date().toISOString(),
+      municipio: c.municipio?.departamento
+        ? `${municipioNombre} (${c.municipio.departamento})`
+        : municipioNombre,
     }
 
     const codigo = await registrarDocumento({ tipo, periodoId, datos })
     const qr = await qrDataUrl(codigo)
-    return { codigo, qr, url: urlVerificacion(codigo), fechaAprobacion }
+    return { codigo, qr, url: urlVerificacion(codigo), fechaAprobacion, municipio: municipioNombre }
   } catch {
     // La verificación nunca debe romper la generación del PDF
     return null

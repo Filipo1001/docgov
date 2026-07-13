@@ -16,6 +16,9 @@ import type { PDFVerificacion } from './types'
 /** Pie de verificación: QR + código. Se inserta dentro del footer fixed. */
 export function SelloVerificacion({ v }: { v?: PDFVerificacion }) {
   if (!v) return null
+  // El texto impreso deriva de la misma URL que codifica el QR — una sola
+  // fuente de verdad si el dominio cambia (se recorta el código final).
+  const urlLegible = v.url.replace(/^https?:\/\//, '').replace(/\/[^/]*$/, '')
   return (
     <View
       style={{
@@ -34,7 +37,7 @@ export function SelloVerificacion({ v }: { v?: PDFVerificacion }) {
           Documento verificable · Código {v.codigo}
         </Text>
         <Text style={{ fontSize: 5.5, color: '#6b7280' }}>
-          Escanee el QR o visite contratistadigital.com/verificar
+          Escanee el QR o visite {urlLegible}
         </Text>
       </View>
     </View>
@@ -84,10 +87,15 @@ export function FirmaSellada({
   // apertura/descarga del PDF — el documento no cambia cada vez que se abre.
   const fechaTexto = v.fechaAprobacion ? `APROBADO ${fmtFecha(v.fechaAprobacion)}` : 'PENDIENTE DE APROBACIÓN'
 
+  // Municipio dinámico (multi-alcaldía): viene de la BD, no del código
+  const muni = v.municipio.toUpperCase().startsWith('MUNICIPIO')
+    ? v.municipio.toUpperCase()
+    : `MUNICIPIO DE ${v.municipio.toUpperCase()}`
+
   // Unidad de información que se repite tejida en el fondo
   const unidad =
     `FIRMA VÁLIDA ÚNICAMENTE PARA ${documento}, CORRESPONDIENTE AL CONTRATO ${contratoNumero}` +
-    ` · ${firmante.toUpperCase()} · MUNICIPIO DE FREDONIA · ${v.codigo} · ${fechaTexto} · `
+    ` · ${firmante.toUpperCase()} · ${muni} · ${v.codigo} · ${fechaTexto} · `
   // Línea larga: cubre el ancho rotado sin importar el tamaño del área
   const linea = unidad.repeat(4)
 
