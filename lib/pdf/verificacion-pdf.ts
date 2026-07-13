@@ -19,6 +19,30 @@ export interface VerificacionPDF {
   codigo: string
   qr: string   // data URL PNG
   url: string
+  /** Fecha en que el supervisor aprobó el informe (ISO). Null si aún no se aprueba. */
+  fechaAprobacion: string | null
+}
+
+/**
+ * Fecha de aprobación del periodo: `fecha_aprobacion` es la fuente directa
+ * (seteada por aprobarPeriodos). Si es null — periodos aprobados antes de que
+ * esa columna se empezara a llenar — se reconstruye desde el historial.
+ */
+async function resolverFechaAprobacion(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  periodoId: string,
+  fechaAprobacionCol: string | null,
+): Promise<string | null> {
+  if (fechaAprobacionCol) return fechaAprobacionCol
+  const { data: hist } = await admin
+    .from('historial_periodos')
+    .select('created_at')
+    .eq('periodo_id', periodoId)
+    .eq('estado_nuevo', 'aprobado')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return hist?.created_at ?? null
 }
 
 export async function prepararVerificacionPDF(
@@ -30,7 +54,7 @@ export async function prepararVerificacionPDF(
     const { data: p } = await admin
       .from('periodos')
       .select(`
-        mes, anio, valor_cobro, estado,
+        mes, anio, valor_cobro, estado, fecha_aprobacion,
         contrato:contratos(
           numero, anio,
           contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula),
@@ -50,6 +74,8 @@ export async function prepararVerificacionPDF(
     } | null
     if (!c) return null
 
+    const fechaAprobacion = await resolverFechaAprobacion(admin, periodoId, p.fecha_aprobacion as string | null)
+
     const datos: DatosVerificacion = {
       tipo,
       contratoNumero: c.numero,
@@ -62,12 +88,12 @@ export async function prepararVerificacionPDF(
       anio: p.anio as number,
       valor: (p.valor_cobro as number) ?? 0,
       estado: p.estado as string,
-      fechaEmision: new Date().toISOString(),
+      fechaEmision: fechaAprobacion ?? new Date().toISOString(),
     }
 
     const codigo = await registrarDocumento({ tipo, periodoId, datos })
     const qr = await qrDataUrl(codigo)
-    return { codigo, qr, url: urlVerificacion(codigo) }
+    return { codigo, qr, url: urlVerificacion(codigo), fechaAprobacion }
   } catch {
     // La verificación nunca debe romper la generación del PDF
     return null

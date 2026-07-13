@@ -41,12 +41,11 @@ export function SelloVerificacion({ v }: { v?: PDFVerificacion }) {
   )
 }
 
-/** DD/MM/AAAA en hora de Colombia — fecha de emisión del PDF (render). */
-function fechaEmisionHoy(): string {
-  const parts = new Intl.DateTimeFormat('es-CO', {
+/** DD/MM/AAAA en hora de Colombia a partir de un ISO. */
+function fmtFecha(iso: string): string {
+  return new Intl.DateTimeFormat('es-CO', {
     timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric',
-  }).format(new Date())
-  return parts
+  }).format(new Date(iso))
 }
 
 /**
@@ -81,10 +80,14 @@ export function FirmaSellada({
 }) {
   if (!v) return <Image src={src} style={style} />
 
+  // La fecha tejida es la de aprobación del informe (supervisor), no la de
+  // apertura/descarga del PDF — el documento no cambia cada vez que se abre.
+  const fechaTexto = v.fechaAprobacion ? `APROBADO ${fmtFecha(v.fechaAprobacion)}` : 'PENDIENTE DE APROBACIÓN'
+
   // Unidad de información que se repite tejida en el fondo
   const unidad =
     `FIRMA VÁLIDA ÚNICAMENTE PARA ${documento}, CORRESPONDIENTE AL CONTRATO ${contratoNumero}` +
-    ` · ${firmante.toUpperCase()} · MUNICIPIO DE FREDONIA · ${v.codigo} · EMITIDO ${fechaEmisionHoy()} · `
+    ` · ${firmante.toUpperCase()} · MUNICIPIO DE FREDONIA · ${v.codigo} · ${fechaTexto} · `
   // Línea larga: cubre el ancho rotado sin importar el tamaño del área
   const linea = unidad.repeat(4)
 

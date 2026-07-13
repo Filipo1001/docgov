@@ -509,7 +509,7 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
     // 1 query: batch update all valid periods
     const { data: updatedBatch, error: updateError } = await supabase
       .from('periodos')
-      .update({ estado: 'aprobado', motivo_rechazo: null })
+      .update({ estado: 'aprobado', motivo_rechazo: null, fecha_aprobacion: new Date().toISOString() })
       .in('id', validIds)
       .select('id')
 

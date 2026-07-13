@@ -109,6 +109,8 @@ export interface PDFVerificacion {
   codigo: string
   qr: string   // data URL PNG del código QR
   url: string
+  /** Fecha en que el supervisor aprobó el informe (ISO). Null si aún no se aprueba. */
+  fechaAprobacion: string | null
 }
 
 export interface PDFData {
