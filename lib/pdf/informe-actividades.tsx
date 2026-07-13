@@ -23,7 +23,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFObligacion, PDFActividad } from './types'
-import { SelloVerificacion } from './verificacion-componentes'
+import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 
 // ─── Date utilities ───────────────────────────────────────────
@@ -469,6 +469,8 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
   const mostrarFirmaSupervisor =
     ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
+  const periodoNum = String(periodo.numero).padStart(2, '0')
+
   // ── Build flat sub-row list ──────────────────────────────────
 
   const subRows: SubRow[] = []
@@ -678,7 +680,14 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
             {/* Block 1: Contratista */}
             <View style={s.sigContratistaBlock}>
               {mostrarFirmaContratista ? (
-                <Image src={contrato.contratista.firma_url!} style={s.firmaImgContratista} />
+                <FirmaSellada
+                  src={contrato.contratista.firma_url!}
+                  style={s.firmaImgContratista}
+                  v={data.verificacion}
+                  contratoNumero={`${contrato.numero}-${contrato.anio}`}
+                  documento={`EL INFORME DE ACTIVIDADES N.° ${periodoNum}`}
+                  firmante={contrato.contratista.nombre_completo}
+                />
               ) : (
                 <View style={s.sigSpace} />
               )}
@@ -717,7 +726,14 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
               <View style={s.sigFirmaRow}>
                 <Text style={s.sigTag}>Firma:</Text>
                 {mostrarFirmaSupervisor ? (
-                  <Image src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} />
+                  <FirmaSellada
+                    src={contrato.supervisor.firma_url!}
+                    style={s.firmaImgSupervisor}
+                    v={data.verificacion}
+                    contratoNumero={`${contrato.numero}-${contrato.anio}`}
+                    documento={`EL INFORME DE ACTIVIDADES N.° ${periodoNum}`}
+                    firmante={contrato.supervisor.nombre_completo}
+                  />
                 ) : (
                   <View style={s.sigFirmaLine} />
                 )}
