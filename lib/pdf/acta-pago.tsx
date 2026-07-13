@@ -10,6 +10,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
+import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
@@ -536,7 +537,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
           {/* Signature */}
           <View style={s.sigBlock}>
             {mostrarFirmaSupervisor ? (
-              <Image src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} />
+              <FirmaSellada src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} documento={`EL ACTA DE PAGO N.° ${periodoNum}`} firmante={contrato.supervisor.nombre_completo} />
             ) : (
               <View style={s.sigSpace} />
             )}
@@ -552,6 +553,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
 
         {/* Footer — único elemento fixed, aparece en todas las páginas */}
         <View style={s.footer} fixed>
+          <SelloVerificacion v={data.verificacion} />
           <View style={s.footerRow}>
             <View style={s.footerLeft}>
               <Text style={s.footerText}>

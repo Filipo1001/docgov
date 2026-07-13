@@ -10,6 +10,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
+import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
 import { calcularBaseCotizacionSS } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
 
@@ -931,7 +932,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
             {/* Signature */}
             <View style={s.sigBlock}>
               {mostrarFirmaSupervisor ? (
-                <Image src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} />
+                <FirmaSellada src={contrato.supervisor.firma_url!} style={{ width: 150, height: 50, objectFit: 'contain' }} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} documento={`EL ACTA DE SUPERVISIÓN N.° ${periodoNum}`} firmante={contrato.supervisor.nombre_completo} />
               ) : (
                 <View style={s.sigSpace} />
               )}
@@ -947,6 +948,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
 
         {/* Footer — único elemento fixed para garantizar repetición en todas las páginas */}
         <View style={s.footer} fixed>
+          <SelloVerificacion v={data.verificacion} />
           <View style={s.footerRow}>
             <View style={s.footerLeft}>
               <Text style={s.footerText}>

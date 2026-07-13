@@ -15,6 +15,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData } from './types'
+import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 
 // Mismas reglas que el Informe de Actividades
@@ -434,7 +435,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
 
           {/* Firma image when estado lo permite, espacio en blanco si no */}
           {mostrarFirmaContratista ? (
-            <Image src={contrato.contratista.firma_url!} style={s.firmaImgContratista} />
+            <FirmaSellada src={contrato.contratista.firma_url!} style={s.firmaImgContratista} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} documento={`LA CUENTA DE COBRO N.° ${ccNum}`} firmante={contrato.contratista.nombre_completo} />
           ) : (
             <View style={s.sigSpace} />
           )}
@@ -457,7 +458,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
             {mostrarFirmaSupervisor ? (
               <>
                 {/* Firma image del supervisor */}
-                <Image src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} />
+                <FirmaSellada src={contrato.supervisor.firma_url!} style={s.firmaImgSupervisor} v={data.verificacion} contratoNumero={`${contrato.numero}-${contrato.anio}`} documento={`LA CUENTA DE COBRO N.° ${ccNum}`} firmante={contrato.supervisor.nombre_completo} />
                 <View style={s.voBoUnderline} />
                 <Text style={s.voBoName}>{contrato.supervisor.nombre_completo.toUpperCase()}</Text>
                 {contrato.supervisor.cargo && (
@@ -474,6 +475,11 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
             )}
           </View>
 
+        </View>
+
+        {/* Sello de verificación al pie (esta cuenta no tiene footer fijo) */}
+        <View style={{ marginTop: 16 }}>
+          <SelloVerificacion v={data.verificacion} />
         </View>
 
       </Page>

@@ -10,8 +10,11 @@
  *   or activities/evidences are modified
  */
 
+import { createHash } from 'crypto'
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { prepararVerificacionPDF, type VerificacionPDF } from '@/lib/pdf/verificacion-pdf'
+import { actualizarHashDocumento, type TipoDocumento } from '@/lib/verificacion'
 
 const BUCKET = 'pdf-cache'
 
@@ -55,7 +58,7 @@ export async function getOrGeneratePDF({
   supabase: any
   tipo: string
   periodoId: string
-  generate: () => Promise<{ buffer: Buffer; filename: string }>
+  generate: (verif: VerificacionPDF | null) => Promise<{ buffer: Buffer; filename: string }>
 }): Promise<NextResponse> {
   const cacheKey = `${tipo}/${periodoId}.pdf`
 
@@ -97,11 +100,14 @@ export async function getOrGeneratePDF({
   }
 
   // Cache miss (or non-cacheable estado) — generate PDF now
-  // buildPDFData is called inside generate(), so it's skipped on cache hits
+  // buildPDFData is called inside generate(), so it's skipped on cache hits.
+  // La verificación (código + QR) se prepara aquí, centralizada, para que TODO
+  // documento la lleve de forma coherente y comparta el mismo caché.
+  const verif = await prepararVerificacionPDF(tipo as TipoDocumento, periodoId)
   let buffer: Buffer
   let filename: string
   try {
-    ;({ buffer, filename } = await generate())
+    ;({ buffer, filename } = await generate(verif))
   } catch (e) {
     // Datos incompletos → 422 con mensaje legible (no un 500 críptico)
     if (e instanceof PDFDatosIncompletosError) {
@@ -116,6 +122,12 @@ export async function getOrGeneratePDF({
       .from(BUCKET)
       .upload(cacheKey, buffer, { contentType: 'application/pdf', upsert: true })
       .catch(() => { /* non-critical — next request will regenerate */ })
+  }
+
+  if (verif) {
+    // Huella del PDF exacto servido — permite comparar el archivo byte a byte
+    // en /verificar. Fire and forget, no bloquea la respuesta.
+    actualizarHashDocumento(verif.codigo, createHash('sha256').update(buffer).digest('hex')).catch(() => {})
   }
 
   return new NextResponse(buffer as unknown as BodyInit, {
@@ -147,7 +159,7 @@ export async function getOrGeneratePDFBuffer({
   tipo: string
   periodoId: string
   estado: string
-  generate: () => Promise<Buffer>
+  generate: (verif: VerificacionPDF | null) => Promise<Buffer>
 }): Promise<Buffer> {
   const cacheKey = `${tipo}/${periodoId}.pdf`
   const shouldCache = ESTADOS_CACHEABLES.has(estado)
@@ -164,13 +176,18 @@ export async function getOrGeneratePDFBuffer({
     }
   }
 
-  const buffer = await generate()
+  const verif = await prepararVerificacionPDF(tipo as TipoDocumento, periodoId)
+  const buffer = await generate(verif)
 
   if (shouldCache) {
     admin.storage
       .from(BUCKET)
       .upload(cacheKey, buffer, { contentType: 'application/pdf', upsert: true })
       .catch(() => { /* non-critical */ })
+  }
+
+  if (verif) {
+    actualizarHashDocumento(verif.codigo, createHash('sha256').update(buffer).digest('hex')).catch(() => {})
   }
 
   return buffer

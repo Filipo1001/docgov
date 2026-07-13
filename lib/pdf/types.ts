@@ -105,6 +105,14 @@ export interface PDFPagoHistorial {
   numero_planilla?: string | null
 }
 
+export interface PDFVerificacion {
+  codigo: string
+  qr: string   // data URL PNG del código QR
+  url: string
+  /** Fecha en que el supervisor aprobó el informe (ISO). Null si aún no se aprueba. */
+  fechaAprobacion: string | null
+}
+
 export interface PDFData {
   municipio: PDFMunicipio
   contrato: PDFContrato
@@ -112,4 +120,5 @@ export interface PDFData {
   obligaciones: PDFObligacion[]
   fechaGeneracion: string
   pagosHistorial?: PDFPagoHistorial[]  // For Acta de Pago
+  verificacion?: PDFVerificacion       // Código + QR de verificación pública
 }
