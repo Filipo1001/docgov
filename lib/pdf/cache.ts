@@ -10,10 +10,11 @@
  *   or activities/evidences are modified
  */
 
+import { createHash } from 'crypto'
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { prepararVerificacionPDF, type VerificacionPDF } from '@/lib/pdf/verificacion-pdf'
-import type { TipoDocumento } from '@/lib/verificacion'
+import { actualizarHashDocumento, type TipoDocumento } from '@/lib/verificacion'
 
 const BUCKET = 'pdf-cache'
 
@@ -123,6 +124,12 @@ export async function getOrGeneratePDF({
       .catch(() => { /* non-critical — next request will regenerate */ })
   }
 
+  if (verif) {
+    // Huella del PDF exacto servido — permite comparar el archivo byte a byte
+    // en /verificar. Fire and forget, no bloquea la respuesta.
+    actualizarHashDocumento(verif.codigo, createHash('sha256').update(buffer).digest('hex')).catch(() => {})
+  }
+
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
       'Content-Type': 'application/pdf',
@@ -177,6 +184,10 @@ export async function getOrGeneratePDFBuffer({
       .from(BUCKET)
       .upload(cacheKey, buffer, { contentType: 'application/pdf', upsert: true })
       .catch(() => { /* non-critical */ })
+  }
+
+  if (verif) {
+    actualizarHashDocumento(verif.codigo, createHash('sha256').update(buffer).digest('hex')).catch(() => {})
   }
 
   return buffer

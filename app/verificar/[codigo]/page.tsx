@@ -83,6 +83,15 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
                 value={new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(resultado.emitidoEn))}
               />
 
+              {resultado.hash && (
+                <div style={{ marginTop: 16, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
+                  <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 4px', fontWeight: 600 }}>Huella digital del PDF (SHA-256)</p>
+                  <p style={{ fontSize: 11, color: '#475569', margin: 0, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all', lineHeight: 1.5 }}>
+                    {resultado.hash}
+                  </p>
+                </div>
+              )}
+
               <p style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5, marginTop: 16, marginBottom: 0 }}>
                 Compare estos datos con el documento físico o PDF que recibió. Si algún dato no coincide,
                 el documento podría haber sido alterado.

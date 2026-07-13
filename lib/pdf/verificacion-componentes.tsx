@@ -28,7 +28,7 @@ export function SelloVerificacion({ v }: { v?: PDFVerificacion }) {
         borderBottomColor: '#e5e7eb',
       }}
     >
-      <Image src={v.qr} style={{ width: 26, height: 26 }} />
+      <Image src={v.qr} style={{ width: 34, height: 34 }} />
       <View>
         <Text style={{ fontSize: 6, color: '#374151', fontFamily: 'Helvetica-Bold' }}>
           Documento verificable · Código {v.codigo}
