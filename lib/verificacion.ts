@@ -17,8 +17,17 @@ import 'server-only'
 import QRCode from 'qrcode'
 import { createAdminSupabaseClient } from './supabase-admin'
 
-/** Dominio canónico donde se verifican los documentos (los impresos apuntan aquí). */
-const BASE_VERIFY = 'https://contratistadigital.com/verificar'
+/**
+ * Origen público de la app en este deployment. En producción es el dominio
+ * propio; en preview, Vercel expone la URL única del deployment por
+ * VERCEL_URL — usarla evita que los QR/enlaces generados en preview apunten
+ * a producción (donde esta ruta puede no existir todavía) y viceversa.
+ */
+function baseUrl(): string {
+  if (process.env.VERCEL_ENV === 'production') return 'https://contratistadigital.com'
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
+}
 
 export type TipoDocumento = 'informe' | 'cuenta-cobro' | 'acta-supervision' | 'acta-pago'
 
@@ -141,7 +150,7 @@ export async function getVerificacion(codigo: string): Promise<{
 
 /** URL pública de verificación de un código. */
 export function urlVerificacion(codigo: string): string {
-  return `${BASE_VERIFY}/${codigo}`
+  return `${baseUrl()}/verificar/${codigo}`
 }
 
 /** QR (data URL PNG) que apunta a la verificación del código. */
