@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEffect, useRef, useState } from 'react'
 import { UserProvider, useUsuario } from '@/lib/user-context'
@@ -52,7 +52,6 @@ function PendingBadge({ n }: { n: number }) {
 // ─── Sidebar ──────────────────────────────────────────────────
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
-  const router = useRouter()
   // Auth redirect is handled by DashboardContent — Sidebar is purely presentational
   const { usuario, municipio, cargando } = useUsuario()
   const [pendientes, setPendientes] = useState(0)
@@ -303,25 +302,30 @@ function AuthLoadingSkeleton() {
 // ─── Layout ───────────────────────────────────────────────────
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { cargando, usuario, sesionExpirada } = useUsuario()
-  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  // Prevent double-redirect if push is already in flight
+  // Prevent double-redirect if navigation is already in flight
   const redirecting = useRef(false)
 
   useEffect(() => {
     if (cargando) return
     if (!usuario && !redirecting.current) {
       redirecting.current = true
-      router.push(sesionExpirada ? '/login?expired=1' : '/login')
+      // Navegación DURA (no router.push): justo después de que iOS reanuda la
+      // página, el App Router puede quedar en un estado en el que push() no
+      // navega (el fetch del RSC muere en silencio) y el usuario quedaría
+      // atrapado en la pantalla de transición. window.location siempre navega
+      // y arranca la app desde cero con las cookies como única verdad.
+      window.location.replace(sesionExpirada ? '/login?expired=1' : '/login')
     }
     if (usuario) redirecting.current = false
-  }, [cargando, usuario, sesionExpirada, router])
+  }, [cargando, usuario, sesionExpirada])
 
-  // Auth confirmed absent — redirect is already in flight, render nothing.
+  // Auth confirmed absent — redirect is in flight. NEVER render a blank
+  // screen: show the skeleton until window.location completes the navigation.
   // We do NOT gate on cargando here: the server already validated auth via
   // requireRole / requireContractAccess, so children can mount immediately
   // and use their SSR-supplied initial data while client-side auth resolves.
-  if (!cargando && !usuario) return null
+  if (!cargando && !usuario) return <AuthLoadingSkeleton />
 
   return (
     <div className="min-h-screen bg-gray-50">
