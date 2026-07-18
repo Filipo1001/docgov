@@ -14,6 +14,11 @@ interface UserCtx {
 
 const Ctx = createContext<UserCtx>({ usuario: null, municipio: null, cargando: true, sesionExpirada: false })
 
+/** No reconciliar más de una vez por minuto (cambios rápidos de app en móvil). */
+const RECONCILIACION_DEBOUNCE_MS = 60_000
+/** Latido mientras la pestaña está visible: mantiene la cookie fresca en sesiones largas. */
+const HEARTBEAT_MS = 10 * 60_000
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [municipio, setMunicipio] = useState<Municipio | null>(null)
@@ -86,6 +91,64 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
     load()
 
+    // ── Reconciliación al volver de segundo plano ─────────────────────────────
+    // iOS Safari congela la página al cambiar de app: los fetch en vuelo mueren
+    // sin resolver, el auto-refresh no corre y el token de la cookie vence.
+    // Al volver, la fuente de verdad es EL SERVIDOR: obtenerPerfilUsuario()
+    // viaja por el middleware, que renueva la cookie de forma atómica. Como el
+    // storage del browser client lee document.cookie en vivo, esa renovación
+    // "cura" también al cliente del navegador — sin recargar, sin re-login.
+    let reconciliando = false
+    let ultimaReconciliacion = 0
+    async function reconciliar(forzar = false) {
+      if (reconciliando) return
+      if (!forzar && Date.now() - ultimaReconciliacion < RECONCILIACION_DEBOUNCE_MS) return
+      reconciliando = true
+      try {
+        const { usuario: u, municipio: m } = await obtenerPerfilUsuario()
+        ultimaReconciliacion = Date.now()
+        if (u) {
+          tuvoSesion.current = true
+          setUsuario(u)
+          setMunicipio(m)
+          setSesionExpirada(false)
+          // Rehidratar el websocket de realtime con el token fresco de la
+          // cookie; si no, el canal de notificaciones queda con un JWT vencido.
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session?.access_token) supabase.realtime.setAuth(session.access_token)
+          } catch { /* mejor esfuerzo — el polling de la campana cubre el resto */ }
+        } else if (tuvoSesion.current) {
+          // El servidor confirma que la sesión murió de verdad (refresh token
+          // revocado/vencido). Expirar honestamente — el layout redirige a
+          // /login con el aviso, nunca deja la pantalla en blanco.
+          setUsuario(null)
+          setMunicipio(null)
+          setSesionExpirada(true)
+        }
+      } catch {
+        // Red intermitente justo al reanudar (habitual en móvil): NO tocar el
+        // estado actual. El siguiente visibilitychange/heartbeat reintenta.
+      } finally {
+        reconciliando = false
+        setCargando(false)
+      }
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') reconciliar()
+    }
+    // pageshow con persisted=true: Safari restauró la página desde bfcache —
+    // el estado de JS puede ser de hace horas; reconciliar sin debounce.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) reconciliar(true)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onPageShow)
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState === 'visible') reconciliar()
+    }, HEARTBEAT_MS)
+
     // React to auth state changes (token refresh, sign-out, sign-in from another tab)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: string, session: { user?: { id: string } } | null) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -98,13 +161,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setCargando(false)
         }
       } else if (event === 'SIGNED_OUT') {
-        setUsuario(null)
-        setMunicipio(null)
-        if (tuvoSesion.current) setSesionExpirada(true)
+        // En iOS este evento puede ser un FALSO POSITIVO: un refresh del
+        // cliente que falló por un fetch congelado dispara SIGNED_OUT aunque
+        // la sesión del servidor siga viva. No expulsar al usuario a ciegas:
+        // reconciliar contra el servidor decide (restaura o expira).
+        reconciliar(true)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onPageShow)
+      clearInterval(heartbeat)
+    }
   }, [])
 
   return <Ctx.Provider value={{ usuario, municipio, cargando, sesionExpirada }}>{children}</Ctx.Provider>
