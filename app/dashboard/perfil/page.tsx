@@ -133,7 +133,7 @@ export default function PerfilPage() {
   // URL firmada de la firma guardada (el bucket documentos es privado)
   const [firmaFirmada,   setFirmaFirmada]   = useState<string | null>(null)
   useEffect(() => {
-    if (usuario?.firma_url) obtenerFirmaFirmada().then(setFirmaFirmada)
+    if (usuario?.firma_url) obtenerFirmaFirmada().then(setFirmaFirmada).catch(() => {})
     else setFirmaFirmada(null)
   }, [usuario?.firma_url])
   const [subiendoFirma,  setSubiendoFirma]  = useState(false)
@@ -142,62 +142,95 @@ export default function PerfilPage() {
 
   useEffect(() => {
     if (!usuario) return
+    let cancelado = false
 
+    // Resiliencia móvil: esta página es estática (la navegación no pasa por el
+    // servidor) y depende de queries del navegador. Tras volver de segundo
+    // plano en iOS, cualquiera de estas llamadas puede fallar o tardar
+    // (token vencido, fetch abortado). Reglas:
+    //   1. Nada cosmético bloquea el render ("Miembro desde" va aparte).
+    //   2. Las queries corren en paralelo y toleran fallos individuales.
+    //   3. setLoading(false) SIEMPRE se ejecuta (finally) — la página nunca
+    //      queda atrapada en el skeleton; si algo falló, la reconciliación de
+    //      sesión re-dispara este efecto (nuevo objeto usuario) y se completa.
     async function load() {
       const supabase = createClient()
 
-      // Member since — from auth
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (authUser?.created_at) {
-        setMemberSince(
-          new Intl.DateTimeFormat('es-CO', { year: 'numeric', month: 'long' }).format(
-            new Date(authUser.created_at)
+      // Member since — cosmético, no bloqueante
+      supabase.auth.getUser()
+        .then(({ data: { user: authUser } }: { data: { user: { created_at?: string } | null } }) => {
+          if (!cancelado && authUser?.created_at) {
+            setMemberSince(
+              new Intl.DateTimeFormat('es-CO', { year: 'numeric', month: 'long' }).format(
+                new Date(authUser.created_at)
+              )
+            )
+          }
+        })
+        .catch(() => {})
+
+      try {
+        const rol = usuario!.rol
+        const tareas: Promise<void>[] = []
+
+        if (usuario!.dependencia_id) {
+          tareas.push(
+            supabase
+              .from('dependencias')
+              .select('nombre')
+              .eq('id', usuario!.dependencia_id)
+              .single()
+              .then(({ data: dep }: { data: { nombre?: string } | null }) => {
+                if (!cancelado && dep?.nombre) setDependencia(dep.nombre)
+              })
           )
-        )
+        }
+
+        if (rol === 'contratista') {
+          tareas.push(
+            supabase
+              .from('contratos')
+              .select('id, numero, objeto, valor_total, fecha_inicio, fecha_fin, banco, tipo_cuenta, numero_cuenta')
+              .eq('contratista_id', usuario!.id)
+              .order('created_at', { ascending: false })
+              .then(({ data }: { data: unknown }) => {
+                if (!cancelado) setContratos(((data as Contrato[]) ?? []))
+              })
+          )
+        }
+
+        if (rol === 'supervisor') {
+          tareas.push(
+            supabase
+              .from('contratos')
+              .select('id', { count: 'exact', head: true })
+              .eq('supervisor_id', usuario!.id)
+              .then(({ count }: { count: number | null }) => {
+                if (!cancelado) setSupervisedCount(count ?? 0)
+              })
+          )
+        }
+
+        if (rol === 'asesor') {
+          tareas.push(
+            supabase
+              .from('preaprobaciones')
+              .select('id', { count: 'exact', head: true })
+              .eq('asesor_id', usuario!.id)
+              .then(({ count }: { count: number | null }) => {
+                if (!cancelado) setAsesoredCount(count ?? 0)
+              })
+          )
+        }
+
+        await Promise.allSettled(tareas)
+      } finally {
+        if (!cancelado) setLoading(false)
       }
-
-      // Dependencia name
-      if (usuario!.dependencia_id) {
-        const { data: dep } = await supabase
-          .from('dependencias')
-          .select('nombre')
-          .eq('id', usuario!.dependencia_id)
-          .single()
-        if (dep?.nombre) setDependencia(dep.nombre)
-      }
-
-      // Role-specific data
-      const rol = usuario!.rol
-
-      if (rol === 'contratista') {
-        const { data } = await supabase
-          .from('contratos')
-          .select('id, numero, objeto, valor_total, fecha_inicio, fecha_fin, banco, tipo_cuenta, numero_cuenta')
-          .eq('contratista_id', usuario!.id)
-          .order('created_at', { ascending: false })
-        setContratos((data ?? []) as Contrato[])
-      }
-
-      if (rol === 'supervisor') {
-        const { count } = await supabase
-          .from('contratos')
-          .select('id', { count: 'exact', head: true })
-          .eq('supervisor_id', usuario!.id)
-        setSupervisedCount(count ?? 0)
-      }
-
-      if (rol === 'asesor') {
-        const { count } = await supabase
-          .from('preaprobaciones')
-          .select('id', { count: 'exact', head: true })
-          .eq('asesor_id', usuario!.id)
-        setAsesoredCount(count ?? 0)
-      }
-
-      setLoading(false)
     }
 
     load()
+    return () => { cancelado = true }
   }, [usuario])
 
   if (loading || !usuario) return <Skeleton />

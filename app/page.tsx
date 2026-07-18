@@ -9,13 +9,15 @@ export default function Home() {
 
   useEffect(() => {
     async function verificarSesion() {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (session) {
-        router.push('/dashboard')
-      } else {
-        router.push('/login')
+      try {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        router.replace(session ? '/dashboard' : '/login')
+      } catch {
+        // Cliente de auth atascado o fetch abortado (p. ej. al reanudar en
+        // iOS): que decida el servidor — /dashboard redirige a /login por sí
+        // solo si no hay sesión válida. Navegación dura: siempre navega.
+        window.location.replace('/dashboard')
       }
     }
 
