@@ -64,6 +64,7 @@ interface InitialData {
   initialObligaciones: Obligacion[]
   initialActividades: Actividad[]
   initialRevisiones?: Record<string, RevisionLocal>
+  certDisponible?: boolean
   periodosHermanos?: PeriodoHermano[]
   initialDuplicados?: Record<string, DuplicadoMatch[]>
   initialParaBackfill?: EvidenciaParaBackfill[]
@@ -82,6 +83,7 @@ export default function PeriodoDetallePage({
   initialObligaciones,
   initialActividades,
   initialRevisiones = {},
+  certDisponible = false,
   periodosHermanos = [],
   initialDuplicados = {},
   initialParaBackfill = [],
@@ -626,6 +628,15 @@ export default function PeriodoDetallePage({
   const puedeDescargarPaquete = periodo
     ? ['aprobado', 'radicado'].includes(periodo.estado)
     : false
+
+  // La certificación de retención es única por contrato → su descarga se
+  // muestra SOLO en el primer periodo (el de menor número) y solo si ya existe.
+  const esPrimerPeriodo = periodo != null && (
+    periodosHermanos.length > 0
+      ? periodo.numero_periodo === Math.min(...periodosHermanos.map(p => p.numero_periodo))
+      : periodo.numero_periodo === 1
+  )
+  const mostrarCertificacion = esPrimerPeriodo && certDisponible
 
   // ── Descarga del pipeline (Opción B) — ZIP completo filtrado por rol ───────
   // Al tocar el nodo Aprobado/Radicado se descargan TODOS los documentos del
@@ -2760,8 +2771,8 @@ export default function PeriodoDetallePage({
               </a>
             </div>
 
-            {/* Certificación de Retención — disponible una vez aceptada (periodo enviado) */}
-            {periodo && periodo.estado !== 'borrador' && (
+            {/* Certificación de Retención — única por contrato, solo en el primer periodo */}
+            {mostrarCertificacion && (
               <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                 <a href={`/api/certificacion/${periodoId}`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-3 flex-1 min-w-0">

@@ -123,6 +123,16 @@ export default async function PeriodoDetallePage({
     initialRevisiones[r.obligacion_id] = { aprobada: r.aprobada, nota: r.nota }
   }
 
+  // ¿Existe ya la certificación de retención para (contrato, año gravable)?
+  // Solo se muestra su tarjeta de descarga en el PRIMER periodo del contrato.
+  const { data: certRow } = await supabase
+    .from('certificaciones_retencion')
+    .select('id')
+    .eq('contrato_id', id)
+    .eq('anio_gravable', (periodo as { anio: number }).anio)
+    .maybeSingle()
+  const certDisponible = !!certRow
+
   // ── Signed URLs (private buckets) ──────────────────────────────
   // The DB stores canonical public-form URLs; the buckets are private, so we
   // convert everything the client will render into signed URLs here.
@@ -155,6 +165,7 @@ export default async function PeriodoDetallePage({
       initialObligaciones={(obligaciones ?? []) as unknown as Obligacion[]}
       initialActividades={(actividades ?? []) as unknown as Actividad[]}
       initialRevisiones={initialRevisiones}
+      certDisponible={certDisponible}
       periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
       initialDuplicados={duplicadosResult.matches ?? {}}
       initialParaBackfill={duplicadosResult.paraBackfill ?? []}
