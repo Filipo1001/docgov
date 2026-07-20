@@ -15,6 +15,8 @@ import {
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
+import CertificacionModal, { type CertPrefill } from './CertificacionModal'
+import { verificarCertificacionRequerida } from '@/app/actions/certificaciones'
 import {
   enviarPeriodo,
   aprobarComoAsesor,
@@ -182,6 +184,10 @@ export default function PeriodoDetallePage({
   const [mostrarRechazo, setMostrarRechazo] = useState(false)
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [enviando, setEnviando] = useState(false)
+  // Certificación de retención — modal obligatorio previo al primer envío
+  const [mostrarCert, setMostrarCert] = useState(false)
+  const [certPrefill, setCertPrefill] = useState<CertPrefill | null>(null)
+  const [certFaltaFirma, setCertFaltaFirma] = useState(false)
 
   // Activity form state
   const [formActivo, setFormActivo] = useState<string | null>(null)
@@ -653,6 +659,14 @@ export default function PeriodoDetallePage({
 
   // ── Handlers ────────────────────────────────────────────────
 
+  async function doEnviar() {
+    setEnviando(true)
+    const result = await enviarPeriodo(periodoId)
+    if (result.error) toast.error(result.error)
+    else { toast.success('Informe enviado a revisión'); router.refresh(); cargarDatos() }
+    setEnviando(false)
+  }
+
   async function handleEnviar() {
     const faltaPlanilla = !periodo?.planilla_ss_url
     const faltaNumero = !numPlanilla.trim()
@@ -665,11 +679,21 @@ export default function PeriodoDetallePage({
     }
 
     setErroresCampos({ planilla: false, numero: false })
+
+    // Certificación de retención (Ley 1819/2016): obligatoria una vez por año
+    // gravable antes del primer envío. Si falta, se abre el modal de juramento
+    // en lugar de enviar; tras aceptarlo, el envío continúa automáticamente.
     setEnviando(true)
-    const result = await enviarPeriodo(periodoId)
-    if (result.error) toast.error(result.error)
-    else { toast.success('Informe enviado a revisión'); router.refresh(); cargarDatos() }
+    const cert = await verificarCertificacionRequerida(periodoId)
     setEnviando(false)
+    if (cert.requerida && cert.prefill) {
+      setCertPrefill(cert.prefill)
+      setCertFaltaFirma(cert.faltaFirma)
+      setMostrarCert(true)
+      return
+    }
+
+    doEnviar()
   }
 
   async function handleAprobarAsesor() {
@@ -2736,6 +2760,20 @@ export default function PeriodoDetallePage({
               </a>
             </div>
 
+            {/* Certificación de Retención — disponible una vez aceptada (periodo enviado) */}
+            {periodo && periodo.estado !== 'borrador' && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                <a href={`/api/certificacion/${periodoId}`} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-lg shrink-0">🧾</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Certificación de Retención</p>
+                    <p className="text-xs text-gray-400">Bajo la gravedad de juramento</p>
+                  </div>
+                </a>
+              </div>
+            )}
+
             {/* Acta de Supervisión + observación del supervisor */}
             <div className="flex flex-col gap-2">
               <div className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-colors ${
@@ -3518,6 +3556,16 @@ export default function PeriodoDetallePage({
           </div>
         )
       })()}
+
+      {/* Certificación de retención — modal obligatorio previo al primer envío */}
+      <CertificacionModal
+        abierto={mostrarCert}
+        periodoId={periodoId}
+        prefill={certPrefill}
+        faltaFirma={certFaltaFirma}
+        onCerrar={() => setMostrarCert(false)}
+        onAceptada={() => { setMostrarCert(false); doEnviar() }}
+      />
     </div>
   )
 }

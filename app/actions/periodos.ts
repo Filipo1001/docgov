@@ -179,6 +179,23 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       return { error: 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida' }
     }
 
+    // Certificación de retención en la fuente (Ley 1819/2016, Art. 383 E.T.):
+    // obligatoria una vez por año gravable antes del envío. Defensa en
+    // profundidad — el cliente ya la exige vía modal, pero la regla es
+    // autoritativa aquí para que no pueda saltarse llamando la acción directo.
+    if (usuario.rol === 'contratista') {
+      const adminCert = createAdminSupabaseClient()
+      const { data: cert } = await adminCert
+        .from('certificaciones_retencion')
+        .select('id')
+        .eq('contrato_id', periodo.contrato_id)
+        .eq('anio_gravable', periodo.anio)
+        .maybeSingle()
+      if (!cert) {
+        return { error: 'Antes de enviar tu informe debes aceptar la Certificación de Retención en la Fuente.' }
+      }
+    }
+
     const estadoAnterior = periodo.estado
     const { data: updated, error } = await supabase
       .from('periodos')
