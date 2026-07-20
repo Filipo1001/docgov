@@ -24,6 +24,7 @@ const ESTADO_LABEL: Record<string, string> = {
   aprobado: 'Aprobado',
   radicado: 'Radicado',
   rechazado: 'Devuelto',
+  vigente: 'Vigente',
 }
 
 function Fila({ label, value }: { label: string; value: string }) {
@@ -38,6 +39,7 @@ function Fila({ label, value }: { label: string; value: string }) {
 export default async function VerificarPage({ params }: { params: Promise<{ codigo: string }> }) {
   const { codigo } = await params
   const resultado = await getVerificacion(codigo)
+  const esCert = resultado?.datos.tipo === 'certificacion-retencion'
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 16px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -73,11 +75,20 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
               <Fila label="Contrato" value={`N.° ${resultado.datos.contratoNumero}-${resultado.datos.contratoAnio}`} />
               <Fila label="Contratista" value={resultado.datos.contratistaNombre} />
               <Fila label="Documento" value={resultado.datos.cedulaMasked} />
-              <Fila label="Dependencia" value={resultado.datos.dependencia} />
-              <Fila label="Periodo" value={`${resultado.datos.mes} ${resultado.datos.anio}`} />
-              <Fila label="Valor" value={COP.format(resultado.datos.valor)} />
-              <Fila label="Estado" value={ESTADO_LABEL[resultado.datos.estado] ?? resultado.datos.estado} />
-              <Fila label="Supervisor" value={resultado.datos.supervisorNombre} />
+              {esCert ? (
+                <>
+                  <Fila label="Año gravable" value={String(resultado.datos.anio)} />
+                  <Fila label="Estado" value={ESTADO_LABEL[resultado.datos.estado] ?? resultado.datos.estado} />
+                </>
+              ) : (
+                <>
+                  <Fila label="Dependencia" value={resultado.datos.dependencia} />
+                  <Fila label="Periodo" value={`${resultado.datos.mes} ${resultado.datos.anio}`} />
+                  <Fila label="Valor" value={COP.format(resultado.datos.valor)} />
+                  <Fila label="Estado" value={ESTADO_LABEL[resultado.datos.estado] ?? resultado.datos.estado} />
+                  <Fila label="Supervisor" value={resultado.datos.supervisorNombre} />
+                </>
+              )}
               <Fila label="Código" value={resultado.codigo} />
               <Fila
                 label="Emitido"
