@@ -20,6 +20,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
+import { certificacionPendiente } from '@/lib/certificaciones'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
 import { enviarNotificacion, enviarNotificacionMultiple } from '@/lib/notifications'
@@ -180,18 +181,12 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
     }
 
     // Certificación de retención en la fuente (Ley 1819/2016, Art. 383 E.T.):
-    // obligatoria una vez por año gravable antes del envío. Defensa en
+    // obligatoria SOLO en el primer informe del contrato. Defensa en
     // profundidad — el cliente ya la exige vía modal, pero la regla es
     // autoritativa aquí para que no pueda saltarse llamando la acción directo.
     if (usuario.rol === 'contratista') {
-      const adminCert = createAdminSupabaseClient()
-      const { data: cert } = await adminCert
-        .from('certificaciones_retencion')
-        .select('id')
-        .eq('contrato_id', periodo.contrato_id)
-        .eq('anio_gravable', periodo.anio)
-        .maybeSingle()
-      if (!cert) {
+      const pendiente = await certificacionPendiente(periodo.contrato_id, periodoId, periodo.anio)
+      if (pendiente) {
         return { error: 'Antes de enviar tu informe debes aceptar la Certificación de Retención en la Fuente.' }
       }
     }

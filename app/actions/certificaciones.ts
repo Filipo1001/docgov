@@ -23,6 +23,7 @@ import {
 } from '@/lib/verificacion'
 import type { CertificacionData } from '@/lib/pdf/certificacion-retencion'
 import type { PDFVerificacion } from '@/lib/pdf/types'
+import { certificacionPendiente } from '@/lib/certificaciones'
 
 const BUCKET = 'certificaciones'
 const TEXTO_VERSION = 'v1'
@@ -99,16 +100,10 @@ export async function verificarCertificacionRequerida(periodoId: string): Promis
       return { requerida: false, faltaFirma: false, prefill: null }
     }
 
-    const admin = createAdminSupabaseClient()
-    const { data: existente } = await admin
-      .from('certificaciones_retencion')
-      .select('id')
-      .eq('contrato_id', ctx.contratoId)
-      .eq('anio_gravable', ctx.anioGravable)
-      .maybeSingle()
+    const requerida = await certificacionPendiente(ctx.contratoId, periodoId, ctx.anioGravable)
 
     return {
-      requerida: !existente,
+      requerida,
       faltaFirma: !ctx.firmaUrl,
       prefill: {
         nombre: ctx.nombre,
