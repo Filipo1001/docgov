@@ -17,7 +17,7 @@ export default function FilterTabs<T extends string>({
         <button
           key={opt.key}
           onClick={() => onChange(opt.key)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
             value === opt.key
               ? 'bg-white text-gray-900 shadow-sm'
               : 'text-gray-500 hover:text-gray-700'

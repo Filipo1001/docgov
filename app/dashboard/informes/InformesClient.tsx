@@ -26,11 +26,21 @@ import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import FilterTabs from '@/components/ui/FilterTabs'
 import EmptyState from '@/components/ui/EmptyState'
+import SearchInput from '@/components/ui/SearchInput'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
 function fmt(n: number) {
   return '$' + n.toLocaleString('es-CO')
+}
+
+/**
+ * Normaliza para búsqueda: minúsculas y sin tildes, de modo que "muñoz"
+ * encuentre "MUÑOZ" y "jose" encuentre "JOSÉ". Imprescindible con nombres
+ * colombianos, donde la tilde y la ñ son frecuentes.
+ */
+function normalizar(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
 type Filtro = 'todos' | 'sin_revisar' | 'revision' | 'aprobados' | 'sin_enviar'
@@ -426,6 +436,7 @@ export default function InformesPage({
   const [mesIdx, setMesIdx] = useState(now.getMonth())
   const [anio, setAnio] = useState(now.getFullYear())
   const [filtro, setFiltro] = useState<Filtro>('todos')
+  const [busqueda, setBusqueda] = useState('')
 
   // Secretary action state
   const [menuAbierto, setMenuAbierto] = useState(false)
@@ -512,6 +523,7 @@ export default function InformesPage({
   useEffect(() => {
     setRecordatoriosEnviados(false)
     setFiltro('todos')
+    setBusqueda('')
   }, [mesIdx, anio])
 
   // Navigation — when the query key changes (new month), TanStack Query fetches fresh
@@ -546,7 +558,7 @@ export default function InformesPage({
   // tienen actividades digitalizadas — sus PDFs saldrían vacíos)
   const descargables = aprobados.filter(p => !p.es_historico)
 
-  const periodosVisibles = (() => {
+  const periodosDelFiltro = (() => {
     switch (filtro) {
       case 'sin_revisar': return sinRevisar
       case 'revision': return aprobadosAsesor
@@ -555,6 +567,23 @@ export default function InformesPage({
       default: return periodos
     }
   })()
+
+  // Búsqueda por contratista o número de contrato. Se aplica SOLO sobre la
+  // lista que se está viendo: los contadores de las pestañas y las acciones
+  // masivas siguen refiriéndose al mes completo, para que buscar nunca cambie
+  // en silencio el alcance de un "aprobar todos" o una descarga masiva.
+  // Es filtrado en cliente sobre datos ya cargados → instantáneo, sin red.
+  const q = normalizar(busqueda.trim())
+  const buscando = q.length > 0
+  const periodosVisibles = buscando
+    ? periodosDelFiltro.filter(p => {
+        const c = p.contrato
+        return (
+          normalizar(c?.contratista?.nombre_completo ?? '').includes(q) ||
+          normalizar(String(c?.numero ?? '')).includes(q)
+        )
+      })
+    : periodosDelFiltro
 
   // Secretary mass actions — revision (asesor reviewed) + enviado (direct)
   const idsAprobadosAsesor = aprobadosAsesor.map(p => p.id)
@@ -626,6 +655,13 @@ export default function InformesPage({
   const esSecretaria = usuario.rol === 'supervisor'
   const esAdmin = usuario.rol === 'admin'
 
+  // ¿Hay alguna acción masiva visible? Evita dejar un hueco vacío bajo los
+  // filtros cuando ninguna aplica al rol/pestaña actual.
+  const hayAcciones =
+    (filtro === 'sin_enviar' && (esAsesor || esAdmin) && periodosBorrador.length > 0) ||
+    (filtro === 'aprobados' && (pendientesRadicar.length > 0 || descargables.length > 0)) ||
+    ((esSecretaria || esAdmin) && idsParaAprobar.length > 0)
+
   const subtitulo = esAsesor
     ? 'Informes de los contratistas de tu dependencia'
     : esSecretaria
@@ -674,20 +710,54 @@ export default function InformesPage({
         </div>
       )}
 
-      {/* Filter bar + secretary mass action */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
-        <FilterTabs<Filtro>
-          options={[
-            { key: 'todos', label: 'Todos', count: periodos.length },
-            { key: 'sin_revisar', label: 'Sin revisar', count: sinRevisar.length },
-            { key: 'revision', label: 'En revisión', count: aprobadosAsesor.length },
-            { key: 'aprobados', label: 'Aprobados', count: aprobados.length },
-            { key: 'sin_enviar', label: 'Sin enviar', count: periodosBorrador.length },
-          ]}
-          value={filtro}
-          onChange={setFiltro}
-        />
+      {/* Barra de búsqueda y filtros — panel unificado */}
+      <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <SearchInput
+            value={busqueda}
+            onChange={setBusqueda}
+            placeholder="Buscar por contratista o número de contrato..."
+          />
+          {/* Las pestañas se desplazan horizontalmente en móvil en vez de
+              romper el layout (5 opciones no caben en pantallas pequeñas). */}
+          <div className="-mx-1 overflow-x-auto px-1 lg:ml-auto lg:overflow-visible">
+            <FilterTabs<Filtro>
+              options={[
+                { key: 'todos', label: 'Todos', count: periodos.length },
+                { key: 'sin_revisar', label: 'Sin revisar', count: sinRevisar.length },
+                { key: 'revision', label: 'En revisión', count: aprobadosAsesor.length },
+                { key: 'aprobados', label: 'Aprobados', count: aprobados.length },
+                { key: 'sin_enviar', label: 'Sin enviar', count: periodosBorrador.length },
+              ]}
+              value={filtro}
+              onChange={setFiltro}
+            />
+          </div>
+        </div>
 
+        {/* Resultado de la búsqueda — aclara que los contadores de las
+            pestañas siguen siendo los totales del mes. */}
+        {buscando && (
+          <div className="mt-2.5 flex items-center gap-2 px-1 text-xs text-gray-500">
+            <span>
+              {periodosVisibles.length === 0
+                ? 'Sin coincidencias'
+                : `${periodosVisibles.length} ${periodosVisibles.length === 1 ? 'resultado' : 'resultados'}`}
+              {' para '}
+              <span className="font-medium text-gray-700">«{busqueda.trim()}»</span>
+            </span>
+            <button
+              onClick={() => setBusqueda('')}
+              className="font-medium text-gray-400 underline-offset-2 transition-colors hover:text-gray-700 hover:underline"
+            >
+              Limpiar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Acciones contextuales — solo se reserva espacio si hay alguna */}
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-4 ${hayAcciones ? 'mb-4' : ''}`}>
         {/* Reminder bulk button — only on Sin Enviar tab, for asesor/admin */}
         {filtro === 'sin_enviar' && (esAsesor || esAdmin) && periodosBorrador.length > 0 && (
           <div className="sm:ml-auto">
@@ -875,12 +945,14 @@ export default function InformesPage({
       ) : periodosVisibles.length === 0 ? (
         <Card>
           <EmptyState
-            icon={filtro === 'todos' ? '📭' : '🔍'}
-            title={filtro === 'todos' ? 'Sin informes este mes' : 'Sin resultados'}
+            icon={buscando || filtro !== 'todos' ? '🔍' : '📭'}
+            title={buscando || filtro !== 'todos' ? 'Sin resultados' : 'Sin informes este mes'}
             description={
-              filtro === 'todos'
-                ? `No hay informes enviados en ${mesNombre} ${anio}.`
-                : `No hay informes que coincidan con el filtro "${filtro}".`
+              buscando
+                ? `Ningún informe de ${mesNombre} ${anio} coincide con «${busqueda.trim()}».`
+                : filtro === 'todos'
+                  ? `No hay informes enviados en ${mesNombre} ${anio}.`
+                  : `No hay informes que coincidan con el filtro "${filtro}".`
             }
           />
         </Card>
