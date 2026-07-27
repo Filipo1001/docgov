@@ -118,7 +118,7 @@ export async function getInformesMensuales(
       *,
       contrato:contratos(
         id, numero, objeto, contratista_id, supervisor_id, dependencia_id,
-        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula),
+        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, foto_url),
         supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
         dependencia:dependencias(nombre, abreviatura)
       ),
@@ -159,7 +159,7 @@ export async function getInformesBorrador(
       *,
       contrato:contratos(
         id, numero, objeto, contratista_id, supervisor_id, dependencia_id,
-        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula),
+        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, foto_url),
         supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
         dependencia:dependencias(nombre, abreviatura)
       ),

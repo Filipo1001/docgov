@@ -116,7 +116,7 @@ export interface Contrato {
   crp?: string          // Certificado de Registro Presupuestal
   created_at: string
   // Joined relations (optional)
-  contratista?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula' | 'email' | 'telefono' | 'cargo' | 'direccion' | 'firma_url'>
+  contratista?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula' | 'email' | 'telefono' | 'cargo' | 'direccion' | 'firma_url' | 'foto_url'>
   supervisor?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula' | 'cargo' | 'firma_url'>
   dependencia?: Pick<Dependencia, 'nombre' | 'abreviatura'>
 }
@@ -164,7 +164,7 @@ export interface Periodo {
   numero_radicado: string | null     // Radicado number assigned on filing
   // Joined
   contrato?: Pick<Contrato, 'id' | 'numero' | 'objeto' | 'contratista_id' | 'supervisor_id' | 'dependencia_id'> & {
-    contratista?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula'>
+    contratista?: Pick<Usuario, 'id' | 'nombre_completo' | 'cedula' | 'foto_url'>
     supervisor?: Pick<Usuario, 'id' | 'nombre_completo'>
     dependencia?: Pick<Dependencia, 'nombre' | 'abreviatura'>
   }

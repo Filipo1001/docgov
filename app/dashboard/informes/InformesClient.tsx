@@ -54,7 +54,9 @@ function InformeCard({
 
   const contrato = periodo.contrato
   const nombre = contrato?.contratista?.nombre_completo ?? 'Sin nombre'
+  const foto = contrato?.contratista?.foto_url
   const tieneNotaSecretaria = periodo.motivo_rechazo && periodo.estado === 'enviado'
+  const detalleHref = `/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`
 
   const esHistorico = periodo.es_historico === true
   const esAsesorCard = rol === 'asesor' || rol === 'admin'
@@ -131,9 +133,21 @@ function InformeCard({
         : 'border-gray-200 bg-white'
 
   return (
-    <div className={`rounded-2xl border p-5 transition-all ${cardBorder}`}>
+    <div
+      className={`relative rounded-2xl border p-5 transition-all hover:shadow-md hover:border-gray-300 focus-within:ring-2 focus-within:ring-blue-400 ${cardBorder}`}
+    >
+      {/* Toda la tarjeta navega al detalle: un <Link> que la cubre por completo.
+          Es un ancla real (soporta ⌘+clic, "abrir en pestaña nueva", teclado y
+          prefetch de Next) y no cuesta JS ni handlers. Los controles de acción
+          llevan `relative z-10` para quedar POR ENCIMA de esta capa y seguir
+          funcionando con normalidad. */}
+      <Link
+        href={detalleHref}
+        aria-label={`Ver detalle del informe de ${nombre}`}
+        className="absolute inset-0 z-0 rounded-2xl outline-none"
+      />
       <div className="flex items-start gap-3">
-        <Avatar nombre={nombre} />
+        <Avatar nombre={nombre} foto={foto} />
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div>
@@ -173,7 +187,7 @@ function InformeCard({
 
           {/* Actions for enviado -- asesor can approve or reject */}
           {!esHistorico && periodo.estado === 'enviado' && !mostrarRechazo && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <div className="relative z-10 mt-3 flex items-center gap-2 flex-wrap">
               {esAsesorCard && (
                 <button
                   onClick={handleAprobarAsesor}
@@ -201,19 +215,12 @@ function InformeCard({
               >
                 Devolver
               </button>
-
-              <Link
-                href={`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium ml-auto"
-              >
-                Ver detalle
-              </Link>
             </div>
           )}
 
           {/* Actions for revision — asesor has reviewed, secretary can approve */}
           {!esHistorico && periodo.estado === 'revision' && !mostrarRechazo && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <div className="relative z-10 mt-3 flex items-center gap-2 flex-wrap">
               {/* Secretary approves */}
               {esSecretariaCard && (
                 <button
@@ -245,18 +252,11 @@ function InformeCard({
                   Devolver
                 </button>
               )}
-
-              <Link
-                href={`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium ml-auto"
-              >
-                Ver detalle
-              </Link>
             </div>
           )}
 
           {!esHistorico && (periodo.estado === 'aprobado' || periodo.estado === 'radicado') && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <div className="relative z-10 mt-3 flex items-center gap-2 flex-wrap">
               {(esAsesorCard || esSecretariaCard) && (
                 <a
                   href={`/api/pdf/${periodo.id}/actas`}
@@ -280,7 +280,7 @@ function InformeCard({
 
           {/* Inline rejection form */}
           {!esHistorico && mostrarRechazo && (
-            <div className="mt-3 space-y-2">
+            <div className="relative z-10 mt-3 space-y-2">
               <p className="text-xs text-gray-500 font-medium">
                 {esSecretariaCard && !esAsesorCard
                   ? 'Motivo (visible para asesores):'
@@ -327,6 +327,7 @@ function SinEnviarCard({
 
   const contrato = periodo.contrato
   const nombre = contrato?.contratista?.nombre_completo ?? 'Sin nombre'
+  const foto = contrato?.contratista?.foto_url
 
   async function handleRecordar() {
     setEstado('enviando')
@@ -343,7 +344,7 @@ function SinEnviarCard({
   return (
     <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 transition-all">
       <div className="flex items-start gap-3">
-        <Avatar nombre={nombre} />
+        <Avatar nombre={nombre} foto={foto} />
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div>
