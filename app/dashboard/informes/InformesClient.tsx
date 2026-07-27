@@ -12,6 +12,7 @@ import {
   rechazarComoAsesor,
   aprobarPeriodos,
   rechazarPeriodos,
+  devolverPeriodoAContratista,
   enviarRecordatorioInforme,
   enviarRecordatoriosMasivos,
 } from '@/app/actions/periodos'
@@ -65,7 +66,11 @@ function InformeCard({
   const contrato = periodo.contrato
   const nombre = contrato?.contratista?.nombre_completo ?? 'Sin nombre'
   const foto = contrato?.contratista?.foto_url
+  // Nota de la secretaria sobre un informe aún en revisión (devuelto a asesores)
   const tieneNotaSecretaria = periodo.motivo_rechazo && periodo.estado === 'enviado'
+  // Motivo por el que se devolvió al contratista — debe seguir visible cuando
+  // el informe ya quedó en "rechazado", si no la tarjeta no explicaría por qué.
+  const tieneMotivoRechazo = periodo.motivo_rechazo && periodo.estado === 'rechazado'
   const detalleHref = `/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`
 
   const esHistorico = periodo.es_historico === true
@@ -121,14 +126,18 @@ function InformeCard({
     setProcesando(false)
   }
 
+  // La secretaria devuelve directamente AL CONTRATISTA: el informe queda en
+  // "rechazado" para que lo corrija y lo reenvíe. (La devolución a los asesores
+  // para re-revisión sigue disponible en el detalle del periodo, donde la
+  // secretaria elige explícitamente el destino.)
   async function handleRechazarSecretaria() {
     if (!motivo.trim()) return
     setProcesando(true)
-    const res = await rechazarPeriodos([periodo.id], motivo)
+    const res = await devolverPeriodoAContratista(periodo.id, motivo)
     if (res.error) toast.error(res.error)
     else {
-      toast.success('Devuelto a asesores')
-      onPatch(periodo.id, { estado: 'enviado', motivo_rechazo: motivo })
+      toast.success('Devuelto al contratista')
+      onPatch(periodo.id, { estado: 'rechazado', motivo_rechazo: motivo })
       setMostrarRechazo(false); setMotivo(''); void onUpdate()
     }
     setProcesando(false)
@@ -136,7 +145,7 @@ function InformeCard({
 
   const cardBorder = esHistorico
     ? 'border-amber-200 bg-amber-50/40'
-    : tieneNotaSecretaria
+    : tieneNotaSecretaria || tieneMotivoRechazo
       ? 'border-red-200 bg-red-50/30'
       : periodo.estado === 'revision'
         ? 'border-indigo-200 bg-indigo-50/30'
@@ -187,10 +196,11 @@ function InformeCard({
           </div>
 
           {/* Secretary rejection note */}
-          {tieneNotaSecretaria && (
+          {(tieneNotaSecretaria || tieneMotivoRechazo) && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 mt-2">
               <p className="text-[10px] text-red-600">
-                <strong>Nota secretaria:</strong> {periodo.motivo_rechazo}
+                <strong>{tieneMotivoRechazo ? 'Motivo de la devolución:' : 'Nota secretaria:'}</strong>{' '}
+                {periodo.motivo_rechazo}
               </p>
             </div>
           )}
@@ -279,22 +289,15 @@ function InformeCard({
                   Descargar Documentos
                 </a>
               )}
-              <Link
-                href={`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium ml-auto"
-              >
-                Ver documentos
-              </Link>
             </div>
           )}
 
           {/* Inline rejection form */}
           {!esHistorico && mostrarRechazo && (
             <div className="relative z-10 mt-3 space-y-2">
+              {/* Ambas rutas (asesor y secretaria) devuelven ya al contratista */}
               <p className="text-xs text-gray-500 font-medium">
-                {esSecretariaCard && !esAsesorCard
-                  ? 'Motivo (visible para asesores):'
-                  : 'Motivo (visible para el contratista):'}
+                Motivo (visible para el contratista):
               </p>
               <textarea
                 value={motivo}
