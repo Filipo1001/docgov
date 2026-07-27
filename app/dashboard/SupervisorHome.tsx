@@ -325,10 +325,14 @@ export default function SupervisorHome({
     }
   }
 
+  // Devuelve AL CONTRATISTA (estado "rechazado"): es lo que ya asumía el
+  // contador optimista de abajo (pipeline.rechazado + 1). La devolución a los
+  // asesores solo existe donde la secretaria elige el destino explícitamente
+  // (modal del detalle del periodo).
   async function handleRechazar(periodoId: string, motivo: string) {
     setProcesando(periodoId)
-    const { rechazarPeriodos } = await import('@/app/actions/periodos')
-    const result = await rechazarPeriodos([periodoId], motivo)
+    const { devolverPeriodoAContratista } = await import('@/app/actions/periodos')
+    const result = await devolverPeriodoAContratista(periodoId, motivo)
     setProcesando(null)
     setRechazando(null)
     if (!result.error) {

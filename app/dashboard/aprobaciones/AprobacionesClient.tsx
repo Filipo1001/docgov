@@ -9,7 +9,7 @@ import type { Periodo } from '@/lib/types'
 import { getPeriodosPendientesParaRol } from '@/services/periodos'
 import { formatCedula } from '@/lib/format'
 import { getPeriodosPendientesSupervisor, type PeriodoPendienteSupervisor } from '@/services/supervisor'
-import { aprobarPeriodos, rechazarPeriodos } from '@/app/actions/periodos'
+import { aprobarPeriodos, devolverPeriodoAContratista } from '@/app/actions/periodos'
 
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
@@ -69,12 +69,12 @@ function SupervisorAprobaciones({ userId }: { userId: string }) {
   async function handleRechazar() {
     if (!rechazandoId || !motivoRechazo.trim()) return
     setProcesando(rechazandoId)
-    const result = await rechazarPeriodos([rechazandoId], motivoRechazo.trim())
+    const result = await devolverPeriodoAContratista(rechazandoId, motivoRechazo.trim())
     setProcesando(null)
     if (result.error) {
       toast.error(result.error)
     } else {
-      toast.success('Periodo devuelto a asesores')
+      toast.success('Periodo devuelto al contratista')
       setPeriodos(prev => prev.filter(p => p.id !== rechazandoId))
       setRechazandoId(null)
       setMotivoRechazo('')
@@ -322,10 +322,10 @@ function GenericAprobaciones({ rol, userId }: { rol: string; userId: string }) {
     const motivo = motivoRechazo[periodoId]?.trim()
     if (!motivo) { toast.error('Escribe el motivo del rechazo'); return }
     setProcesando(periodoId)
-    const result = await rechazarPeriodos([periodoId], motivo)
+    const result = await devolverPeriodoAContratista(periodoId, motivo)
     if (result.error) toast.error(result.error)
     else {
-      toast.success('Periodo devuelto a asesores')
+      toast.success('Periodo devuelto al contratista')
       setMostrarRechazo(p => ({ ...p, [periodoId]: false }))
       setMotivoRechazo(p => ({ ...p, [periodoId]: '' }))
       cargar()

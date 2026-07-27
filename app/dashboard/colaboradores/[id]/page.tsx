@@ -12,7 +12,7 @@ import type {
   ContratoConPeriodos,
   PeriodoColaborador,
 } from '@/services/supervisor'
-import { aprobarPeriodos, rechazarPeriodos } from '@/app/actions/periodos'
+import { aprobarPeriodos, devolverPeriodoAContratista } from '@/app/actions/periodos'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -80,11 +80,11 @@ function PeriodoRow({
   async function handleRechazar() {
     if (!motivo.trim()) { toast.error('Escribe el motivo'); return }
     setProcesando(true)
-    const res = await rechazarPeriodos([periodo.id], motivo.trim())
+    const res = await devolverPeriodoAContratista(periodo.id, motivo.trim())
     setProcesando(false)
     setRechazando(false)
     if (res.error) toast.error(res.error)
-    else { toast.success('Periodo devuelto'); onUpdate() }
+    else { toast.success('Periodo devuelto al contratista'); onUpdate() }
   }
 
   return (
