@@ -45,6 +45,7 @@ import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/ac
 import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
 import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 import MejorarRedaccion from '@/components/MejorarRedaccion'
+import Badge from '@/components/ui/Badge'
 
 /** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
 type RevisionLocal = { aprobada: boolean; nota: string | null }
@@ -359,9 +360,15 @@ export default function PeriodoDetallePage({
   const [guardandoNota, setGuardandoNota] = useState(false)
   const [obligacionProcesando, setObligacionProcesando] = useState<string | null>(null)
 
-  async function handleToggleAprobacion(obligacionId: string) {
+  async function handleToggleAprobacion(obligacionId: string, numero: number) {
     const actual = getRevision(obligacionId)
-    const nuevoValor = !actual.aprobada
+    // Una obligación SIN REVISAR (sin fila) se muestra como pendiente aunque el
+    // acta la dé por cumplida: el primer clic debe APROBARLA explícitamente.
+    // Antes se calculaba !actual.aprobada, y como el default es `true`, ese
+    // primer clic la marcaba como NO aprobada — lo contrario de lo que el
+    // usuario creía estar haciendo, y sin ningún aviso.
+    const sinRevisar = revisiones[obligacionId] === undefined
+    const nuevoValor = sinRevisar ? true : !actual.aprobada
     // Optimista
     setRevisiones((prev) => ({
       ...prev,
@@ -371,11 +378,19 @@ export default function PeriodoDetallePage({
     const res = await toggleAprobacionObligacion(periodoId, obligacionId, nuevoValor)
     if (res.error) {
       // Revertir
-      setRevisiones((prev) => ({
-        ...prev,
-        [obligacionId]: { aprobada: actual.aprobada, nota: prev[obligacionId]?.nota ?? actual.nota },
-      }))
+      setRevisiones((prev) => {
+        const copia = { ...prev }
+        if (sinRevisar) delete copia[obligacionId]
+        else copia[obligacionId] = { aprobada: actual.aprobada, nota: prev[obligacionId]?.nota ?? actual.nota }
+        return copia
+      })
       toast.error(res.error)
+    } else {
+      toast.success(
+        nuevoValor
+          ? `Obligación ${numero} aprobada`
+          : `Obligación ${numero} marcada como no cumplida`,
+      )
     }
     setObligacionProcesando(null)
   }
@@ -1952,10 +1967,27 @@ export default function PeriodoDetallePage({
           const abierta = obligacionesAbiertas.has(obl.id)
           const rev = getRevision(obl.id)
           const tieneNota = !!rev.nota?.trim()
+          // TRES estados, no dos. "Sin revisar" (nadie la ha tocado) se
+          // distingue de "Aprobada" (alguien la aprobó explícitamente), que es
+          // justo lo que la barra de progreso de arriba ya cuenta. Antes ambos
+          // se pintaban con el mismo check verde, así que aprobar no producía
+          // ningún cambio visible.
+          const revisada = revisiones[obl.id] !== undefined
+          const estadoRev: 'aprobada' | 'sin_aprobar' | 'sin_revisar' =
+            !revisada ? 'sin_revisar' : rev.aprobada ? 'aprobada' : 'sin_aprobar'
           const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico &&
             !!periodo && ['enviado', 'revision', 'rechazado'].includes(periodo.estado)
           return (
-            <div key={obl.id} className="bg-white rounded-2xl border p-6">
+            <div
+              key={obl.id}
+              className={`rounded-2xl border border-l-4 p-6 transition-colors ${
+                estadoRev === 'aprobada'
+                  ? 'bg-green-50/40 border-gray-200 border-l-green-500'
+                  : estadoRev === 'sin_aprobar'
+                    ? 'bg-amber-50/40 border-amber-200 border-l-amber-400'
+                    : 'bg-white border-gray-200 border-l-gray-200'
+              }`}
+            >
               {/* Cabecera — zona clickable (expandir) + acciones de revisión.
                   Colapsada por defecto: las actividades y evidencias (imágenes)
                   no se montan hasta abrir, evitando descargar fotos innecesarias. */}
@@ -1976,12 +2008,25 @@ export default function PeriodoDetallePage({
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 break-words">{obl.descripcion}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''} registrada{actsDeObl.length !== 1 ? 's' : ''}
-                      {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
-                      {!rev.aprobada && <span className="text-amber-600 font-medium"> · Sin aprobar</span>}
-                      {tieneNota && <span className="text-blue-600 font-medium"> · Con nota</span>}
-                    </p>
+                    {/* Estado con ETIQUETA, no solo color: el color por sí solo
+                        no es un indicador accesible (WCAG 1.4.1) y un botón
+                        verde se lee como "acción disponible", no como "hecho". */}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                      {estadoRev === 'aprobada' && (
+                        <Badge variant="green" size="xs">✓ Aprobada por la supervisión</Badge>
+                      )}
+                      {estadoRev === 'sin_aprobar' && (
+                        <Badge variant="amber" size="xs">Sin aprobar</Badge>
+                      )}
+                      {estadoRev === 'sin_revisar' && puedeRevisar && (
+                        <Badge variant="gray" size="xs">Sin revisar</Badge>
+                      )}
+                      {tieneNota && <Badge variant="blue" size="xs">Con nota</Badge>}
+                      <span className="text-xs text-gray-400">
+                        {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''}
+                        {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
+                      </span>
+                    </div>
                   </div>
                   <svg
                     className={`w-5 h-5 text-gray-400 shrink-0 mt-1 transition-transform ${abierta ? 'rotate-180' : ''}`}
@@ -1995,20 +2040,30 @@ export default function PeriodoDetallePage({
                 {puedeRevisar && (
                   <div className="flex items-center gap-1 shrink-0">
                     {/* Aprobar / desmarcar */}
+                    {/* Botón con ETIQUETA: un icono suelto no dice si el verde
+                        significa "ya está aprobada" o "pulsa para aprobar". El
+                        texto elimina esa ambigüedad y anuncia qué hará el clic. */}
                     <button
                       type="button"
-                      onClick={() => handleToggleAprobacion(obl.id)}
+                      onClick={() => handleToggleAprobacion(obl.id, oblIndex + 1)}
                       disabled={obligacionProcesando === obl.id}
-                      title={rev.aprobada ? 'Obligación aprobada — clic para desmarcar' : 'Marcar obligación como aprobada'}
-                      aria-label={rev.aprobada ? 'Desmarcar obligación' : 'Aprobar obligación'}
-                      className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors disabled:opacity-40
-                        ${rev.aprobada
-                          ? 'bg-green-500 border-green-500 text-white hover:bg-green-600'
-                          : 'bg-white border-gray-200 text-gray-300 hover:text-green-500 hover:border-green-300'}`}
+                      aria-pressed={estadoRev === 'aprobada'}
+                      title={
+                        estadoRev === 'aprobada'
+                          ? 'Aprobada — clic para retirar la aprobación'
+                          : 'Marcar esta obligación como cumplida'
+                      }
+                      className={`h-9 px-2.5 sm:px-3 inline-flex items-center gap-1.5 rounded-xl border text-xs font-semibold transition-colors disabled:opacity-40
+                        ${estadoRev === 'aprobada'
+                          ? 'bg-green-600 border-green-600 text-white hover:bg-green-700'
+                          : 'bg-white border-gray-200 text-gray-500 hover:text-green-600 hover:border-green-400'}`}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                       </svg>
+                      <span className="hidden sm:inline">
+                        {estadoRev === 'aprobada' ? 'Aprobada' : 'Aprobar'}
+                      </span>
                     </button>
                     {/* Agregar / editar nota */}
                     <button
@@ -2632,7 +2687,7 @@ export default function PeriodoDetallePage({
               </div>
               {!todasRevisadas && (
                 <p className="text-[11px] text-amber-600 mt-1.5">
-                  Usa los botones ✓ en cada obligación del acordeón de arriba para registrar tu seguimiento.
+                  Usa el botón <strong>Aprobar</strong> en cada obligación del acordeón de arriba para registrar tu seguimiento.
                 </p>
               )}
             </div>
