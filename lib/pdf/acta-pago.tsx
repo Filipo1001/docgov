@@ -10,7 +10,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
-import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
+import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
@@ -548,12 +548,15 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
             )}
             <Text style={s.sigCargo}>Supervisor</Text>
           </View>
+
+          {/* Sello de verificación — junto a la firma, con el QR al tamaño
+              necesario para ser escaneable. */}
+          <BloqueVerificacion v={data.verificacion} />
         </View>
 
 
         {/* Footer — único elemento fixed, aparece en todas las páginas */}
         <View style={s.footer} fixed>
-          <SelloVerificacion v={data.verificacion} />
           <View style={s.footerRow}>
             <View style={s.footerLeft}>
               <Text style={s.footerText}>
@@ -566,10 +569,15 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
                 Email: contactenos@fredonia-antioquia.gov.co / Sitio web: www.fredonia-antioquia.gov.co
               </Text>
             </View>
-            <Text
-              style={s.footerPage}
-              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-            />
+            {/* Página + código: 2 líneas frente a las 3 de la izquierda, así
+                que el pie conserva su altura original y no invade el contenido. */}
+            <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+              <Text
+                style={s.footerPage}
+                render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+              />
+              <CodigoPie v={data.verificacion} />
+            </View>
           </View>
         </View>
 

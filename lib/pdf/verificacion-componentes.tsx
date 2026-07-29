@@ -44,6 +44,60 @@ export function SelloVerificacion({ v }: { v?: PDFVerificacion }) {
   )
 }
 
+/**
+ * Sello de verificación para el CIERRE del documento (junto a la firma).
+ *
+ * Sustituye al QR del pie repetido: dentro de un footer `fixed` el bloque no
+ * cabía en el espacio reservado por paddingBottom y se superponía al contenido.
+ * Aquí va en el flujo normal, donde puede tener el tamaño que un QR necesita
+ * para ser escaneable de verdad (58pt ≈ 20 mm → ~0,7 mm por módulo, legible
+ * incluso fotocopiado). El código sigue impreso en el pie de TODAS las páginas,
+ * así que cualquier hoja suelta puede verificarse a mano.
+ */
+export function BloqueVerificacion({ v }: { v?: PDFVerificacion }) {
+  if (!v) return null
+  const urlLegible = v.url.replace(/^https?:\/\//, '').replace(/\/[^/]*$/, '')
+  return (
+    <View
+      wrap={false}
+      style={{
+        marginTop: 18,
+        maxWidth: 290,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 9,
+        borderWidth: 0.5,
+        borderColor: '#d1d5db',
+        borderRadius: 4,
+        padding: 8,
+      }}
+    >
+      <Image src={v.qr} style={{ width: 58, height: 58 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 2 }}>
+          Documento verificable
+        </Text>
+        <Text style={{ fontSize: 7, color: '#374151', marginBottom: 3 }}>
+          Código {v.codigo}
+        </Text>
+        <Text style={{ fontSize: 6.5, color: '#6b7280', lineHeight: 1.35 }}>
+          Escanee el código QR o verifíquelo en {urlLegible}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
+/** Código de verificación para el pie de página (sin QR, altura mínima). */
+export function CodigoPie({ v }: { v?: PDFVerificacion }) {
+  if (!v) return null
+  return (
+    <Text style={{ fontSize: 6.5, color: '#888' }}>
+      Código {v.codigo}
+    </Text>
+  )
+}
+
 /** DD/MM/AAAA en hora de Colombia a partir de un ISO. */
 function fmtFecha(iso: string): string {
   return new Intl.DateTimeFormat('es-CO', {

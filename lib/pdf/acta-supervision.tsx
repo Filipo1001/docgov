@@ -10,7 +10,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
-import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
+import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
 import { calcularBaseCotizacionSS } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
 
@@ -943,12 +943,15 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
               )}
               <Text style={s.sigCargo}>Supervisor Contrato No {contrato.numero}-{contrato.anio}</Text>
             </View>
+
+            {/* Sello de verificación — junto a la firma, donde corresponde a su
+                jerarquía y donde el QR puede tener tamaño escaneable. */}
+            <BloqueVerificacion v={data.verificacion} />
           </View>
         </View>
 
         {/* Footer — único elemento fixed para garantizar repetición en todas las páginas */}
         <View style={s.footer} fixed>
-          <SelloVerificacion v={data.verificacion} />
           <View style={s.footerRow}>
             <View style={s.footerLeft}>
               <Text style={s.footerText}>
@@ -961,10 +964,15 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                 Email: contactenos@fredonia-antioquia.gov.co / Sitio web: www.fredonia-antioquia.gov.co
               </Text>
             </View>
-            <Text
-              style={s.footerPage}
-              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-            />
+            {/* Columna derecha: página + código. Ocupa 2 líneas frente a las 3
+                de la izquierda, así que NO aumenta la altura del pie. */}
+            <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+              <Text
+                style={s.footerPage}
+                render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+              />
+              <CodigoPie v={data.verificacion} />
+            </View>
           </View>
         </View>
 

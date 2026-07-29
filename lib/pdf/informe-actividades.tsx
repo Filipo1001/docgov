@@ -23,7 +23,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFObligacion, PDFActividad } from './types'
-import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
+import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 
 // ─── Date utilities ───────────────────────────────────────────
@@ -767,13 +767,17 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
           </View>
         </View>{/* end wrap={false} closing+signature */}
 
-        {/* ── Footer — page number only (centered) ──────── */}
+        {/* Sello de verificación — al cierre, con el QR al tamaño necesario
+            para ser escaneable (en el pie fijo no cabía y se superponía). */}
+        <BloqueVerificacion v={data.verificacion} />
+
+        {/* ── Footer — page number + código de verificación ──────── */}
         <View style={s.footer} fixed>
-          <SelloVerificacion v={data.verificacion} />
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
           />
+          <CodigoPie v={data.verificacion} />
         </View>
 
       </Page>
