@@ -36,7 +36,9 @@ export interface AdjuntoDTO {
   estado: string
   verificacion_nota: string | null
   created_at: string
-  /** URL firmada para abrir el PDF en una pestaña nueva. */
+  /** Actividad (y por tanto obligación) a la que soporta este documento. */
+  actividad_id: string | null
+  /** URL firmada, consumida por el visor integrado. */
   urlFirmada?: string
 }
 
@@ -81,6 +83,7 @@ export async function prepararUploadAdjunto(
   periodoId: string,
   fileName: string,
   fileSize: number,
+  actividadId: string,
 ): Promise<ActionResult<{ signedUrl: string; path: string }>> {
   try {
     if (!fileName.toLowerCase().endsWith('.pdf')) {
@@ -94,6 +97,16 @@ export async function prepararUploadAdjunto(
     if ('error' in permiso) return { error: permiso.error }
 
     const admin = createAdminSupabaseClient()
+
+    // La actividad debe pertenecer a este periodo: impide que un actividadId
+    // manipulado cuelgue un documento de la obligación de otro contrato.
+    const { data: actividad } = await admin
+      .from('actividades')
+      .select('id')
+      .eq('id', actividadId)
+      .eq('periodo_id', periodoId)
+      .single()
+    if (!actividad) return { error: 'La actividad no pertenece a este periodo' }
 
     // Tope acumulado por periodo: protege la memoria de la función que fusiona
     // los anexos al generar el informe.
@@ -129,6 +142,7 @@ export async function registrarAdjunto(
   periodoId: string,
   storagePath: string,
   nombreOriginal: string,
+  actividadId: string,
 ): Promise<ActionResult<AdjuntoDTO>> {
   const admin = createAdminSupabaseClient()
 
@@ -178,6 +192,7 @@ export async function registrarAdjunto(
       .insert({
         entidad_tipo: 'periodo',
         entidad_id: periodoId,
+        actividad_id: actividadId,
         municipio_id: permiso.municipioId,
         storage_path: storagePath,
         nombre_original: nombreOriginal.slice(0, 200),
@@ -192,7 +207,7 @@ export async function registrarAdjunto(
         verificado_at: new Date().toISOString(),
         subido_por: permiso.userId,
       })
-      .select('id, nombre_original, bytes, paginas, orden, estado, verificacion_nota, created_at')
+      .select('id, nombre_original, bytes, paginas, orden, estado, verificacion_nota, created_at, actividad_id')
       .single()
 
     if (insErr || !fila) {
@@ -223,7 +238,7 @@ export async function listarAdjuntos(periodoId: string): Promise<AdjuntoDTO[]> {
     // Lectura con la sesión del usuario para que RLS decida la visibilidad.
     const { data } = await supabase
       .from('documentos_adjuntos')
-      .select('id, nombre_original, bytes, paginas, orden, estado, verificacion_nota, created_at, storage_path')
+      .select('id, nombre_original, bytes, paginas, orden, estado, verificacion_nota, created_at, actividad_id, storage_path')
       .eq('entidad_tipo', 'periodo')
       .eq('entidad_id', periodoId)
       .is('eliminado_at', null)

@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation'
 import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
 import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { buscarDuplicados } from '@/lib/duplicados'
-import { firmarUrls, firmarUrlsMiniatura } from '@/lib/storage-firmado'
+import { firmarUrls, firmarUrlsMiniatura, firmarUrl } from '@/lib/storage-firmado'
+import type { AdjuntoDTO } from '@/app/actions/adjuntos'
 
 /**
  * Server component — runs with full server-side auth (httpOnly cookies).
@@ -123,6 +124,25 @@ export default async function PeriodoDetallePage({
     initialRevisiones[r.obligacion_id] = { aprobada: r.aprobada, nota: r.nota }
   }
 
+  // Adjuntos PDF agrupados por actividad — se muestran junto a las imágenes en
+  // la evidencia de cada obligación. Se firman aquí (bucket privado) para que el
+  // visor integrado pueda leerlos sin una ida y vuelta adicional.
+  const { data: adjuntosRaw } = await supabase
+    .from('documentos_adjuntos')
+    .select('id, nombre_original, bytes, paginas, orden, estado, verificacion_nota, created_at, actividad_id, storage_path')
+    .eq('entidad_tipo', 'periodo')
+    .eq('entidad_id', periodoId)
+    .is('eliminado_at', null)
+    .order('orden', { ascending: true })
+
+  const initialAdjuntos: Record<string, AdjuntoDTO[]> = {}
+  for (const a of (adjuntosRaw ?? []) as Array<AdjuntoDTO & { storage_path: string }>) {
+    if (!a.actividad_id) continue
+    const { storage_path, ...resto } = a
+    const urlFirmada = (await firmarUrl('adjuntos', storage_path)) ?? undefined
+      ; (initialAdjuntos[a.actividad_id] ??= []).push({ ...resto, urlFirmada })
+  }
+
   // ¿Existe ya la certificación de retención para (contrato, año gravable)?
   // Solo se muestra su tarjeta de descarga en el PRIMER periodo del contrato.
   const { data: certRow } = await supabase
@@ -171,6 +191,7 @@ export default async function PeriodoDetallePage({
       initialParaBackfill={duplicadosResult.paraBackfill ?? []}
       initialUrlsFirmadas={initialUrlsFirmadas}
       initialUrlsMiniatura={miniaturasEvidencias}
+      initialAdjuntos={initialAdjuntos}
     />
   )
 }
