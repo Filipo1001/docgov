@@ -115,6 +115,16 @@ export interface PDFVerificacion {
   municipio: string
 }
 
+/** Anexo PDF cargado por el contratista, listado en el índice del informe. */
+export interface PDFAnexo {
+  orden: number
+  nombre: string
+  paginas: number | null
+  bytes: number
+  /** SHA-256 del archivo — prueba cuál fue exactamente el soporte anexado. */
+  sha256: string
+}
+
 export interface PDFData {
   municipio: PDFMunicipio
   contrato: PDFContrato
@@ -123,4 +133,5 @@ export interface PDFData {
   fechaGeneracion: string
   pagosHistorial?: PDFPagoHistorial[]  // For Acta de Pago
   verificacion?: PDFVerificacion       // Código + QR de verificación pública
+  anexos?: PDFAnexo[]                  // Índice de anexos (Informe de Actividades)
 }

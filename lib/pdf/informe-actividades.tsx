@@ -402,6 +402,45 @@ const s = StyleSheet.create({
     fontSize: 7.5,
     color: '#888',
   },
+
+  // ── Relación de anexos ──────────────────────────────────────
+  anexosBloque: {
+    marginTop: 18,
+    borderWidth: 0.8,
+    borderColor: '#999',
+    padding: 10,
+  },
+  anexosTitulo: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 7,
+    letterSpacing: 0.4,
+  },
+  anexosHead: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.8,
+    borderBottomColor: '#999',
+    paddingBottom: 3,
+    marginBottom: 2,
+  },
+  anexosFila: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.4,
+    borderBottomColor: '#ddd',
+    paddingVertical: 3,
+  },
+  anexoCol: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#444' },
+  anexoCel: { fontSize: 7.5, color: '#111' },
+  anexoColNum: { width: '8%' },
+  anexoColNombre: { width: '54%', paddingRight: 6 },
+  anexoColPags: { width: '11%' },
+  anexoColHash: { width: '27%', fontFamily: 'Courier' },
+  anexosNota: {
+    fontSize: 6.5,
+    color: '#666',
+    marginTop: 6,
+    lineHeight: 1.4,
+  },
 })
 
 // ─── Info table helpers ───────────────────────────────────────
@@ -771,12 +810,46 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
             para ser escaneable (en el pie fijo no cabía y se superponía). */}
         <BloqueVerificacion v={data.verificacion} />
 
-        {/* ── Footer — page number + código de verificación ──────── */}
+        {/* ── Índice de anexos ────────────────────────────────────────────
+            El documento oficial DECLARA qué se anexó. Sin esto, una copia
+            impresa del informe no dejaría rastro de que existían soportes.
+            El hash permite demostrar cuál archivo exacto se anexó. */}
+        {!!data.anexos?.length && (
+          <View style={s.anexosBloque} wrap={false}>
+            <Text style={s.anexosTitulo}>RELACIÓN DE ANEXOS</Text>
+            <View style={s.anexosHead}>
+              <Text style={[s.anexoCol, s.anexoColNum]}>N.°</Text>
+              <Text style={[s.anexoCol, s.anexoColNombre]}>Documento</Text>
+              <Text style={[s.anexoCol, s.anexoColPags]}>Págs.</Text>
+              <Text style={[s.anexoCol, s.anexoColHash]}>Huella SHA-256</Text>
+            </View>
+            {data.anexos.map(a => (
+              <View key={a.orden} style={s.anexosFila}>
+                <Text style={[s.anexoCel, s.anexoColNum]}>{a.orden}</Text>
+                <Text style={[s.anexoCel, s.anexoColNombre]}>{a.nombre}</Text>
+                <Text style={[s.anexoCel, s.anexoColPags]}>{a.paginas ?? '—'}</Text>
+                <Text style={[s.anexoCel, s.anexoColHash]}>{a.sha256.slice(0, 16)}…</Text>
+              </View>
+            ))}
+            <Text style={s.anexosNota}>
+              Los documentos relacionados se encuentran anexos al final de este informe,
+              identificados en cada página con su número de anexo.
+            </Text>
+          </View>
+        )}
+
+        {/* ── Footer — page number + código de verificación ────────
+            La numeración se OMITE cuando hay anexos: react-pdf solo conoce el
+            total de las páginas que él genera, así que imprimiría "de 7" en un
+            documento que tras la fusión tiene 12. En ese caso la numeración
+            global la estampa pdf-lib sobre el documento ya completo. */}
         <View style={s.footer} fixed>
-          <Text
-            style={s.footerText}
-            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-          />
+          {!data.anexos?.length && (
+            <Text
+              style={s.footerText}
+              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            />
+          )}
           <CodigoPie v={data.verificacion} />
         </View>
 

@@ -16,6 +16,7 @@ import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, Duplicado
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import CertificacionModal, { type CertPrefill } from './CertificacionModal'
+import AdjuntosPeriodo from './AdjuntosPeriodo'
 import { verificarCertificacionRequerida } from '@/app/actions/certificaciones'
 import {
   enviarPeriodo,
@@ -2386,6 +2387,14 @@ export default function PeriodoDetallePage({
           )
         })}
       </div>
+
+      {/* Anexos PDF — se adjuntan al final del Informe de Actividades.
+          Editable solo por el contratista dueño mientras el periodo lo permita;
+          los demás roles los ven en modo lectura. */}
+      <AdjuntosPeriodo
+        periodoId={periodoId}
+        puedeEditar={esEditable && (esContratista || usuario?.rol === 'admin')}
+      />
 
       {/* Submit section (contratista) */}
       {esEditable && (
