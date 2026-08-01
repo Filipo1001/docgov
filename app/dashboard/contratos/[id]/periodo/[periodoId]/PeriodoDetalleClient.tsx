@@ -19,7 +19,7 @@ import CertificacionModal, { type CertPrefill } from './CertificacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import TarjetaAdjunto from '@/components/TarjetaAdjunto'
 import {
-  prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto,
+  prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
   type AdjuntoDTO,
 } from '@/app/actions/adjuntos'
 import { verificarCertificacionRequerida } from '@/app/actions/certificaciones'
@@ -1000,6 +1000,24 @@ export default function PeriodoDetallePage({
    * pipeline es distinto: sin compresión (un PDF no se recomprime en el
    * navegador) y con verificación del contenido real en el servidor.
    */
+  /**
+   * Reconsulta los anexos del periodo.
+   *
+   * Necesario tras añadir o eliminar: el servidor renumera TODOS los anexos en
+   * orden de lectura del informe, así que un cambio en una actividad puede
+   * mover el número de otra. Sin esta resincronización la pantalla mostraría
+   * un "Anexo N" que no coincide con el del PDF.
+   */
+  async function sincronizarAdjuntos() {
+    const filas = await listarAdjuntos(periodoId)
+    const porActividad: Record<string, AdjuntoDTO[]> = {}
+    for (const f of filas) {
+      if (!f.actividad_id) continue
+      ;(porActividad[f.actividad_id] ??= []).push(f)
+    }
+    setAdjuntos(porActividad)
+  }
+
   async function handleSubirAdjuntos(actividadId: string, files: File[]) {
     for (const file of files) {
       setSubiendoAdjunto(prev => ({ ...prev, [actividadId]: file.name }))
@@ -1031,6 +1049,9 @@ export default function PeriodoDetallePage({
         setSubiendoAdjunto(prev => { const c = { ...prev }; delete c[actividadId]; return c })
       }
     }
+    // Una sola reconsulta al final del lote: la numeración de los demás anexos
+    // pudo desplazarse al insertar estos.
+    await sincronizarAdjuntos().catch(() => {})
   }
 
   async function handleEliminarAdjunto(actividadId: string, adjuntoId: string) {
@@ -1041,6 +1062,8 @@ export default function PeriodoDetallePage({
       [actividadId]: (prev[actividadId] ?? []).filter(a => a.id !== adjuntoId),
     }))
     toast.success('Documento eliminado')
+    // Los anexos posteriores bajan un número: hay que releerlos.
+    await sincronizarAdjuntos().catch(() => {})
   }
 
   /**

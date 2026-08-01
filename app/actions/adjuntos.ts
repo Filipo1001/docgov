@@ -43,6 +43,65 @@ export interface AdjuntoDTO {
 }
 
 /**
+ * Renumera los anexos del periodo siguiendo el ORDEN DE LECTURA del informe:
+ * obligación, luego actividad, luego antigüedad de carga.
+ *
+ * Sin esto, el número de anexo dependía del orden en que el contratista subió
+ * los archivos, así que la primera actividad del informe podía remitir al
+ * "Anexo 3" — justo la ambigüedad que la referencia cruzada busca eliminar.
+ *
+ * `orden` queda siendo LA fuente de verdad del número de anexo: lo leen tanto
+ * el informe generado como la pantalla del periodo, sin recalcularlo cada uno
+ * por su cuenta.
+ */
+async function renumerarAnexos(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  periodoId: string,
+) {
+  const { data: filas } = await admin
+    .from('documentos_adjuntos')
+    .select('id, orden, created_at, actividad:actividades(orden, obligacion:obligaciones(orden))')
+    .eq('entidad_tipo', 'periodo')
+    .eq('entidad_id', periodoId)
+    .is('eliminado_at', null)
+
+  if (!filas?.length) return
+
+  // Supabase devuelve las relaciones anidadas como objeto o como array de uno
+  // según cómo infiera la cardinalidad; se normaliza antes de ordenar.
+  const primero = <T,>(v: T | T[] | null): T | null =>
+    Array.isArray(v) ? (v[0] ?? null) : v
+
+  const clave = (f: any) => {
+    const act = primero<any>(f.actividad)
+    const obl = act ? primero<any>(act.obligacion) : null
+    // Un anexo sin actividad (previo a la migración 034) va al final, no en medio.
+    return [
+      obl?.orden ?? Number.MAX_SAFE_INTEGER,
+      act?.orden ?? Number.MAX_SAFE_INTEGER,
+      f.created_at ?? '',
+    ] as const
+  }
+
+  const ordenadas = [...filas].sort((a, b) => {
+    const ka = clave(a), kb = clave(b)
+    for (let i = 0; i < ka.length; i++) {
+      if (ka[i] < kb[i]) return -1
+      if (ka[i] > kb[i]) return 1
+    }
+    return 0
+  })
+
+  await Promise.all(
+    ordenadas.flatMap((f: any, i) =>
+      f.orden === i + 1
+        ? []                                  // ya está en su sitio
+        : [admin.from('documentos_adjuntos').update({ orden: i + 1 }).eq('id', f.id)],
+    ),
+  )
+}
+
+/**
  * Comprueba que el usuario puede modificar los anexos de este periodo.
  * Solo el contratista dueño (o admin) y solo mientras el periodo esté en un
  * estado editable — que es justo lo que garantiza que un anexo nunca cambie
@@ -215,12 +274,22 @@ export async function registrarAdjunto(
       return { error: `No se pudo registrar el anexo: ${insErr?.message ?? 'error desconocido'}` }
     }
 
+    // El número definitivo depende de la posición de la actividad en el informe,
+    // no del momento de la carga: se recalcula y se relee para devolver al
+    // cliente el mismo "Anexo N" que va a imprimirse en el documento.
+    await renumerarAnexos(admin, periodoId)
+    const { data: renumerada } = await admin
+      .from('documentos_adjuntos')
+      .select('orden')
+      .eq('id', (fila as { id: string }).id)
+      .single()
+
     // El informe cambia al añadir un anexo → invalidar su PDF cacheado.
     await invalidarCachePDF(admin, periodoId).catch(() => {})
     revalidatePath(`/dashboard/contratos`, 'layout')
 
     const urlFirmada = await firmarUrl(BUCKET, storagePath) ?? undefined
-    return { data: { ...(fila as any), urlFirmada } }
+    return { data: { ...(fila as any), orden: renumerada?.orden ?? orden, urlFirmada } }
   } catch (e: unknown) {
     await admin.storage.from(BUCKET).remove([storagePath]).catch(() => {})
     return { error: e instanceof Error ? e.message : 'Error inesperado al registrar el anexo' }
@@ -280,19 +349,7 @@ export async function eliminarAdjunto(periodoId: string, adjuntoId: string): Pro
 
     // Renumerar los anexos restantes para que la secuencia siga siendo 1..N
     // sin huecos — "Anexo 3" con solo dos anexos sería confuso en el informe.
-    const { data: vigentes } = await admin
-      .from('documentos_adjuntos')
-      .select('id')
-      .eq('entidad_tipo', 'periodo')
-      .eq('entidad_id', periodoId)
-      .is('eliminado_at', null)
-      .order('orden', { ascending: true })
-
-    await Promise.all(
-      (vigentes ?? []).map((f, i) =>
-        admin.from('documentos_adjuntos').update({ orden: i + 1 }).eq('id', f.id),
-      ),
-    )
+    await renumerarAnexos(admin, periodoId)
 
     await invalidarCachePDF(admin, periodoId).catch(() => {})
     revalidatePath(`/dashboard/contratos`, 'layout')

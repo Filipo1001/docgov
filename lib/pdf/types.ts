@@ -78,9 +78,13 @@ export interface PDFEvidencia {
 }
 
 export interface PDFActividad {
+  /** No se imprime: sirve para casar la actividad con los anexos que la soportan. */
+  id: string
   descripcion: string
   cantidad: number
   evidencias: PDFEvidencia[]
+  /** Números de anexo que soportan esta actividad, en el orden del documento. */
+  anexos?: number[]
 }
 
 export interface PDFObligacion {
@@ -123,6 +127,8 @@ export interface PDFAnexo {
   bytes: number
   /** SHA-256 del archivo — prueba cuál fue exactamente el soporte anexado. */
   sha256: string
+  /** Actividad que soporta, ej. "Obl. 2 · Act. 1". Cierra la referencia cruzada. */
+  referencia?: string
 }
 
 export interface PDFData {

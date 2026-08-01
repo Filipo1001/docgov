@@ -29,7 +29,12 @@ export interface AnexoParaFusion {
   /** Ruta en el bucket `adjuntos`. */
   storage_path: string
   nombre_original: string
-  /** Número de anexo (1-based), en orden de carga. */
+  /**
+   * Número de anexo (1-based). Sigue el orden de LECTURA del informe —
+   * obligación, luego actividad — no el orden en que se subieron los archivos,
+   * para que quien lea el documento encuentre el Anexo 1 en la primera
+   * actividad que lo referencia. Lo mantiene así `renumerarAnexos`.
+   */
   orden: number
 }
 
@@ -37,6 +42,8 @@ interface AnexoCompleto extends AnexoParaFusion {
   paginas: number | null
   bytes: number
   sha256: string
+  /** Actividad que soporta. Null solo en anexos anteriores a la migración 034. */
+  actividad_id: string | null
 }
 
 /**
@@ -48,7 +55,7 @@ export async function cargarAnexos(periodoId: string): Promise<AnexoCompleto[]> 
     const admin = createAdminSupabaseClient()
     const { data } = await admin
       .from('documentos_adjuntos')
-      .select('storage_path, nombre_original, orden, paginas, bytes, sha256')
+      .select('storage_path, nombre_original, orden, paginas, bytes, sha256, actividad_id')
       .eq('entidad_tipo', 'periodo')
       .eq('entidad_id', periodoId)
       .eq('estado', 'limpio')          // solo los verificados
@@ -61,14 +68,60 @@ export async function cargarAnexos(periodoId: string): Promise<AnexoCompleto[]> 
 }
 
 /** Convierte los anexos al formato del índice que se renderiza en el informe. */
-export function aIndicePDF(anexos: AnexoCompleto[]): PDFAnexo[] {
+export function aIndicePDF(anexos: AnexoCompleto[], referencias?: Map<string, string>): PDFAnexo[] {
   return anexos.map(a => ({
     orden: a.orden,
     nombre: a.nombre_original,
     paginas: a.paginas,
     bytes: Number(a.bytes),
     sha256: a.sha256,
+    referencia: a.actividad_id ? referencias?.get(a.actividad_id) : undefined,
   }))
+}
+
+/**
+ * Enlaza cada actividad con los anexos que la soportan, en ambos sentidos.
+ *
+ * De la actividad al anexo: cada actividad recibe los números de anexo que la
+ * respaldan, y el informe imprime bajo su descripción dónde encontrarlos.
+ * Del anexo a la actividad: el índice de anexos recibe una etiqueta legible
+ * ("Obl. 2 · Act. 1"), de modo que quien empiece por el documento anexado
+ * también sepa qué actividad está justificando.
+ *
+ * Se resuelve aquí y no en la consulta porque la numeración de obligaciones y
+ * actividades que ve el lector es la POSICIÓN en el informe ya filtrado por
+ * otrosí — no un campo de la base de datos.
+ */
+function enlazarAnexos(
+  data: PDFData,
+  anexos: AnexoCompleto[],
+): { data: PDFData; referencias: Map<string, string> } {
+  const referencias = new Map<string, string>()
+  if (!anexos.length) return { data, referencias }
+
+  const porActividad = new Map<string, number[]>()
+  for (const a of anexos) {
+    if (!a.actividad_id) continue
+    const lista = porActividad.get(a.actividad_id) ?? []
+    lista.push(a.orden)
+    porActividad.set(a.actividad_id, lista)
+  }
+  if (!porActividad.size) return { data, referencias }
+
+  const obligaciones = data.obligaciones.map((obl, oi) => {
+    if (!obl.actividades.length) return obl
+    return {
+      ...obl,
+      actividades: obl.actividades.map((act, ai) => {
+        const numeros = porActividad.get(act.id)
+        if (!numeros?.length) return act
+        referencias.set(act.id, `Obl. ${oi + 1} · Act. ${ai + 1}`)
+        return { ...act, anexos: numeros }
+      }),
+    }
+  })
+
+  return { data: { ...data, obligaciones }, referencias }
 }
 
 /**
@@ -83,6 +136,7 @@ export async function generarInformeConAnexos(
   verif: VerificacionPDF | null,
 ): Promise<Buffer> {
   const anexos = await cargarAnexos(periodoId)
+  const { data: dataEnlazada, referencias } = enlazarAnexos(data, anexos)
 
   const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
     import('@react-pdf/renderer'),
@@ -92,7 +146,11 @@ export async function generarInformeConAnexos(
 
   const buffer = await renderToBuffer(
     React.createElement(InformeActividadesPDF, {
-      data: { ...data, verificacion: verif ?? undefined, anexos: aIndicePDF(anexos) },
+      data: {
+        ...dataEnlazada,
+        verificacion: verif ?? undefined,
+        anexos: aIndicePDF(anexos, referencias),
+      },
     }) as any,
   ) as unknown as Buffer
 

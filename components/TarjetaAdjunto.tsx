@@ -27,10 +27,15 @@ export default function TarjetaAdjunto({ adjunto, editable, onAbrir, onEliminar 
         className="w-20 h-20 rounded-xl border border-gray-200 bg-white hover:border-red-300 hover:bg-red-50/40 transition-colors flex flex-col items-center justify-center gap-1 px-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
         aria-label={`Ver documento ${adjunto.nombre_original}`}
       >
-        <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.6}>
+        <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.6}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5A3.375 3.375 0 0010.125 2.25H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
         </svg>
-        <span className="text-[9px] font-medium text-gray-500 leading-tight text-center line-clamp-2 break-all">
+        {/* Mismo número que imprimirá el informe: el contratista puede
+            comprobar la correspondencia antes de enviarlo. */}
+        <span className="text-[9px] font-semibold text-red-600 leading-none">
+          Anexo {adjunto.orden}
+        </span>
+        <span className="text-[8px] text-gray-500 leading-tight text-center line-clamp-1 break-all w-full">
           {adjunto.nombre_original.replace(/\.pdf$/i, '')}
         </span>
       </button>

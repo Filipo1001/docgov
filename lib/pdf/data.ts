@@ -227,12 +227,13 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
 
   const actsPorObligacion = new Map<
     string,
-    Array<{ descripcion: string; cantidad: number; evidencias: Array<{ url: string; nombre_archivo: string }> }>
+    Array<{ id: string; descripcion: string; cantidad: number; evidencias: Array<{ url: string; nombre_archivo: string }> }>
   >()
   for (const act of actividadesArr) {
     const resolved = urlsByAct.get(act.id) ?? []
     const list = actsPorObligacion.get(act.obligacion_id) ?? []
     list.push({
+      id: act.id,
       descripcion: act.descripcion,
       cantidad: act.cantidad,
       evidencias: (act.evidencias ?? []).map((ev, i) => ({
