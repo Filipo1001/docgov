@@ -2,6 +2,7 @@ import { requireContractAccess } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import ContratoDetalleClient from './ContratoDetalleClient'
+import { listarDocumentosContrato } from '@/app/actions/documentos-contrato'
 
 /**
  * Server component — fetches all contract data with server-side auth
@@ -18,7 +19,7 @@ export default async function ContratoDetallePage({
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: contrato }, { data: obligaciones }, { data: periodos }] = await Promise.all([
+  const [{ data: contrato }, { data: obligaciones }, { data: periodos }, documentos] = await Promise.all([
     supabase
       .from('contratos')
       .select(`
@@ -41,6 +42,9 @@ export default async function ContratoDetallePage({
       .select('*')
       .eq('contrato_id', id)
       .order('numero_periodo'),
+
+    // Expediente documental — RLS decide la visibilidad según el rol.
+    listarDocumentosContrato(id),
   ])
 
   if (!contrato) redirect('/dashboard/contratos')
@@ -52,6 +56,7 @@ export default async function ContratoDetallePage({
       initialContrato={contrato}
       initialObligaciones={obligaciones ?? []}
       initialPeriodos={periodos ?? []}
+      initialDocumentos={documentos}
     />
   )
 }

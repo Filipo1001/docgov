@@ -12,15 +12,19 @@ import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from 
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
 import { esGestorContratos } from '@/lib/constants'
+import ExpedienteContrato from './ExpedienteContrato'
+import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
 
 export default function ContratoDetallePage({
   initialContrato,
   initialObligaciones,
   initialPeriodos,
+  initialDocumentos = [],
 }: {
   initialContrato: any
   initialObligaciones: any[]
   initialPeriodos: any[]
+  initialDocumentos?: DocumentoContratoDTO[]
 }) {
   const { id } = useParams()
   const router = useRouter()
@@ -423,6 +427,14 @@ export default function ContratoDetallePage({
           </p>
         )}
       </div>
+
+      {/* Expediente documental — entre las obligaciones y los periodos: es
+          parte de la legalización del contrato, no de su ejecución mensual. */}
+      <ExpedienteContrato
+        contratoId={id as string}
+        initial={initialDocumentos}
+        editable={esGestor}
+      />
 
       {/* Periodos de pago */}
       <div className="bg-white rounded-2xl border p-6">
