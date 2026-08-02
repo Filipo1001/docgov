@@ -250,14 +250,22 @@ export default function ContratoDetallePage({
               <p className="text-xs text-gray-400">{contrato.valor_letras_total}</p>
             </div>
             {esGestor && (
-              <Link
-                href={`/dashboard/contratos/${id}/avanzado`}
-                className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
-              >
-                {/* Contratación solo encuentra otrosíes al otro lado del
-                    enlace; nombrarlo "Opciones avanzadas" prometería de más. */}
-                {usuario?.rol === 'contratacion' ? '📑 Otrosíes' : '⚙️ Opciones avanzadas'}
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/dashboard/contratos/${id}/editar`}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
+                >
+                  ✏️ Editar
+                </Link>
+                <Link
+                  href={`/dashboard/contratos/${id}/avanzado`}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
+                >
+                  {/* Contratación solo encuentra otrosíes al otro lado del
+                      enlace; nombrarlo "Opciones avanzadas" prometería de más. */}
+                  {usuario?.rol === 'contratacion' ? '📑 Otrosíes' : '⚙️ Opciones avanzadas'}
+                </Link>
+              </div>
             )}
           </div>
         </div>

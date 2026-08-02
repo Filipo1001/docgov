@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
-import { formatCedula } from '@/lib/format'
+import SelectorContratista from '@/components/SelectorContratista'
+import SelectorSupervisor from '@/components/SelectorSupervisor'
+import type { UsuarioSelect } from '@/services/admin'
 import { numerosALetras } from '@/lib/numero-letras'
 import { crearContratoConContratista } from '@/app/actions/contratos'
 
@@ -29,7 +31,7 @@ export default function NuevoContratoPage({
   initialUsuarios = [],
 }: {
   initialDependencias?: { id: string; nombre: string }[]
-  initialUsuarios?: { id: string; nombre_completo: string; cedula: string; rol: string }[]
+  initialUsuarios?: UsuarioSelect[]
 }) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
@@ -191,6 +193,17 @@ export default function NuevoContratoPage({
       return
     }
 
+    // Al desaparecer el desplegable de dependencia, estas dos validaciones
+    // dejan de estar cubiertas por `required` del navegador.
+    if (!form.supervisor_id) {
+      toast.error('Selecciona el supervisor del contrato')
+      return
+    }
+    if (!form.dependencia_id) {
+      toast.error('El supervisor elegido no tiene secretaría asignada. Indícala con "cambiar".')
+      return
+    }
+
     setGuardando(true)
 
     // Server Action atómica: crea el contratista (si es nuevo) + el contrato.
@@ -345,16 +358,6 @@ export default function NuevoContratoPage({
                 <option value="Selección Abreviada">Selección Abreviada</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dependencia</label>
-              <select name="dependencia_id" value={form.dependencia_id} onChange={handleChange} required
-                className={excelEncontrado && form.dependencia_id ? autoClass : inputClass}>
-                <option value="">Seleccionar...</option>
-                {dependencias.map(d => (
-                  <option key={d.id} value={d.id}>{d.nombre}</option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
 
@@ -387,28 +390,11 @@ export default function NuevoContratoPage({
           </div>
 
           {modoContratista === 'existente' ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contratista</label>
-                <select name="contratista_id" value={form.contratista_id} onChange={handleChange}
-                  className={excelEncontrado && form.contratista_id ? autoClass : inputClass}>
-                  <option value="">Seleccionar...</option>
-                  {contratistas.map(u => (
-                    <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor</label>
-                <select name="supervisor_id" value={form.supervisor_id} onChange={handleChange} required
-                  className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
-                  <option value="">Seleccionar...</option>
-                  {supervisores.map(u => (
-                    <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            <SelectorContratista
+              contratistas={contratistas}
+              valor={form.contratista_id}
+              onChange={id => setForm(f => ({ ...f, contratista_id: id }))}
+            />
           ) : (
             <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-800">
@@ -471,19 +457,21 @@ export default function NuevoContratoPage({
                     onChange={e => setNuevoContratista(n => ({ ...n, numero_cuenta: e.target.value }))}
                     className={inputClass} />
                 </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor *</label>
-                  <select name="supervisor_id" value={form.supervisor_id} onChange={handleChange} required
-                    className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
-                    <option value="">Seleccionar...</option>
-                    {supervisores.map(u => (
-                      <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
             </div>
           )}
+
+          {/* El supervisor es del CONTRATO, no de cómo se eligió al
+              contratista: antes estaba duplicado dentro de cada rama. */}
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <SelectorSupervisor
+              supervisores={supervisores}
+              dependencias={dependencias}
+              supervisorId={form.supervisor_id}
+              dependenciaId={form.dependencia_id}
+              onChange={(sup, dep) => setForm(f => ({ ...f, supervisor_id: sup, dependencia_id: dep }))}
+            />
+          </div>
         </div>
 
         {/* Valores */}
