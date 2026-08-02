@@ -2595,11 +2595,85 @@ export default function PeriodoDetallePage({
           <p className="text-sm text-gray-500 mb-4">
             {rechazado
               ? 'Verifica que la planilla esté adjunta y reenvía el informe a revisión.'
-              : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
+              : exigeFacturaElectronica
+                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número y tu factura electrónica.'
+                : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
             }
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            {/* Factura electrónica — solo para quien está obligado a emitirla.
+                Va aquí, junto a la planilla, y no en la sección de documentos:
+                esa sección solo aparece DESPUÉS de enviar, y sin factura no se
+                puede enviar. Debe estar donde se prepara el envío. */}
+            {exigeFacturaElectronica && (
+              <div className="sm:col-span-2">
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                  periodo.factura_electronica_url
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-amber-50 border-amber-300'
+                }`}>
+                  <span className="text-lg shrink-0">🧾</span>
+
+                  <label className={`flex-1 min-w-0 transition-opacity ${
+                    puedeAdjuntarFactura ? 'cursor-pointer hover:opacity-75' : ''
+                  }`}>
+                    <p className="text-sm font-medium text-gray-900">Factura electrónica</p>
+                    <p className={`text-xs truncate ${
+                      periodo.factura_electronica_url ? 'text-gray-400' : 'text-amber-700 font-medium'
+                    }`}>
+                      {subiendoFactura
+                        ? 'Subiendo...'
+                        : periodo.factura_electronica_url
+                          ? '✓ Adjuntada — clic para reemplazar'
+                          : 'Requerida — sustituye a la Cuenta de Cobro'}
+                    </p>
+                    {puedeAdjuntarFactura && (
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="hidden"
+                        disabled={subiendoFactura}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.target.value = ''
+                          if (file) void handleSubirFactura(file)
+                        }}
+                      />
+                    )}
+                  </label>
+
+                  {periodo.factura_electronica_url && (
+                    <>
+                      <a
+                        href={resolverUrl(periodo.factura_electronica_url)}
+                        target="_blank" rel="noopener noreferrer"
+                        title="Ver la factura"
+                        className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </a>
+                      {puedeAdjuntarFactura && (
+                        <button
+                          type="button"
+                          onClick={handleEliminarFactura}
+                          title="Quitar la factura"
+                          className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Planilla file upload */}
             <div>
               {/*
@@ -2998,80 +3072,24 @@ export default function PeriodoDetallePage({
               </a>
             </div>
 
-            {/* Cuenta de Cobro — o, para quien factura electrónicamente, el
-                campo donde adjunta su factura. Es la ÚNICA diferencia del
-                flujo: el resto de documentos no cambia. */}
-            {exigeFacturaElectronica ? (
-              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl">
-                <span className="text-lg shrink-0">🧾</span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900">Factura electrónica</p>
-                  {periodo.factura_electronica_url ? (
-                    <a
-                      href={resolverUrl(periodo.factura_electronica_url)}
-                      target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:text-blue-700 underline underline-offset-2"
-                    >
-                      Ver el archivo adjunto
-                    </a>
-                  ) : (
-                    <p className="text-xs text-amber-600">
-                      Pendiente — sustituye a la Cuenta de Cobro
-                    </p>
-                  )}
+            {/* Cuenta de Cobro — para quien factura electrónicamente la ruta
+                entrega su factura adjunta en lugar de generarla. El campo de
+                CARGA no vive aquí: esta sección solo existe una vez enviado el
+                informe, y la factura hace falta ANTES, para poder enviarlo. */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+              <a href={`/api/pdf/${periodoId}/cuenta-cobro`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="text-lg shrink-0">{exigeFacturaElectronica ? '🧾' : '💰'}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">
+                    {exigeFacturaElectronica ? 'Factura electrónica' : 'Cuenta de Cobro'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {exigeFacturaElectronica ? 'Adjuntada por la contratista' : 'Generado automáticamente'}
+                  </p>
                 </div>
-
-                {/* El admin también, no solo la contratista: la acción del
-                    servidor ya lo permite, y a menudo es él quien recibe la
-                    factura por correo y la carga en su nombre. La pantalla no
-                    debe ser más restrictiva que el permiso real. */}
-                {puedeAdjuntarFactura && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <label className={`text-xs font-medium px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
-                      subiendoFactura
-                        ? 'text-gray-400 bg-gray-100 cursor-wait'
-                        : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
-                    }`}>
-                      {subiendoFactura
-                        ? 'Subiendo…'
-                        : periodo.factura_electronica_url ? 'Reemplazar' : 'Adjuntar PDF'}
-                      <input
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        className="hidden"
-                        disabled={subiendoFactura}
-                        onChange={e => {
-                          const f = e.target.files?.[0]
-                          e.target.value = ''
-                          if (f) void handleSubirFactura(f)
-                        }}
-                      />
-                    </label>
-                    {periodo.factura_electronica_url && (
-                      <button
-                        type="button"
-                        onClick={handleEliminarFactura}
-                        aria-label="Eliminar factura electrónica"
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                <a href={`/api/pdf/${periodoId}/cuenta-cobro`} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className="text-lg shrink-0">💰</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900">Cuenta de Cobro</p>
-                    <p className="text-xs text-gray-400">Generado automáticamente</p>
-                  </div>
-                </a>
+              </a>
+              {!exigeFacturaElectronica && (
                 <a href={`/api/pdf/${periodoId}/cuenta-cobro?force=1`} target="_blank" rel="noopener noreferrer"
                   title="Actualizar documento"
                   className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 active:bg-blue-100 transition-colors">
@@ -3079,8 +3097,8 @@ export default function PeriodoDetallePage({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 </a>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Certificación de Retención — única por contrato, solo en el primer periodo */}
             {mostrarCertificacion && (
