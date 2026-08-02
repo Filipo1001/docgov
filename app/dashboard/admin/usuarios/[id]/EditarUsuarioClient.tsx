@@ -66,6 +66,11 @@ export default function EditarUsuarioClient({
   const [banco, setBanco]               = useState(usuario.banco ?? '')
   const [tipoCuenta, setTipoCuenta]     = useState(usuario.tipo_cuenta ?? '')
   const [numeroCuenta, setNumeroCuenta] = useState(usuario.numero_cuenta ?? '')
+  // '' = sin verificar; se distingue de "no" a propósito.
+  const [facturaElectronica, setFacturaElectronica] = useState<'' | 'si' | 'no'>(
+    usuario.obligado_facturar_electronicamente === true ? 'si'
+      : usuario.obligado_facturar_electronicamente === false ? 'no' : '',
+  )
 
   async function handleSave() {
     if (!nombre.trim() || !cedula.trim()) {
@@ -87,6 +92,8 @@ export default function EditarUsuarioClient({
       banco,
       tipo_cuenta: tipoCuenta,
       numero_cuenta: numeroCuenta,
+      obligado_facturar_electronicamente:
+        facturaElectronica === '' ? null : facturaElectronica === 'si',
     })
     setSaving(false)
     if (result.error) toast.error(result.error)
@@ -356,6 +363,23 @@ export default function EditarUsuarioClient({
               onChange={e => setNumeroCuenta(e.target.value)}
               placeholder="XXXX XXXX XXXX"
             />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ¿Obligado a facturar electrónicamente?
+            </label>
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={facturaElectronica}
+              onChange={e => setFacturaElectronica(e.target.value as '' | 'si' | 'no')}
+            >
+              <option value="">Sin verificar</option>
+              <option value="no">No — se genera Cuenta de Cobro</option>
+              <option value="si">Sí — adjuntará su factura electrónica</option>
+            </select>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Según sus responsabilidades en el RUT.
+            </p>
           </div>
         </div>
 

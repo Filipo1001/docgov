@@ -241,6 +241,8 @@ export async function actualizarUsuario(
     banco?: string
     tipo_cuenta?: string
     numero_cuenta?: string
+    /** true = factura electrónica · false = no obligado · null = sin verificar */
+    obligado_facturar_electronicamente?: boolean | null
   }
 ): Promise<ActionResult<void>> {
   const admin = await requireGestorUsuarios()

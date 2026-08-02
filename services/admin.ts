@@ -25,6 +25,8 @@ export interface UsuarioAdmin {
   banco?: string
   tipo_cuenta?: string
   numero_cuenta?: string
+  /** true = factura electrónica · false = no obligado · null = sin verificar */
+  obligado_facturar_electronicamente?: boolean | null
   /** Contratos donde este usuario es el contratista principal */
   contratos?: Array<{ id: string; numero: string }>
 }

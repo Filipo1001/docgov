@@ -62,7 +62,7 @@ export default function ContratoDetallePage({
           .from('contratos')
           .select(`
             *,
-            contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono),
+            contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono, obligado_facturar_electronicamente),
             supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
             dependencia:dependencias(nombre, abreviatura)
           `)
@@ -281,6 +281,14 @@ export default function ContratoDetallePage({
             <span className="text-gray-400 text-xs">Contratista</span>
             <p className="font-medium text-gray-900 truncate">{contrato.contratista?.nombre_completo}</p>
             <p className="text-xs text-gray-400">CC {formatCedula(contrato.contratista?.cedula)}</p>
+            {/* Decide si el cobro se documenta con Cuenta de Cobro o con
+                factura electrónica. Solo se marca cuando está confirmado:
+                un dato sin verificar no debe parecer una respuesta. */}
+            {contrato.contratista?.obligado_facturar_electronicamente === true && (
+              <span className="inline-block mt-1 text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                Factura electrónica
+              </span>
+            )}
           </div>
           <div className="min-w-0">
             <span className="text-gray-400 text-xs">Supervisor</span>

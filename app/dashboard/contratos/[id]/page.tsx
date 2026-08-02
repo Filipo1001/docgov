@@ -24,7 +24,7 @@ export default async function ContratoDetallePage({
       .from('contratos')
       .select(`
         *,
-        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono),
+        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono, obligado_facturar_electronicamente),
         supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
         dependencia:dependencias(nombre, abreviatura)
       `)

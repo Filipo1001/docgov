@@ -47,6 +47,9 @@ export default function NuevoContratoPage({
   const [nuevoContratista, setNuevoContratista] = useState({
     nombre_completo: '', cedula: '', email: '', telefono: '', direccion: '',
     banco: '', tipo_cuenta: '', numero_cuenta: '',
+    // '' = sin verificar. Se distingue de 'no' a propósito: no es lo mismo
+    // haber comprobado que no está obligado que no haberlo preguntado.
+    factura_electronica: '' as '' | 'si' | 'no',
   })
   // Resultado de éxito (muestra la contraseña temporal si se creó el contratista)
   const [resultado, setResultado] = useState<{ contratoId: string; password?: string; nombre?: string } | null>(null)
@@ -221,6 +224,9 @@ export default function NuevoContratoPage({
           banco: nuevoContratista.banco || undefined,
           tipo_cuenta: nuevoContratista.tipo_cuenta || undefined,
           numero_cuenta: nuevoContratista.numero_cuenta || undefined,
+          obligado_facturar_electronicamente:
+            nuevoContratista.factura_electronica === '' ? null
+              : nuevoContratista.factura_electronica === 'si',
         } : undefined,
         supervisor_id: form.supervisor_id,
         numero: form.numero,
@@ -456,6 +462,21 @@ export default function NuevoContratoPage({
                   <input value={nuevoContratista.numero_cuenta}
                     onChange={e => setNuevoContratista(n => ({ ...n, numero_cuenta: e.target.value }))}
                     className={inputClass} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ¿Obligado a facturar electrónicamente?
+                  </label>
+                  <select value={nuevoContratista.factura_electronica}
+                    onChange={e => setNuevoContratista(n => ({ ...n, factura_electronica: e.target.value as '' | 'si' | 'no' }))}
+                    className={inputClass}>
+                    <option value="">Sin verificar</option>
+                    <option value="no">No — se genera Cuenta de Cobro</option>
+                    <option value="si">Sí — adjuntará su factura electrónica</option>
+                  </select>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Según sus responsabilidades en el RUT. Se puede cambiar después.
+                  </p>
                 </div>
               </div>
             </div>

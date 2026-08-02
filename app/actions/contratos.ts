@@ -134,6 +134,8 @@ export type NuevoContratistaInput = {
   banco?: string
   tipo_cuenta?: string
   numero_cuenta?: string
+  /** true = factura electrónica · false = no obligado · undefined = sin verificar */
+  obligado_facturar_electronicamente?: boolean | null
 }
 
 /**
@@ -199,6 +201,9 @@ export async function crearContratoConContratista(
         tipo_cuenta: nc.tipo_cuenta?.trim() || null,
         numero_cuenta: nc.numero_cuenta?.trim() || null,
         tipo_documento: 'CC',
+        // Condición de la persona ante la DIAN, no del contrato. Decide si en
+        // el futuro se genera Cuenta de Cobro o se exige la factura.
+        obligado_facturar_electronicamente: nc.obligado_facturar_electronicamente ?? null,
         municipio_id: muni.id,
       })
       if (dbError) {
