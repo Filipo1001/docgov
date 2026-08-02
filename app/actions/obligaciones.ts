@@ -119,3 +119,108 @@ export async function eliminarObligacion(
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }
+
+// ─── Copiar obligaciones de otro contrato ────────────────────────────────────
+
+export interface ContratoModelo {
+  id: string
+  numero: string
+  anio: number
+  objeto: string
+  obligaciones: number
+}
+
+/**
+ * Contratos que pueden servir de modelo, priorizando la misma dependencia.
+ *
+ * En producción hay 61 contratos sin obligaciones: escribirlas una por una es
+ * el cuello de botella real, no la falta de permisos. Se copian de un contrato
+ * EXISTENTE en vez de mantener un catálogo de plantillas aparte, porque el
+ * origen es entonces un contrato que de verdad se usó y se aprobó — una
+ * plantilla paralela hay que mantenerla y envejece sin que nadie lo note.
+ */
+export async function contratosModelo(
+  contratoId: string,
+): Promise<ContratoModelo[]> {
+  try {
+    const gestorId = await requireAdminId()
+    if (!gestorId) return []
+
+    const admin = createAdminSupabaseClient()
+    const { data: destino } = await admin
+      .from('contratos').select('dependencia_id').eq('id', contratoId).single()
+    if (!destino) return []
+
+    const { data } = await admin
+      .from('contratos')
+      .select('id, numero, anio, objeto, dependencia_id, obligaciones(count)')
+      .neq('id', contratoId)
+      .order('anio', { ascending: false })
+      .order('numero', { ascending: false })
+
+    return ((data ?? []) as any[])
+      .map(c => ({
+        id: c.id,
+        numero: c.numero,
+        anio: c.anio,
+        objeto: c.objeto,
+        obligaciones: c.obligaciones?.[0]?.count ?? 0,
+        mismaDependencia: c.dependencia_id === destino.dependencia_id,
+      }))
+      .filter(c => c.obligaciones > 0)
+      // La misma secretaría primero: es donde los objetos contractuales se
+      // parecen y donde está el modelo que se va a querer casi siempre.
+      .sort((a, b) => Number(b.mismaDependencia) - Number(a.mismaDependencia))
+      .slice(0, 30)
+      .map(({ mismaDependencia, ...c }) => c)
+  } catch {
+    return []
+  }
+}
+
+export async function copiarObligaciones(
+  contratoDestinoId: string,
+  contratoOrigenId: string,
+): Promise<ActionResult<{ copiadas: number }>> {
+  try {
+    const gestorId = await requireAdminId()
+    if (!gestorId) return { error: 'No autorizado' }
+
+    const admin = createAdminSupabaseClient()
+
+    // Solo sobre un contrato vacío: mezclar dos juegos de obligaciones dejaría
+    // duplicados difíciles de detectar en un acta ya generada.
+    const { count: yaTiene } = await admin
+      .from('obligaciones').select('id', { count: 'exact', head: true })
+      .eq('contrato_id', contratoDestinoId)
+    if ((yaTiene ?? 0) > 0) {
+      return { error: 'Este contrato ya tiene obligaciones. Elimínalas antes de copiar otras.' }
+    }
+
+    const { data: origen } = await admin
+      .from('obligaciones')
+      .select('descripcion, es_permanente, orden')
+      .eq('contrato_id', contratoOrigenId)
+      .order('orden')
+
+    if (!origen?.length) return { error: 'El contrato elegido no tiene obligaciones.' }
+
+    // otrosi_id NO se copia: pertenece a un otrosí del contrato de origen y
+    // aquí no significaría nada.
+    const { error } = await admin.from('obligaciones').insert(
+      origen.map((o, i) => ({
+        contrato_id: contratoDestinoId,
+        descripcion: o.descripcion,
+        es_permanente: o.es_permanente,
+        orden: i + 1,
+      })),
+    )
+
+    if (error) return { error: error.message }
+
+    revalidatePath(`/dashboard/contratos/${contratoDestinoId}`)
+    return { data: { copiadas: origen.length } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}

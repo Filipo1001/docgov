@@ -14,6 +14,7 @@ import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
 import { esGestorContratos } from '@/lib/constants'
 import { etiquetaEstado } from '@/lib/estado-contrato'
 import ExpedienteContrato from './ExpedienteContrato'
+import CopiarObligaciones from './CopiarObligaciones'
 import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
 
 export default function ContratoDetallePage({
@@ -390,7 +391,12 @@ export default function ContratoDetallePage({
           </div>
         )}
 
-        {/* Solo admin puede agregar obligaciones */}
+        {/* Atajo para arrancar: solo cuando no hay ninguna obligación. */}
+        {esGestor && obligaciones.length === 0 && (
+          <CopiarObligaciones contratoId={id as string} onCopiado={cargarDatos} />
+        )}
+
+        {/* Alta manual de obligaciones */}
         {esGestor && (
           <form onSubmit={agregarObligacion} className="flex gap-2">
             <div className="flex-1">
