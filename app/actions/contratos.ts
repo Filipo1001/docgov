@@ -306,7 +306,7 @@ export type PeriodoNuevo = {
 export async function generarPeriodos(
   contratoId: string,
   periodos: PeriodoNuevo[],
-): Promise<ActionResult<{ generados: number }>> {
+): Promise<ActionResult<{ periodos: Record<string, unknown>[] }>> {
   try {
     const adminId = await requireAdminId()
     if (!adminId) return { error: 'No autorizado' }
@@ -339,11 +339,14 @@ export async function generarPeriodos(
       }),
     }))
 
-    const { error } = await adminClient.from('periodos').insert(filas)
+    // Se devuelven los periodos insertados —con su id real— para que la
+    // pantalla los liste al instante, sin una segunda consulta de por medio.
+    const { data: creados, error } = await adminClient
+      .from('periodos').insert(filas).select('*').order('numero_periodo')
     if (error) return { error: `Error generando periodos: ${error.message}` }
 
     revalidatePath(`/dashboard/contratos/${contratoId}`)
-    return { data: { generados: filas.length } }
+    return { data: { periodos: (creados ?? []) as Record<string, unknown>[] } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }

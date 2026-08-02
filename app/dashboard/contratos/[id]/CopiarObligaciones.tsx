@@ -9,13 +9,17 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { contratosModelo, copiarObligaciones, type ContratoModelo } from '@/app/actions/obligaciones'
+import {
+  contratosModelo, copiarObligaciones,
+  type ContratoModelo, type ObligacionCreada,
+} from '@/app/actions/obligaciones'
 
 export default function CopiarObligaciones({
   contratoId, onCopiado,
 }: {
   contratoId: string
-  onCopiado: () => void
+  /** Recibe las obligaciones creadas para pintarlas sin reconsultar. */
+  onCopiado: (obligaciones: ObligacionCreada[]) => void
 }) {
   const [abierto, setAbierto] = useState(false)
   const [modelos, setModelos] = useState<ContratoModelo[] | null>(null)
@@ -35,9 +39,9 @@ export default function CopiarObligaciones({
     const res = await copiarObligaciones(contratoId, origenId)
     setCopiando(null)
     if (res.error) { toast.error(res.error); return }
-    toast.success(`${res.data!.copiadas} obligaciones copiadas`)
+    toast.success(`${res.data!.obligaciones.length} obligaciones copiadas`)
     setAbierto(false)
-    onCopiado()
+    onCopiado(res.data!.obligaciones)
   }
 
   const visibles = (modelos ?? []).filter(m => {

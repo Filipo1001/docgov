@@ -45,12 +45,21 @@ async function requireAdminId(): Promise<string | null> {
 
 // ─── Crear obligación ───────────────────────────────────────────────────────
 
+export interface ObligacionCreada {
+  id: string
+  contrato_id: string
+  descripcion: string
+  orden: number
+  es_permanente: boolean
+  otrosi_id: string | null
+}
+
 export async function crearObligacion(params: {
   contratoId: string
   descripcion: string
   esPermanente: boolean
   otrosiId?: string | null
-}): Promise<ActionResult<{ id: string }>> {
+}): Promise<ActionResult<ObligacionCreada>> {
   try {
     const adminId = await requireAdminId()
     if (!adminId) return { error: 'No autorizado' }
@@ -81,14 +90,16 @@ export async function crearObligacion(params: {
         es_permanente: params.esPermanente,
         otrosi_id: params.otrosiId ?? null,
       })
-      .select('id')
+      .select('id, contrato_id, descripcion, orden, es_permanente, otrosi_id')
       .single()
 
-    if (error) return { error: `Error al guardar: ${error.message}` }
+    if (error || !data) return { error: `Error al guardar: ${error?.message ?? 'sin respuesta'}` }
 
     await invalidarCacheContrato(adminClient, params.contratoId)
     revalidatePath(`/dashboard/contratos/${params.contratoId}`)
-    return { data: { id: data.id as string } }
+    // Se devuelve la fila entera, no solo el id: así la pantalla la pinta al
+    // instante en vez de volver a consultar y hacer esperar al usuario.
+    return { data: data as ObligacionCreada }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
@@ -181,7 +192,7 @@ export async function contratosModelo(
 export async function copiarObligaciones(
   contratoDestinoId: string,
   contratoOrigenId: string,
-): Promise<ActionResult<{ copiadas: number }>> {
+): Promise<ActionResult<{ obligaciones: ObligacionCreada[] }>> {
   try {
     const gestorId = await requireAdminId()
     if (!gestorId) return { error: 'No autorizado' }
@@ -207,19 +218,19 @@ export async function copiarObligaciones(
 
     // otrosi_id NO se copia: pertenece a un otrosí del contrato de origen y
     // aquí no significaría nada.
-    const { error } = await admin.from('obligaciones').insert(
+    const { data: creadas, error } = await admin.from('obligaciones').insert(
       origen.map((o, i) => ({
         contrato_id: contratoDestinoId,
         descripcion: o.descripcion,
         es_permanente: o.es_permanente,
         orden: i + 1,
       })),
-    )
+    ).select('id, contrato_id, descripcion, orden, es_permanente, otrosi_id')
 
     if (error) return { error: error.message }
 
     revalidatePath(`/dashboard/contratos/${contratoDestinoId}`)
-    return { data: { copiadas: origen.length } }
+    return { data: { obligaciones: (creadas ?? []) as ObligacionCreada[] } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }

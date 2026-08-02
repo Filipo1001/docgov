@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
@@ -32,12 +31,13 @@ export default function ContratoDetallePage({
   const router = useRouter()
   const { usuario } = useUsuario()
 
-  // Data is pre-fetched server-side — no client fetch needed on mount.
-  // cargarDatos() is still called explicitly after mutations.
+  // Los datos llegan como props SSR desde page.tsx. Tras cada mutación la
+  // pantalla se actualiza con la fila que devuelve la propia acción, sin
+  // volver a consultar: es instantáneo y no depende de que la sesión del
+  // navegador esté caliente.
   const [contrato, setContrato] = useState<any>(initialContrato)
   const [obligaciones, setObligaciones] = useState<any[]>(initialObligaciones)
   const [periodos, setPeriodos] = useState<any[]>(initialPeriodos)
-  const [cargando, setCargando] = useState(false)
 
   // Form para nueva obligación
   const [nuevaObligacion, setNuevaObligacion] = useState('')
@@ -52,53 +52,21 @@ export default function ContratoDetallePage({
   const [generandoPeriodos, setGenerandoPeriodos] = useState(false)
 
 
-  async function cargarDatos() {
-    try {
-      const supabase = createClient()
-
-      // Run all three queries in parallel for speed.
-      // Wrapped in try/finally so setCargando(false) is guaranteed even on error —
-      // previously a failed query left cargando=true forever (infinite loading screen).
-      const [{ data: cont }, { data: obls }, { data: pers }] = await Promise.all([
-        supabase
-          .from('contratos')
-          .select(`
-            *,
-            contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono, obligado_facturar_electronicamente),
-            supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
-            dependencia:dependencias(nombre, abreviatura)
-          `)
-          .eq('id', id)
-          .single(),
-
-        supabase
-          .from('obligaciones')
-          .select('*')
-          .eq('contrato_id', id)
-          .order('orden'),
-
-        supabase
-          .from('periodos')
-          .select('*')
-          .eq('contrato_id', id)
-          .order('numero_periodo'),
-      ])
-
-      setContrato(cont)
-      setObligaciones(obls || [])
-      setPeriodos(pers || [])
-      try {
-        setOtrosies(await getOtrosies(id as string))
-      } catch { /* no bloquea la carga del resto */ }
-    } catch {
-      // Queries failed — contrato stays null, render shows "Contrato no encontrado"
-    } finally {
-      setCargando(false)
-    }
-  }
-
-  // No initial useEffect — data arrives as SSR props from page.tsx.
-  // cargarDatos() is called explicitly after mutations (agregarObligacion, etc.).
+  /**
+   * Otrosíes del contrato — alimentan el selector al crear una obligación y
+   * el distintivo "Otrosí N" de las ya creadas.
+   *
+   * Se cargan al montar. Antes solo se pedían dentro de la recarga posterior a
+   * una mutación, de modo que al abrir el contrato la lista estaba vacía y el
+   * selector no ofrecía ningún otrosí hasta que se guardaba algo.
+   */
+  useEffect(() => {
+    let vivo = true
+    getOtrosies(id as string)
+      .then(o => { if (vivo) setOtrosies(o) })
+      .catch(() => { /* el resto de la pantalla no depende de esto */ })
+    return () => { vivo = false }
+  }, [id])
 
   async function agregarObligacion(e: React.FormEvent) {
     e.preventDefault()
@@ -117,11 +85,15 @@ export default function ContratoDetallePage({
     if (res.error) {
       toast.error('Error: ' + res.error)
     } else {
+      // La acción devuelve la fila creada, así que la lista se actualiza en el
+      // mismo instante en que aparece el aviso de éxito. Antes se lanzaba una
+      // reconsulta al servidor y el usuario veía "Obligación agregada" sobre
+      // una lista todavía sin ella.
+      if (res.data) setObligaciones(prev => [...prev, res.data!])
       toast.success('Obligación agregada')
       setNuevaObligacion('')
       setEsPermanente(false)
       setOtrosiIdNuevaObl('')
-      cargarDatos()
     }
     setAgregando(false)
   }
@@ -130,10 +102,10 @@ export default function ContratoDetallePage({
     const res = await eliminarObligacionAction(oblId, id as string)
     if (res.error) {
       toast.error('Error: ' + res.error)
-    } else {
-      toast.success('Obligación eliminada')
-      cargarDatos()
+      return
     }
+    setObligaciones(prev => prev.filter(o => o.id !== oblId))
+    toast.success('Obligación eliminada')
   }
 
   async function generarPeriodos() {
@@ -184,8 +156,10 @@ export default function ContratoDetallePage({
       if (res.error) {
         toast.error(res.error)
       } else {
-        toast.success(`${res.data!.generados} periodos generados`)
-        cargarDatos()
+        // Mismos periodos que acaba de insertar el servidor, con su id real:
+        // la tabla se llena sin una segunda vuelta a la base de datos.
+        setPeriodos(res.data!.periodos)
+        toast.success(`${res.data!.periodos.length} periodos generados`)
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error inesperado')
@@ -218,7 +192,6 @@ export default function ContratoDetallePage({
     pagado: 'Pagado',
   }
 
-  if (cargando) return <p className="text-gray-500">Cargando contrato...</p>
   if (!contrato) return <p className="text-red-500">Contrato no encontrado</p>
 
   // Admin y contratación gestionan el contrato por igual: definir obligaciones,
@@ -393,7 +366,10 @@ export default function ContratoDetallePage({
 
         {/* Atajo para arrancar: solo cuando no hay ninguna obligación. */}
         {esGestor && obligaciones.length === 0 && (
-          <CopiarObligaciones contratoId={id as string} onCopiado={cargarDatos} />
+          <CopiarObligaciones
+            contratoId={id as string}
+            onCopiado={obls => setObligaciones(obls)}
+          />
         )}
 
         {/* Alta manual de obligaciones */}
