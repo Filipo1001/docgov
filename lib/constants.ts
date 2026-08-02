@@ -61,7 +61,6 @@ export const ESTADO_REVISOR: Partial<Record<Rol, EstadoPeriodo>> = {
   supervisor: 'enviado',
 }
 
-/** States where a contratista can edit activities and evidence */
 // ─── Gestión del contrato ────────────────────
 
 /**
@@ -78,6 +77,7 @@ export function esGestorContratos(rol?: Rol | null): boolean {
   return rol === 'admin' || rol === 'contratacion'
 }
 
+/** States where a contratista can edit activities and evidence */
 export const ESTADOS_EDITABLES: EstadoPeriodo[] = ['borrador', 'rechazado']
 
 /** States where a reviewer can approve or reject */
@@ -124,6 +124,7 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
+      { href: '/dashboard/dependencias', label: 'Dependencias', icon: '🏢' },
       { href: '/dashboard/admin/municipio', label: 'Municipio', icon: '🏛️' },
       { href: '/dashboard/admin/historicos', label: 'Históricos', icon: '🔒' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
@@ -145,15 +146,17 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/contratos', label: 'Mis contratos', icon: '📄' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
-    // Dependencia de Contratación: gestión de usuarios contratistas y contratos.
-    // Sin acceso al flujo de informes (aprobar/rechazar/radicar), firmas,
-    // importación ni config admin. La creación de contratista va embebida en el
-    // formulario de contrato (crear contrato = crear también su cuenta).
+    // Dependencia de Contratación: ciclo de vida del contrato y de las cuentas
+    // de contratista (crear, corregir, obligaciones, periodos, otrosíes, firma).
+    // Sin acceso al flujo de informes (aprobar/rechazar/radicar), a la carga
+    // masiva desde Excel ni a la configuración del municipio. La creación del
+    // contratista va embebida en el formulario de contrato.
     contratacion: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: '👥' },
       { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
+      { href: '/dashboard/dependencias', label: 'Dependencias', icon: '🏢' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
   }
