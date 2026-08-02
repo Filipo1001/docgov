@@ -17,6 +17,8 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { estadoFacturaPeriodo, FACTURA_BUCKET, FACTURA_MAX_BYTES } from '@/lib/factura-electronica'
+import { extraerPath } from '@/lib/storage-firmado'
 import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
@@ -178,6 +180,14 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 
     if (!planillaData?.planilla_ss_url || !planillaData?.numero_planilla?.trim()) {
       return { error: 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida' }
+    }
+
+    // La factura electrónica sustituye a la Cuenta de Cobro para quien está
+    // obligado a emitirla. Se exige igual que la planilla: sin ella el paquete
+    // que recibe la alcaldía sale sin ningún documento de cobro.
+    const factura = await estadoFacturaPeriodo(periodoId)
+    if (factura.exigeFactura && !factura.facturaUrl) {
+      return { error: 'Debes adjuntar tu factura electrónica antes de enviar el informe. En tu caso sustituye a la Cuenta de Cobro.' }
     }
 
     // Certificación de retención en la fuente (Ley 1819/2016, Art. 383 E.T.):
@@ -2013,6 +2023,149 @@ export async function marcarRadicadosMasivo(
 
     revalidar() // ya incluye /dashboard/informes
     return { data: { radicados: exitosos.length, errores } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Factura electrónica ─────────────────────────────────────────────────────
+//
+// Solo para los contratistas obligados a facturar electrónicamente: sustituye a
+// la Cuenta de Cobro, que en su caso no se genera. Sigue el mismo patrón de dos
+// pasos que la planilla (URL prefirmada + registro), con una diferencia: aquí
+// se comprueba que el PDF sea realmente un PDF, porque la factura es el
+// documento de cobro y no puede quedar en un archivo ilegible.
+
+export async function prepararUploadFactura(
+  periodoId: string,
+  fileName: string,
+  fileSize: number,
+): Promise<ActionResult<{ signedUrl: string; path: string; publicUrl: string }>> {
+  try {
+    if ((fileName.split('.').pop()?.toLowerCase() || '') !== 'pdf') {
+      return { error: 'La factura electrónica debe ser un archivo PDF.' }
+    }
+    if (fileSize > FACTURA_MAX_BYTES) {
+      return { error: `El archivo no puede superar ${Math.round(FACTURA_MAX_BYTES / 1024 / 1024)} MB.` }
+    }
+
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede adjuntar su factura electrónica' }
+    }
+
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    // Pedirla a quien no factura electrónicamente sería un error de flujo: a él
+    // el sistema le genera la Cuenta de Cobro.
+    const { exigeFactura } = await estadoFacturaPeriodo(periodoId)
+    if (!exigeFactura) {
+      return { error: 'Este contratista no está marcado como obligado a facturar electrónicamente.' }
+    }
+
+    if (usuario.rol !== 'admin') {
+      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+      if (!ESTADOS_EDITABLES.includes(periodo.estado)) {
+        return { error: 'No se puede reemplazar la factura de un informe ya enviado' }
+      }
+    }
+
+    const path = `facturas/${periodoId}/${Date.now()}.pdf`
+    const adminClient = createAdminSupabaseClient()
+    const { data: signedData, error: signedError } = await adminClient.storage
+      .from(FACTURA_BUCKET).createSignedUploadUrl(path)
+
+    if (signedError || !signedData) {
+      return { error: `Error al preparar la subida: ${signedError?.message}` }
+    }
+
+    const { data: { publicUrl } } = adminClient.storage.from(FACTURA_BUCKET).getPublicUrl(path)
+    return { data: { signedUrl: signedData.signedUrl, path, publicUrl } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al preparar la subida' }
+  }
+}
+
+export async function confirmarUploadFactura(
+  periodoId: string,
+  publicUrl: string,
+  storagePath: string,
+): Promise<ActionResult<{ urlFirmada: string | null }>> {
+  const adminClient = createAdminSupabaseClient()
+  try {
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'No autorizado' }
+    }
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    // La ruta se deriva del periodo: una falsificada que apunte a otro se rechaza.
+    if (!storagePath.startsWith(`facturas/${periodoId}/`)) {
+      return { error: 'Ruta de archivo inválida.' }
+    }
+
+    // Verificación del contenido REAL: la subida va directa del navegador a
+    // Storage, así que el tipo declarado no prueba nada.
+    const { data: blob } = await adminClient.storage.from(FACTURA_BUCKET).download(storagePath)
+    if (!blob) return { error: 'No se encontró el archivo subido. Intenta de nuevo.' }
+    const { validarPDF } = await import('@/lib/pdf-validacion')
+    const validacion = await validarPDF(Buffer.from(await blob.arrayBuffer()))
+    if (!validacion.ok) {
+      await adminClient.storage.from(FACTURA_BUCKET).remove([storagePath]).catch(() => {})
+      return { error: validacion.error ?? 'El archivo no es un PDF válido.' }
+    }
+
+    const { error } = await adminClient
+      .from('periodos')
+      .update({ factura_electronica_url: publicUrl })
+      .eq('id', periodoId)
+
+    if (error) return { error: `Error al registrar la factura: ${error.message}` }
+
+    // El paquete y el ZIP de SECOP incluyen la factura: sus PDF cacheados
+    // dejan de ser válidos.
+    await invalidarCachePDF(adminClient, periodoId).catch(() => {})
+    revalidatePath(`/dashboard/contratos`, 'layout')
+    // El bucket es privado: sin la URL firmada el enlace "ver el archivo" no
+    // abriría hasta recargar la página.
+    const { firmarUrl } = await import('@/lib/storage-firmado')
+    return { data: { urlFirmada: await firmarUrl(FACTURA_BUCKET, publicUrl) } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al registrar la factura' }
+  }
+}
+
+export async function eliminarFactura(periodoId: string): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'No autorizado' }
+    }
+    const periodo = await getPeriodo(supabase, periodoId)
+    if (!periodo) return { error: 'Periodo no encontrado' }
+
+    if (usuario.rol !== 'admin' && !ESTADOS_EDITABLES.includes(periodo.estado)) {
+      return { error: 'No se puede eliminar la factura de un informe ya enviado' }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { data: actual } = await adminClient
+      .from('periodos').select('factura_electronica_url').eq('id', periodoId).single()
+
+    const ruta = actual?.factura_electronica_url
+      ? extraerPath(actual.factura_electronica_url, FACTURA_BUCKET)
+      : null
+    if (ruta) await adminClient.storage.from(FACTURA_BUCKET).remove([ruta]).catch(() => {})
+
+    const { error } = await adminClient
+      .from('periodos').update({ factura_electronica_url: null }).eq('id', periodoId)
+    if (error) return { error: error.message }
+
+    await invalidarCachePDF(adminClient, periodoId).catch(() => {})
+    revalidatePath(`/dashboard/contratos`, 'layout')
+    return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }

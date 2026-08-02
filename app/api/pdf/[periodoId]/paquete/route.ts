@@ -22,6 +22,7 @@ import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { descargarObjeto } from '@/lib/storage-firmado'
+import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-electronica'
 import { buildPDFData } from '@/lib/pdf/data'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
@@ -82,6 +83,11 @@ export async function GET(
 
   const estado = data.periodo.estado
 
+  // Quien factura electrónicamente no lleva Cuenta de Cobro: se sustituye por
+  // el PDF de su factura. Se resuelve antes de lanzar los generadores para no
+  // gastar CPU produciendo un documento que no va a entrar en el ZIP.
+  const factura = await estadoFacturaPeriodo(periodoId)
+
   // ── Fetch planilla URL in parallel with PDF generation ───────
   const planillaPromise = supabase
     .from('periodos')
@@ -104,20 +110,22 @@ export async function GET(
           return generarInformeConAnexos(periodoId, data, verif)
         },
       }),
-      getOrGeneratePDFBuffer({
-        supabase,
-        tipo: 'cuenta-cobro',
-        periodoId,
-        estado,
-        generate: async (verif) => {
-          const [{ renderToBuffer }, React, { CuentaDeCobroPDF }] = await Promise.all([
-            import('@react-pdf/renderer'),
-            import('react'),
-            import('@/lib/pdf/cuenta-de-cobro'),
-          ])
-          return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
-        },
-      }),
+      factura.exigeFactura
+        ? (factura.facturaUrl ? descargarObjeto('documentos', factura.facturaUrl) : Promise.resolve(null))
+        : getOrGeneratePDFBuffer({
+            supabase,
+            tipo: 'cuenta-cobro',
+            periodoId,
+            estado,
+            generate: async (verif) => {
+              const [{ renderToBuffer }, React, { CuentaDeCobroPDF }] = await Promise.all([
+                import('@react-pdf/renderer'),
+                import('react'),
+                import('@/lib/pdf/cuenta-de-cobro'),
+              ])
+              return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
+            },
+          }),
       getOrGeneratePDFBuffer({
         supabase,
         tipo: 'acta-supervision',
@@ -171,7 +179,11 @@ export async function GET(
   const folder = zip.folder(folderName)!
 
   folder.file('Informe_de_Actividades.pdf', informeBuffer)
-  folder.file('Cuenta_de_Cobro.pdf',        cuentaBuffer)
+  // Si el contratista factura y aún no adjuntó su PDF, el ZIP sale sin ese
+  // documento en vez de fallar entero: los otros tres siguen sirviendo.
+  if (cuentaBuffer) {
+    folder.file(factura.exigeFactura ? NOMBRE_ARCHIVO_FACTURA : 'Cuenta_de_Cobro.pdf', cuentaBuffer)
+  }
   folder.file('Acta_de_Supervision.pdf',    supervisionBuffer)
   folder.file('Acta_de_Pago.pdf',           pagoBuffer)
   if (planillaBuffer) {

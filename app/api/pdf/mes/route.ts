@@ -33,6 +33,7 @@ import { descargarObjeto } from '@/lib/storage-firmado'
 import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 import { MESES } from '@/lib/constants'
+import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-electronica'
 import type { PDFData } from '@/lib/pdf/types'
 
 export const runtime = 'nodejs'
@@ -133,9 +134,28 @@ export async function GET(req: NextRequest) {
     let dataPromise: Promise<PDFData | null> | null = null
     const getData = () => (dataPromise ??= buildPDFData(p.id))
 
+    // Un mismo lote mezcla contratistas con Cuenta de Cobro y contratistas que
+    // facturan electrónicamente; la condición se resuelve por periodo.
+    const factura = docsPdfSolicitados.includes('cuenta-cobro')
+      ? await estadoFacturaPeriodo(p.id)
+      : { exigeFactura: false, facturaUrl: null }
+
     await Promise.all([
       ...docsPdfSolicitados.map(async (tipo) => {
         try {
+          if (tipo === 'cuenta-cobro' && factura.exigeFactura) {
+            if (!factura.facturaUrl) {
+              errores.push(`${etiqueta}: factura electrónica sin adjuntar`)
+              return
+            }
+            const fb = await descargarObjeto('documentos', factura.facturaUrl)
+            if (!fb) {
+              errores.push(`${etiqueta}: no se pudo descargar la factura electrónica`)
+              return
+            }
+            carpeta.file(NOMBRE_ARCHIVO_FACTURA, fb)
+            return
+          }
           const buffer = await getOrGeneratePDFBuffer({
             supabase: admin,
             tipo,

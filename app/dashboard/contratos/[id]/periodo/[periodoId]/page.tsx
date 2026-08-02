@@ -38,7 +38,7 @@ export default async function PeriodoDetallePage({
         .from('contratos')
         .select(`
           *,
-          contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, telefono, cargo, direccion, firma_url),
+          contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, telefono, cargo, direccion, firma_url, obligado_facturar_electronicamente),
           supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo, cedula, cargo, firma_url),
           dependencia:dependencias(nombre, abreviatura)
         `)
@@ -168,7 +168,10 @@ export default async function PeriodoDetallePage({
     // Full-resolution: ONE storage API call regardless of image count
     // (createSignedUrls). Used by the lightbox and the pHash backfill.
     firmarUrls('evidencias', [...urlsEvidenciasGrid, ...urlsParaBackfill]),
-    firmarUrls('documentos', [(periodo as { planilla_ss_url?: string | null }).planilla_ss_url]),
+    firmarUrls('documentos', [
+      (periodo as { planilla_ss_url?: string | null }).planilla_ss_url,
+      (periodo as { factura_electronica_url?: string | null }).factura_electronica_url,
+    ]),
     // 160×160 resized JPEGs for the thumbnail grid — a 3-8 MB photo becomes
     // ~10-20 KB to paint an 80×80 px thumbnail (Supabase image transforms).
     firmarUrlsMiniatura('evidencias', urlsEvidenciasGrid, { width: 160, height: 160, resize: 'cover', quality: 70 }),

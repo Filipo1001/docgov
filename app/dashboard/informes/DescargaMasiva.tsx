@@ -18,7 +18,9 @@ import { toast } from 'sonner'
 
 const DOCS = [
   { id: 'informe',          label: 'Informe de Actividades' },
-  { id: 'cuenta-cobro',     label: 'Cuenta de Cobro' },
+  // Un lote puede mezclar ambos: quien factura electrónicamente aporta su
+  // factura en lugar de la Cuenta de Cobro, y el ZIP la incluye con su nombre.
+  { id: 'cuenta-cobro',     label: 'Cuenta de Cobro / Factura' },
   { id: 'acta-supervision', label: 'Acta de Supervisión' },
   { id: 'acta-pago',        label: 'Acta de Pago' },
   { id: 'planilla',         label: 'Planilla de Seguridad Social' },
