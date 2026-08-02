@@ -18,11 +18,12 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import SelectorSupervisor from '@/components/SelectorSupervisor'
 import EstadoContratoPanel from './EstadoContratoPanel'
+import EliminarContrato from './EliminarContrato'
 import type { EstadoContrato } from '@/lib/estado-contrato'
 import { numerosALetras } from '@/lib/numero-letras'
 import {
   actualizarContrato,
-  type CampoContrato, type CamposBloqueados, type CambioContrato,
+  type CampoContrato, type CamposBloqueados, type CambioContrato, type ResumenBorrado,
 } from '@/app/actions/contratos'
 import type { UsuarioSelect } from '@/services/admin'
 
@@ -41,13 +42,15 @@ const inputBloqueado =
   'w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-400 cursor-not-allowed'
 
 export default function EditarContratoClient({
-  contrato, dependencias, supervisores, bloqueo, historial,
+  contrato, dependencias, supervisores, bloqueo, historial, resumenBorrado,
 }: {
   contrato: Record<string, any>
   dependencias: { id: string; nombre: string }[]
   supervisores: UsuarioSelect[]
   bloqueo: CamposBloqueados
   historial: CambioContrato[]
+  /** Null para quien no es administrador: el bloque no se renderiza. */
+  resumenBorrado: ResumenBorrado | null
 }) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
@@ -220,6 +223,17 @@ export default function EditarContratoClient({
           </Link>
         </div>
       </form>
+
+      {resumenBorrado && (
+        <div className="mt-8">
+          <EliminarContrato
+            contratoId={contrato.id}
+            numero={contrato.numero}
+            anio={contrato.anio}
+            resumen={resumenBorrado}
+          />
+        </div>
+      )}
 
       {/* ── Historial ── */}
       {historial.length > 0 && (
