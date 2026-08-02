@@ -1,7 +1,7 @@
 'use server'
 
 /**
- * Server Action: carga de datos del módulo "Opciones avanzadas" (admin only).
+ * Server Action: carga de datos del módulo "Opciones avanzadas".
  *
  * Por qué existe: las mutaciones del módulo corren como server actions
  * (cookies httpOnly renovadas por el middleware — siempre funcionan), pero la
@@ -18,7 +18,8 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { firmarUrls } from '@/lib/storage-firmado'
-import type { EstadoPeriodo } from '@/lib/types'
+import { esGestorContratos } from '@/lib/constants'
+import type { EstadoPeriodo, Rol } from '@/lib/types'
 import type { Otrosi } from './otrosies'
 
 export interface PeriodoAvanzado {
@@ -56,6 +57,8 @@ export interface AvanzadoData {
   contrato: ContratoAvanzado
   periodos: PeriodoAvanzado[]
   otrosies: Otrosi[]
+  /** Rol de quien consulta — decide qué pestañas puede operar el cliente. */
+  rol: Rol
 }
 
 export async function getAvanzadoData(
@@ -72,7 +75,13 @@ export async function getAvanzadoData(
       .select('rol')
       .eq('id', user.id)
       .single()
-    if (yo?.rol !== 'admin') return { error: 'Solo administradores pueden ver este módulo' }
+    // Contratación entra para gestionar otrosíes. Las demás pestañas (plan de
+    // pagos, planillas, base de cotización) pertenecen a la operación del
+    // informe y sus acciones en periodos.ts siguen exigiendo admin, así que el
+    // cliente solo le muestra la pestaña que de verdad puede usar.
+    if (!esGestorContratos(yo?.rol as Rol)) {
+      return { error: 'No tienes permiso para ver este módulo' }
+    }
 
     const admin = createAdminSupabaseClient()
     const [{ data: contrato }, { data: periodos }, { data: otrosies }] = await Promise.all([
@@ -107,6 +116,7 @@ export async function getAvanzadoData(
           planilla_url_firmada: p.planilla_ss_url ? (firmadas[p.planilla_ss_url] ?? null) : null,
         })),
         otrosies: (otrosies ?? []) as Otrosi[],
+        rol: yo!.rol as Rol,
       },
     }
   } catch (e: unknown) {

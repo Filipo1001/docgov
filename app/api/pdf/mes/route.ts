@@ -144,6 +144,12 @@ export async function GET(req: NextRequest) {
             generate: async (verif) => {
               const data = await getData()
               if (!data) throw new Error('datos del periodo no disponibles')
+              // El informe pasa por el generador con anexos; los demás
+              // documentos no llevan anexos y se renderizan directo.
+              if (tipo === 'informe') {
+                const { generarInformeConAnexos } = await import('@/lib/pdf/anexos')
+                return generarInformeConAnexos(p.id, data, verif)
+              }
               const [{ renderToBuffer }, React, Componente] = await Promise.all([
                 import('@react-pdf/renderer'),
                 import('react'),

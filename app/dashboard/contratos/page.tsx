@@ -208,6 +208,15 @@ export default function ContratosPage() {
 
   const busquedaDebounced = useDebounced(busqueda, 200)
 
+  // Filtros que llegan por URL desde las tarjetas del panel de contratación.
+  // Se aplican tras montar y no en el useState inicial: el servidor no ve la
+  // query string de la misma forma y la hidratación no cuadraría.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('incompletos') === '1') setSoloInc(true)
+    if (q.get('vigencia') === 'vigentes') setFiltroVig('vigentes')
+  }, [])
+
   // ── Carga única de todos los contratos del rol ─────────────────
   const {
     data: todosContratos,
@@ -227,8 +236,17 @@ export default function ContratosPage() {
   const total = todosCargados.length
 
   function datosFaltantes(c: ContratoListItem): string[] {
-    if (!esGestor || !c.contratista) return []
+    if (!esGestor) return []
     const f: string[] = []
+
+    // Lo que impide OPERAR el contrato va primero: sin obligaciones o sin
+    // periodos el contratista no puede reportar aunque el contrato exista.
+    // Antes solo se revisaban los datos del contratista, así que 61 contratos
+    // sin obligaciones no aparecían como incompletos en ninguna parte.
+    if ((c.num_obligaciones ?? 0) === 0) f.push('Obligaciones')
+    if ((c.num_periodos ?? 0) === 0) f.push('Periodos')
+
+    if (!c.contratista) return f
     const u = c.contratista
     if (!u.email || u.email.endsWith('@pendiente.local')) f.push('Email')
     if (!u.telefono) f.push('Celular')

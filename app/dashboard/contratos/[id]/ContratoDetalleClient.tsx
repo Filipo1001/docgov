@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
@@ -11,26 +10,34 @@ import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from '@/app/actions/obligaciones'
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
+import { esGestorContratos } from '@/lib/constants'
+import { etiquetaEstado } from '@/lib/estado-contrato'
+import ExpedienteContrato from './ExpedienteContrato'
+import CopiarObligaciones from './CopiarObligaciones'
+import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
 
 export default function ContratoDetallePage({
   initialContrato,
   initialObligaciones,
   initialPeriodos,
+  initialDocumentos = [],
 }: {
   initialContrato: any
   initialObligaciones: any[]
   initialPeriodos: any[]
+  initialDocumentos?: DocumentoContratoDTO[]
 }) {
   const { id } = useParams()
   const router = useRouter()
   const { usuario } = useUsuario()
 
-  // Data is pre-fetched server-side — no client fetch needed on mount.
-  // cargarDatos() is still called explicitly after mutations.
+  // Los datos llegan como props SSR desde page.tsx. Tras cada mutación la
+  // pantalla se actualiza con la fila que devuelve la propia acción, sin
+  // volver a consultar: es instantáneo y no depende de que la sesión del
+  // navegador esté caliente.
   const [contrato, setContrato] = useState<any>(initialContrato)
   const [obligaciones, setObligaciones] = useState<any[]>(initialObligaciones)
   const [periodos, setPeriodos] = useState<any[]>(initialPeriodos)
-  const [cargando, setCargando] = useState(false)
 
   // Form para nueva obligación
   const [nuevaObligacion, setNuevaObligacion] = useState('')
@@ -45,53 +52,21 @@ export default function ContratoDetallePage({
   const [generandoPeriodos, setGenerandoPeriodos] = useState(false)
 
 
-  async function cargarDatos() {
-    try {
-      const supabase = createClient()
-
-      // Run all three queries in parallel for speed.
-      // Wrapped in try/finally so setCargando(false) is guaranteed even on error —
-      // previously a failed query left cargando=true forever (infinite loading screen).
-      const [{ data: cont }, { data: obls }, { data: pers }] = await Promise.all([
-        supabase
-          .from('contratos')
-          .select(`
-            *,
-            contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono),
-            supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
-            dependencia:dependencias(nombre, abreviatura)
-          `)
-          .eq('id', id)
-          .single(),
-
-        supabase
-          .from('obligaciones')
-          .select('*')
-          .eq('contrato_id', id)
-          .order('orden'),
-
-        supabase
-          .from('periodos')
-          .select('*')
-          .eq('contrato_id', id)
-          .order('numero_periodo'),
-      ])
-
-      setContrato(cont)
-      setObligaciones(obls || [])
-      setPeriodos(pers || [])
-      try {
-        setOtrosies(await getOtrosies(id as string))
-      } catch { /* no bloquea la carga del resto */ }
-    } catch {
-      // Queries failed — contrato stays null, render shows "Contrato no encontrado"
-    } finally {
-      setCargando(false)
-    }
-  }
-
-  // No initial useEffect — data arrives as SSR props from page.tsx.
-  // cargarDatos() is called explicitly after mutations (agregarObligacion, etc.).
+  /**
+   * Otrosíes del contrato — alimentan el selector al crear una obligación y
+   * el distintivo "Otrosí N" de las ya creadas.
+   *
+   * Se cargan al montar. Antes solo se pedían dentro de la recarga posterior a
+   * una mutación, de modo que al abrir el contrato la lista estaba vacía y el
+   * selector no ofrecía ningún otrosí hasta que se guardaba algo.
+   */
+  useEffect(() => {
+    let vivo = true
+    getOtrosies(id as string)
+      .then(o => { if (vivo) setOtrosies(o) })
+      .catch(() => { /* el resto de la pantalla no depende de esto */ })
+    return () => { vivo = false }
+  }, [id])
 
   async function agregarObligacion(e: React.FormEvent) {
     e.preventDefault()
@@ -110,11 +85,15 @@ export default function ContratoDetallePage({
     if (res.error) {
       toast.error('Error: ' + res.error)
     } else {
+      // La acción devuelve la fila creada, así que la lista se actualiza en el
+      // mismo instante en que aparece el aviso de éxito. Antes se lanzaba una
+      // reconsulta al servidor y el usuario veía "Obligación agregada" sobre
+      // una lista todavía sin ella.
+      if (res.data) setObligaciones(prev => [...prev, res.data!])
       toast.success('Obligación agregada')
       setNuevaObligacion('')
       setEsPermanente(false)
       setOtrosiIdNuevaObl('')
-      cargarDatos()
     }
     setAgregando(false)
   }
@@ -123,10 +102,10 @@ export default function ContratoDetallePage({
     const res = await eliminarObligacionAction(oblId, id as string)
     if (res.error) {
       toast.error('Error: ' + res.error)
-    } else {
-      toast.success('Obligación eliminada')
-      cargarDatos()
+      return
     }
+    setObligaciones(prev => prev.filter(o => o.id !== oblId))
+    toast.success('Obligación eliminada')
   }
 
   async function generarPeriodos() {
@@ -177,8 +156,10 @@ export default function ContratoDetallePage({
       if (res.error) {
         toast.error(res.error)
       } else {
-        toast.success(`${res.data!.generados} periodos generados`)
-        cargarDatos()
+        // Mismos periodos que acaba de insertar el servidor, con su id real:
+        // la tabla se llena sin una segunda vuelta a la base de datos.
+        setPeriodos(res.data!.periodos)
+        toast.success(`${res.data!.periodos.length} periodos generados`)
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error inesperado')
@@ -211,10 +192,12 @@ export default function ContratoDetallePage({
     pagado: 'Pagado',
   }
 
-  if (cargando) return <p className="text-gray-500">Cargando contrato...</p>
   if (!contrato) return <p className="text-red-500">Contrato no encontrado</p>
 
-  const esAdmin = usuario?.rol === 'admin'
+  // Admin y contratación gestionan el contrato por igual: definir obligaciones,
+  // generar periodos y registrar otrosíes. El backend ya lo autorizaba; esta
+  // pantalla era lo único que lo impedía.
+  const esGestor = esGestorContratos(usuario?.rol)
 
   return (
     <div className="max-w-4xl">
@@ -223,7 +206,7 @@ export default function ContratoDetallePage({
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
         <Link href="/dashboard/contratos" className="hover:text-gray-600">
-          {esAdmin ? 'Contratos' : 'Mis contratos'}
+          {esGestor ? 'Contratos' : 'Mis contratos'}
         </Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">N.º {contrato.numero}</span>
@@ -245,16 +228,35 @@ export default function ContratoDetallePage({
               </p>
               <p className="text-xs text-gray-400">{contrato.valor_letras_total}</p>
             </div>
-            {esAdmin && (
-              <Link
-                href={`/dashboard/contratos/${id}/avanzado`}
-                className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
-              >
-                ⚙️ Opciones avanzadas
-              </Link>
+            {esGestor && (
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/dashboard/contratos/${id}/editar`}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
+                >
+                  ✏️ Editar
+                </Link>
+                <Link
+                  href={`/dashboard/contratos/${id}/avanzado`}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
+                >
+                  {/* Contratación solo encuentra otrosíes al otro lado del
+                      enlace; nombrarlo "Opciones avanzadas" prometería de más. */}
+                  {usuario?.rol === 'contratacion' ? '📑 Otrosíes' : '⚙️ Opciones avanzadas'}
+                </Link>
+              </div>
             )}
           </div>
         </div>
+
+        {(() => {
+          const e = etiquetaEstado(contrato.estado, contrato.fecha_fin)
+          return (
+            <span className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full border mb-3 ${e.color}`}>
+              {e.label}
+            </span>
+          )
+        })()}
 
         <p className="text-sm text-gray-600 mb-4">{contrato.objeto}</p>
 
@@ -263,6 +265,14 @@ export default function ContratoDetallePage({
             <span className="text-gray-400 text-xs">Contratista</span>
             <p className="font-medium text-gray-900 truncate">{contrato.contratista?.nombre_completo}</p>
             <p className="text-xs text-gray-400">CC {formatCedula(contrato.contratista?.cedula)}</p>
+            {/* Decide si el cobro se documenta con Cuenta de Cobro o con
+                factura electrónica. Solo se marca cuando está confirmado:
+                un dato sin verificar no debe parecer una respuesta. */}
+            {contrato.contratista?.obligado_facturar_electronicamente === true && (
+              <span className="inline-block mt-1 text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                Factura electrónica
+              </span>
+            )}
           </div>
           <div className="min-w-0">
             <span className="text-gray-400 text-xs">Supervisor</span>
@@ -339,7 +349,7 @@ export default function ContratoDetallePage({
                         Otrosí {otrosiVinculado.numero}
                       </span>
                     )}
-                    {esAdmin && (
+                    {esGestor && (
                       <button
                         onClick={() => eliminarObligacion(obl.id)}
                         className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
@@ -354,8 +364,16 @@ export default function ContratoDetallePage({
           </div>
         )}
 
-        {/* Solo admin puede agregar obligaciones */}
-        {esAdmin && (
+        {/* Atajo para arrancar: solo cuando no hay ninguna obligación. */}
+        {esGestor && obligaciones.length === 0 && (
+          <CopiarObligaciones
+            contratoId={id as string}
+            onCopiado={obls => setObligaciones(obls)}
+          />
+        )}
+
+        {/* Alta manual de obligaciones */}
+        {esGestor && (
           <form onSubmit={agregarObligacion} className="flex gap-2">
             <div className="flex-1">
               <input
@@ -403,12 +421,20 @@ export default function ContratoDetallePage({
           </form>
         )}
 
-        {!esAdmin && obligaciones.length === 0 && (
+        {!esGestor && obligaciones.length === 0 && (
           <p className="text-sm text-gray-400 text-center py-4">
-            El administrador aún no ha definido las obligaciones de este contrato.
+            La dependencia de contratación aún no ha definido las obligaciones de este contrato.
           </p>
         )}
       </div>
+
+      {/* Expediente documental — entre las obligaciones y los periodos: es
+          parte de la legalización del contrato, no de su ejecución mensual. */}
+      <ExpedienteContrato
+        contratoId={id as string}
+        initial={initialDocumentos}
+        editable={esGestor}
+      />
 
       {/* Periodos de pago */}
       <div className="bg-white rounded-2xl border p-6">
@@ -416,7 +442,7 @@ export default function ContratoDetallePage({
           <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
             Periodos de pago ({periodos.length})
           </h3>
-          {esAdmin && periodos.length === 0 && obligaciones.length > 0 && (
+          {esGestor && periodos.length === 0 && obligaciones.length > 0 && (
             <button
               onClick={generarPeriodos}
               disabled={generandoPeriodos}
@@ -427,21 +453,21 @@ export default function ContratoDetallePage({
           )}
         </div>
 
-        {periodos.length === 0 && esAdmin && obligaciones.length === 0 && (
+        {periodos.length === 0 && esGestor && obligaciones.length === 0 && (
           <p className="text-sm text-gray-400 text-center py-6">
             Agrega las obligaciones del contrato primero, luego genera los periodos.
           </p>
         )}
 
-        {periodos.length === 0 && esAdmin && obligaciones.length > 0 && (
+        {periodos.length === 0 && esGestor && obligaciones.length > 0 && (
           <p className="text-sm text-gray-400 text-center py-6">
             Haz clic en "Generar periodos automáticamente" para crear los {contrato.plazo_meses} periodos mensuales.
           </p>
         )}
 
-        {periodos.length === 0 && !esAdmin && (
+        {periodos.length === 0 && !esGestor && (
           <p className="text-sm text-gray-400 text-center py-6">
-            Los periodos de pago aún no han sido generados por el administrador.
+            Los periodos de pago aún no han sido generados por la dependencia de contratación.
           </p>
         )}
 

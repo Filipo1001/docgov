@@ -61,6 +61,22 @@ export const ESTADO_REVISOR: Partial<Record<Rol, EstadoPeriodo>> = {
   supervisor: 'enviado',
 }
 
+// ─── Gestión del contrato ────────────────────
+
+/**
+ * Roles que administran el CICLO DE VIDA DEL CONTRATO: crearlo, corregirlo,
+ * definir sus obligaciones, generar sus periodos y registrar sus otrosíes.
+ *
+ * Es una frontera distinta a la del flujo de informes (asesor → secretaría),
+ * donde contratación no interviene. Se centraliza aquí porque estaba escrita
+ * como `rol === 'admin'` repartida por las pantallas, y eso dejaba a
+ * contratación con permiso en el servidor pero sin botones para usarlo:
+ * podía crear un contrato y no terminar de configurarlo.
+ */
+export function esGestorContratos(rol?: Rol | null): boolean {
+  return rol === 'admin' || rol === 'contratacion'
+}
+
 /** States where a contratista can edit activities and evidence */
 export const ESTADOS_EDITABLES: EstadoPeriodo[] = ['borrador', 'rechazado']
 
@@ -108,6 +124,7 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
+      { href: '/dashboard/dependencias', label: 'Dependencias', icon: '🏢' },
       { href: '/dashboard/admin/municipio', label: 'Municipio', icon: '🏛️' },
       { href: '/dashboard/admin/historicos', label: 'Históricos', icon: '🔒' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
@@ -129,10 +146,12 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/contratos', label: 'Mis contratos', icon: '📄' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
-    // Dependencia de Contratación: gestión de usuarios contratistas y contratos.
-    // Sin acceso al flujo de informes (aprobar/rechazar/radicar), firmas,
-    // importación ni config admin. La creación de contratista va embebida en el
-    // formulario de contrato (crear contrato = crear también su cuenta).
+    // Dependencia de Contratación: ciclo de vida del contrato y de las cuentas
+    // de contratista (crear, corregir, obligaciones, periodos, otrosíes).
+    // Sin acceso al flujo de informes (aprobar/rechazar/radicar), a las firmas,
+    // a las dependencias, a la carga masiva desde Excel ni a la configuración
+    // del municipio. La creación del contratista va embebida en el formulario
+    // de contrato.
     contratacion: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },

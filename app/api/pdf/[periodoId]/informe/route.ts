@@ -41,12 +41,8 @@ export async function GET(
       const faltan = mensajeDatosFaltantes('informe', data)
       if (faltan) throw new PDFDatosIncompletosError(faltan)
       const filename = `informe-actividades-${data.contrato.numero}-${data.contrato.anio}-periodo-${data.periodo.numero}.pdf`
-      const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
-        import('@react-pdf/renderer'),
-        import('react'),
-        import('@/lib/pdf/informe-actividades'),
-      ])
-      const buffer = await renderToBuffer(React.createElement(InformeActividadesPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Buffer
+      const { generarInformeConAnexos } = await import('@/lib/pdf/anexos')
+      const buffer = await generarInformeConAnexos(periodoId, data, verif)
       return { buffer, filename }
     },
   })

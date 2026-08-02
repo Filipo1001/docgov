@@ -250,8 +250,11 @@ const s = StyleSheet.create({
     width: 16,
     lineHeight: 1.6,
   },
-  actText: {
+  /** Columna a la derecha del número: descripción + remisión al anexo. */
+  actTextCol: {
     flex: 1,
+  },
+  actText: {
     fontSize: 9,
     lineHeight: 1.6,
     color: '#111',
@@ -402,7 +405,74 @@ const s = StyleSheet.create({
     fontSize: 7.5,
     color: '#888',
   },
+
+  // ── Relación de anexos ──────────────────────────────────────
+  anexosBloque: {
+    marginTop: 18,
+    borderWidth: 0.8,
+    borderColor: '#999',
+    padding: 10,
+  },
+  anexosTitulo: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 7,
+    letterSpacing: 0.4,
+  },
+  anexosHead: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.8,
+    borderBottomColor: '#999',
+    paddingBottom: 3,
+    marginBottom: 2,
+  },
+  anexosFila: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.4,
+    borderBottomColor: '#ddd',
+    paddingVertical: 3,
+  },
+  anexoCol: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#444' },
+  anexoCel: { fontSize: 7.5, color: '#111' },
+  anexoColNum: { width: '7%' },
+  anexoColNombre: { width: '38%', paddingRight: 6 },
+  anexoColSoporta: { width: '21%', paddingRight: 6 },
+  anexoColPags: { width: '9%' },
+  anexoColHash: { width: '25%', fontFamily: 'Courier' },
+  anexosNota: {
+    fontSize: 6.5,
+    color: '#666',
+    marginTop: 6,
+    lineHeight: 1.4,
+  },
+
+  /** Remisión al anexo, bajo la descripción de la actividad que soporta. */
+  actAnexoRef: {
+    fontSize: 6.8,
+    fontFamily: 'Helvetica-Oblique',
+    color: '#444',
+    marginTop: 3,
+    lineHeight: 1.3,
+  },
 })
+
+/**
+ * Remisión en prosa a los anexos de una actividad.
+ *
+ * Va redactada, no como una etiqueta suelta ("Anexo 2"), porque el informe es
+ * un documento que puede terminar ante un ente de control: la frase debe
+ * sostenerse sola en una hoja impresa, sin depender del contexto de la tabla.
+ */
+function frasesAnexos(nums: number[]): string {
+  if (nums.length === 1) {
+    return `La evidencia de esta actividad se encuentra en el Anexo ${nums[0]}.`
+  }
+  const lista =
+    nums.length === 2
+      ? `${nums[0]} y ${nums[1]}`
+      : `${nums.slice(0, -1).join(', ')} y ${nums[nums.length - 1]}`
+  return `La evidencia de esta actividad se encuentra en los Anexos ${lista}.`
+}
 
 // ─── Info table helpers ───────────────────────────────────────
 
@@ -651,7 +721,14 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
                 <View style={s.col2}>
                   <View style={s.actRow}>
                     <Text style={s.actNumber}>{row.actIndex + 1}.</Text>
-                    <Text style={s.actText}>{row.act.descripcion}</Text>
+                    <View style={s.actTextCol}>
+                      <Text style={s.actText}>{row.act.descripcion}</Text>
+                      {/* Remisión al soporte documental: sin ella, el lector no
+                          sabría cuál de los anexos respalda esta actividad. */}
+                      {!!row.act.anexos?.length && (
+                        <Text style={s.actAnexoRef}>{frasesAnexos(row.act.anexos)}</Text>
+                      )}
+                    </View>
                   </View>
                 </View>
                 {/* col3: total actions — shown only once, on first activity */}
@@ -771,12 +848,49 @@ export function InformeActividadesPDF({ data }: { data: PDFData }) {
             para ser escaneable (en el pie fijo no cabía y se superponía). */}
         <BloqueVerificacion v={data.verificacion} />
 
-        {/* ── Footer — page number + código de verificación ──────── */}
+        {/* ── Índice de anexos ────────────────────────────────────────────
+            El documento oficial DECLARA qué se anexó. Sin esto, una copia
+            impresa del informe no dejaría rastro de que existían soportes.
+            El hash permite demostrar cuál archivo exacto se anexó. */}
+        {!!data.anexos?.length && (
+          <View style={s.anexosBloque} wrap={false}>
+            <Text style={s.anexosTitulo}>RELACIÓN DE ANEXOS</Text>
+            <View style={s.anexosHead}>
+              <Text style={[s.anexoCol, s.anexoColNum]}>N.°</Text>
+              <Text style={[s.anexoCol, s.anexoColNombre]}>Documento</Text>
+              <Text style={[s.anexoCol, s.anexoColSoporta]}>Soporta</Text>
+              <Text style={[s.anexoCol, s.anexoColPags]}>Págs.</Text>
+              <Text style={[s.anexoCol, s.anexoColHash]}>Huella SHA-256</Text>
+            </View>
+            {data.anexos.map(a => (
+              <View key={a.orden} style={s.anexosFila}>
+                <Text style={[s.anexoCel, s.anexoColNum]}>{a.orden}</Text>
+                <Text style={[s.anexoCel, s.anexoColNombre]}>{a.nombre}</Text>
+                <Text style={[s.anexoCel, s.anexoColSoporta]}>{a.referencia ?? '—'}</Text>
+                <Text style={[s.anexoCel, s.anexoColPags]}>{a.paginas ?? '—'}</Text>
+                <Text style={[s.anexoCel, s.anexoColHash]}>{a.sha256.slice(0, 16)}…</Text>
+              </View>
+            ))}
+            <Text style={s.anexosNota}>
+              Los documentos relacionados se encuentran anexos al final de este informe,
+              identificados en cada página con su número de anexo. La columna «Soporta»
+              indica la obligación y la actividad que cada documento respalda.
+            </Text>
+          </View>
+        )}
+
+        {/* ── Footer — page number + código de verificación ────────
+            La numeración se OMITE cuando hay anexos: react-pdf solo conoce el
+            total de las páginas que él genera, así que imprimiría "de 7" en un
+            documento que tras la fusión tiene 12. En ese caso la numeración
+            global la estampa pdf-lib sobre el documento ya completo. */}
         <View style={s.footer} fixed>
-          <Text
-            style={s.footerText}
-            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-          />
+          {!data.anexos?.length && (
+            <Text
+              style={s.footerText}
+              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            />
+          )}
           <CodigoPie v={data.verificacion} />
         </View>
 

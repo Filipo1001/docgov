@@ -12,7 +12,14 @@ export interface ContratistaFirma {
   firma_url: string | null
 }
 
-export default async function FirmasAdminPage() {
+export default async function FirmasAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filtro?: string }>
+}) {
+  // ?filtro=sin llega desde la tarjeta "Sin firma registrada" del panel de
+  // contratación, para caer directo sobre los que faltan.
+  const { filtro } = await searchParams
   const supabase = await createServerSupabaseClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) redirect('/login')
@@ -56,5 +63,5 @@ export default async function FirmasAdminPage() {
     .filter((c) => c.id && !c.nombre_completo.toLowerCase().includes('prueba'))
     .sort((a, b) => a.nombre_completo.localeCompare(b.nombre_completo))
 
-  return <FirmasAdminClient contratistas={contratistas} />
+  return <FirmasAdminClient contratistas={contratistas} filtroInicial={filtro === 'sin' || filtro === 'con' ? filtro : 'todos'} />
 }

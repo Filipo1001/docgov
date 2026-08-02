@@ -2,6 +2,7 @@ import { requireContractAccess } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import ContratoDetalleClient from './ContratoDetalleClient'
+import { listarDocumentosContrato } from '@/app/actions/documentos-contrato'
 
 /**
  * Server component — fetches all contract data with server-side auth
@@ -18,12 +19,12 @@ export default async function ContratoDetallePage({
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: contrato }, { data: obligaciones }, { data: periodos }] = await Promise.all([
+  const [{ data: contrato, error: errorContrato }, { data: obligaciones }, { data: periodos }, documentos] = await Promise.all([
     supabase
       .from('contratos')
       .select(`
         *,
-        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono),
+        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono, obligado_facturar_electronicamente),
         supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
         dependencia:dependencias(nombre, abreviatura)
       `)
@@ -41,8 +42,19 @@ export default async function ContratoDetallePage({
       .select('*')
       .eq('contrato_id', id)
       .order('numero_periodo'),
+
+    // Expediente documental — RLS decide la visibilidad según el rol.
+    listarDocumentosContrato(id),
   ])
 
+  // Este redirect ocultó durante horas un fallo real: al añadir una columna a
+  // `usuarios` sin su GRANT, la consulta devolvía "permission denied" y la
+  // pantalla se limitaba a rebotar al listado, como si el contrato no
+  // existiera. Un error de consulta y un contrato inexistente no son lo mismo:
+  // el primero se registra para que aparezca en los logs.
+  if (errorContrato) {
+    console.error(`[contrato ${id}] la consulta falló:`, errorContrato.message)
+  }
   if (!contrato) redirect('/dashboard/contratos')
 
   return (
@@ -52,6 +64,7 @@ export default async function ContratoDetallePage({
       initialContrato={contrato}
       initialObligaciones={obligaciones ?? []}
       initialPeriodos={periodos ?? []}
+      initialDocumentos={documentos}
     />
   )
 }

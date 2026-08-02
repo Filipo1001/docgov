@@ -1395,7 +1395,8 @@ export async function subirFirma(
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    // Only contratista (own) or admin (anyone) can upload
+    // Cada quien sube la suya; el admin, la de cualquiera. La firma es la
+    // rúbrica que sella los documentos del informe: su gestión no se delega.
     const uploadForId = targetUserId || usuario.id
     if (usuario.rol !== 'admin' && uploadForId !== usuario.id) {
       return { error: 'Solo puedes subir tu propia firma' }

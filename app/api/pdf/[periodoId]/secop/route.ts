@@ -85,12 +85,8 @@ export async function GET(
       periodoId,
       estado,
       generate: async (verif) => {
-        const [{ renderToBuffer }, React, { InformeActividadesPDF }] = await Promise.all([
-          import('@react-pdf/renderer'),
-          import('react'),
-          import('@/lib/pdf/informe-actividades'),
-        ])
-        return renderToBuffer(React.createElement(InformeActividadesPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
+        const { generarInformeConAnexos } = await import('@/lib/pdf/anexos')
+        return generarInformeConAnexos(periodoId, data, verif)
       },
     }),
     getOrGeneratePDFBuffer({

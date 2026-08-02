@@ -178,11 +178,13 @@ function FirmaCard({
 
 export default function FirmasAdminClient({
   contratistas: initial,
+  filtroInicial = 'todos',
 }: {
   contratistas: ContratistaFirma[]
+  filtroInicial?: 'todos' | 'con' | 'sin'
 }) {
   const [contratistas, setContratistas] = useState(initial)
-  const [filtro, setFiltro] = useState<'todos' | 'con' | 'sin'>('todos')
+  const [filtro, setFiltro] = useState<'todos' | 'con' | 'sin'>(filtroInicial)
 
   function handleUpdated(id: string, newUrl: string | null) {
     setContratistas(prev =>

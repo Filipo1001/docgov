@@ -25,6 +25,8 @@ export interface UsuarioAdmin {
   banco?: string
   tipo_cuenta?: string
   numero_cuenta?: string
+  /** true = factura electrónica · false = no obligado · null = sin verificar */
+  obligado_facturar_electronicamente?: boolean | null
   /** Contratos donde este usuario es el contratista principal */
   contratos?: Array<{ id: string; numero: string }>
 }
@@ -128,15 +130,25 @@ export async function getDependencias(): Promise<Dependencia[]> {
  * creación de contrato. Se ejecuta server-side, así que no depende de que la
  * sesión del navegador esté caliente (evita listas vacías por RLS fría).
  */
-export async function getUsuariosParaSelect(): Promise<
-  { id: string; nombre_completo: string; cedula: string; rol: string }[]
-> {
+export interface UsuarioSelect {
+  id: string
+  nombre_completo: string
+  cedula: string
+  rol: string
+  /** El bucket `avatars` es público: la URL se usa tal cual en el selector. */
+  foto_url: string | null
+  cargo: string | null
+  /** Secretaría a la que pertenece — permite deducir la dependencia del contrato. */
+  dependencia_id: string | null
+}
+
+export async function getUsuariosParaSelect(): Promise<UsuarioSelect[]> {
   const supabase = await createServerSupabaseClient()
   const { data } = await supabase
     .from('usuarios')
-    .select('id, nombre_completo, cedula, rol')
+    .select('id, nombre_completo, cedula, rol, foto_url, cargo, dependencia_id')
     .order('nombre_completo')
-  return (data ?? []) as { id: string; nombre_completo: string; cedula: string; rol: string }[]
+  return (data ?? []) as UsuarioSelect[]
 }
 
 // ─── Municipio ────────────────────────────────────────────────

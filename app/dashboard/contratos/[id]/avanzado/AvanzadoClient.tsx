@@ -62,12 +62,24 @@ function exportarCSV(nombre: string, filas: string[][], cabeceras: string[]) {
 
 // ─── Component ────────────────────────────────────────────────
 
+type Tab = 'pagos' | 'planillas' | 'base_ss' | 'otrosies'
+const TABS = ['pagos', 'planillas', 'base_ss', 'otrosies'] as const
+
 export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [contrato, setContrato] = useState<ContratoRow | null>(null)
   const [periodos, setPeriodos] = useState<PeriodoRow[]>([])
   const [distribucion, setDistribucion] = useState<DistribucionItem[]>([])
   const [cargando, setCargando] = useState(true)
-  const [tab, setTab] = useState<'pagos' | 'planillas' | 'base_ss' | 'otrosies'>('pagos')
+  const [tab, setTab] = useState<Tab>('pagos')
+
+  /**
+   * Contratación solo ve la pestaña de otrosíes.
+   *
+   * Las otras tres operan sobre el pago y la seguridad social del informe, y
+   * sus acciones en periodos.ts exigen admin: mostrárselas sería ofrecerle
+   * botones que fallan con "No autorizado" al pulsarlos.
+   */
+  const [tabsVisibles, setTabsVisibles] = useState<readonly Tab[]>(TABS)
 
   // Otrosíes
   const [otrosies, setOtrosies] = useState<Otrosi[]>([])
@@ -118,7 +130,12 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
         return
       }
 
-      const { contrato: ctr, periodos: rows, otrosies: ots } = res.data
+      const { contrato: ctr, periodos: rows, otrosies: ots, rol } = res.data
+
+      if (rol === 'contratacion') {
+        setTabsVisibles(['otrosies'])
+        setTab('otrosies')
+      }
 
       setContrato(ctr)
       setDistribucion(calcularDistribucionPeriodos({
@@ -351,8 +368,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {(['pagos', 'planillas', 'base_ss', 'otrosies'] as const).map((t) => (
+      <div className={`flex flex-wrap gap-1 bg-gray-100 p-1 rounded-xl w-fit ${tabsVisibles.length === 1 ? 'hidden' : ''}`}>
+        {tabsVisibles.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}

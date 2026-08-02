@@ -48,6 +48,12 @@ export interface ContratoListItem {
   } | null
   supervisor: { id: string; nombre_completo: string } | null
   dependencia: { id: string; nombre: string; abreviatura: string } | null
+  estado?: string | null
+  estado_fecha?: string | null
+  /** Configuración del contrato: sin obligaciones o sin periodos, el
+      contratista no puede reportar aunque el contrato exista. */
+  num_obligaciones?: number
+  num_periodos?: number
 }
 
 export interface PaginaContratos {

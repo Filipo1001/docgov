@@ -15,7 +15,8 @@ export interface ContratacionStats {
   contratosActivos: number
   contratosPorVencer60: number
   importadosPendientes: number
-  contratistasSinFirma: number
+  /** Sin obligaciones o sin periodos: el contratista no puede reportar. */
+  contratosIncompletos: number
   /** Contratos que vencen en ≤60 días, para la lista del home */
   proximosVencer: { id: string; numero: string; fecha_fin: string; contratista: string }[]
 }
@@ -33,7 +34,7 @@ export async function getContratacionStats(): Promise<{ data?: ContratacionStats
     const hoy = new Date().toISOString().slice(0, 10)
     const en60 = new Date(Date.now() + 60 * 24 * 3600_000).toISOString().slice(0, 10)
 
-    const [activos, porVencer, importados, sinFirma] = await Promise.all([
+    const [activos, porVencer, importados, todos] = await Promise.all([
       admin.from('contratos').select('id', { count: 'exact', head: true }).gte('fecha_fin', hoy),
       admin
         .from('contratos')
@@ -41,8 +42,12 @@ export async function getContratacionStats(): Promise<{ data?: ContratacionStats
         .gte('fecha_fin', hoy)
         .lte('fecha_fin', en60)
         .order('fecha_fin'),
-      admin.from('contratistas_importados').select('id', { count: 'exact', head: true }),
-      admin.from('usuarios').select('id', { count: 'exact', head: true }).eq('rol', 'contratista').is('firma_url', null),
+      // La tarjeta dice "Pendientes de activar": sin este filtro contaba
+      // también los ya activados y mostraba un número inflado.
+      admin.from('contratistas_importados').select('id', { count: 'exact', head: true }).eq('activado', false),
+      // Un contrato sin obligaciones o sin periodos existe pero no se puede
+      // operar: es el pendiente que de verdad bloquea al contratista.
+      admin.from('contratos').select('id, obligaciones(count), periodos(count)'),
     ])
 
     type PorVencer = { id: string; numero: string; fecha_fin: string; contratista: { nombre_completo: string } | null }
@@ -58,7 +63,9 @@ export async function getContratacionStats(): Promise<{ data?: ContratacionStats
         contratosActivos: activos.count ?? 0,
         contratosPorVencer60: lista.length,
         importadosPendientes: importados.count ?? 0,
-        contratistasSinFirma: sinFirma.count ?? 0,
+        contratosIncompletos: ((todos.data ?? []) as any[]).filter(
+          c => (c.obligaciones?.[0]?.count ?? 0) === 0 || (c.periodos?.[0]?.count ?? 0) === 0,
+        ).length,
         proximosVencer: lista,
       },
     }

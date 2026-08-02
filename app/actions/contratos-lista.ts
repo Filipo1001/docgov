@@ -37,7 +37,10 @@ export async function getTodosContratosConBanco(): Promise<ContratoListItem[]> {
         firma_url, cargo, banco, tipo_cuenta, numero_cuenta
       ),
       supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
-      dependencia:dependencias(id, nombre, abreviatura)
+      dependencia:dependencias(id, nombre, abreviatura),
+      estado, estado_fecha,
+      obligaciones(count),
+      periodos(count)
     `)
     .order('numero', { ascending: true })
 
@@ -48,5 +51,12 @@ export async function getTodosContratosConBanco(): Promise<ContratoListItem[]> {
 
   const { data, error } = await query
   if (error) throw error
-  return (data ?? []) as unknown as ContratoListItem[]
+
+  // Los conteos llegan como [{ count }]; se aplanan para que la tarjeta pueda
+  // señalar el contrato que quedó a medias sin consultas extra.
+  return ((data ?? []) as any[]).map(c => ({
+    ...c,
+    num_obligaciones: c.obligaciones?.[0]?.count ?? 0,
+    num_periodos: c.periodos?.[0]?.count ?? 0,
+  })) as unknown as ContratoListItem[]
 }

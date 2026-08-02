@@ -1,0 +1,19 @@
+-- 040 — Permiso de lectura sobre obligado_facturar_electronicamente
+--
+-- CORRIGE UNA REGRESIÓN INTRODUCIDA POR LA MIGRACIÓN 038.
+--
+-- `usuarios` no concede SELECT sobre la tabla entera, sino COLUMNA POR COLUMNA:
+-- banco, tipo_cuenta y numero_cuenta se ocultan al cliente del navegador a
+-- propósito (por eso el listado de contratos los lee con el service-role).
+--
+-- Una columna nueva nace, por tanto, SIN permiso. Al pedirla desde la consulta
+-- del detalle del contrato —que sí corre con la sesión del usuario— PostgREST
+-- devolvía "permission denied for column", la consulta no traía contrato y
+-- page.tsx caía en su `redirect('/dashboard/contratos')`. Efecto visible: los
+-- contratos "no cargaban" y, tras crear uno, la aplicación devolvía al listado.
+--
+-- Se concede porque no es un dato reservado como los bancarios: es la condición
+-- del contratista ante la DIAN, y él mismo debe poder ver si su cobro se
+-- documenta con Cuenta de Cobro o con factura electrónica. Qué FILAS ve cada
+-- quien lo sigue decidiendo la RLS de `usuarios`, que no cambia aquí.
+GRANT SELECT (obligado_facturar_electronicamente) ON public.usuarios TO authenticated;

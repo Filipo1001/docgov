@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
-import { formatCedula } from '@/lib/format'
+import SelectorContratista from '@/components/SelectorContratista'
+import SelectorSupervisor from '@/components/SelectorSupervisor'
+import type { UsuarioSelect } from '@/services/admin'
 import { numerosALetras } from '@/lib/numero-letras'
 import { crearContratoConContratista } from '@/app/actions/contratos'
 
@@ -29,7 +31,7 @@ export default function NuevoContratoPage({
   initialUsuarios = [],
 }: {
   initialDependencias?: { id: string; nombre: string }[]
-  initialUsuarios?: { id: string; nombre_completo: string; cedula: string; rol: string }[]
+  initialUsuarios?: UsuarioSelect[]
 }) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
@@ -45,6 +47,9 @@ export default function NuevoContratoPage({
   const [nuevoContratista, setNuevoContratista] = useState({
     nombre_completo: '', cedula: '', email: '', telefono: '', direccion: '',
     banco: '', tipo_cuenta: '', numero_cuenta: '',
+    // '' = sin verificar. Se distingue de 'no' a propósito: no es lo mismo
+    // haber comprobado que no está obligado que no haberlo preguntado.
+    factura_electronica: '' as '' | 'si' | 'no',
   })
   // Resultado de éxito (muestra la contraseña temporal si se creó el contratista)
   const [resultado, setResultado] = useState<{ contratoId: string; password?: string; nombre?: string } | null>(null)
@@ -191,6 +196,17 @@ export default function NuevoContratoPage({
       return
     }
 
+    // Al desaparecer el desplegable de dependencia, estas dos validaciones
+    // dejan de estar cubiertas por `required` del navegador.
+    if (!form.supervisor_id) {
+      toast.error('Selecciona el supervisor del contrato')
+      return
+    }
+    if (!form.dependencia_id) {
+      toast.error('El supervisor elegido no tiene secretaría asignada. Indícala con "cambiar".')
+      return
+    }
+
     setGuardando(true)
 
     // Server Action atómica: crea el contratista (si es nuevo) + el contrato.
@@ -208,6 +224,9 @@ export default function NuevoContratoPage({
           banco: nuevoContratista.banco || undefined,
           tipo_cuenta: nuevoContratista.tipo_cuenta || undefined,
           numero_cuenta: nuevoContratista.numero_cuenta || undefined,
+          obligado_facturar_electronicamente:
+            nuevoContratista.factura_electronica === '' ? null
+              : nuevoContratista.factura_electronica === 'si',
         } : undefined,
         supervisor_id: form.supervisor_id,
         numero: form.numero,
@@ -248,7 +267,8 @@ export default function NuevoContratoPage({
   }
 
   const contratistas = usuarios.filter(u => u.rol === 'contratista' || u.rol === 'admin')
-  const supervisores = usuarios.filter(u => u.rol === 'supervisor' || u.rol === 'admin')
+  // Solo secretarios: el admin es una cuenta técnica, no supervisa contratos.
+  const supervisores = usuarios.filter(u => u.rol === 'supervisor')
 
   const inputClass =
     'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
@@ -336,25 +356,6 @@ export default function NuevoContratoPage({
                 placeholder="PRESTACIÓN DE SERVICIOS DE APOYO A LA GESTIÓN..."
                 className={`${excelEncontrado ? autoClass : inputClass} resize-none`} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Modalidad</label>
-              <select name="modalidad_seleccion" value={form.modalidad_seleccion} onChange={handleChange}
-                className={inputClass}>
-                <option value="Contratacion Directa">Contratación Directa</option>
-                <option value="Mínima Cuantía">Mínima Cuantía</option>
-                <option value="Selección Abreviada">Selección Abreviada</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dependencia</label>
-              <select name="dependencia_id" value={form.dependencia_id} onChange={handleChange} required
-                className={excelEncontrado && form.dependencia_id ? autoClass : inputClass}>
-                <option value="">Seleccionar...</option>
-                {dependencias.map(d => (
-                  <option key={d.id} value={d.id}>{d.nombre}</option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
 
@@ -387,28 +388,11 @@ export default function NuevoContratoPage({
           </div>
 
           {modoContratista === 'existente' ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contratista</label>
-                <select name="contratista_id" value={form.contratista_id} onChange={handleChange}
-                  className={excelEncontrado && form.contratista_id ? autoClass : inputClass}>
-                  <option value="">Seleccionar...</option>
-                  {contratistas.map(u => (
-                    <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor</label>
-                <select name="supervisor_id" value={form.supervisor_id} onChange={handleChange} required
-                  className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
-                  <option value="">Seleccionar...</option>
-                  {supervisores.map(u => (
-                    <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            <SelectorContratista
+              contratistas={contratistas}
+              valor={form.contratista_id}
+              onChange={id => setForm(f => ({ ...f, contratista_id: id }))}
+            />
           ) : (
             <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-800">
@@ -472,18 +456,35 @@ export default function NuevoContratoPage({
                     className={inputClass} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor *</label>
-                  <select name="supervisor_id" value={form.supervisor_id} onChange={handleChange} required
-                    className={excelEncontrado && form.supervisor_id ? autoClass : inputClass}>
-                    <option value="">Seleccionar...</option>
-                    {supervisores.map(u => (
-                      <option key={u.id} value={u.id}>{u.nombre_completo} — {formatCedula(u.cedula)}</option>
-                    ))}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ¿Obligado a facturar electrónicamente?
+                  </label>
+                  <select value={nuevoContratista.factura_electronica}
+                    onChange={e => setNuevoContratista(n => ({ ...n, factura_electronica: e.target.value as '' | 'si' | 'no' }))}
+                    className={inputClass}>
+                    <option value="">Sin verificar</option>
+                    <option value="no">No — se genera Cuenta de Cobro</option>
+                    <option value="si">Sí — adjuntará su factura electrónica</option>
                   </select>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Según sus responsabilidades en el RUT. Se puede cambiar después.
+                  </p>
                 </div>
               </div>
             </div>
           )}
+
+          {/* El supervisor es del CONTRATO, no de cómo se eligió al
+              contratista: antes estaba duplicado dentro de cada rama. */}
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <SelectorSupervisor
+              supervisores={supervisores}
+              dependencias={dependencias}
+              supervisorId={form.supervisor_id}
+              dependenciaId={form.dependencia_id}
+              onChange={(sup, dep) => setForm(f => ({ ...f, supervisor_id: sup, dependencia_id: dep }))}
+            />
+          </div>
         </div>
 
         {/* Valores */}
@@ -587,7 +588,8 @@ export default function NuevoContratoPage({
             </label>
             <input
               name="secop_url"
-              type="url"
+              type="text"
+              inputMode="url"
               value={form.secop_url ?? ''}
               onChange={handleChange}
               placeholder="https://www.secop.gov.co/..."

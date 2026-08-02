@@ -241,6 +241,8 @@ export async function actualizarUsuario(
     banco?: string
     tipo_cuenta?: string
     numero_cuenta?: string
+    /** true = factura electrónica · false = no obligado · null = sin verificar */
+    obligado_facturar_electronicamente?: boolean | null
   }
 ): Promise<ActionResult<void>> {
   const admin = await requireGestorUsuarios()
@@ -554,10 +556,10 @@ export async function eliminarUsuario(
 // ─── Firma management ─────────────────────────────────────────
 
 /**
- * Admin: clear the firma_url for a user.
+ * Borra la firma registrada de un usuario, para poder reemplazarla.
  */
 export async function eliminarFirmaAdmin(userId: string): Promise<ActionResult> {
-  // Gestión de firmas: exclusiva de admin (contratación no accede a firmas)
+  // Gestión de firmas: exclusiva de admin.
   const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
 

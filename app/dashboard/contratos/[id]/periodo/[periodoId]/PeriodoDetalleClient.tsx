@@ -16,6 +16,12 @@ import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, Duplicado
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import CertificacionModal, { type CertPrefill } from './CertificacionModal'
+import VisorPDF from '@/components/VisorPDF'
+import TarjetaAdjunto from '@/components/TarjetaAdjunto'
+import {
+  prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
+  type AdjuntoDTO,
+} from '@/app/actions/adjuntos'
 import { verificarCertificacionRequerida } from '@/app/actions/certificaciones'
 import {
   enviarPeriodo,
@@ -76,6 +82,8 @@ interface InitialData {
    *  transform). Usada solo en la grilla de thumbnails; el lightbox y el PDF
    *  siguen usando la resolución completa via initialUrlsFirmadas. */
   initialUrlsMiniatura?: Record<string, string>
+  /** Adjuntos PDF agrupados por actividad, con su URL ya firmada. */
+  initialAdjuntos?: Record<string, AdjuntoDTO[]>
 }
 
 export default function PeriodoDetallePage({
@@ -90,6 +98,7 @@ export default function PeriodoDetallePage({
   initialParaBackfill = [],
   initialUrlsFirmadas = {},
   initialUrlsMiniatura = {},
+  initialAdjuntos = {},
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -229,6 +238,10 @@ export default function PeriodoDetallePage({
 
   // Upload progress state per activity (null = idle, number = count of files uploading)
   const [subiendoEvidencia, setSubiendoEvidencia] = useState<Record<string, number | null>>({})
+  // Adjuntos PDF por actividad + estado de subida y del visor integrado
+  const [adjuntos, setAdjuntos] = useState<Record<string, AdjuntoDTO[]>>(initialAdjuntos)
+  const [subiendoAdjunto, setSubiendoAdjunto] = useState<Record<string, string>>({})
+  const [visorPDF, setVisorPDF] = useState<{ url: string; nombre: string } | null>(null)
   // Byte-level progress 0-100 per activity (M-1)
   const [progresoEvidencia, setProgresoEvidencia] = useState<Record<string, number>>({})
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
@@ -982,6 +995,92 @@ export default function PeriodoDetallePage({
    *   E) try/finally ALWAYS clears the overlay — eliminates the "stuck loading"
    *      state that occurred when an unhandled throw left the counter non-null.
    */
+  /**
+   * Sube un PDF como anexo de la actividad. Se separa de las imágenes porque el
+   * pipeline es distinto: sin compresión (un PDF no se recomprime en el
+   * navegador) y con verificación del contenido real en el servidor.
+   */
+  /**
+   * Reconsulta los anexos del periodo.
+   *
+   * Necesario tras añadir o eliminar: el servidor renumera TODOS los anexos en
+   * orden de lectura del informe, así que un cambio en una actividad puede
+   * mover el número de otra. Sin esta resincronización la pantalla mostraría
+   * un "Anexo N" que no coincide con el del PDF.
+   */
+  async function sincronizarAdjuntos() {
+    const filas = await listarAdjuntos(periodoId)
+    const porActividad: Record<string, AdjuntoDTO[]> = {}
+    for (const f of filas) {
+      if (!f.actividad_id) continue
+      ;(porActividad[f.actividad_id] ??= []).push(f)
+    }
+    setAdjuntos(porActividad)
+  }
+
+  async function handleSubirAdjuntos(actividadId: string, files: File[]) {
+    for (const file of files) {
+      setSubiendoAdjunto(prev => ({ ...prev, [actividadId]: file.name }))
+      try {
+        const prep = await prepararUploadAdjunto(periodoId, file.name, file.size, actividadId)
+        if (prep.error || !prep.data) { toast.error(prep.error ?? 'No se pudo preparar la subida'); continue }
+
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.timeout = 120_000
+          xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
+            ? resolve() : reject(new Error(`Error al subir (HTTP ${xhr.status})`))
+          xhr.onerror = () => reject(new Error('Error de red al subir el documento'))
+          xhr.ontimeout = () => reject(new Error('La subida tardó demasiado. Verifica tu conexión.'))
+          xhr.open('PUT', prep.data!.signedUrl)
+          xhr.setRequestHeader('Content-Type', 'application/pdf')
+          xhr.send(file)
+        })
+
+        const res = await registrarAdjunto(periodoId, prep.data.path, file.name, actividadId)
+        if (res.error) { toast.error(res.error); continue }
+        if (res.data) {
+          setAdjuntos(prev => ({ ...prev, [actividadId]: [...(prev[actividadId] ?? []), res.data!] }))
+          toast.success(`Documento adjuntado: ${file.name}`)
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error al subir el documento')
+      } finally {
+        setSubiendoAdjunto(prev => { const c = { ...prev }; delete c[actividadId]; return c })
+      }
+    }
+    // Una sola reconsulta al final del lote: la numeración de los demás anexos
+    // pudo desplazarse al insertar estos.
+    await sincronizarAdjuntos().catch(() => {})
+  }
+
+  async function handleEliminarAdjunto(actividadId: string, adjuntoId: string) {
+    const res = await eliminarAdjunto(periodoId, adjuntoId)
+    if (res.error) { toast.error(res.error); return }
+    setAdjuntos(prev => ({
+      ...prev,
+      [actividadId]: (prev[actividadId] ?? []).filter(a => a.id !== adjuntoId),
+    }))
+    toast.success('Documento eliminado')
+    // Los anexos posteriores bajan un número: hay que releerlos.
+    await sincronizarAdjuntos().catch(() => {})
+  }
+
+  /**
+   * Punto de entrada único de "Adjuntar evidencia": reparte los archivos según
+   * su tipo real. El usuario elige de una sola vez y no tiene que saber si lo
+   * que sube es una foto o un documento.
+   */
+  function handleAdjuntarEvidencia(actividadId: string, files: File[]) {
+    const esPdf = (f: File) =>
+      f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+    const pdfs = files.filter(esPdf)
+    const imagenes = files.filter(f => !esPdf(f))
+
+    if (imagenes.length) void handleSubirEvidencias(actividadId, imagenes)
+    if (pdfs.length) void handleSubirAdjuntos(actividadId, pdfs)
+  }
+
   async function handleSubirEvidencias(actividadId: string, files: File[]) {
     const limited = files.slice(0, 5)
     if (files.length > 5) {
@@ -2193,9 +2292,12 @@ export default function PeriodoDetallePage({
 
                           {/* Evidence */}
                           <div className="mt-3">
-                            {act.evidencias && act.evidencias.length > 0 && (
+                            {/* Imágenes y documentos comparten una sola grilla:
+                                para el supervisor la evidencia de la obligación
+                                es un único conjunto, no dos listas separadas. */}
+                            {((act.evidencias?.length ?? 0) > 0 || (adjuntos[act.id]?.length ?? 0) > 0) && (
                               <div className="flex flex-wrap gap-2 mb-2">
-                                {act.evidencias.map((ev) => {
+                                {(act.evidencias ?? []).map((ev) => {
                                   const evMatches = (esAsesor || esSecretaria) ? (duplicados[ev.id] ?? []) : []
                                   const tieneDuplicado = evMatches.length > 0
                                   return (
@@ -2252,6 +2354,29 @@ export default function PeriodoDetallePage({
                                   </div>
                                   )
                                 })}
+
+                                {(adjuntos[act.id] ?? []).map((ad) => (
+                                  <TarjetaAdjunto
+                                    key={ad.id}
+                                    adjunto={ad}
+                                    editable={esEditable}
+                                    onAbrir={() => ad.urlFirmada && setVisorPDF({ url: ad.urlFirmada, nombre: ad.nombre_original })}
+                                    onEliminar={() => handleEliminarAdjunto(act.id, ad.id)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Subida de documento en curso */}
+                            {subiendoAdjunto[act.id] && (
+                              <div className="mb-2 flex items-center gap-2 text-blue-600">
+                                <svg className="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                                <span className="text-xs font-medium truncate">
+                                  Subiendo {subiendoAdjunto[act.id]}…
+                                </span>
                               </div>
                             )}
 
@@ -2295,12 +2420,12 @@ export default function PeriodoDetallePage({
                                   className="flex-1 inline-flex flex-col items-center justify-center gap-0.5 text-sm font-medium text-blue-600 hover:text-blue-700 active:text-blue-800 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 min-h-[44px] px-4 py-2 rounded-xl transition-colors"
                                 >
                                   <span className="inline-flex items-center gap-1.5">
-                                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
                                     </svg>
-                                    Subir imágenes
+                                    Adjuntar evidencia
                                   </span>
-                                  <span className="text-[10px] font-normal text-blue-400 leading-tight">hasta 5 a la vez</span>
+                                  <span className="text-[10px] font-normal text-blue-400 leading-tight">imágenes o PDF</span>
                                 </button>
                                 {/* Camera — single capture */}
                                 <button
@@ -3507,16 +3632,17 @@ export default function PeriodoDetallePage({
         position:fixed + opacity:0 + size:0 keeps them in the accessibility
         tree and layout-reachable by the browser's native file dialog trigger.
       */}
-      {/* Gallery: multiple selection (up to 5). */}
+      {/* Adjuntar evidencia: imágenes y/o PDF en una sola selección.
+          handleAdjuntarEvidencia reparte cada archivo según su tipo real. */}
       <input
         ref={galleryInputRef}
         type="file"
-        accept="image/*,.heic,.heif"
+        accept="image/*,.heic,.heif,application/pdf,.pdf"
         multiple
         style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? [])
-          if (files.length > 0 && uploadTargetId.current) handleSubirEvidencias(uploadTargetId.current, files)
+          if (files.length > 0 && uploadTargetId.current) handleAdjuntarEvidencia(uploadTargetId.current, files)
           e.target.value = ''
         }}
       />
@@ -3622,6 +3748,15 @@ export default function PeriodoDetallePage({
           </div>
         )
       })()}
+
+      {/* Visor de PDF integrado — el usuario nunca sale de la aplicación */}
+      {visorPDF && (
+        <VisorPDF
+          url={visorPDF.url}
+          nombre={visorPDF.nombre}
+          onClose={() => setVisorPDF(null)}
+        />
+      )}
 
       {/* Certificación de retención — modal obligatorio previo al primer envío */}
       <CertificacionModal

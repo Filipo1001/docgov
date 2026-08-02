@@ -16,6 +16,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
+import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
 
 /** Contraseña temporal aleatoria (mismo criterio que admin.ts). */
 function generarPasswordSegura(): string {
@@ -134,6 +135,8 @@ export type NuevoContratistaInput = {
   banco?: string
   tipo_cuenta?: string
   numero_cuenta?: string
+  /** true = factura electrónica · false = no obligado · undefined = sin verificar */
+  obligado_facturar_electronicamente?: boolean | null
 }
 
 /**
@@ -199,6 +202,9 @@ export async function crearContratoConContratista(
         tipo_cuenta: nc.tipo_cuenta?.trim() || null,
         numero_cuenta: nc.numero_cuenta?.trim() || null,
         tipo_documento: 'CC',
+        // Condición de la persona ante la DIAN, no del contrato. Decide si en
+        // el futuro se genera Cuenta de Cobro o se exige la factura.
+        obligado_facturar_electronicamente: nc.obligado_facturar_electronicamente ?? null,
         municipio_id: muni.id,
       })
       if (dbError) {
@@ -300,7 +306,7 @@ export type PeriodoNuevo = {
 export async function generarPeriodos(
   contratoId: string,
   periodos: PeriodoNuevo[],
-): Promise<ActionResult<{ generados: number }>> {
+): Promise<ActionResult<{ periodos: Record<string, unknown>[] }>> {
   try {
     const adminId = await requireAdminId()
     if (!adminId) return { error: 'No autorizado' }
@@ -333,11 +339,251 @@ export async function generarPeriodos(
       }),
     }))
 
-    const { error } = await adminClient.from('periodos').insert(filas)
+    // Se devuelven los periodos insertados —con su id real— para que la
+    // pantalla los liste al instante, sin una segunda consulta de por medio.
+    const { data: creados, error } = await adminClient
+      .from('periodos').insert(filas).select('*').order('numero_periodo')
     if (error) return { error: `Error generando periodos: ${error.message}` }
 
     revalidatePath(`/dashboard/contratos/${contratoId}`)
-    return { data: { generados: filas.length } }
+    return { data: { periodos: (creados ?? []) as Record<string, unknown>[] } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Edición del contrato ────────────────────────────────────────────────────
+
+/**
+ * Campos del contrato que se pueden corregir, agrupados por lo que arriesgan.
+ *
+ * El contrato es la fuente de la que se derivan TODOS los documentos oficiales,
+ * así que la libertad para corregirlo se estrecha a medida que el expediente
+ * avanza. Tres niveles:
+ *
+ *  · SIEMPRE — metadatos administrativos y personas. Que un supervisor cambie
+ *    o que se corrija un número de CDP son hechos normales de la vida del
+ *    contrato; nada de lo ya emitido se vuelve falso por registrarlos.
+ *
+ *  · HASTA GENERAR PERIODOS — valores y plazo. Los periodos se calculan a
+ *    partir de estos campos; cambiarlos después dejaría la distribución de
+ *    pagos desincronizada del contrato. A partir de ahí la vía correcta es un
+ *    otrosí, que sí queda registrado como acto administrativo.
+ *
+ *  · HASTA EL PRIMER INFORME PRESENTADO — identidad y objeto. En cuanto un
+ *    informe sale de borrador, esos textos ya viajaron impresos en un
+ *    documento con código de verificación y huella; cambiarlos haría que el
+ *    documento archivado y el sistema dijeran cosas distintas.
+ */
+const CAMPOS_SIEMPRE = [
+  'modalidad_seleccion', 'cdp', 'crp', 'numero_cdp', 'numero_crp', 'secop_url',
+  'supervisor_id', 'dependencia_id', 'banco', 'tipo_cuenta', 'numero_cuenta',
+] as const
+
+const CAMPOS_HASTA_PERIODOS = [
+  'valor_total', 'valor_mensual', 'valor_letras_total', 'valor_letras_mensual',
+  'plazo_dias', 'plazo_meses', 'fecha_inicio', 'fecha_fin',
+] as const
+
+const CAMPOS_HASTA_PRIMER_INFORME = ['numero', 'anio', 'objeto'] as const
+
+export type CampoContrato =
+  | (typeof CAMPOS_SIEMPRE)[number]
+  | (typeof CAMPOS_HASTA_PERIODOS)[number]
+  | (typeof CAMPOS_HASTA_PRIMER_INFORME)[number]
+
+export interface CamposBloqueados {
+  /** Ya existen periodos: valores y plazo exigen otrosí. */
+  economicos: boolean
+  /** Algún informe salió de borrador: identidad y objeto quedan fijados. */
+  identidad: boolean
+  motivoEconomicos: string | null
+  motivoIdentidad: string | null
+}
+
+/** Qué se puede tocar hoy en este contrato, y por qué no lo demás. */
+export async function getCamposBloqueados(contratoId: string): Promise<CamposBloqueados> {
+  const admin = createAdminSupabaseClient()
+  const [{ count: periodos }, { count: presentados }] = await Promise.all([
+    admin.from('periodos').select('id', { count: 'exact', head: true }).eq('contrato_id', contratoId),
+    admin.from('periodos').select('id', { count: 'exact', head: true })
+      .eq('contrato_id', contratoId).neq('estado', 'borrador'),
+  ])
+
+  const conPeriodos = (periodos ?? 0) > 0
+  const conInformes = (presentados ?? 0) > 0
+
+  return {
+    economicos: conPeriodos,
+    identidad: conInformes,
+    motivoEconomicos: conPeriodos
+      ? `Los ${periodos} periodos ya están generados a partir de estos valores. Para modificarlos se requiere un otrosí.`
+      : null,
+    motivoIdentidad: conInformes
+      ? `${presentados} informe(s) ya se presentaron con estos datos impresos y sellados.`
+      : null,
+  }
+}
+
+export async function actualizarContrato(
+  contratoId: string,
+  cambios: Partial<Record<CampoContrato, string | number | null>>,
+): Promise<ActionResult<{ camposActualizados: number }>> {
+  try {
+    const gestorId = await requireAdminId()
+    if (!gestorId) return { error: 'No autorizado' }
+
+    const admin = createAdminSupabaseClient()
+    const { data: actual } = await admin
+      .from('contratos').select('*').eq('id', contratoId).single()
+    if (!actual) return { error: 'Contrato no encontrado' }
+
+    const bloqueo = await getCamposBloqueados(contratoId)
+
+    const permitidos = new Set<string>(CAMPOS_SIEMPRE)
+    if (!bloqueo.economicos) CAMPOS_HASTA_PERIODOS.forEach(c => permitidos.add(c))
+    if (!bloqueo.identidad) CAMPOS_HASTA_PRIMER_INFORME.forEach(c => permitidos.add(c))
+
+    // Se rechaza en bloque en vez de ignorar en silencio: si el formulario
+    // envía un campo bloqueado es un fallo, y guardar "casi todo" dejaría al
+    // usuario creyendo que su corrección quedó registrada.
+    const rechazados = Object.keys(cambios).filter(c => !permitidos.has(c))
+    if (rechazados.length) {
+      const motivo = CAMPOS_HASTA_PRIMER_INFORME.some(c => rechazados.includes(c))
+        ? bloqueo.motivoIdentidad
+        : bloqueo.motivoEconomicos
+      return { error: motivo ?? `No se pueden modificar estos campos: ${rechazados.join(', ')}.` }
+    }
+
+    // Solo lo que de verdad cambia: así el historial no se llena de filas donde
+    // el valor anterior y el nuevo son idénticos.
+    const efectivos: Record<string, string | number | null> = {}
+    const filasHistorial: Array<{ campo: string; valor_anterior: string | null; valor_nuevo: string | null }> = []
+
+    for (const [campo, valor] of Object.entries(cambios)) {
+      const previo = (actual as Record<string, unknown>)[campo] ?? null
+      const norm = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v))
+      if (norm(previo) === norm(valor)) continue
+      efectivos[campo] = valor === '' ? null : valor
+      filasHistorial.push({ campo, valor_anterior: norm(previo), valor_nuevo: norm(valor) })
+    }
+
+    if (!filasHistorial.length) return { data: { camposActualizados: 0 } }
+
+    const { error } = await admin
+      .from('contratos')
+      .update({ ...efectivos, updated_at: new Date().toISOString() })
+      .eq('id', contratoId)
+
+    if (error) return { error: error.message }
+
+    // El historial no bloquea la corrección: si falla el registro, el dato ya
+    // quedó bien y perder la traza es preferible a dejar el contrato mal.
+    await admin.from('contratos_historial').insert(
+      filasHistorial.map(f => ({ ...f, contrato_id: contratoId, usuario_id: gestorId })),
+    ).then(undefined, () => {})
+
+    revalidatePath(`/dashboard/contratos/${contratoId}`)
+    revalidatePath('/dashboard/contratos', 'layout')
+    return { data: { camposActualizados: filasHistorial.length } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+export interface CambioContrato {
+  id: string
+  campo: string
+  valor_anterior: string | null
+  valor_nuevo: string | null
+  created_at: string
+  usuario: string
+}
+
+export async function getHistorialContrato(contratoId: string): Promise<CambioContrato[]> {
+  try {
+    const gestorId = await requireAdminId()
+    if (!gestorId) return []
+    const admin = createAdminSupabaseClient()
+    const { data } = await admin
+      .from('contratos_historial')
+      .select('id, campo, valor_anterior, valor_nuevo, created_at, usuario:usuarios(nombre_completo)')
+      .eq('contrato_id', contratoId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    return ((data ?? []) as any[]).map(f => ({
+      id: f.id,
+      campo: f.campo,
+      valor_anterior: f.valor_anterior,
+      valor_nuevo: f.valor_nuevo,
+      created_at: f.created_at,
+      usuario: f.usuario?.nombre_completo ?? '—',
+    }))
+  } catch {
+    return []
+  }
+}
+
+// ─── Ciclo de vida ───────────────────────────────────────────────────────────
+
+/**
+ * Registra un hecho del ciclo de vida del contrato: suspensión, terminación
+ * anticipada, liquidación o cesión.
+ *
+ * Va aparte de actualizarContrato porque no es una corrección de un dato mal
+ * escrito, sino la constancia de un acto administrativo: exige fecha y, salvo
+ * al volver a "vigente", un motivo. Queda en el mismo historial para que la
+ * vida del contrato se lea en una sola línea de tiempo.
+ */
+export async function cambiarEstadoContrato(
+  contratoId: string,
+  estado: EstadoContrato,
+  fecha: string,
+  motivo: string,
+): Promise<ActionResult> {
+  try {
+    const gestorId = await requireAdminId()
+    if (!gestorId) return { error: 'No autorizado' }
+
+    if (!ESTADOS_CONTRATO.some(e => e.id === estado)) return { error: 'Estado no válido.' }
+    if (!fecha) return { error: 'Indica la fecha del acto.' }
+    if (estado !== 'vigente' && !motivo.trim()) {
+      return { error: 'Indica el motivo: queda como constancia en el expediente.' }
+    }
+
+    const admin = createAdminSupabaseClient()
+    const { data: actual } = await admin
+      .from('contratos').select('estado').eq('id', contratoId).single()
+    if (!actual) return { error: 'Contrato no encontrado' }
+    if (actual.estado === estado) return { error: `El contrato ya está en estado "${estado}".` }
+
+    const { error } = await admin
+      .from('contratos')
+      .update({
+        estado,
+        estado_fecha: fecha,
+        estado_motivo: motivo.trim() || null,
+        // `activo` se mantiene coherente para el código anterior que aún lo
+        // consulta; el estado es a partir de ahora la fuente de verdad.
+        activo: estado === 'vigente' || estado === 'suspendido',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', contratoId)
+
+    if (error) return { error: error.message }
+
+    await admin.from('contratos_historial').insert({
+      contrato_id: contratoId,
+      usuario_id: gestorId,
+      campo: 'estado',
+      valor_anterior: actual.estado,
+      valor_nuevo: `${estado} (${fecha})${motivo.trim() ? ` — ${motivo.trim()}` : ''}`,
+    }).then(undefined, () => {})
+
+    revalidatePath(`/dashboard/contratos/${contratoId}`)
+    revalidatePath('/dashboard/contratos', 'layout')
+    return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
