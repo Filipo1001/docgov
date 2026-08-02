@@ -41,7 +41,9 @@ export async function getContratacionStats(): Promise<{ data?: ContratacionStats
         .gte('fecha_fin', hoy)
         .lte('fecha_fin', en60)
         .order('fecha_fin'),
-      admin.from('contratistas_importados').select('id', { count: 'exact', head: true }),
+      // La tarjeta dice "Pendientes de activar": sin este filtro contaba
+      // también los ya activados y mostraba un número inflado.
+      admin.from('contratistas_importados').select('id', { count: 'exact', head: true }).eq('activado', false),
       admin.from('usuarios').select('id', { count: 'exact', head: true }).eq('rol', 'contratista').is('firma_url', null),
     ])
 

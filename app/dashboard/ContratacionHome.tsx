@@ -27,7 +27,8 @@ function fmtFecha(iso: string): string {
 const ACCESOS = [
   { href: '/dashboard/contratos/nuevo', icon: '📝', titulo: 'Nuevo contrato', desc: 'Registra el contrato y crea al contratista en un solo paso' },
   { href: '/dashboard/contratos', icon: '📄', titulo: 'Ver contratos', desc: 'Listado, edición y exportación' },
-  { href: '/dashboard/admin/usuarios', icon: '👥', titulo: 'Contratistas', desc: 'Editar datos de las cuentas' },
+  { href: '/dashboard/admin/usuarios', icon: '👥', titulo: 'Contratistas', desc: 'Activar cuentas y editar sus datos' },
+  { href: '/dashboard/admin/firmas', icon: '✍️', titulo: 'Firmas', desc: 'Registrar la firma que entrega el contratista' },
 ]
 
 export default function ContratacionHome({ nombre }: { nombre: string }) {
@@ -45,12 +46,21 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
         subtitle="Gestión de contratación — usuarios y contratos"
       />
 
-      {/* Stats */}
+      {/* Stats — cada cifra lleva a la pantalla donde se resuelve. Mostrar un
+          pendiente sin ofrecer dónde atenderlo solo genera frustración. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Contratos activos" value={stats?.contratosActivos ?? '—'} color="gray" />
-        <StatCard label="Vencen en 60 días" value={stats?.contratosPorVencer60 ?? '—'} color="amber" />
-        <StatCard label="Pendientes de activar" value={stats?.importadosPendientes ?? '—'} color="blue" />
-        <StatCard label="Sin firma registrada" value={stats?.contratistasSinFirma ?? '—'} color="red" />
+        <Link href="/dashboard/contratos" className="block rounded-2xl transition-transform hover:-translate-y-0.5">
+          <StatCard label="Contratos activos" value={stats?.contratosActivos ?? '—'} color="gray" />
+        </Link>
+        <Link href="/dashboard/contratos?vigencia=vigentes" className="block rounded-2xl transition-transform hover:-translate-y-0.5">
+          <StatCard label="Vencen en 60 días" value={stats?.contratosPorVencer60 ?? '—'} color="amber" />
+        </Link>
+        <Link href="/dashboard/admin/usuarios?tab=pendientes" className="block rounded-2xl transition-transform hover:-translate-y-0.5">
+          <StatCard label="Pendientes de activar" value={stats?.importadosPendientes ?? '—'} color="blue" />
+        </Link>
+        <Link href="/dashboard/admin/firmas?filtro=sin" className="block rounded-2xl transition-transform hover:-translate-y-0.5">
+          <StatCard label="Sin firma registrada" value={stats?.contratistasSinFirma ?? '—'} color="red" />
+        </Link>
       </div>
 
       {/* Accesos rápidos */}

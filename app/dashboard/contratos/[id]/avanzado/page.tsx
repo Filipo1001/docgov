@@ -7,6 +7,6 @@ export default async function OpcionesAvanzadasPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  await requireRole(['admin'], `/dashboard/contratos/${id}`)
+  await requireRole(['admin', 'contratacion'], `/dashboard/contratos/${id}`)
   return <AvanzadoClient contratoId={id} />
 }

@@ -11,6 +11,7 @@ import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from '@/app/actions/obligaciones'
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
+import { esGestorContratos } from '@/lib/constants'
 
 export default function ContratoDetallePage({
   initialContrato,
@@ -214,7 +215,10 @@ export default function ContratoDetallePage({
   if (cargando) return <p className="text-gray-500">Cargando contrato...</p>
   if (!contrato) return <p className="text-red-500">Contrato no encontrado</p>
 
-  const esAdmin = usuario?.rol === 'admin'
+  // Admin y contratación gestionan el contrato por igual: definir obligaciones,
+  // generar periodos y registrar otrosíes. El backend ya lo autorizaba; esta
+  // pantalla era lo único que lo impedía.
+  const esGestor = esGestorContratos(usuario?.rol)
 
   return (
     <div className="max-w-4xl">
@@ -223,7 +227,7 @@ export default function ContratoDetallePage({
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
         <Link href="/dashboard/contratos" className="hover:text-gray-600">
-          {esAdmin ? 'Contratos' : 'Mis contratos'}
+          {esGestor ? 'Contratos' : 'Mis contratos'}
         </Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">N.º {contrato.numero}</span>
@@ -245,12 +249,14 @@ export default function ContratoDetallePage({
               </p>
               <p className="text-xs text-gray-400">{contrato.valor_letras_total}</p>
             </div>
-            {esAdmin && (
+            {esGestor && (
               <Link
                 href={`/dashboard/contratos/${id}/avanzado`}
                 className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
               >
-                ⚙️ Opciones avanzadas
+                {/* Contratación solo encuentra otrosíes al otro lado del
+                    enlace; nombrarlo "Opciones avanzadas" prometería de más. */}
+                {usuario?.rol === 'contratacion' ? '📑 Otrosíes' : '⚙️ Opciones avanzadas'}
               </Link>
             )}
           </div>
@@ -339,7 +345,7 @@ export default function ContratoDetallePage({
                         Otrosí {otrosiVinculado.numero}
                       </span>
                     )}
-                    {esAdmin && (
+                    {esGestor && (
                       <button
                         onClick={() => eliminarObligacion(obl.id)}
                         className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
@@ -355,7 +361,7 @@ export default function ContratoDetallePage({
         )}
 
         {/* Solo admin puede agregar obligaciones */}
-        {esAdmin && (
+        {esGestor && (
           <form onSubmit={agregarObligacion} className="flex gap-2">
             <div className="flex-1">
               <input
@@ -403,9 +409,9 @@ export default function ContratoDetallePage({
           </form>
         )}
 
-        {!esAdmin && obligaciones.length === 0 && (
+        {!esGestor && obligaciones.length === 0 && (
           <p className="text-sm text-gray-400 text-center py-4">
-            El administrador aún no ha definido las obligaciones de este contrato.
+            La dependencia de contratación aún no ha definido las obligaciones de este contrato.
           </p>
         )}
       </div>
@@ -416,7 +422,7 @@ export default function ContratoDetallePage({
           <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
             Periodos de pago ({periodos.length})
           </h3>
-          {esAdmin && periodos.length === 0 && obligaciones.length > 0 && (
+          {esGestor && periodos.length === 0 && obligaciones.length > 0 && (
             <button
               onClick={generarPeriodos}
               disabled={generandoPeriodos}
@@ -427,21 +433,21 @@ export default function ContratoDetallePage({
           )}
         </div>
 
-        {periodos.length === 0 && esAdmin && obligaciones.length === 0 && (
+        {periodos.length === 0 && esGestor && obligaciones.length === 0 && (
           <p className="text-sm text-gray-400 text-center py-6">
             Agrega las obligaciones del contrato primero, luego genera los periodos.
           </p>
         )}
 
-        {periodos.length === 0 && esAdmin && obligaciones.length > 0 && (
+        {periodos.length === 0 && esGestor && obligaciones.length > 0 && (
           <p className="text-sm text-gray-400 text-center py-6">
             Haz clic en "Generar periodos automáticamente" para crear los {contrato.plazo_meses} periodos mensuales.
           </p>
         )}
 
-        {periodos.length === 0 && !esAdmin && (
+        {periodos.length === 0 && !esGestor && (
           <p className="text-sm text-gray-400 text-center py-6">
-            Los periodos de pago aún no han sido generados por el administrador.
+            Los periodos de pago aún no han sido generados por la dependencia de contratación.
           </p>
         )}
 

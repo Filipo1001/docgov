@@ -370,12 +370,14 @@ export default function AdminUsuariosClient({
   usuarios: initialUsuarios,
   pendientes: initialPendientes,
   dependencias,
+  tabInicial = 'activos',
 }: {
   usuarios: UsuarioAdmin[]
   pendientes: ContratistaPendiente[]
   dependencias: Dependencia[]
+  tabInicial?: 'activos' | 'pendientes'
 }) {
-  const [tab, setTab]           = useState<'activos' | 'pendientes'>('activos')
+  const [tab, setTab]           = useState<'activos' | 'pendientes'>(tabInicial)
   const [usuarios, setUsuarios] = useState(initialUsuarios)
   const [pendientes, setPendientes] = useState(initialPendientes)
   const [busqueda, setBusqueda] = useState('')

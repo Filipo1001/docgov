@@ -62,6 +62,22 @@ export const ESTADO_REVISOR: Partial<Record<Rol, EstadoPeriodo>> = {
 }
 
 /** States where a contratista can edit activities and evidence */
+// ─── Gestión del contrato ────────────────────
+
+/**
+ * Roles que administran el CICLO DE VIDA DEL CONTRATO: crearlo, corregirlo,
+ * definir sus obligaciones, generar sus periodos y registrar sus otrosíes.
+ *
+ * Es una frontera distinta a la del flujo de informes (asesor → secretaría),
+ * donde contratación no interviene. Se centraliza aquí porque estaba escrita
+ * como `rol === 'admin'` repartida por las pantallas, y eso dejaba a
+ * contratación con permiso en el servidor pero sin botones para usarlo:
+ * podía crear un contrato y no terminar de configurarlo.
+ */
+export function esGestorContratos(rol?: Rol | null): boolean {
+  return rol === 'admin' || rol === 'contratacion'
+}
+
 export const ESTADOS_EDITABLES: EstadoPeriodo[] = ['borrador', 'rechazado']
 
 /** States where a reviewer can approve or reject */
@@ -137,6 +153,7 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: '👥' },
+      { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
   }
