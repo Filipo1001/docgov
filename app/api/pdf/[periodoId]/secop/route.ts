@@ -16,6 +16,7 @@ import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { descargarObjeto } from '@/lib/storage-firmado'
+import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-electronica'
 import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
@@ -60,7 +61,13 @@ export async function GET(
   }
 
   // Datos incompletos → 422 con mensaje claro (el ZIP incluye la Cuenta de Cobro)
-  const faltanDatos = mensajeDatosFaltantes('cuenta-cobro', data)
+  // Quien factura electrónicamente lleva su factura en lugar de la Cuenta de
+  // Cobro, así que los datos obligatorios de ese documento no le bloquean.
+  const factura = await estadoFacturaPeriodo(periodoId)
+  const faltanDatos = mensajeDatosFaltantes(
+    factura.exigeFactura ? 'informe' : 'cuenta-cobro',
+    data,
+  )
   if (faltanDatos) {
     return NextResponse.json({ error: faltanDatos }, { status: 422 })
   }
@@ -89,20 +96,22 @@ export async function GET(
         return generarInformeConAnexos(periodoId, data, verif)
       },
     }),
-    getOrGeneratePDFBuffer({
-      supabase,
-      tipo: 'cuenta-cobro',
-      periodoId,
-      estado,
-      generate: async (verif) => {
-        const [{ renderToBuffer }, React, { CuentaDeCobroPDF }] = await Promise.all([
-          import('@react-pdf/renderer'),
-          import('react'),
-          import('@/lib/pdf/cuenta-de-cobro'),
-        ])
-        return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
-      },
-    }),
+    factura.exigeFactura
+      ? (factura.facturaUrl ? descargarObjeto('documentos', factura.facturaUrl) : Promise.resolve(null))
+      : getOrGeneratePDFBuffer({
+          supabase,
+          tipo: 'cuenta-cobro',
+          periodoId,
+          estado,
+          generate: async (verif) => {
+            const [{ renderToBuffer }, React, { CuentaDeCobroPDF }] = await Promise.all([
+              import('@react-pdf/renderer'),
+              import('react'),
+              import('@/lib/pdf/cuenta-de-cobro'),
+            ])
+            return renderToBuffer(React.createElement(CuentaDeCobroPDF, { data: { ...data, verificacion: verif ?? undefined } }) as any) as unknown as Promise<Buffer>
+          },
+        }),
     planillaPromise,
   ])
 
@@ -127,7 +136,9 @@ export async function GET(
   const folder = zip.folder(folderName)!
 
   folder.file('Informe_de_Actividades.pdf', informeBuffer)
-  folder.file('Cuenta_de_Cobro.pdf',        cuentaBuffer)
+  if (cuentaBuffer) {
+    folder.file(factura.exigeFactura ? NOMBRE_ARCHIVO_FACTURA : 'Cuenta_de_Cobro.pdf', cuentaBuffer)
+  }
   if (planillaBuffer) {
     folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
   }

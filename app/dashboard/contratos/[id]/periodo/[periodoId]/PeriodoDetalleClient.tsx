@@ -33,6 +33,9 @@ import {
   marcarRadicado,
   actualizarNumeroRadicado,
   prepararUploadPlanilla,
+  prepararUploadFactura,
+  confirmarUploadFactura,
+  eliminarFactura,
   confirmarUploadPlanilla,
   eliminarPlanilla,
   guardarNumeroPlanilla,
@@ -242,6 +245,7 @@ export default function PeriodoDetallePage({
   const [adjuntos, setAdjuntos] = useState<Record<string, AdjuntoDTO[]>>(initialAdjuntos)
   const [subiendoAdjunto, setSubiendoAdjunto] = useState<Record<string, string>>({})
   const [visorPDF, setVisorPDF] = useState<{ url: string; nombre: string } | null>(null)
+  const [subiendoFactura, setSubiendoFactura] = useState(false)
   // Byte-level progress 0-100 per activity (M-1)
   const [progresoEvidencia, setProgresoEvidencia] = useState<Record<string, number>>({})
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
@@ -549,6 +553,16 @@ export default function PeriodoDetallePage({
   const esSecretaria = usuario?.rol === 'supervisor' || usuario?.rol === 'admin'
   const esContratista = usuario?.rol === 'contratista'
 
+  /**
+   * Único punto del flujo que cambia para los contratistas obligados a
+   * facturar electrónicamente: no se les genera la Cuenta de Cobro, adjuntan
+   * su factura. Todo lo demás —informe, actas, planilla— es idéntico.
+   */
+  const exigeFacturaElectronica =
+    (contrato as { contratista?: { obligado_facturar_electronicamente?: boolean | null } })
+      ?.contratista?.obligado_facturar_electronicamente === true
+
+
   // Progreso de revisión por obligación — usado en el panel de secretaria
   const obligacionesConRevision = obligaciones.filter(obl => revisiones[obl.id] !== undefined)
   const obligacionesSinRevisar = obligaciones.filter(obl => revisiones[obl.id] === undefined)
@@ -586,6 +600,14 @@ export default function PeriodoDetallePage({
   })()
 
   const esEditable = !esHistorico && !periodoVencido && (periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false)
+  /**
+   * Quién puede adjuntarla: la contratista mientras el informe sea editable, y
+   * el administrador siempre —también sobre informes ya enviados, igual que
+   * ocurre con la planilla—. Es el mismo alcance que aplica prepararUploadFactura
+   * en el servidor.
+   */
+  const puedeAdjuntarFactura =
+    usuario?.rol === 'admin' || (esEditable && esContratista)
 
   // ── Mes de cotización: meses disponibles (rango del contrato) ──────────────
   // El selector ofrece cualquier mes dentro del rango del contrato.
@@ -1272,6 +1294,49 @@ export default function PeriodoDetallePage({
     } finally {
       setSubiendoPlanilla(false)
     }
+  }
+
+  /**
+   * Factura electrónica — mismo recorrido que la planilla: URL prefirmada y
+   * subida directa del navegador a Storage, sin pasar por Vercel.
+   */
+  async function handleSubirFactura(file: File) {
+    setSubiendoFactura(true)
+    try {
+      const prep = await prepararUploadFactura(periodoId, file.name, file.size)
+      if (prep.error || !prep.data) { toast.error(prep.error ?? 'Error al preparar la subida'); return }
+      const { signedUrl, publicUrl, path } = prep.data
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.timeout = 120_000
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+          ? resolve() : reject(new Error(`Error al subir: HTTP ${xhr.status}`))
+        xhr.onerror = () => reject(new Error('Error de red al subir la factura'))
+        xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado. Verifica tu conexión.'))
+        xhr.open('PUT', signedUrl)
+        xhr.setRequestHeader('Content-Type', 'application/pdf')
+        xhr.send(file)
+      })
+
+      const confirm = await confirmarUploadFactura(periodoId, publicUrl, path)
+      if (confirm.error) { toast.error(confirm.error); return }
+      if (confirm.data?.urlFirmada) {
+        setUrlsFirmadas(prev => ({ ...prev, [publicUrl]: confirm.data!.urlFirmada! }))
+      }
+      toast.success('Factura electrónica adjuntada')
+      cargarDatos()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir la factura')
+    } finally {
+      setSubiendoFactura(false)
+    }
+  }
+
+  async function handleEliminarFactura() {
+    const res = await eliminarFactura(periodoId)
+    if (res.error) toast.error(res.error)
+    else { toast.success('Factura eliminada'); cargarDatos() }
   }
 
   async function handleEliminarPlanilla() {
@@ -2530,11 +2595,85 @@ export default function PeriodoDetallePage({
           <p className="text-sm text-gray-500 mb-4">
             {rechazado
               ? 'Verifica que la planilla esté adjunta y reenvía el informe a revisión.'
-              : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
+              : exigeFacturaElectronica
+                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número y tu factura electrónica.'
+                : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
             }
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            {/* Factura electrónica — solo para quien está obligado a emitirla.
+                Va aquí, junto a la planilla, y no en la sección de documentos:
+                esa sección solo aparece DESPUÉS de enviar, y sin factura no se
+                puede enviar. Debe estar donde se prepara el envío. */}
+            {exigeFacturaElectronica && (
+              <div className="sm:col-span-2">
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                  periodo.factura_electronica_url
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-amber-50 border-amber-300'
+                }`}>
+                  <span className="text-lg shrink-0">🧾</span>
+
+                  <label className={`flex-1 min-w-0 transition-opacity ${
+                    puedeAdjuntarFactura ? 'cursor-pointer hover:opacity-75' : ''
+                  }`}>
+                    <p className="text-sm font-medium text-gray-900">Factura electrónica</p>
+                    <p className={`text-xs truncate ${
+                      periodo.factura_electronica_url ? 'text-gray-400' : 'text-amber-700 font-medium'
+                    }`}>
+                      {subiendoFactura
+                        ? 'Subiendo...'
+                        : periodo.factura_electronica_url
+                          ? '✓ Adjuntada — clic para reemplazar'
+                          : 'Requerida — sustituye a la Cuenta de Cobro'}
+                    </p>
+                    {puedeAdjuntarFactura && (
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="hidden"
+                        disabled={subiendoFactura}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.target.value = ''
+                          if (file) void handleSubirFactura(file)
+                        }}
+                      />
+                    )}
+                  </label>
+
+                  {periodo.factura_electronica_url && (
+                    <>
+                      <a
+                        href={resolverUrl(periodo.factura_electronica_url)}
+                        target="_blank" rel="noopener noreferrer"
+                        title="Ver la factura"
+                        className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </a>
+                      {puedeAdjuntarFactura && (
+                        <button
+                          type="button"
+                          onClick={handleEliminarFactura}
+                          title="Quitar la factura"
+                          className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Planilla file upload */}
             <div>
               {/*
@@ -2933,22 +3072,32 @@ export default function PeriodoDetallePage({
               </a>
             </div>
 
+            {/* Cuenta de Cobro — para quien factura electrónicamente la ruta
+                entrega su factura adjunta en lugar de generarla. El campo de
+                CARGA no vive aquí: esta sección solo existe una vez enviado el
+                informe, y la factura hace falta ANTES, para poder enviarlo. */}
             <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
               <a href={`/api/pdf/${periodoId}/cuenta-cobro`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="text-lg shrink-0">💰</span>
+                <span className="text-lg shrink-0">{exigeFacturaElectronica ? '🧾' : '💰'}</span>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900">Cuenta de Cobro</p>
-                  <p className="text-xs text-gray-400">Generado automáticamente</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {exigeFacturaElectronica ? 'Factura electrónica' : 'Cuenta de Cobro'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {exigeFacturaElectronica ? 'Adjuntada por la contratista' : 'Generado automáticamente'}
+                  </p>
                 </div>
               </a>
-              <a href={`/api/pdf/${periodoId}/cuenta-cobro?force=1`} target="_blank" rel="noopener noreferrer"
-                title="Actualizar documento"
-                className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 active:bg-blue-100 transition-colors">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </a>
+              {!exigeFacturaElectronica && (
+                <a href={`/api/pdf/${periodoId}/cuenta-cobro?force=1`} target="_blank" rel="noopener noreferrer"
+                  title="Actualizar documento"
+                  className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </a>
+              )}
             </div>
 
             {/* Certificación de Retención — única por contrato, solo en el primer periodo */}
