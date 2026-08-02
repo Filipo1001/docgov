@@ -28,6 +28,30 @@ export interface EstadoFactura {
 }
 
 /**
+ * Periodos anteriores a la marca.
+ *
+ * Cuando a un contratista se le activa la obligación de facturar, sus periodos
+ * YA CERRADOS no se tocan: si su Cuenta de Cobro se emitió —existe un código de
+ * verificación para ella—, ese documento se generó, se selló con QR y pudo
+ * entregarse impreso. Dejar de servirlo lo volvería indescargable y rompería un
+ * expediente ya archivado.
+ *
+ * Un documento ya emitido no se reescribe. La sustitución aplica de ahí en
+ * adelante.
+ */
+async function cuentaDeCobroYaEmitida(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  periodoId: string,
+): Promise<boolean> {
+  const { count } = await admin
+    .from('documentos_emitidos')
+    .select('id', { count: 'exact', head: true })
+    .eq('periodo_id', periodoId)
+    .eq('tipo', 'cuenta-cobro')
+  return (count ?? 0) > 0
+}
+
+/**
  * Resuelve la condición para un periodo concreto.
  *
  * Devuelve `exigeFactura: false` ante cualquier fallo de consulta: si no se
@@ -53,10 +77,16 @@ export async function estadoFacturaPeriodo(periodoId: string): Promise<EstadoFac
     const contrato = primero<any>((data as any).contrato)
     const contratista = contrato ? primero<any>(contrato.contratista) : null
 
-    return {
-      exigeFactura: contratista?.obligado_facturar_electronicamente === true,
-      facturaUrl: (data as any).factura_electronica_url ?? null,
+    const obligado = contratista?.obligado_facturar_electronicamente === true
+    const facturaUrl = (data as any).factura_electronica_url ?? null
+
+    // Si ya se emitió la Cuenta de Cobro de este periodo, ese documento manda:
+    // el cambio aplica a los periodos siguientes, no a los ya cerrados.
+    if (obligado && !facturaUrl && await cuentaDeCobroYaEmitida(admin, periodoId)) {
+      return { exigeFactura: false, facturaUrl: null }
     }
+
+    return { exigeFactura: obligado, facturaUrl }
   } catch {
     return { exigeFactura: false, facturaUrl: null }
   }
