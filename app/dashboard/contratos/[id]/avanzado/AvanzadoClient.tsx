@@ -7,6 +7,7 @@ import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion, guardarMesCotizacion } from '@/app/actions/periodos'
 import { crearOtrosi, eliminarOtrosi, type Otrosi, type TipoOtrosi } from '@/app/actions/otrosies'
 import { getAvanzadoData, type PeriodoAvanzado, type ContratoAvanzado } from '@/app/actions/avanzado'
+import EliminarContrato from './EliminarContrato'
 import type { EstadoPeriodo } from '@/lib/types'
 import { DEFAULT_BASE_COTIZACION_SS, calcularBaseCotizacionSS, MESES } from '@/lib/constants'
 
@@ -62,8 +63,8 @@ function exportarCSV(nombre: string, filas: string[][], cabeceras: string[]) {
 
 // ─── Component ────────────────────────────────────────────────
 
-type Tab = 'pagos' | 'planillas' | 'base_ss' | 'otrosies'
-const TABS = ['pagos', 'planillas', 'base_ss', 'otrosies'] as const
+type Tab = 'pagos' | 'planillas' | 'base_ss' | 'otrosies' | 'eliminar'
+const TABS = ['pagos', 'planillas', 'base_ss', 'otrosies', 'eliminar'] as const
 
 export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [contrato, setContrato] = useState<ContratoRow | null>(null)
@@ -132,6 +133,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
       const { contrato: ctr, periodos: rows, otrosies: ots, rol } = res.data
 
+      // Contratación: solo otrosíes. Eliminar es exclusivo del administrador y
+      // ni siquiera aparece como pestaña para los demás.
       if (rol === 'contratacion') {
         setTabsVisibles(['otrosies'])
         setTab('otrosies')
@@ -374,12 +377,15 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              tab === t
+                ? t === 'eliminar' ? 'bg-white text-red-700 shadow-sm' : 'bg-white text-gray-900 shadow-sm'
+                : t === 'eliminar' ? 'text-red-500 hover:text-red-700' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             {t === 'pagos' ? '💰 Plan de Pagos'
               : t === 'planillas' ? '📋 Plan de Planillas'
               : t === 'base_ss' ? '🏥 Base SS'
+              : t === 'eliminar' ? '🗑️ Eliminar'
               : `📑 Otrosíes${otrosies.length > 0 ? ` (${otrosies.length})` : ''}`}
           </button>
         ))}
@@ -971,6 +977,15 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
           e.target.value = ''
         }}
       />
+
+      {/* ══ ELIMINAR ═══════════════════════════════════════════ */}
+      {tab === 'eliminar' && contrato && (
+        <EliminarContrato
+          contratoId={contratoId}
+          numero={contrato.numero}
+          anio={contrato.anio}
+        />
+      )}
     </div>
   )
 }

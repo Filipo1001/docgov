@@ -14,6 +14,7 @@ import { randomBytes } from 'crypto'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
+import { extraerPath } from '@/lib/storage-firmado'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
 import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
@@ -586,5 +587,183 @@ export async function cambiarEstadoContrato(
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Eliminación del contrato ────────────────────────────────────────────────
+
+export interface ResumenBorrado {
+  periodos: number
+  obligaciones: number
+  evidencias: number
+  documentos: number
+  /** Informes que salieron de borrador: ya circularon fuera del sistema. */
+  informesPresentados: number
+  /** Códigos QR emitidos que dejarán de poder verificarse. */
+  codigosVerificacion: number
+}
+
+/**
+ * Qué se lleva por delante borrar este contrato.
+ *
+ * No decide si se puede: el administrador puede borrar cualquier contrato. Su
+ * función es que sepa QUÉ está destruyendo antes de confirmarlo, en particular
+ * los informes ya presentados y los códigos de verificación emitidos: esos
+ * códigos pueden estar impresos en documentos que ya circulan fuera del
+ * sistema, y al borrar el contrato dejarán de resolver.
+ */
+export async function resumenBorradoContrato(contratoId: string): Promise<ResumenBorrado> {
+  const admin = createAdminSupabaseClient()
+
+  const { data: periodos } = await admin
+    .from('periodos').select('id, estado').eq('contrato_id', contratoId)
+  const idsPeriodo = (periodos ?? []).map(p => p.id as string)
+
+  const vacio = Promise.resolve({ count: 0 } as { count: number | null })
+
+  const [
+    { count: obligaciones }, { count: evidencias },
+    { count: adjuntosPeriodo }, { count: adjuntosContrato }, { count: codigos },
+  ] = await Promise.all([
+    admin.from('obligaciones').select('id', { count: 'exact', head: true }).eq('contrato_id', contratoId),
+    idsPeriodo.length
+      ? admin.from('evidencias').select('id, actividades!inner(periodo_id)', { count: 'exact', head: true })
+          .in('actividades.periodo_id', idsPeriodo)
+      : vacio,
+    idsPeriodo.length
+      ? admin.from('documentos_adjuntos').select('id', { count: 'exact', head: true })
+          .eq('entidad_tipo', 'periodo').in('entidad_id', idsPeriodo)
+      : vacio,
+    admin.from('documentos_adjuntos').select('id', { count: 'exact', head: true })
+      .eq('entidad_tipo', 'contrato').eq('entidad_id', contratoId),
+    idsPeriodo.length
+      ? admin.from('documentos_emitidos').select('id', { count: 'exact', head: true }).in('periodo_id', idsPeriodo)
+      : vacio,
+  ])
+
+  return {
+    periodos: idsPeriodo.length,
+    obligaciones: obligaciones ?? 0,
+    evidencias: evidencias ?? 0,
+    documentos: (adjuntosPeriodo ?? 0) + (adjuntosContrato ?? 0),
+    informesPresentados: (periodos ?? []).filter(p => p.estado !== 'borrador').length,
+    codigosVerificacion: codigos ?? 0,
+  }
+}
+
+/**
+ * Borra el contrato y todo lo que cuelga de él. Exclusivo del administrador.
+ *
+ * Sin restricciones: el administrador puede borrar cualquier contrato, tenga o
+ * no informes presentados. Es una decisión suya, y la pantalla se limita a
+ * decirle qué destruye —incluidos los códigos de verificación, que dejarán de
+ * resolver aunque estén impresos en documentos ya entregados.
+ *
+ * En la base de datos todas las claves foráneas hacia `contratos` son CASCADE,
+ * así que un solo DELETE arrastra periodos, obligaciones, actividades,
+ * evidencias, otrosíes, historial y certificaciones.
+ *
+ * Storage NO cascadea, y los adjuntos del expediente del contrato tampoco:
+ * cuelgan de (entidad_tipo, entidad_id) sin clave foránea, así que sobrevivirían
+ * al borrado como filas huérfanas. Ambas cosas se limpian aquí, ANTES del
+ * DELETE — si se hiciera después ya no habría forma de saber qué archivos
+ * pertenecían al contrato, y quedarían ocupando espacio para siempre.
+ */
+export async function eliminarContrato(
+  contratoId: string,
+  confirmacion: string,
+): Promise<ActionResult<{ numero: string }>> {
+  try {
+    // requireAdmin, no requireAdminId: contratación gestiona contratos pero no
+    // los destruye.
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autorizado' }
+    const { data: yo } = await supabase.from('usuarios').select('rol').eq('id', user.id).single()
+    if (yo?.rol !== 'admin') return { error: 'Solo el administrador puede eliminar contratos.' }
+
+    const admin = createAdminSupabaseClient()
+    const { data: contrato } = await admin
+      .from('contratos').select('id, numero, anio').eq('id', contratoId).single()
+    if (!contrato) return { error: 'Contrato no encontrado' }
+
+    // El número escrito a mano evita el borrado por inercia: obliga a mirar
+    // QUÉ contrato se está borrando, no solo a pulsar "confirmar".
+    if (confirmacion.trim() !== contrato.numero) {
+      return { error: `Para confirmar, escribe el número del contrato: ${contrato.numero}` }
+    }
+
+    // ── Archivos en Storage ──────────────────────────────────────────────────
+    const { data: periodos } = await admin
+      .from('periodos')
+      .select('id, planilla_ss_url, informe_actividades_url, cuenta_cobro_url')
+      .eq('contrato_id', contratoId)
+    const idsPeriodo = (periodos ?? []).map(p => p.id as string)
+
+    const porBucket: Record<string, string[]> = { evidencias: [], adjuntos: [], documentos: [], certificaciones: [] }
+    const anotar = (bucket: string, url: string | null | undefined) => {
+      const path = url ? extraerPath(url, bucket) : null
+      if (path) porBucket[bucket].push(path)
+    }
+
+    for (const p of (periodos ?? []) as Record<string, string | null>[]) {
+      anotar('documentos', p.planilla_ss_url)
+      anotar('documentos', p.informe_actividades_url)
+      anotar('documentos', p.cuenta_cobro_url)
+    }
+
+    if (idsPeriodo.length) {
+      const { data: evs } = await admin
+        .from('evidencias').select('url, storage_path, actividades!inner(periodo_id)')
+        .in('actividades.periodo_id', idsPeriodo)
+      for (const e of (evs ?? []) as unknown as Array<{ url: string | null; storage_path: string | null }>) {
+        anotar('evidencias', e.storage_path ?? e.url)
+      }
+    }
+
+    const [{ data: adjContrato }, { data: adjPeriodo }] = await Promise.all([
+      admin.from('documentos_adjuntos').select('storage_path')
+        .eq('entidad_tipo', 'contrato').eq('entidad_id', contratoId),
+      idsPeriodo.length
+        ? admin.from('documentos_adjuntos').select('storage_path')
+            .eq('entidad_tipo', 'periodo').in('entidad_id', idsPeriodo)
+        : Promise.resolve({ data: [] as { storage_path: string }[] }),
+    ])
+    for (const a of [...(adjContrato ?? []), ...(adjPeriodo ?? [])] as { storage_path: string }[]) {
+      porBucket.adjuntos.push(a.storage_path)
+    }
+
+    const { data: certs } = await admin
+      .from('certificaciones_retencion').select('pdf_path').eq('contrato_id', contratoId)
+    for (const c of (certs ?? []) as { pdf_path: string | null }[]) {
+      if (c.pdf_path) porBucket.certificaciones.push(c.pdf_path)
+    }
+
+    // Un fallo al borrar archivos no impide borrar el contrato: dejar basura en
+    // Storage es molesto, dejar el contrato a medio borrar es peor.
+    await Promise.all(
+      Object.entries(porBucket)
+        .filter(([, rutas]) => rutas.length)
+        .map(([bucket, rutas]) => admin.storage.from(bucket).remove(rutas).then(undefined, () => {})),
+    )
+
+    // ── Filas sin cascada ────────────────────────────────────────────────────
+    // documentos_adjuntos apunta al contrato y al periodo por (entidad_tipo,
+    // entidad_id), sin clave foránea: nada las borraría.
+    await admin.from('documentos_adjuntos').delete()
+      .eq('entidad_tipo', 'contrato').eq('entidad_id', contratoId)
+    if (idsPeriodo.length) {
+      await admin.from('documentos_adjuntos').delete()
+        .eq('entidad_tipo', 'periodo').in('entidad_id', idsPeriodo)
+    }
+
+    // ── El contrato (arrastra el resto por CASCADE) ──────────────────────────
+    const { error } = await admin.from('contratos').delete().eq('id', contratoId)
+    if (error) return { error: `No se pudo eliminar el contrato: ${error.message}` }
+
+    revalidatePath('/dashboard/contratos', 'layout')
+    return { data: { numero: `${contrato.numero}-${contrato.anio}` } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al eliminar el contrato' }
   }
 }
