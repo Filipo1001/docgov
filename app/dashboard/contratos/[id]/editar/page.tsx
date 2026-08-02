@@ -2,7 +2,7 @@ import { requireRole } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { getDependencias, getUsuariosParaSelect } from '@/services/admin'
-import { getCamposBloqueados, getHistorialContrato, resumenBorradoContrato } from '@/app/actions/contratos'
+import { getCamposBloqueados, getHistorialContrato } from '@/app/actions/contratos'
 import EditarContratoClient from './EditarContratoClient'
 
 export default async function EditarContratoPage({
@@ -11,16 +11,15 @@ export default async function EditarContratoPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const yo = await requireRole(['admin', 'contratacion'], `/dashboard/contratos/${id}`)
+  await requireRole(['admin', 'contratacion'], `/dashboard/contratos/${id}`)
 
   const admin = createAdminSupabaseClient()
-  const [{ data: contrato }, dependencias, usuarios, bloqueo, historial, resumen] = await Promise.all([
+  const [{ data: contrato }, dependencias, usuarios, bloqueo, historial] = await Promise.all([
     admin.from('contratos').select('*').eq('id', id).single(),
     getDependencias(),
     getUsuariosParaSelect(),
     getCamposBloqueados(id),
     getHistorialContrato(id),
-    resumenBorradoContrato(id),
   ])
 
   if (!contrato) redirect('/dashboard/contratos')
@@ -32,7 +31,6 @@ export default async function EditarContratoPage({
       supervisores={usuarios.filter(u => u.rol === 'supervisor')}
       bloqueo={bloqueo}
       historial={historial}
-      resumenBorrado={yo.rol === 'admin' ? resumen : null}
     />
   )
 }

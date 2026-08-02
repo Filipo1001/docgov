@@ -593,24 +593,24 @@ export async function cambiarEstadoContrato(
 // ─── Eliminación del contrato ────────────────────────────────────────────────
 
 export interface ResumenBorrado {
-  puedeBorrarse: boolean
-  motivo: string | null
   periodos: number
   obligaciones: number
   evidencias: number
   documentos: number
+  /** Informes que salieron de borrador: ya circularon fuera del sistema. */
+  informesPresentados: number
+  /** Códigos QR emitidos que dejarán de poder verificarse. */
+  codigosVerificacion: number
 }
 
 /**
- * Qué se llevaría por delante borrar este contrato, y si se permite.
+ * Qué se lleva por delante borrar este contrato.
  *
- * La frontera es la misma que ya usa la edición: mientras ningún periodo haya
- * salido de borrador, el contrato es un registro sin consecuencias fuera del
- * sistema y borrarlo solo deshace un error de digitación. En cuanto un informe
- * se presenta, deja de serlo: ese PDF salió con código de verificación y huella
- * y puede estar impreso en un expediente físico. Borrar el contrato dejaría ese
- * código apuntando al vacío, así que a partir de ahí solo cabe cerrarlo por
- * estado (terminado, liquidado…), que es justo para lo que sirve.
+ * No decide si se puede: el administrador puede borrar cualquier contrato. Su
+ * función es que sepa QUÉ está destruyendo antes de confirmarlo, en particular
+ * los informes ya presentados y los códigos de verificación emitidos: esos
+ * códigos pueden estar impresos en documentos que ya circulan fuera del
+ * sistema, y al borrar el contrato dejarán de resolver.
  */
 export async function resumenBorradoContrato(contratoId: string): Promise<ResumenBorrado> {
   const admin = createAdminSupabaseClient()
@@ -619,37 +619,45 @@ export async function resumenBorradoContrato(contratoId: string): Promise<Resume
     .from('periodos').select('id, estado').eq('contrato_id', contratoId)
   const idsPeriodo = (periodos ?? []).map(p => p.id as string)
 
-  const presentados = (periodos ?? []).filter(p => p.estado !== 'borrador')
+  const vacio = Promise.resolve({ count: 0 } as { count: number | null })
 
-  const [{ count: obligaciones }, { count: evidencias }, { count: adjuntosPeriodo }, { count: adjuntosContrato }] =
-    await Promise.all([
-      admin.from('obligaciones').select('id', { count: 'exact', head: true }).eq('contrato_id', contratoId),
-      idsPeriodo.length
-        ? admin.from('evidencias').select('id, actividades!inner(periodo_id)', { count: 'exact', head: true })
-            .in('actividades.periodo_id', idsPeriodo)
-        : Promise.resolve({ count: 0 } as { count: number | null }),
-      idsPeriodo.length
-        ? admin.from('documentos_adjuntos').select('id', { count: 'exact', head: true })
-            .eq('entidad_tipo', 'periodo').in('entidad_id', idsPeriodo)
-        : Promise.resolve({ count: 0 } as { count: number | null }),
-      admin.from('documentos_adjuntos').select('id', { count: 'exact', head: true })
-        .eq('entidad_tipo', 'contrato').eq('entidad_id', contratoId),
-    ])
+  const [
+    { count: obligaciones }, { count: evidencias },
+    { count: adjuntosPeriodo }, { count: adjuntosContrato }, { count: codigos },
+  ] = await Promise.all([
+    admin.from('obligaciones').select('id', { count: 'exact', head: true }).eq('contrato_id', contratoId),
+    idsPeriodo.length
+      ? admin.from('evidencias').select('id, actividades!inner(periodo_id)', { count: 'exact', head: true })
+          .in('actividades.periodo_id', idsPeriodo)
+      : vacio,
+    idsPeriodo.length
+      ? admin.from('documentos_adjuntos').select('id', { count: 'exact', head: true })
+          .eq('entidad_tipo', 'periodo').in('entidad_id', idsPeriodo)
+      : vacio,
+    admin.from('documentos_adjuntos').select('id', { count: 'exact', head: true })
+      .eq('entidad_tipo', 'contrato').eq('entidad_id', contratoId),
+    idsPeriodo.length
+      ? admin.from('documentos_emitidos').select('id', { count: 'exact', head: true }).in('periodo_id', idsPeriodo)
+      : vacio,
+  ])
 
   return {
-    puedeBorrarse: presentados.length === 0,
-    motivo: presentados.length
-      ? `${presentados.length} informe(s) ya se presentaron y llevan código de verificación. Un contrato con informes presentados se cierra por estado (terminado o liquidado), no se borra.`
-      : null,
     periodos: idsPeriodo.length,
     obligaciones: obligaciones ?? 0,
     evidencias: evidencias ?? 0,
     documentos: (adjuntosPeriodo ?? 0) + (adjuntosContrato ?? 0),
+    informesPresentados: (periodos ?? []).filter(p => p.estado !== 'borrador').length,
+    codigosVerificacion: codigos ?? 0,
   }
 }
 
 /**
  * Borra el contrato y todo lo que cuelga de él. Exclusivo del administrador.
+ *
+ * Sin restricciones: el administrador puede borrar cualquier contrato, tenga o
+ * no informes presentados. Es una decisión suya, y la pantalla se limita a
+ * decirle qué destruye —incluidos los códigos de verificación, que dejarán de
+ * resolver aunque estén impresos en documentos ya entregados.
  *
  * En la base de datos todas las claves foráneas hacia `contratos` son CASCADE,
  * así que un solo DELETE arrastra periodos, obligaciones, actividades,
@@ -684,9 +692,6 @@ export async function eliminarContrato(
     if (confirmacion.trim() !== contrato.numero) {
       return { error: `Para confirmar, escribe el número del contrato: ${contrato.numero}` }
     }
-
-    const resumen = await resumenBorradoContrato(contratoId)
-    if (!resumen.puedeBorrarse) return { error: resumen.motivo ?? 'No se puede eliminar este contrato.' }
 
     // ── Archivos en Storage ──────────────────────────────────────────────────
     const { data: periodos } = await admin
