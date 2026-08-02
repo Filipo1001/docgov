@@ -562,6 +562,7 @@ export default function PeriodoDetallePage({
     (contrato as { contratista?: { obligado_facturar_electronicamente?: boolean | null } })
       ?.contratista?.obligado_facturar_electronicamente === true
 
+
   // Progreso de revisión por obligación — usado en el panel de secretaria
   const obligacionesConRevision = obligaciones.filter(obl => revisiones[obl.id] !== undefined)
   const obligacionesSinRevisar = obligaciones.filter(obl => revisiones[obl.id] === undefined)
@@ -599,6 +600,14 @@ export default function PeriodoDetallePage({
   })()
 
   const esEditable = !esHistorico && !periodoVencido && (periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false)
+  /**
+   * Quién puede adjuntarla: la contratista mientras el informe sea editable, y
+   * el administrador siempre —también sobre informes ya enviados, igual que
+   * ocurre con la planilla—. Es el mismo alcance que aplica prepararUploadFactura
+   * en el servidor.
+   */
+  const puedeAdjuntarFactura =
+    usuario?.rol === 'admin' || (esEditable && esContratista)
 
   // ── Mes de cotización: meses disponibles (rango del contrato) ──────────────
   // El selector ofrece cualquier mes dentro del rango del contrato.
@@ -3012,7 +3021,11 @@ export default function PeriodoDetallePage({
                   )}
                 </div>
 
-                {esEditable && esContratista && (
+                {/* El admin también, no solo la contratista: la acción del
+                    servidor ya lo permite, y a menudo es él quien recibe la
+                    factura por correo y la carga en su nombre. La pantalla no
+                    debe ser más restrictiva que el permiso real. */}
+                {puedeAdjuntarFactura && (
                   <div className="flex items-center gap-1 shrink-0">
                     <label className={`text-xs font-medium px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
                       subiendoFactura
