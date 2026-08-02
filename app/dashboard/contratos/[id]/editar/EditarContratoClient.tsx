@@ -17,6 +17,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import SelectorSupervisor from '@/components/SelectorSupervisor'
+import EstadoContratoPanel from './EstadoContratoPanel'
+import type { EstadoContrato } from '@/lib/estado-contrato'
 import { numerosALetras } from '@/lib/numero-letras'
 import {
   actualizarContrato,
@@ -130,6 +132,15 @@ export default function EditarContratoClient({
       <p className="text-sm text-gray-500 mb-6">
         Cada cambio queda registrado con tu nombre y la fecha.
       </p>
+
+      <div className="mb-4">
+        <EstadoContratoPanel
+          contratoId={contrato.id}
+          estadoActual={(contrato.estado ?? 'vigente') as EstadoContrato}
+          fechaEstado={contrato.estado_fecha ?? null}
+          motivoEstado={contrato.estado_motivo ?? null}
+        />
+      </div>
 
       <form onSubmit={guardar} className="space-y-4">
 

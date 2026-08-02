@@ -16,6 +16,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
+import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
 
 /** Contraseña temporal aleatoria (mismo criterio que admin.ts). */
 function generarPasswordSegura(): string {
@@ -518,5 +519,69 @@ export async function getHistorialContrato(contratoId: string): Promise<CambioCo
     }))
   } catch {
     return []
+  }
+}
+
+// ─── Ciclo de vida ───────────────────────────────────────────────────────────
+
+/**
+ * Registra un hecho del ciclo de vida del contrato: suspensión, terminación
+ * anticipada, liquidación o cesión.
+ *
+ * Va aparte de actualizarContrato porque no es una corrección de un dato mal
+ * escrito, sino la constancia de un acto administrativo: exige fecha y, salvo
+ * al volver a "vigente", un motivo. Queda en el mismo historial para que la
+ * vida del contrato se lea en una sola línea de tiempo.
+ */
+export async function cambiarEstadoContrato(
+  contratoId: string,
+  estado: EstadoContrato,
+  fecha: string,
+  motivo: string,
+): Promise<ActionResult> {
+  try {
+    const gestorId = await requireAdminId()
+    if (!gestorId) return { error: 'No autorizado' }
+
+    if (!ESTADOS_CONTRATO.some(e => e.id === estado)) return { error: 'Estado no válido.' }
+    if (!fecha) return { error: 'Indica la fecha del acto.' }
+    if (estado !== 'vigente' && !motivo.trim()) {
+      return { error: 'Indica el motivo: queda como constancia en el expediente.' }
+    }
+
+    const admin = createAdminSupabaseClient()
+    const { data: actual } = await admin
+      .from('contratos').select('estado').eq('id', contratoId).single()
+    if (!actual) return { error: 'Contrato no encontrado' }
+    if (actual.estado === estado) return { error: `El contrato ya está en estado "${estado}".` }
+
+    const { error } = await admin
+      .from('contratos')
+      .update({
+        estado,
+        estado_fecha: fecha,
+        estado_motivo: motivo.trim() || null,
+        // `activo` se mantiene coherente para el código anterior que aún lo
+        // consulta; el estado es a partir de ahora la fuente de verdad.
+        activo: estado === 'vigente' || estado === 'suspendido',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', contratoId)
+
+    if (error) return { error: error.message }
+
+    await admin.from('contratos_historial').insert({
+      contrato_id: contratoId,
+      usuario_id: gestorId,
+      campo: 'estado',
+      valor_anterior: actual.estado,
+      valor_nuevo: `${estado} (${fecha})${motivo.trim() ? ` — ${motivo.trim()}` : ''}`,
+    }).then(undefined, () => {})
+
+    revalidatePath(`/dashboard/contratos/${contratoId}`)
+    revalidatePath('/dashboard/contratos', 'layout')
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }

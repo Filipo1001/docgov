@@ -12,6 +12,7 @@ import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from 
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
 import { esGestorContratos } from '@/lib/constants'
+import { etiquetaEstado } from '@/lib/estado-contrato'
 import ExpedienteContrato from './ExpedienteContrato'
 import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
 
@@ -273,6 +274,15 @@ export default function ContratoDetallePage({
             )}
           </div>
         </div>
+
+        {(() => {
+          const e = etiquetaEstado(contrato.estado, contrato.fecha_fin)
+          return (
+            <span className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full border mb-3 ${e.color}`}>
+              {e.label}
+            </span>
+          )
+        })()}
 
         <p className="text-sm text-gray-600 mb-4">{contrato.objeto}</p>
 
