@@ -147,16 +147,15 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
     // Dependencia de Contratación: ciclo de vida del contrato y de las cuentas
-    // de contratista (crear, corregir, obligaciones, periodos, otrosíes, firma).
-    // Sin acceso al flujo de informes (aprobar/rechazar/radicar), a la carga
-    // masiva desde Excel ni a la configuración del municipio. La creación del
-    // contratista va embebida en el formulario de contrato.
+    // de contratista (crear, corregir, obligaciones, periodos, otrosíes).
+    // Sin acceso al flujo de informes (aprobar/rechazar/radicar), a las firmas,
+    // a las dependencias, a la carga masiva desde Excel ni a la configuración
+    // del municipio. La creación del contratista va embebida en el formulario
+    // de contrato.
     contratacion: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
       { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: '👥' },
-      { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
-      { href: '/dashboard/dependencias', label: 'Dependencias', icon: '🏢' },
       { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
   }

@@ -28,7 +28,6 @@ const ACCESOS = [
   { href: '/dashboard/contratos/nuevo', icon: '📝', titulo: 'Nuevo contrato', desc: 'Registra el contrato y crea al contratista en un solo paso' },
   { href: '/dashboard/contratos', icon: '📄', titulo: 'Ver contratos', desc: 'Listado, edición y exportación' },
   { href: '/dashboard/admin/usuarios', icon: '👥', titulo: 'Contratistas', desc: 'Activar cuentas y editar sus datos' },
-  { href: '/dashboard/admin/firmas', icon: '✍️', titulo: 'Firmas', desc: 'Registrar la firma que entrega el contratista' },
 ]
 
 export default function ContratacionHome({ nombre }: { nombre: string }) {
@@ -58,8 +57,8 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
         <Link href="/dashboard/admin/usuarios?tab=pendientes" className="block rounded-2xl transition-transform hover:-translate-y-0.5">
           <StatCard label="Pendientes de activar" value={stats?.importadosPendientes ?? '—'} color="blue" />
         </Link>
-        <Link href="/dashboard/admin/firmas?filtro=sin" className="block rounded-2xl transition-transform hover:-translate-y-0.5">
-          <StatCard label="Sin firma registrada" value={stats?.contratistasSinFirma ?? '—'} color="red" />
+        <Link href="/dashboard/contratos?incompletos=1" className="block rounded-2xl transition-transform hover:-translate-y-0.5">
+          <StatCard label="Contratos incompletos" value={stats?.contratosIncompletos ?? '—'} color="red" />
         </Link>
       </div>
 

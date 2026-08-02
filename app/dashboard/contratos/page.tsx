@@ -208,6 +208,15 @@ export default function ContratosPage() {
 
   const busquedaDebounced = useDebounced(busqueda, 200)
 
+  // Filtros que llegan por URL desde las tarjetas del panel de contratación.
+  // Se aplican tras montar y no en el useState inicial: el servidor no ve la
+  // query string de la misma forma y la hidratación no cuadraría.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('incompletos') === '1') setSoloInc(true)
+    if (q.get('vigencia') === 'vigentes') setFiltroVig('vigentes')
+  }, [])
+
   // ── Carga única de todos los contratos del rol ─────────────────
   const {
     data: todosContratos,

@@ -7,16 +7,15 @@
  * al crear un contrato pero no ofrecía forma de crearlas ni corregirlas, así
  * que una secretaría nueva obligaba a entrar a la base de datos.
  *
- * Las gestiona quien gestiona contratos (admin y contratación), porque es
- * quien descubre que falta una justo al ir a registrar el contrato.
+ * Las gestiona el admin: definir la estructura de secretarías del municipio es
+ * configuración de la entidad, no parte del trámite de un contrato.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName } from '@/lib/format'
-import { esGestorContratos } from '@/lib/constants'
 import { revalidatePath } from 'next/cache'
-import type { ActionResult, Rol } from '@/lib/types'
+import type { ActionResult } from '@/lib/types'
 
 export interface DependenciaDetalle {
   id: string
@@ -34,8 +33,8 @@ async function requireGestor(): Promise<{ userId: string; municipioId: string } 
   if (!user) return null
   const { data } = await supabase
     .from('usuarios').select('rol, municipio_id').eq('id', user.id).single()
-  if (!esGestorContratos(data?.rol as Rol)) return null
-  return { userId: user.id, municipioId: data!.municipio_id as string }
+  if (data?.rol !== 'admin') return null
+  return { userId: user.id, municipioId: data.municipio_id as string }
 }
 
 // ── Lectura ──────────────────────────────────────────────────────────────────

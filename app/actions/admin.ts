@@ -559,13 +559,9 @@ export async function eliminarUsuario(
  * Borra la firma registrada de un usuario, para poder reemplazarla.
  */
 export async function eliminarFirmaAdmin(userId: string): Promise<ActionResult> {
-  const admin = await requireGestorUsuarios()
+  // Gestión de firmas: exclusiva de admin.
+  const admin = await requireAdmin()
   if (!admin) return { error: 'No autorizado' }
-  // Mismo límite que en el resto de la gestión de cuentas: contratación no
-  // puede tocar la firma de un supervisor, que es quien aprueba los informes.
-  if (admin.rol === 'contratacion' && !(await targetEsContratista(userId))) {
-    return { error: ERROR_SOLO_CONTRATISTAS }
-  }
 
   const adminClient = createAdminSupabaseClient()
   const { error } = await adminClient

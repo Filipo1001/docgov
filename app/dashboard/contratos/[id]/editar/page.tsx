@@ -28,7 +28,7 @@ export default async function EditarContratoPage({
     <EditarContratoClient
       contrato={contrato}
       dependencias={dependencias.map(d => ({ id: d.id, nombre: d.nombre }))}
-      supervisores={usuarios.filter(u => u.rol === 'supervisor' || u.rol === 'admin')}
+      supervisores={usuarios.filter(u => u.rol === 'supervisor')}
       bloqueo={bloqueo}
       historial={historial}
     />

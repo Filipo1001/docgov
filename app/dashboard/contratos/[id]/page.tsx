@@ -19,7 +19,7 @@ export default async function ContratoDetallePage({
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: contrato }, { data: obligaciones }, { data: periodos }, documentos] = await Promise.all([
+  const [{ data: contrato, error: errorContrato }, { data: obligaciones }, { data: periodos }, documentos] = await Promise.all([
     supabase
       .from('contratos')
       .select(`
@@ -47,6 +47,14 @@ export default async function ContratoDetallePage({
     listarDocumentosContrato(id),
   ])
 
+  // Este redirect ocultó durante horas un fallo real: al añadir una columna a
+  // `usuarios` sin su GRANT, la consulta devolvía "permission denied" y la
+  // pantalla se limitaba a rebotar al listado, como si el contrato no
+  // existiera. Un error de consulta y un contrato inexistente no son lo mismo:
+  // el primero se registra para que aparezca en los logs.
+  if (errorContrato) {
+    console.error(`[contrato ${id}] la consulta falló:`, errorContrato.message)
+  }
   if (!contrato) redirect('/dashboard/contratos')
 
   return (

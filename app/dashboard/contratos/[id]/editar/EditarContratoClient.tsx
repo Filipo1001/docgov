@@ -57,7 +57,6 @@ export default function EditarContratoClient({
     numero: contrato.numero ?? '',
     anio: String(contrato.anio ?? ''),
     objeto: contrato.objeto ?? '',
-    modalidad_seleccion: contrato.modalidad_seleccion ?? '',
     supervisor_id: contrato.supervisor_id ?? '',
     dependencia_id: contrato.dependencia_id ?? '',
     valor_total: String(contrato.valor_total ?? ''),
@@ -78,7 +77,6 @@ export default function EditarContratoClient({
     setGuardando(true)
 
     const cambios: Partial<Record<CampoContrato, string | number | null>> = {
-      modalidad_seleccion: f.modalidad_seleccion,
       supervisor_id: f.supervisor_id,
       dependencia_id: f.dependencia_id,
       cdp: f.cdp || null,
@@ -159,13 +157,6 @@ export default function EditarContratoClient({
           <Campo etiqueta="Objeto">
             <textarea rows={3} value={f.objeto} onChange={set('objeto')} disabled={bloqueo.identidad}
               className={`${bloqueo.identidad ? inputBloqueado : input} resize-none`} />
-          </Campo>
-          <Campo etiqueta="Modalidad de selección">
-            <select value={f.modalidad_seleccion} onChange={set('modalidad_seleccion')} className={input}>
-              <option value="Contratacion Directa">Contratación Directa</option>
-              <option value="Mínima Cuantía">Mínima Cuantía</option>
-              <option value="Selección Abreviada">Selección Abreviada</option>
-            </select>
           </Campo>
         </Seccion>
 

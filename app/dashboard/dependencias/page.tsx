@@ -3,7 +3,7 @@ import { listarDependencias } from '@/app/actions/dependencias'
 import DependenciasClient from './DependenciasClient'
 
 export default async function DependenciasPage() {
-  await requireRole(['admin', 'contratacion'])
+  await requireRole(['admin'])
   const dependencias = await listarDependencias()
   return <DependenciasClient initial={dependencias} />
 }

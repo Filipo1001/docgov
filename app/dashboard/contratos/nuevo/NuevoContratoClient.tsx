@@ -267,7 +267,8 @@ export default function NuevoContratoPage({
   }
 
   const contratistas = usuarios.filter(u => u.rol === 'contratista' || u.rol === 'admin')
-  const supervisores = usuarios.filter(u => u.rol === 'supervisor' || u.rol === 'admin')
+  // Solo secretarios: el admin es una cuenta técnica, no supervisa contratos.
+  const supervisores = usuarios.filter(u => u.rol === 'supervisor')
 
   const inputClass =
     'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
@@ -354,15 +355,6 @@ export default function NuevoContratoPage({
               <textarea name="objeto" value={form.objeto} onChange={handleChange} required rows={3}
                 placeholder="PRESTACIÓN DE SERVICIOS DE APOYO A LA GESTIÓN..."
                 className={`${excelEncontrado ? autoClass : inputClass} resize-none`} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Modalidad</label>
-              <select name="modalidad_seleccion" value={form.modalidad_seleccion} onChange={handleChange}
-                className={inputClass}>
-                <option value="Contratacion Directa">Contratación Directa</option>
-                <option value="Mínima Cuantía">Mínima Cuantía</option>
-                <option value="Selección Abreviada">Selección Abreviada</option>
-              </select>
             </div>
           </div>
         </div>
@@ -596,7 +588,8 @@ export default function NuevoContratoPage({
             </label>
             <input
               name="secop_url"
-              type="url"
+              type="text"
+              inputMode="url"
               value={form.secop_url ?? ''}
               onChange={handleChange}
               placeholder="https://www.secop.gov.co/..."

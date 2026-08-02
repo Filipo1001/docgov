@@ -30,9 +30,7 @@ export default async function FirmasAdminPage({
     .eq('id', session.user.id)
     .single()
 
-  // Contratación también: registra la firma que el contratista entrega al
-  // legalizar, y sin ella los documentos del informe no se pueden sellar.
-  if (me?.rol !== 'admin' && me?.rol !== 'contratacion') redirect('/dashboard')
+  if (me?.rol !== 'admin') redirect('/dashboard')
 
   const adminClient = createAdminSupabaseClient()
 
