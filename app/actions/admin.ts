@@ -1,22 +1,11 @@
 'use server'
 
-import { randomBytes } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
+import { passwordInicialDesdeCedula } from '@/lib/password-inicial'
 import type { ActionResult } from '@/lib/types'
-
-/**
- * Generates a cryptographically random 12-character temporary password.
- * Excludes confusable characters (0/O, 1/l/I) for easier communication.
- * Entropy ≈ 68 bits — far stronger than using a document number.
- */
-function generarPasswordSegura(): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  const bytes = randomBytes(12)
-  return Array.from(bytes).map((b) => chars[b % chars.length]).join('')
-}
 
 // ─── Auth guard ───────────────────────────────────────────────
 
@@ -95,8 +84,12 @@ export async function crearUsuario(formData: {
   const cargo         = formData.cargo ? normalizeName(formData.cargo) : null
   const direccion     = formData.direccion ? normalizeFreeText(formData.direccion) : null
 
-  // 1. Create auth user with a secure random temporary password
-  const passwordInicial = generarPasswordSegura()
+  // 1. La contraseña inicial es la cédula: quien crea la cuenta no tiene que
+  //    transmitir nada, el contratista ya conoce su número.
+  const passwordInicial = passwordInicialDesdeCedula(formData.cedula)
+  if (!passwordInicial) {
+    return { error: 'La cédula es obligatoria: se usa como contraseña inicial de la cuenta.' }
+  }
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
     password: passwordInicial,
@@ -177,8 +170,11 @@ export async function activarContratista(
     : null
   const direccionNorm = extraData.direccion ? normalizeFreeText(extraData.direccion) : null
 
-  // Create auth user with a secure random temporary password
-  const passwordInicial = generarPasswordSegura()
+  const cedulaCuenta = extraData.cedula?.trim() || imp.cedula || ''
+  const passwordInicial = passwordInicialDesdeCedula(cedulaCuenta)
+  if (!passwordInicial) {
+    return { error: 'Este contratista no tiene cédula registrada, y la cédula es la contraseña inicial. Ingrésala para activarlo.' }
+  }
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email: emailNorm,
     password: passwordInicial,

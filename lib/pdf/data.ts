@@ -304,9 +304,12 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       duracion_letras: contrato.duracion_letras ?? undefined,
       // Prefer contratista's bank data (single source of truth).
       // Fall back to contract-level data for backwards compatibility.
-      banco: contrato.contratista?.banco || contrato.banco,
-      tipo_cuenta: contrato.contratista?.tipo_cuenta || contrato.tipo_cuenta,
-      numero_cuenta: contrato.contratista?.numero_cuenta || contrato.numero_cuenta,
+      // Fuente única: la ficha del contratista. Antes había un respaldo que
+      // leía la copia del contrato; se retiró tras comprobar que ningún
+      // contrato tenía el dato que al usuario le faltara.
+      banco: contrato.contratista?.banco,
+      tipo_cuenta: contrato.contratista?.tipo_cuenta,
+      numero_cuenta: contrato.contratista?.numero_cuenta,
       dependencia: contrato.dependencia?.nombre ?? '',
       fecha_inicio_contrato: contrato.fecha_inicio ?? undefined,
       fecha_fin_contrato: contrato.fecha_fin ?? undefined,

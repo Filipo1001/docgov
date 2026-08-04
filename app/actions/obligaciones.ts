@@ -13,8 +13,30 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
+import { ESTADOS_EDITABLES } from '@/lib/constants'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
+
+/**
+ * Invalida solo los PDF de periodos que todavía no se han presentado.
+ *
+ * A diferencia de invalidarCacheContrato, respeta lo ya emitido: los
+ * documentos de un periodo enviado, aprobado o radicado se quedan como
+ * estaban.
+ */
+async function invalidarCachePeriodosAbiertos(
+  adminClient: ReturnType<typeof createAdminSupabaseClient>,
+  contratoId: string,
+) {
+  const { data: periodos } = await adminClient
+    .from('periodos')
+    .select('id')
+    .eq('contrato_id', contratoId)
+    .in('estado', ESTADOS_EDITABLES)
+  await Promise.all(
+    (periodos ?? []).map((p: { id: string }) => invalidarCachePDF(adminClient, p.id).catch(() => {})),
+  )
+}
 
 async function invalidarCacheContrato(
   adminClient: ReturnType<typeof createAdminSupabaseClient>,
@@ -126,6 +148,58 @@ export async function eliminarObligacion(
     await invalidarCacheContrato(adminClient, contratoId)
     revalidatePath(`/dashboard/contratos/${contratoId}`)
     return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Corrige el texto de una obligación existente.
+ *
+ * Mismo guard que crear y eliminar: quien puede definir las obligaciones de un
+ * contrato puede corregirlas. Faltaba solo esta, así que un error de redacción
+ * obligaba a borrar la obligación y volver a escribirla — perdiendo su orden y,
+ * peor, las revisiones que el supervisor ya hubiera hecho sobre ella.
+ *
+ * NO se toca `orden` ni `otrosi_id`: cambiar el vínculo con un otrosí alteraría
+ * desde qué periodo rige la obligación, y eso no es una corrección de texto.
+ */
+export async function actualizarObligacion(params: {
+  obligacionId: string
+  contratoId: string
+  descripcion: string
+  esPermanente: boolean
+}): Promise<ActionResult<{ descripcion: string; es_permanente: boolean }>> {
+  try {
+    const adminId = await requireAdminId()
+    if (!adminId) return { error: 'No autorizado' }
+
+    const descripcion = params.descripcion.trim()
+    if (!descripcion) return { error: 'La descripción no puede estar vacía' }
+    if (descripcion.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
+
+    const adminClient = createAdminSupabaseClient()
+
+    // La obligación debe pertenecer al contrato indicado: impide que un id
+    // manipulado edite la obligación de otro contrato.
+    const { data: fila, error } = await adminClient
+      .from('obligaciones')
+      .update({ descripcion, es_permanente: params.esPermanente })
+      .eq('id', params.obligacionId)
+      .eq('contrato_id', params.contratoId)
+      .select('descripcion, es_permanente')
+      .single()
+
+    if (error || !fila) return { error: `Error al guardar: ${error?.message ?? 'obligación no encontrada'}` }
+
+    // El texto aparece impreso en el informe y en el acta de supervisión, así
+    // que sus PDF cacheados dejan de ser válidos... PERO solo los de periodos
+    // aún no presentados. Un informe ya enviado es la foto de lo que se
+    // presentó: regenerarlo con el texto nuevo cambiaría un documento que
+    // pudo entregarse impreso y sellado con su código de verificación.
+    await invalidarCachePeriodosAbiertos(adminClient, params.contratoId)
+    revalidatePath(`/dashboard/contratos/${params.contratoId}`)
+    return { data: fila as { descripcion: string; es_permanente: boolean } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }

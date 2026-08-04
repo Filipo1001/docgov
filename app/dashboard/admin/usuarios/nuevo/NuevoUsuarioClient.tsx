@@ -91,7 +91,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
 
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 text-left">
             <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">
-              Contraseña temporal generada
+              Contraseña inicial
             </p>
             <div className="flex items-center gap-3 bg-white border border-amber-200 rounded-lg px-3 py-3">
               <code className="flex-1 text-xl font-mono font-bold text-gray-900 tracking-widest select-all">
@@ -173,7 +173,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
-            Se generará una <span className="font-semibold">contraseña temporal segura</span> que podrás copiar y compartir con el usuario.
+            La contraseña inicial será su <span className="font-semibold">número de cédula</span>. Podrá cambiarla al ingresar.
           </div>
         </div>
 
