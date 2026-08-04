@@ -7,7 +7,7 @@ import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula, formatDateMedium } from '@/lib/format'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
-import { crearObligacion, eliminarObligacion as eliminarObligacionAction } from '@/app/actions/obligaciones'
+import { crearObligacion, eliminarObligacion as eliminarObligacionAction, actualizarObligacion } from '@/app/actions/obligaciones'
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
 import { esGestorContratos } from '@/lib/constants'
@@ -44,6 +44,12 @@ export default function ContratoDetallePage({
   const [esPermanente, setEsPermanente] = useState(false)
   const [otrosiIdNuevaObl, setOtrosiIdNuevaObl] = useState<string>('')
   const [agregando, setAgregando] = useState(false)
+
+  // Edición en línea de una obligación
+  const [editandoOblId, setEditandoOblId] = useState<string | null>(null)
+  const [textoEdicion, setTextoEdicion] = useState('')
+  const [permanenteEdicion, setPermanenteEdicion] = useState(false)
+  const [guardandoObl, setGuardandoObl] = useState(false)
 
   // Otrosíes del contrato (para asociar obligaciones)
   const [otrosies, setOtrosies] = useState<Otrosi[]>([])
@@ -96,6 +102,31 @@ export default function ContratoDetallePage({
       setOtrosiIdNuevaObl('')
     }
     setAgregando(false)
+  }
+
+  function abrirEdicionObligacion(obl: { id: string; descripcion: string; es_permanente: boolean }) {
+    setEditandoOblId(obl.id)
+    setTextoEdicion(obl.descripcion)
+    setPermanenteEdicion(obl.es_permanente)
+  }
+
+  async function guardarObligacion(oblId: string) {
+    setGuardandoObl(true)
+    const res = await actualizarObligacion({
+      obligacionId: oblId,
+      contratoId: id as string,
+      descripcion: textoEdicion,
+      esPermanente: permanenteEdicion,
+    })
+    setGuardandoObl(false)
+    if (res.error) { toast.error(res.error); return }
+    // Se pinta con lo que devolvió el servidor —ya normalizado— en vez de con
+    // lo que quedó en el formulario.
+    setObligaciones(prev => prev.map(o =>
+      o.id === oblId ? { ...o, descripcion: res.data!.descripcion, es_permanente: res.data!.es_permanente } : o,
+    ))
+    setEditandoOblId(null)
+    toast.success('Obligación actualizada')
   }
 
   async function eliminarObligacion(oblId: string) {
@@ -336,8 +367,48 @@ export default function ContratoDetallePage({
               return (
                 <div key={obl.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl group min-w-0">
                   <span className="text-xs font-medium text-gray-400 mt-0.5 min-w-[20px]">{index + 1}.</span>
-                  <p className="flex-1 min-w-0 text-sm text-gray-700 break-words">{obl.descripcion}</p>
-                  <div className="flex items-center gap-2 shrink-0">
+
+                  {editandoOblId === obl.id ? (
+                    <div className="flex-1 min-w-0">
+                      <textarea
+                        autoFocus
+                        rows={3}
+                        value={textoEdicion}
+                        onChange={e => setTextoEdicion(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                      <div className="flex flex-wrap items-center gap-3 mt-2">
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={permanenteEdicion}
+                            onChange={e => setPermanenteEdicion(e.target.checked)}
+                            className="rounded border-gray-300"
+                          />
+                          Permanente
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => guardarObligacion(obl.id)}
+                          disabled={guardandoObl || !textoEdicion.trim()}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                        >
+                          {guardandoObl ? 'Guardando…' : 'Guardar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditandoOblId(null)}
+                          className="text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="flex-1 min-w-0 text-sm text-gray-700 break-words">{obl.descripcion}</p>
+                  )}
+
+                  <div className={`flex items-center gap-2 shrink-0 ${editandoOblId === obl.id ? 'hidden' : ''}`}>
                     {obl.es_permanente && (
                       <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Permanente</span>
                     )}
@@ -350,12 +421,26 @@ export default function ContratoDetallePage({
                       </span>
                     )}
                     {esGestor && (
-                      <button
-                        onClick={() => eliminarObligacion(obl.id)}
-                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
-                      >
-                        ✕
-                      </button>
+                      <>
+                        <button
+                          onClick={() => abrirEdicionObligacion(obl)}
+                          title="Editar obligación"
+                          aria-label="Editar obligación"
+                          className="text-gray-300 hover:text-blue-600 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => eliminarObligacion(obl.id)}
+                          title="Eliminar obligación"
+                          aria-label="Eliminar obligación"
+                          className="text-gray-300 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all text-xs"
+                        >
+                          ✕
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

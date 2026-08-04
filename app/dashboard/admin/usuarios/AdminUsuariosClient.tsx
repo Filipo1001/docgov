@@ -92,7 +92,7 @@ function ActivarModal({
 
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
             <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">
-              Contraseña temporal generada
+              Contraseña inicial
             </p>
             <div className="flex items-center gap-3 bg-white border border-amber-200 rounded-lg px-3 py-2.5">
               <code className="flex-1 text-lg font-mono font-bold text-gray-900 tracking-widest select-all">
@@ -191,7 +191,7 @@ function ActivarModal({
         </div>
 
         <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mt-4">
-          Se generará una <strong>contraseña temporal segura</strong> que podrás copiar y compartir con el usuario.
+          La contraseña inicial será su <strong>número de cédula</strong>. Podrá cambiarla al ingresar.
         </p>
 
         <div className="flex gap-3 mt-5">

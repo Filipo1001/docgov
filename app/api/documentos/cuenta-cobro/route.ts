@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       *,
       contrato:contratos(
         *,
-        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, telefono),
+        contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, telefono, banco, tipo_cuenta, numero_cuenta),
         supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo, cedula),
         dependencia:dependencias(nombre)
       )
@@ -178,7 +178,8 @@ export async function GET(request: Request) {
             ]}),
             new TableRow({ children: [
               cell('Cuenta bancaria autorizada:', { bold: true }),
-              cell(`${contrato.banco || ''} - ${contrato.tipo_cuenta || ''} - No. ${contrato.numero_cuenta || ''}`),
+              // La cuenta bancaria es del contratista; la copia del contrato quedó obsoleta.
+              cell(`${contratista.banco || ''} - ${contratista.tipo_cuenta || ''} - No. ${contratista.numero_cuenta || ''}`),
             ]}),
           ]
         }),

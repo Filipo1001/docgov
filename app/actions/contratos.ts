@@ -10,20 +10,14 @@
  * Mismo patrón que actividades y obligaciones.
  */
 
-import { randomBytes } from 'crypto'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import { extraerPath } from '@/lib/storage-firmado'
+import { passwordInicialDesdeCedula } from '@/lib/password-inicial'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
 import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
-
-/** Contraseña temporal aleatoria (mismo criterio que admin.ts). */
-function generarPasswordSegura(): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  return Array.from(randomBytes(12)).map((b) => chars[b % chars.length]).join('')
-}
 
 async function requireAdminId(): Promise<string | null> {
   const supabase = await createServerSupabaseClient()
@@ -179,7 +173,8 @@ export async function crearContratoConContratista(
       if (!nombre) return { error: 'El nombre del contratista es obligatorio' }
       if (!nc.cedula?.trim()) return { error: 'La cédula del contratista es obligatoria' }
 
-      passwordInicial = generarPasswordSegura()
+      passwordInicial = passwordInicialDesdeCedula(nc.cedula)
+      if (!passwordInicial) return { error: 'La cédula del contratista es obligatoria: es su contraseña inicial.' }
       const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
         email,
         password: passwordInicial,
@@ -378,7 +373,9 @@ export async function generarPeriodos(
  */
 const CAMPOS_SIEMPRE = [
   'modalidad_seleccion', 'cdp', 'crp', 'numero_cdp', 'numero_crp', 'secop_url',
-  'supervisor_id', 'dependencia_id', 'banco', 'tipo_cuenta', 'numero_cuenta',
+  'supervisor_id', 'dependencia_id',
+  // Los datos bancarios NO están aquí a propósito: viven en la ficha del
+  // contratista. Si cambia de banco, cambia para todos sus contratos.
 ] as const
 
 const CAMPOS_HASTA_PERIODOS = [

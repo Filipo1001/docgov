@@ -51,7 +51,7 @@ export default function NuevoContratoPage({
     // haber comprobado que no está obligado que no haberlo preguntado.
     factura_electronica: '' as '' | 'si' | 'no',
   })
-  // Resultado de éxito (muestra la contraseña temporal si se creó el contratista)
+  // Resultado de éxito (muestra la contraseña inicial si se creó el contratista)
   const [resultado, setResultado] = useState<{ contratoId: string; password?: string; nombre?: string } | null>(null)
   const [copiado, setCopiado] = useState(false)
 
@@ -251,7 +251,7 @@ export default function NuevoContratoPage({
         return
       }
 
-      // Si se creó un contratista nuevo, mostrar la contraseña temporal antes
+      // Si se creó un contratista nuevo, mostrar la contraseña inicial antes
       // de salir. Si no, ir directo al contrato como siempre.
       if (res.data?.passwordInicial) {
         setResultado({ contratoId: res.data.id, password: res.data.passwordInicial, nombre: res.data.contratistaNombre })
@@ -274,7 +274,7 @@ export default function NuevoContratoPage({
     'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
   const autoClass = inputClass + ' bg-emerald-50 border-emerald-200'
 
-  // Pantalla de éxito con la contraseña temporal del contratista recién creado
+  // Pantalla de éxito con la contraseña inicial del contratista recién creado
   if (resultado?.password) {
     return (
       <div className="max-w-lg mx-auto">
@@ -288,10 +288,10 @@ export default function NuevoContratoPage({
           <h2 className="text-xl font-bold text-gray-900 mb-1">Contrato y contratista creados</h2>
           <p className="text-sm text-gray-500 mb-5">
             {resultado.nombre ? `Se creó la cuenta de ${resultado.nombre}. ` : ''}
-            Comparte esta contraseña temporal; podrá cambiarla al ingresar.
+            Su contraseña inicial es su número de cédula. Podrá cambiarla al ingresar.
           </p>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5">
-            <p className="text-xs text-gray-400 mb-1">Contraseña temporal</p>
+            <p className="text-xs text-gray-400 mb-1">Contraseña inicial (su cédula)</p>
             <p className="text-2xl font-mono font-bold text-gray-900 tracking-wider select-all">{resultado.password}</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -396,8 +396,8 @@ export default function NuevoContratoPage({
           ) : (
             <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-800">
-                Se creará la cuenta del contratista junto con el contrato. Al guardar se generará
-                una <strong>contraseña temporal</strong> para compartirle.
+                Se creará la cuenta del contratista junto con el contrato. Su contraseña
+                inicial será su <strong>número de cédula</strong>.
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
