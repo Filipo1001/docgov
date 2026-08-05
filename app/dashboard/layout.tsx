@@ -9,6 +9,7 @@ import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
 import { avatarThumb } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
+import AvisoMigracion from '@/components/AvisoMigracion'
 
 // ─── User avatar (photo or initials) ─────────────────────────
 function getInitiales(nombre: string): string {
@@ -332,7 +333,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="md:ml-64 flex flex-col min-h-screen">
         <MobileHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-8 md:pb-8">{children}</main>
+        <main className="flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-8 md:pb-8">
+          {/* Encima del contenido de CUALQUIER pantalla del panel: el aviso debe
+              verse entre al entrar, sin depender de a dónde navegue cada rol. */}
+          <AvisoMigracion />
+          {children}
+        </main>
       </div>
     </div>
   )
