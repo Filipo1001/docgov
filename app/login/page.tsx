@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
+import { LogoCD } from '@/components/Logo'
 
 function SesionExpiradaBanner() {
   const searchParams = useSearchParams()
@@ -95,16 +96,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center p-4">
       <Toaster position="top-center" richColors />
 
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 rounded-2xl mb-4">
-            <span className="text-2xl font-bold text-white">CD</span>
+          <div className="inline-flex mb-4">
+            <LogoCD size={64} />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Contratista Digital</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-[#131B2B]">Contratista Digital</h1>
           <p className="text-gray-500 mt-1">Gestión documental contractual</p>
           <p className="text-sm text-gray-400">Alcaldía Municipal de Fredonia</p>
         </div>
