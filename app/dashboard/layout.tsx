@@ -10,6 +10,7 @@ import { getMenuPorRol } from '@/lib/constants'
 import { avatarThumb } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
 import AvisoMigracion from '@/components/AvisoMigracion'
+import { LogoCD } from '@/components/Logo'
 
 // ─── User avatar (photo or initials) ─────────────────────────
 function getInitiales(nombre: string): string {
@@ -143,11 +144,9 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         {/* Logo */}
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center">
-              <span className="text-sm font-bold text-white">CD</span>
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-gray-900">Contratista Digital</h1>
+            <LogoCD size={40} />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-tight text-[#131B2B] truncate">Contratista Digital</h1>
               {municipio && <p className="text-xs text-gray-400">{municipio.nombre}</p>}
             </div>
           </div>
@@ -253,11 +252,9 @@ function MobileHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
         </svg>
       </button>
       <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
-          <span className="text-xs font-bold text-white">CD</span>
-        </div>
-        <div>
-          <h1 className="text-sm font-bold text-gray-900">Contratista Digital</h1>
+        <LogoCD size={32} />
+        <div className="min-w-0">
+          <h1 className="text-sm font-bold tracking-tight text-[#131B2B] truncate">Contratista Digital</h1>
           {municipio && <p className="text-[10px] text-gray-400 -mt-0.5">{municipio.nombre}</p>}
         </div>
       </div>
