@@ -8,6 +8,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getResendClient, RESEND_FROM } from '@/lib/resend'
 import { getMesActual } from '@/lib/constants'
+import { ORIGEN_APP } from '@/lib/dominio'
 import type { ActionResult } from '@/lib/types'
 
 export type FiltroCorreo = 'sin_enviar' | 'enviaron' | 'rechazados' | 'todos'
@@ -29,7 +30,7 @@ function buildEmailHtml(asunto: string, contenidoHtml: string): string {
     <div style="padding:32px;">
       <div style="color:#333;font-size:14px;line-height:1.8;">${contenidoHtml}</div>
       <div style="margin-top:28px;text-align:center;">
-        <a href="https://contratistadigital.com/"
+        <a href="${ORIGEN_APP}/"
            style="display:inline-block;background:#1a1a1a;color:#fff;padding:13px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;">
           Abrir Contratista Digital
         </a>

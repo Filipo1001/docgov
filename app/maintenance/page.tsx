@@ -1,3 +1,5 @@
+import { HOST_APP } from '@/lib/dominio'
+
 export const dynamic = 'force-static'
 
 export default function MantenimientoPage() {
@@ -46,7 +48,7 @@ export default function MantenimientoPage() {
             Att.{' '}
             <span className="font-semibold text-gray-600">Felipe Restrepo</span>
           </p>
-          <p className="text-[11px] text-gray-300 mt-1">contratistadigital.com</p>
+          <p className="text-[11px] text-gray-300 mt-1">{HOST_APP}</p>
         </div>
 
       </div>

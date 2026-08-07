@@ -3,6 +3,8 @@
  * Returns { subject, html } for each notification type.
  */
 
+import { ORIGEN_APP } from '@/lib/dominio'
+
 interface TemplateData {
   nombreDestinatario: string
   mes: string
@@ -15,7 +17,7 @@ interface TemplateData {
   detalle?: string
 }
 
-const APP_URL = 'https://contratistadigital.com/'
+const APP_URL = `${ORIGEN_APP}/`
 
 function baseHtml(titulo: string, contenido: string, color: string): string {
   return `

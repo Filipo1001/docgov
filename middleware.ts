@@ -1,15 +1,22 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
-
-const OLD_HOST = 'docgov-black.vercel.app'
-const NEW_ORIGIN = 'https://contratistadigital.com'
+import { ORIGEN_APP, HOSTS_REDIRIGIDOS } from '@/lib/dominio'
 
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? ''
 
   // ── Domain redirect ───────────────────────────────────────────
-  if (host === OLD_HOST) {
-    const destination = NEW_ORIGIN + request.nextUrl.pathname + request.nextUrl.search
+  // Every legacy host lands on the canonical origin, path and query intact.
+  //
+  // 301 and not 302 on purpose: QR readers, SECOP II and search engines all
+  // treat it as definitive, and the browser caches it so the hop only costs
+  // the first visit.
+  //
+  // CRITICAL — /verificar/* must survive this redirect forever. The QR codes
+  // printed on the 240 documents issued before August 2026 have the apex URL
+  // baked into the bitmap and cannot be rewritten. See lib/dominio.ts.
+  if ((HOSTS_REDIRIGIDOS as readonly string[]).includes(host)) {
+    const destination = ORIGEN_APP + request.nextUrl.pathname + request.nextUrl.search
     return NextResponse.redirect(destination, { status: 301 })
   }
 

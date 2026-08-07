@@ -1,9 +1,13 @@
 /**
  * app/verificar/page.tsx — Landing de verificación: búsqueda manual por código.
  *
- * El pie de cada PDF invita a "visitar contratistadigital.com/verificar" para
- * quien no pueda escanear el QR. Esta página es ese destino: permite escribir
- * el código a mano y llegar al mismo resultado que el escaneo.
+ * El pie de cada PDF invita a visitar "{dominio}/verificar" para quien no pueda
+ * escanear el QR. Esta página es ese destino: permite escribir el código a mano
+ * y llegar al mismo resultado que el escaneo.
+ *
+ * Los documentos emitidos antes de agosto de 2026 llevan impreso el dominio
+ * anterior (contratistadigital.com). Quien lo escriba tal cual llega igual:
+ * el middleware redirige el ápice al host canónico. Ver lib/dominio.ts.
  */
 
 'use client'

@@ -17,15 +17,21 @@ import 'server-only'
 import { randomInt } from 'crypto'
 import QRCode from 'qrcode'
 import { createAdminSupabaseClient } from './supabase-admin'
+import { ORIGEN_APP } from './dominio'
 
 /**
  * Origen público de la app en este deployment. En producción es el dominio
  * propio; en preview, Vercel expone la URL única del deployment por
  * VERCEL_URL — usarla evita que los QR/enlaces generados en preview apunten
  * a producción (donde esta ruta puede no existir todavía) y viceversa.
+ *
+ * Los documentos emitidos antes de agosto de 2026 llevan grabado el dominio
+ * anterior en la imagen del QR. Siguen resolviendo por la redirección 301 del
+ * middleware, no porque este valor los alcance: una vez impreso, el QR es
+ * inmutable. Ver lib/dominio.ts.
  */
 function baseUrl(): string {
-  if (process.env.VERCEL_ENV === 'production') return 'https://contratistadigital.com'
+  if (process.env.VERCEL_ENV === 'production') return ORIGEN_APP
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
   return 'http://localhost:3000'
 }

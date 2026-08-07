@@ -2,6 +2,8 @@
  * WhatsApp message builder for Contratista Digital notifications.
  */
 
+import { HOST_APP } from '@/lib/dominio'
+
 interface WhatsAppData {
   mes: string
   anio: number
@@ -31,5 +33,5 @@ const templates: Record<string, (d: WhatsAppData) => string> = {
 export function getWhatsAppMessage(tipo: string, data: WhatsAppData): string {
   const template = templates[tipo]
   if (template) return template(data)
-  return `Contratista Digital: Tienes una nueva notificacion sobre tu contrato ${data.contrato}. Ingresa a contratistadigital.com para mas detalles.`
+  return `Contratista Digital: Tienes una nueva notificacion sobre tu contrato ${data.contrato}. Ingresa a ${HOST_APP} para mas detalles.`
 }
