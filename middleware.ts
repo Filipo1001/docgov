@@ -1,23 +1,41 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
-import { ORIGEN_APP, HOSTS_REDIRIGIDOS } from '@/lib/dominio'
+import { ORIGEN_APP, HOSTS_REDIRIGIDOS, HOSTS_COMERCIALES, esRutaComercial } from '@/lib/dominio'
 
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? ''
+  const { pathname, search } = request.nextUrl
 
-  // ── Domain redirect ───────────────────────────────────────────
-  // Every legacy host lands on the canonical origin, path and query intact.
+  // ── Host routing ──────────────────────────────────────────────
+  // Two sites share one deployment:
+  //
+  //   contratistadigital.com  →  the commercial site (root only)
+  //   app.contratistadigital.com  →  the application
+  //
+  // On the commercial hosts the root is rewritten to /inicio — the URL stays
+  // on the apex, which is what a marketing page needs — and everything else
+  // redirects to the app.
   //
   // 301 and not 302 on purpose: QR readers, SECOP II and search engines all
   // treat it as definitive, and the browser caches it so the hop only costs
   // the first visit.
   //
-  // CRITICAL — /verificar/* must survive this redirect forever. The QR codes
+  // CRITICAL — /verificar/* must keep redirecting, forever. The QR codes
   // printed on the 240 documents issued before August 2026 have the apex URL
-  // baked into the bitmap and cannot be rewritten. See lib/dominio.ts.
+  // baked into the bitmap and cannot be rewritten. Anything that narrows this
+  // redirect must keep /verificar/* out of the exception. See lib/dominio.ts.
+  if ((HOSTS_COMERCIALES as readonly string[]).includes(host)) {
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/inicio', request.url))
+    }
+    if (!esRutaComercial(pathname)) {
+      return NextResponse.redirect(ORIGEN_APP + pathname + search, { status: 301 })
+    }
+    return NextResponse.next({ request })
+  }
+
   if ((HOSTS_REDIRIGIDOS as readonly string[]).includes(host)) {
-    const destination = ORIGEN_APP + request.nextUrl.pathname + request.nextUrl.search
-    return NextResponse.redirect(destination, { status: 301 })
+    return NextResponse.redirect(ORIGEN_APP + pathname + search, { status: 301 })
   }
 
   // ── Maintenance mode ──────────────────────────────────────────

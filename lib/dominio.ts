@@ -32,14 +32,45 @@ export const HOST_APP = 'app.contratistadigital.com'
 export const ORIGEN_APP = `https://${HOST_APP}` as const
 
 /**
- * Hosts que redirigen al canónico.
+ * Hosts del sitio comercial: el ápice y `www`.
  *
- * El ápice y `www` son el dominio anterior; `docgov-black.vercel.app` es el
- * host de Vercel que se usó antes de tener dominio propio y que ya venía
- * redirigiendo. Ninguno se elimina: cada uno tiene enlaces vivos allá afuera.
+ * Sirven la página de negocio en su raíz y redirigen todo lo demás al app.
+ * Son los mismos que antes redirigían por completo; al montar la landing, la
+ * raíz dejó de redirigir pero el resto de rutas no cambió.
  */
-export const HOSTS_REDIRIGIDOS = [
+export const HOSTS_COMERCIALES = [
   'contratistadigital.com',
   'www.contratistadigital.com',
+] as const
+
+/**
+ * Hosts que redirigen absolutamente todo al canónico.
+ *
+ * `docgov-black.vercel.app` es el host de Vercel anterior al dominio propio.
+ * No se elimina: quedan enlaces vivos apuntando ahí.
+ */
+export const HOSTS_REDIRIGIDOS = [
   'docgov-black.vercel.app',
 ] as const
+
+/**
+ * Rutas que los hosts comerciales sirven por sí mismos. Todo lo demás —
+ * incluido `/verificar/*` — se redirige al app.
+ *
+ * `/icon` es la ruta que Next genera para el favicon; sin ella la landing
+ * pediría su propio icono al otro dominio.
+ */
+const RUTAS_COMERCIALES = ['/inicio', '/icon']
+
+export function esRutaComercial(pathname: string): boolean {
+  return pathname === '/' || RUTAS_COMERCIALES.some(r => pathname === r || pathname.startsWith(`${r}/`))
+}
+
+/**
+ * Dirección de contacto comercial que publica la landing.
+ *
+ * PENDIENTE: hay que crear este buzón (o el alias correspondiente) antes de
+ * anunciar el sitio. El dominio ya envía correo por Resend desde
+ * `notificaciones@`, así que el DNS está listo; falta la casilla de entrada.
+ */
+export const EMAIL_CONTACTO = 'contacto@contratistadigital.com'
