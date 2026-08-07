@@ -18,7 +18,20 @@
 import type { Metadata } from 'next'
 import { LogoCD } from '@/components/Logo'
 import { MARCA, CLASES_MARCA } from '@/lib/marca'
-import { ORIGEN_APP, EMAIL_CONTACTO } from '@/lib/dominio'
+import { ORIGEN_APP, WHATSAPP_COMERCIAL, enlaceWhatsApp } from '@/lib/dominio'
+
+/** Número tal como se lee en pantalla: +57 319 242 0334 */
+const WHATSAPP_LEGIBLE = WHATSAPP_COMERCIAL.replace(
+  /^(\d{2})(\d{3})(\d{3})(\d{4})$/,
+  '+$1 $2 $3 $4'
+)
+
+const IconoWhatsApp = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.64-2.05-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.02-.53-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.06 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.28.17-1.41-.07-.13-.27-.2-.57-.35z" />
+    <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.15h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.22 8.22 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24a8.2 8.2 0 0 1 8.24 8.25c0 4.54-3.7 8.23-8.24 8.23z" />
+  </svg>
+)
 
 export const dynamic = 'force-static'
 
@@ -121,9 +134,12 @@ export default function InicioPage() {
         </p>
         <div className="mt-9 flex flex-col sm:flex-row gap-3">
           <a
-            href={`mailto:${EMAIL_CONTACTO}?subject=${encodeURIComponent('Demostración de Contratista Digital')}`}
-            className={`inline-flex items-center justify-center rounded-xl ${CLASES_MARCA.fondo} ${CLASES_MARCA.fondoHover} px-7 py-3.5 text-sm font-bold text-white transition-colors`}
+            href={enlaceWhatsApp()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-flex items-center justify-center gap-2 rounded-xl ${CLASES_MARCA.fondo} ${CLASES_MARCA.fondoHover} px-7 py-3.5 text-sm font-bold text-white transition-colors`}
           >
+            <IconoWhatsApp />
             Solicitar una demostración
           </a>
           <a
@@ -204,11 +220,15 @@ export default function InicioPage() {
             puesta en marcha toma menos de dos semanas y no interrumpe ningún trámite en curso.
           </p>
           <a
-            href={`mailto:${EMAIL_CONTACTO}?subject=${encodeURIComponent('Demostración de Contratista Digital')}`}
-            className="mt-8 inline-flex items-center justify-center rounded-xl bg-white px-8 py-3.5 text-sm font-bold text-[#131B2B] hover:bg-gray-100 transition-colors"
+            href={enlaceWhatsApp()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-8 py-3.5 text-sm font-bold text-[#131B2B] hover:bg-gray-100 transition-colors"
           >
-            Solicitar una demostración
+            <IconoWhatsApp />
+            Escríbanos por WhatsApp
           </a>
+          <p className="mt-4 text-sm text-gray-400">{WHATSAPP_LEGIBLE}</p>
         </div>
       </section>
 
@@ -225,8 +245,14 @@ export default function InicioPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <a href={`mailto:${EMAIL_CONTACTO}`} className="text-gray-600 hover:text-gray-900 transition-colors">
-              {EMAIL_CONTACTO}
+            <a
+              href={enlaceWhatsApp()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <IconoWhatsApp />
+              {WHATSAPP_LEGIBLE}
             </a>
             <a href={ORIGEN_APP} className="font-medium text-gray-600 hover:text-gray-900 transition-colors">
               Ingresar a la plataforma

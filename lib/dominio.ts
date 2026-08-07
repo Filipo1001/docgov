@@ -67,10 +67,32 @@ export function esRutaComercial(pathname: string): boolean {
 }
 
 /**
- * Dirección de contacto comercial que publica la landing.
+ * Contacto comercial que publica la landing.
  *
- * PENDIENTE: hay que crear este buzón (o el alias correspondiente) antes de
- * anunciar el sitio. El dominio ya envía correo por Resend desde
- * `notificaciones@`, así que el DNS está listo; falta la casilla de entrada.
+ * Hoy es WhatsApp y no correo por una razón concreta: el dominio no tiene
+ * registros MX, así que no puede recibir correo — cualquier mensaje a
+ * `@contratistadigital.com` rebota. Lo que sí está configurado es el envío
+ * (SPF y DKIM de Resend), que es de una sola vía.
+ *
+ * Cuando exista el buzón, cambiar de canal es sustituir el destino de los
+ * botones en app/inicio/page.tsx. Por eso ambos valores viven aquí juntos.
  */
+
+/** Número comercial en formato internacional, sin `+` ni separadores. */
+export const WHATSAPP_COMERCIAL = '573192420334'
+
+/** PENDIENTE: el buzón todavía no existe. No usar hasta que haya MX. */
 export const EMAIL_CONTACTO = 'contacto@contratistadigital.com'
+
+/**
+ * Enlace de WhatsApp con el mensaje ya redactado.
+ *
+ * El texto previo importa: quien llega a la página no tiene que pensar cómo
+ * empezar, y a ti te llega el contexto en el primer mensaje en vez de un
+ * "hola" suelto.
+ */
+export function enlaceWhatsApp(
+  mensaje = 'Buen día. Quisiera conocer Contratista Digital para mi alcaldía.'
+): string {
+  return `https://wa.me/${WHATSAPP_COMERCIAL}?text=${encodeURIComponent(mensaje)}`
+}
