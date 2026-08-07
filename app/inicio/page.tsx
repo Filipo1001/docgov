@@ -78,7 +78,9 @@ export default function InicioPage() {
           </div>
           <a
             href={ORIGEN_APP}
-            className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-[#131B2B] transition-colors hover:bg-gray-100"
+            /* py-3: 44 px de alto, el mínimo cómodo para tocar con el dedo.
+               Es la acción que más se va a usar y casi siempre desde un móvil. */
+            className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#131B2B] transition-colors hover:bg-gray-100"
           >
             Ir a la plataforma
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} aria-hidden>
