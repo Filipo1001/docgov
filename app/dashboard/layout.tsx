@@ -146,7 +146,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           <div className="flex items-center gap-3">
             <LogoCD size={40} />
             <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-tight text-[#131B2B] truncate">Contratista Digital</h1>
+              <h1 className="text-base font-bold tracking-tight text-[#192031] truncate">Contratista Digital</h1>
               {municipio && <p className="text-xs text-gray-400">{municipio.nombre}</p>}
             </div>
           </div>
@@ -254,7 +254,7 @@ function MobileHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
       <div className="flex items-center gap-2">
         <LogoCD size={32} />
         <div className="min-w-0">
-          <h1 className="text-sm font-bold tracking-tight text-[#131B2B] truncate">Contratista Digital</h1>
+          <h1 className="text-sm font-bold tracking-tight text-[#192031] truncate">Contratista Digital</h1>
           {municipio && <p className="text-[10px] text-gray-400 -mt-0.5">{municipio.nombre}</p>}
         </div>
       </div>

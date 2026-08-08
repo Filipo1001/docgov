@@ -1,7 +1,7 @@
 /**
  * Identidad visual de Contratista Digital.
  *
- * El color de marca sale del logotipo: #131B2B, un azul tan oscuro que lee
+ * El color de marca sale del logotipo: #192031, un azul tan oscuro que lee
  * como grafito. Es una elección deliberadamente institucional — el público de
  * este producto son alcaldías y entes de control, no usuarios de una app de
  * consumo — y encaja con lo que la interfaz ya hacía: `gray-900` aparecía 58
@@ -12,11 +12,17 @@
  * por las pantallas.
  */
 
-/** Tinta de la marca, muestreada del logotipo. */
-export const MARCA = '#131B2B'
+/**
+ * Tinta de la marca, tomada del archivo vectorial oficial.
+ *
+ * Antes era #131B2B, muestreado a ojo del PNG. La diferencia con el valor real
+ * es de seis puntos por canal —imperceptible en pantalla— pero el vectorial es
+ * la fuente autorizada y es lo que usará cualquier imprenta.
+ */
+export const MARCA = '#192031'
 
 /** Un punto más claro, para superficies interactivas sobre la tinta. */
-export const MARCA_CLARA = '#1E2A3F'
+export const MARCA_CLARA = '#242F45'
 
 /** Fondo del logotipo original: prácticamente blanco. */
 export const MARCA_FONDO = '#FDFDFE'
@@ -29,8 +35,8 @@ export const MARCA_FONDO = '#FDFDFE'
  * perceptible y repintarlas solo añadiría ruido al historial.
  */
 export const CLASES_MARCA = {
-  fondo: 'bg-[#131B2B]',
-  fondoHover: 'hover:bg-[#1E2A3F]',
-  texto: 'text-[#131B2B]',
-  borde: 'border-[#131B2B]',
+  fondo: 'bg-[#192031]',
+  fondoHover: 'hover:bg-[#242F45]',
+  texto: 'text-[#192031]',
+  borde: 'border-[#192031]',
 } as const

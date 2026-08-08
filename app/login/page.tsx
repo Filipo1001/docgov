@@ -105,7 +105,7 @@ export default function LoginPage() {
           <div className="inline-flex mb-4">
             <LogoCD size={64} />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-[#131B2B]">Contratista Digital</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-[#192031]">Contratista Digital</h1>
           <p className="text-gray-500 mt-1">Gestión documental contractual</p>
           <p className="text-sm text-gray-400">Alcaldía Municipal de Fredonia</p>
         </div>

@@ -57,10 +57,11 @@ export const HOSTS_REDIRIGIDOS = [
  * Rutas que los hosts comerciales sirven por sí mismos. Todo lo demás —
  * incluido `/verificar/*` — se redirige al app.
  *
- * `/icon` es la ruta que Next genera para el favicon; sin ella la landing
- * pediría su propio icono al otro dominio.
+ * `/icon.svg` es el favicon (convención de archivo de Next) y `/marca` guarda
+ * los archivos del logotipo; sin ellos la landing pediría su propia imagen al
+ * otro dominio.
  */
-const RUTAS_COMERCIALES = ['/inicio', '/icon']
+const RUTAS_COMERCIALES = ['/inicio', '/icon.svg', '/marca']
 
 export function esRutaComercial(pathname: string): boolean {
   return pathname === '/' || RUTAS_COMERCIALES.some(r => pathname === r || pathname.startsWith(`${r}/`))

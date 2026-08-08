@@ -93,7 +93,7 @@ export default function InicioPage() {
             href={ORIGEN_APP}
             /* py-3: 44 px de alto, el mínimo cómodo para tocar con el dedo.
                Es la acción que más se va a usar y casi siempre desde un móvil. */
-            className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#131B2B] transition-colors hover:bg-gray-100"
+            className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#192031] transition-colors hover:bg-gray-100"
           >
             Ir a la plataforma
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} aria-hidden>
@@ -223,7 +223,7 @@ export default function InicioPage() {
             href={enlaceWhatsApp()}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-8 py-3.5 text-sm font-bold text-[#131B2B] hover:bg-gray-100 transition-colors"
+            className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-8 py-3.5 text-sm font-bold text-[#192031] hover:bg-gray-100 transition-colors"
           >
             <IconoWhatsApp />
             Escríbanos por WhatsApp
