@@ -35,10 +35,9 @@ export const metadata: Metadata = {
   referrer: 'origin-when-cross-origin',
   formatDetection: { telephone: false, address: false, email: false },
   icons: {
-    // El .ico va primero: es lo que piden los rastreadores antiguos y el que
-    // Google usa para el icono del resultado de búsqueda.
+    // app/favicon.ico lo inyecta Next por convención de archivo; declararlo
+    // aquí además duplicaba la etiqueta. Estos dos son los que Next no añade.
     icon: [
-      { url: '/favicon.ico', sizes: '48x48' },
       { url: '/icon.svg', type: 'image/svg+xml', sizes: 'any' },
       { url: '/marca/icono-96.png', type: 'image/png', sizes: '96x96' },
     ],
