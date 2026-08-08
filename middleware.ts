@@ -68,7 +68,12 @@ export async function middleware(request: NextRequest) {
   // La landing solo debe existir en el sitio comercial. Servida también desde
   // el subdominio de la aplicación serían dos URL con el mismo contenido, y
   // Google elegiría por su cuenta cuál mostrar.
-  if (pathname === '/inicio') {
+  //
+  // La condición se limita al host canónico a propósito. Aplicada a todo host
+  // no comercial, alcanzaba también a las URL de preview de Vercel y dejaba la
+  // landing imposible de revisar antes de publicarla — y ahí no hay nada que
+  // proteger: los despliegues de preview no son indexables.
+  if (pathname === '/inicio' && host === new URL(ORIGEN_APP).host) {
     return NextResponse.redirect(SITIO + search, { status: 301 })
   }
 
