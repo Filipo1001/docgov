@@ -79,7 +79,7 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
 
             <div style={{ padding: '8px 20px 20px' }}>
               <div style={{ padding: '12px 0 4px' }}>
-                <span style={{ display: 'inline-block', background: '#eff6ff', color: '#1d4ed8', fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 8 }}>
+                <span style={{ display: 'inline-block', background: '#F1F3F7', color: '#192031', fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 8 }}>
                   {TIPO_LABEL[resultado.datos.tipo as TipoDocumento] ?? resultado.datos.tipo}
                 </span>
               </div>
