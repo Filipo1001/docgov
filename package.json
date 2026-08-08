@@ -18,6 +18,7 @@
     "@types/jszip": "^3.4.1",
     "@types/qrcode": "^1.5.6",
     "@types/react-pdf": "^6.2.0",
+    "@vercel/analytics": "^2.0.1",
     "docx": "^9.6.1",
     "exceljs": "^4.4.0",
     "heic2any": "^0.0.4",

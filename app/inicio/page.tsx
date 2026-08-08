@@ -20,6 +20,8 @@ import { LogoCD } from '@/components/Logo'
 import { MARCA, CLASES_MARCA } from '@/lib/marca'
 import { ORIGEN_APP, WHATSAPP_COMERCIAL, enlaceWhatsApp } from '@/lib/dominio'
 import { SITIO, NOMBRE, TITULO, DESCRIPCION, PORTADA_SOCIAL, datosEstructurados } from '@/lib/seo'
+import { Analytics } from '@vercel/analytics/next'
+import BotonContacto from './BotonContacto'
 
 /** Número tal como se lee en pantalla: +57 319 242 0334 */
 const WHATSAPP_LEGIBLE = WHATSAPP_COMERCIAL.replace(
@@ -235,15 +237,14 @@ export default function InicioPage() {
           abrir un Word.
         </p>
         <div className="mt-9 flex flex-col sm:flex-row gap-3">
-          <a
+          <BotonContacto
             href={enlaceWhatsApp()}
-            target="_blank"
-            rel="noopener noreferrer"
+            origen="portada"
             className={`inline-flex items-center justify-center gap-2 rounded-xl ${CLASES_MARCA.fondo} ${CLASES_MARCA.fondoHover} px-7 py-3.5 text-sm font-bold text-white transition-colors`}
           >
             <IconoWhatsApp />
             Solicitar una demostración
-          </a>
+          </BotonContacto>
           <a
             href="#como-funciona"
             className="inline-flex items-center justify-center rounded-xl border border-gray-200 px-7 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
@@ -347,15 +348,14 @@ export default function InicioPage() {
             Le mostramos el sistema con un contrato real de su municipio. Si decide avanzar, la
             puesta en marcha toma menos de dos semanas y no interrumpe ningún trámite en curso.
           </p>
-          <a
+          <BotonContacto
             href={enlaceWhatsApp()}
-            target="_blank"
-            rel="noopener noreferrer"
+            origen="cierre"
             className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-8 py-3.5 text-sm font-bold text-[#192031] hover:bg-gray-100 transition-colors"
           >
             <IconoWhatsApp />
             Escríbanos por WhatsApp
-          </a>
+          </BotonContacto>
           <p className="mt-4 text-sm text-gray-400">{WHATSAPP_LEGIBLE}</p>
         </div>
       </section>
@@ -368,21 +368,24 @@ export default function InicioPage() {
             <p className="text-sm font-bold" style={{ color: MARCA }}>Contratista Digital</p>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <a
+            <BotonContacto
               href={enlaceWhatsApp()}
-              target="_blank"
-              rel="noopener noreferrer"
+              origen="pie"
               className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <IconoWhatsApp />
               {WHATSAPP_LEGIBLE}
-            </a>
+            </BotonContacto>
             <a href={ORIGEN_APP} className="font-medium text-gray-600 hover:text-gray-900 transition-colors">
               Ingresar a la plataforma
             </a>
           </div>
         </div>
       </footer>
+
+      {/* Medición del embudo, solo en el sitio comercial. La aplicación queda
+          fuera a propósito: son 127 usuarios reales trabajando, no visitantes. */}
+      <Analytics />
     </main>
   )
 }
