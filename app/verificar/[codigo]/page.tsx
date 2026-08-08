@@ -9,11 +9,24 @@
  * Privacidad: solo se muestran datos NO sensibles (sin cuenta bancaria,
  * cédula completa, dirección ni email). El acceso es por código exacto vía
  * service-role, sin posibilidad de enumerar la tabla.
+ *
+ * FUERA DE LOS BUSCADORES. Pública no es lo mismo que indexable. La página
+ * muestra el nombre completo del contratista, su dependencia, el valor del
+ * contrato y el nombre del supervisor; que alguien con el código pueda
+ * consultarla es el objetivo, que aparezca al buscar el nombre de una persona
+ * en Google no lo es. `noindex` la mantiene accesible por su URL y fuera de
+ * los resultados, que es exactamente la distinción que hace falta.
  */
 
+import type { Metadata } from 'next'
 import { getVerificacion, TIPO_LABEL, type TipoDocumento } from '@/lib/verificacion'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Verificación de documento',
+  robots: { index: false, follow: false, nocache: true },
+}
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 

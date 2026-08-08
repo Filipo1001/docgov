@@ -1,10 +1,30 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { ORIGEN_APP, HOSTS_REDIRIGIDOS, HOSTS_COMERCIALES, esRutaComercial } from '@/lib/dominio'
+import { SITIO } from '@/lib/seo'
+
+/**
+ * Rutas que nunca deben aparecer en un buscador.
+ *
+ * `/verificar` es la que importa: es pública a propósito —un QR impreso tiene
+ * que poder consultarse sin cuenta— pero muestra nombre completo, dependencia,
+ * valor del contrato y supervisor de personas reales. La cabecera se suma al
+ * `noindex` de la propia página porque actúa aunque el rastreador no llegue a
+ * ejecutar la página, y cubre igualmente a los PDF y respuestas de API.
+ */
+const RUTAS_NO_INDEXABLES = ['/dashboard', '/verificar', '/auth', '/api', '/maintenance']
 
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? ''
   const { pathname, search } = request.nextUrl
+
+  /** Marca la respuesta como no indexable si la ruta lo requiere. */
+  const conDirectivas = (res: NextResponse) => {
+    if (RUTAS_NO_INDEXABLES.some(r => pathname === r || pathname.startsWith(`${r}/`))) {
+      res.headers.set('X-Robots-Tag', 'noindex, nofollow')
+    }
+    return res
+  }
 
   // ── Host routing ──────────────────────────────────────────────
   // Two sites share one deployment:
@@ -25,17 +45,31 @@ export async function middleware(request: NextRequest) {
   // baked into the bitmap and cannot be rewritten. Anything that narrows this
   // redirect must keep /verificar/* out of the exception. See lib/dominio.ts.
   if ((HOSTS_COMERCIALES as readonly string[]).includes(host)) {
+    // Una sola versión indexable. `www` y el dominio desnudo servían ambos un
+    // 200 con contenido idéntico, que para un buscador son dos sitios
+    // compitiendo entre sí. Se elige el desnudo porque es el que llevan
+    // impreso los 240 QR y todos los documentos ya emitidos.
+    if (host !== new URL(SITIO).host) {
+      return NextResponse.redirect(SITIO + pathname + search, { status: 301 })
+    }
     if (pathname === '/') {
       return NextResponse.rewrite(new URL('/inicio', request.url))
     }
     if (!esRutaComercial(pathname)) {
       return NextResponse.redirect(ORIGEN_APP + pathname + search, { status: 301 })
     }
-    return NextResponse.next({ request })
+    return conDirectivas(NextResponse.next({ request }))
   }
 
   if ((HOSTS_REDIRIGIDOS as readonly string[]).includes(host)) {
     return NextResponse.redirect(ORIGEN_APP + pathname + search, { status: 301 })
+  }
+
+  // La landing solo debe existir en el sitio comercial. Servida también desde
+  // el subdominio de la aplicación serían dos URL con el mismo contenido, y
+  // Google elegiría por su cuenta cuál mostrar.
+  if (pathname === '/inicio') {
+    return NextResponse.redirect(SITIO + search, { status: 301 })
   }
 
   // ── Maintenance mode ──────────────────────────────────────────
@@ -60,7 +94,7 @@ export async function middleware(request: NextRequest) {
   // if the token is actually expired.  Skipping here reduces Auth server load by
   // ~95% and eliminates the "exhausting resources" burst pattern in the logs.
   if (request.headers.get('Next-Router-Prefetch') === '1') {
-    return NextResponse.next({ request })
+    return conDirectivas(NextResponse.next({ request }))
   }
 
   // ── Fast path: skip auth refresh when there is no session ────
@@ -74,7 +108,7 @@ export async function middleware(request: NextRequest) {
     c => c.name.includes('-auth-token')
   )
   if (!hasSessionCookie) {
-    return NextResponse.next({ request })
+    return conDirectivas(NextResponse.next({ request }))
   }
 
   // ── Supabase session refresh ──────────────────────────────────
@@ -116,7 +150,7 @@ export async function middleware(request: NextRequest) {
   // redirect the user to /login as usual.
   await supabase.auth.getUser()
 
-  return response
+  return conDirectivas(response)
 }
 
 export const config = {

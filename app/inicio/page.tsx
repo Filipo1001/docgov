@@ -19,6 +19,7 @@ import type { Metadata } from 'next'
 import { LogoCD } from '@/components/Logo'
 import { MARCA, CLASES_MARCA } from '@/lib/marca'
 import { ORIGEN_APP, WHATSAPP_COMERCIAL, enlaceWhatsApp } from '@/lib/dominio'
+import { SITIO, NOMBRE, TITULO, DESCRIPCION, PORTADA_SOCIAL, datosEstructurados } from '@/lib/seo'
 
 /** Número tal como se lee en pantalla: +57 319 242 0334 */
 const WHATSAPP_LEGIBLE = WHATSAPP_COMERCIAL.replace(
@@ -36,12 +37,101 @@ const IconoWhatsApp = () => (
 export const dynamic = 'force-static'
 
 export const metadata: Metadata = {
-  title: 'Contratista Digital — Supervisión de contratos para alcaldías',
-  description:
-    'Automatiza la supervisión de los contratos de prestación de servicios: el contratista '
-    + 'reporta desde su celular, el supervisor aprueba en línea y los documentos se generan '
-    + 'solos, numerados y verificables.',
+  // `absolute` evita que la plantilla del layout añada " | Contratista Digital"
+  // a un título que ya lleva la marca delante.
+  title: { absolute: TITULO },
+  description: DESCRIPCION,
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    locale: 'es_CO',
+    url: SITIO,
+    siteName: NOMBRE,
+    title: TITULO,
+    description: DESCRIPCION,
+    images: [{
+      url: PORTADA_SOCIAL,
+      width: 1200,
+      height: 630,
+      alt: 'Contratista Digital — el expediente completo de cada contratista, listo en un clic',
+    }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITULO,
+    description: DESCRIPCION,
+    images: [PORTADA_SOCIAL],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      // Sin recorte en el fragmento ni en la vista previa de imagen: para un
+      // producto desconocido, cuanto más contexto muestre el resultado, mejor.
+      'max-snippet': -1,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+    },
+  },
 }
+
+/**
+ * Preguntas frecuentes.
+ *
+ * No son relleno para buscadores. Son las que de verdad hace un secretario de
+ * despacho antes de decidir, escritas con las palabras que esa persona usa al
+ * buscar —cuenta de cobro, informe de actividades, supervisión, SECOP II— en
+ * lugar de la jerga del producto. Alimentan a la vez la página y el bloque de
+ * datos estructurados, de modo que no puedan contradecirse.
+ */
+const PREGUNTAS = [
+  {
+    p: '¿Qué es Contratista Digital?',
+    r: 'Es un software de gestión documental contractual para alcaldías. Automatiza el ciclo '
+      + 'mensual de los contratos de prestación de servicios: el contratista reporta sus '
+      + 'actividades y sus soportes, el supervisor aprueba en línea y el sistema genera el '
+      + 'informe de actividades, la cuenta de cobro, el acta de supervisión y el acta de pago.',
+  },
+  {
+    p: '¿Cómo se generan las cuentas de cobro y los informes de actividades?',
+    r: 'Los genera el sistema a partir de los datos del contrato y de lo que reporta el '
+      + 'contratista. No se abre Word ni se parte de la plantilla del mes anterior: los '
+      + 'consecutivos, las fechas, los valores y los periodos los calcula el sistema, así que '
+      + 'desaparecen los errores de digitación y las devoluciones que provocan.',
+  },
+  {
+    p: '¿Sirve para la supervisión contractual y el control de la contratación pública?',
+    r: 'Sí. El supervisor ve cada obligación específica del contrato junto a la evidencia que '
+      + 'la sustenta, aprueba o devuelve con observaciones, y cada acción queda registrada con '
+      + 'su responsable y su hora en un historial inalterable. Eso es lo que se necesita cuando '
+      + 'llega un requerimiento de un ente de control.',
+  },
+  {
+    p: '¿Los documentos sirven para radicar en SECOP II?',
+    r: 'Sí. El paquete completo del periodo —informe de actividades, cuenta de cobro y planilla '
+      + 'de seguridad social— se descarga armado, con los anexos numerados y en orden, listo '
+      + 'para cargar.',
+  },
+  {
+    p: '¿Cómo se comprueba que un documento es auténtico?',
+    r: 'Cada documento se emite con un código de verificación y un código QR. Quien lo reciba '
+      + 'escanea el código y confirma en segundos contra el sistema que el documento es '
+      + 'auténtico y a qué contrato y periodo corresponde, sin necesidad de tener una cuenta.',
+  },
+  {
+    p: '¿El contratista necesita instalar algo?',
+    r: 'No. Se entra por internet con usuario y contraseña, desde el celular, la tableta o el '
+      + 'computador. La alcaldía no tiene que comprar equipos ni mantener servidores.',
+  },
+  {
+    p: '¿Cuánto cuesta y qué incluye?',
+    r: 'La licencia es de $2.900.000 mensuales e incluye la implementación, la migración de los '
+      + 'contratos en curso, la capacitación de secretarías, supervisores y contratistas, el '
+      + 'soporte permanente, las actualizaciones, el alojamiento y los respaldos.',
+  },
+]
 
 const CAPACIDADES = [
   {
@@ -73,6 +163,14 @@ const PASOS = [
 export default function InicioPage() {
   return (
     <main className="min-h-screen bg-white text-gray-900">
+
+      {/* Datos estructurados. Le dicen a Google qué es esto —una organización y
+          una aplicación de software con un precio, no un blog— y son lo que
+          habilita los resultados enriquecidos de preguntas frecuentes. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(datosEstructurados(PREGUNTAS)) }}
+      />
 
       {/* ── Aviso de acceso a la plataforma ──────────────────────
           Primero en el DOM y primero en pantalla: es lo que vienen
@@ -122,15 +220,19 @@ export default function InicioPage() {
       {/* ── Portada ──────────────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-5 pt-10 pb-16 sm:pt-16 sm:pb-24">
         <p className="text-xs font-bold tracking-[0.15em] text-gray-400">
-          PARA ALCALDÍAS MUNICIPALES
+          SOFTWARE DE CONTRATACIÓN PÚBLICA PARA ALCALDÍAS
         </p>
         <h1 className="mt-4 text-4xl sm:text-5xl font-bold tracking-tight leading-[1.1] max-w-3xl">
           El expediente completo de cada contratista, listo en un clic.
         </h1>
+        {/* El primer párrafo nombra los documentos por su nombre —informe de
+            actividades, cuenta de cobro, actas— porque son los términos con los
+            que una alcaldía busca esto, y porque son literalmente lo que hace. */}
         <p className="mt-6 text-lg leading-relaxed text-gray-600 max-w-2xl">
-          Contratista Digital automatiza de principio a fin la supervisión de los contratos de
-          prestación de servicios. Nadie vuelve a abrir un Word: el sistema genera cada documento
-          solo y el expediente queda armado, verificable y listo para radicar.
+          Contratista Digital automatiza la supervisión de los contratos de prestación de
+          servicios: los informes de actividades, las cuentas de cobro y las actas de supervisión
+          y de pago se generan solos, sin errores y con sus evidencias adentro. Nadie vuelve a
+          abrir un Word.
         </p>
         <div className="mt-9 flex flex-col sm:flex-row gap-3">
           <a
@@ -206,6 +308,32 @@ export default function InicioPage() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      {/* ── Preguntas frecuentes ─────────────────────────────────
+          Marcado con <details> nativo: se despliega sin JavaScript, y el
+          contenido está en el HTML aunque esté plegado, así que un rastreador
+          lo lee igual. La misma lista alimenta los datos estructurados. */}
+      <section id="preguntas" className="mx-auto max-w-5xl px-5 py-16 sm:py-20 scroll-mt-4">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Preguntas frecuentes</h2>
+        <div className="mt-10 divide-y divide-gray-100 border-y border-gray-100">
+          {PREGUNTAS.map(({ p, r }) => (
+            <details key={p} className="group py-5">
+              <summary className="flex cursor-pointer items-start justify-between gap-6 list-none">
+                <h3 className="font-bold leading-snug">{p}</h3>
+                <span
+                  className="mt-0.5 shrink-0 text-gray-400 transition-transform group-open:rotate-45"
+                  aria-hidden
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                  </svg>
+                </span>
+              </summary>
+              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-gray-600">{r}</p>
+            </details>
+          ))}
         </div>
       </section>
 
