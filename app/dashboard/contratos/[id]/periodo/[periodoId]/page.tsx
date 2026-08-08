@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
 import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { buscarDuplicados } from '@/lib/duplicados'
-import { firmarUrls, firmarUrlsMiniatura, firmarUrl } from '@/lib/storage-firmado'
+import { firmarUrls, firmarUrlsMiniatura, firmarUrl, UMBRAL_MINIATURA_BYTES } from '@/lib/storage-firmado'
 import type { AdjuntoDTO } from '@/app/actions/adjuntos'
 
 /**
@@ -160,9 +160,21 @@ export default async function PeriodoDetallePage({
   // Grid-rendered evidencias (thumbnails) vs. backfill-only URLs (never shown,
   // only read pixel-by-pixel for pHash) — kept separate so only the former
   // pays for thumbnail transforms.
-  const urlsEvidenciasGrid = (actividades ?? []).flatMap(
-    (a: { evidencias?: { url: string }[] }) => (a.evidencias ?? []).map(e => e.url)
+  const evidenciasGrid = (actividades ?? []).flatMap(
+    (a: { evidencias?: { url: string; bytes?: number | null }[] }) => a.evidencias ?? []
   )
+  const urlsEvidenciasGrid = evidenciasGrid.map(e => e.url)
+
+  // Solo las fotos pesadas justifican una miniatura transformada: se facturan
+  // por imagen distinta y las evidencias ya llegan comprimidas del cliente
+  // (mediana 92 KB). Ver UMBRAL_MINIATURA_BYTES.
+  //
+  // `bytes` nulo —una fila anterior al backfill— se trata como pequeña: el
+  // cliente resuelve `miniatura ?? firmada ?? url`, así que lo peor que pasa
+  // es que se sirva la imagen completa. Nunca queda una imagen rota.
+  const urlsParaMiniatura = evidenciasGrid
+    .filter(e => (e.bytes ?? 0) > UMBRAL_MINIATURA_BYTES)
+    .map(e => e.url)
   const urlsParaBackfill = (duplicadosResult.paraBackfill ?? []).map(e => e.url)
   const [firmadasEvidencias, firmadasDocumentos, miniaturasEvidencias] = await Promise.all([
     // Full-resolution: ONE storage API call regardless of image count
@@ -172,9 +184,9 @@ export default async function PeriodoDetallePage({
       (periodo as { planilla_ss_url?: string | null }).planilla_ss_url,
       (periodo as { factura_electronica_url?: string | null }).factura_electronica_url,
     ]),
-    // 160×160 resized JPEGs for the thumbnail grid — a 3-8 MB photo becomes
-    // ~10-20 KB to paint an 80×80 px thumbnail (Supabase image transforms).
-    firmarUrlsMiniatura('evidencias', urlsEvidenciasGrid, { width: 160, height: 160, resize: 'cover', quality: 70 }),
+    // 160×160 para la grilla, solo en las fotos que superan el umbral. En la
+    // gran mayoría de periodos esta lista va vacía y no se hace ni una llamada.
+    firmarUrlsMiniatura('evidencias', urlsParaMiniatura, { width: 160, height: 160, resize: 'cover', quality: 70 }),
   ])
   const initialUrlsFirmadas: Record<string, string> = { ...firmadasEvidencias, ...firmadasDocumentos }
 

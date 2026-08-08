@@ -152,6 +152,13 @@ export async function registrarEvidencia(
   nombreArchivo: string,
   fileHash?: string,
   phash?: string,
+  /**
+   * Tamaño del archivo subido. Decide si la grilla pedirá una miniatura
+   * transformada (ver UMBRAL_MINIATURA_BYTES). Es opcional a propósito: si no
+   * llega, la fila queda sin tamaño y se sirve la imagen completa, que es el
+   * comportamiento correcto para el 99% de las fotos.
+   */
+  bytes?: number,
 ): Promise<ActionResult<{ url: string; nombre: string; urlFirmada?: string }>> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -179,6 +186,9 @@ export async function registrarEvidencia(
         nombre_archivo: nombreArchivo,
         ...(fileHash ? { file_hash: fileHash } : {}),
         ...(phash ? { phash } : {}),
+        // Number.isFinite descarta NaN e Infinity si llegara un valor raro
+        // del cliente; un tamaño ausente es preferible a uno absurdo.
+        ...(Number.isFinite(bytes) && bytes! > 0 ? { bytes: Math.round(bytes!) } : {}),
       })
 
     if (insertError) {

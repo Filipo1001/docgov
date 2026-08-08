@@ -91,14 +91,37 @@ export async function firmarUrl(
 /**
  * Batch-sign a list of stored URLs with an on-the-fly resize transform
  * (Supabase Storage image transformations, Pro plan). Used for thumbnail
- * grids: a 3-8 MB evidencia photo becomes a ~10-20 KB 160×160 JPEG instead of
- * shipping the full-resolution file to paint an 80×80 px thumbnail.
+ * grids: paints an 80×80 px thumbnail without shipping the full-resolution
+ * file.
+ *
+ * USE SPARINGLY — see UMBRAL_MINIATURA_BYTES. These transforms are billed per
+ * distinct image transformed in the billing period, so the caller decides
+ * which images are worth it; this function does not.
  *
  * createSignedUrls (plural) has no transform parameter, so each URL is
  * signed individually via createSignedUrl — but all requests run in
  * parallel (Promise.all), so wall-clock cost stays close to one round-trip
  * regardless of how many images are on the page.
  */
+/**
+ * A partir de qué tamaño compensa pedir una miniatura transformada.
+ *
+ * Supabase factura las transformaciones POR IMAGEN DISTINTA transformada en el
+ * periodo de facturación —no por petición—, en paquetes de 1.000 a 5 USD, con
+ * 100 incluidas en el plan Pro. Se pedían para todas las evidencias, y eso
+ * puso el contador en 1.393 imágenes: 1.293 de exceso.
+ *
+ * Pero las fotos ya llegan comprimidas desde el cliente. Sobre las 2.953
+ * evidencias reales: mediana 92 KB, percentil 90 en 203 KB, y solo el 0,85%
+ * supera este umbral. Se estaba pagando por comprimir lo ya comprimido, para
+ * ahorrar un tráfico que de todas formas cabe de sobra en los 250 GB que el
+ * plan incluye.
+ *
+ * En 400 KB entran las ~25 fotos donde la miniatura sí gana de verdad (400 KB
+ * a ~15 KB es un 96% menos) y el total queda por debajo de las 100 incluidas.
+ */
+export const UMBRAL_MINIATURA_BYTES = 400 * 1024
+
 export async function firmarUrlsMiniatura(
   bucket: string,
   urls: (string | null | undefined)[],

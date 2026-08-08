@@ -251,7 +251,7 @@ export default function PeriodoDetallePage({
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
   // Persisted to localStorage so the user can retry step 3 after a page refresh.
   const PENDING_KEY = `pendiente_reg_${periodoId}`
-  const [pendienteRegistro, setPendienteRegistro] = useState<Record<string, { publicUrl: string; storagePath: string; nombre: string } | null>>(() => {
+  const [pendienteRegistro, setPendienteRegistro] = useState<Record<string, { publicUrl: string; storagePath: string; nombre: string; bytes?: number } | null>>(() => {
     if (typeof window === 'undefined') return {}
     try {
       const stored = localStorage.getItem(`pendiente_reg_${periodoId}`)
@@ -1183,7 +1183,7 @@ export default function PeriodoDetallePage({
             setProgresoEvidencia(prev => ({ ...prev, [actividadId]: pct }))
           })
 
-          return { publicUrl, storagePath: path, nombre: fileToUpload.name }
+          return { publicUrl, storagePath: path, nombre: fileToUpload.name, bytes: fileToUpload.size }
         }),
       )
 
@@ -1196,11 +1196,12 @@ export default function PeriodoDetallePage({
           continue
         }
 
-        const { publicUrl, storagePath, nombre } = res.value
+        const { publicUrl, storagePath, nombre, bytes } = res.value
         const reg = await registrarEvidencia(
           actividadId, periodoId, publicUrl, storagePath, nombre,
           hashes[i]?.fileHash || undefined,
           hashes[i]?.phash || undefined,
+          bytes,
         )
         // La imagen recién subida se renderiza con la URL firmada devuelta por
         // el registro (el bucket es privado; router.refresh() la renovará).
@@ -1208,7 +1209,7 @@ export default function PeriodoDetallePage({
           setUrlsFirmadas(prev => ({ ...prev, [publicUrl]: reg.data!.urlFirmada! }))
         }
         if (reg.error) {
-          setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, storagePath, nombre } }))
+          setPendienteRegistro(prev => ({ ...prev, [actividadId]: { publicUrl, storagePath, nombre, bytes } }))
           toast.error('La imagen se subió pero no se pudo registrar. Toca "Reintentar" para completar.', { duration: 8000 })
         } else {
           successCount++
@@ -1240,7 +1241,7 @@ export default function PeriodoDetallePage({
     if (!pending) return
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: 1 }))
     try {
-      const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.storagePath ?? '', pending.nombre)
+      const reg = await registrarEvidencia(actividadId, periodoId, pending.publicUrl, pending.storagePath ?? '', pending.nombre, undefined, undefined, pending.bytes)
       if (reg.error) {
         toast.error(`Reintento fallido: ${reg.error}`)
       } else {
