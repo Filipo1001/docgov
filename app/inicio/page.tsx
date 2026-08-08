@@ -237,12 +237,7 @@ export default function InicioPage() {
         <div className="mx-auto max-w-5xl px-5 py-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5">
             <LogoCD size={28} />
-            <div>
-              <p className="text-sm font-bold" style={{ color: MARCA }}>Contratista Digital</p>
-              <p className="text-xs text-gray-500">
-                Gestión documental contractual para el sector público
-              </p>
-            </div>
+            <p className="text-sm font-bold" style={{ color: MARCA }}>Contratista Digital</p>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <a

@@ -38,7 +38,7 @@ function baseHtml(titulo: string, contenido: string, color: string): string {
       </div>
     </div>
     <div style="padding:16px 32px;border-top:1px solid #eee;text-align:center;">
-      <p style="color:#999;font-size:12px;margin:0;">Contratista Digital — Sistema de Gestión Documental</p>
+      <p style="color:#999;font-size:12px;margin:0;">Contratista Digital</p>
     </div>
   </div>
 </body>

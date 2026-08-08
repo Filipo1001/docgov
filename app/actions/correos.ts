@@ -38,7 +38,7 @@ function buildEmailHtml(asunto: string, contenidoHtml: string): string {
     </div>
     <div style="padding:16px 32px;border-top:1px solid #eee;text-align:center;">
       <p style="color:#999;font-size:12px;margin:0;">
-        Contratista Digital — Sistema de Gestión Documental
+        Contratista Digital
       </p>
     </div>
   </div>

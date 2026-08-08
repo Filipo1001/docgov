@@ -106,8 +106,7 @@ export default function LoginPage() {
             <LogoCD size={64} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[#192031]">Contratista Digital</h1>
-          <p className="text-gray-500 mt-1">Gestión documental contractual</p>
-          <p className="text-sm text-gray-400">Alcaldía Municipal de Fredonia</p>
+          <p className="text-sm text-gray-400 mt-1">Alcaldía Municipal de Fredonia</p>
         </div>
 
         {/* Expired session banner */}
