@@ -16,6 +16,7 @@ import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, Duplicado
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import CertificacionModal, { type CertPrefill } from './CertificacionModal'
+import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import TarjetaAdjunto from '@/components/TarjetaAdjunto'
 import {
@@ -23,6 +24,7 @@ import {
   type AdjuntoDTO,
 } from '@/app/actions/adjuntos'
 import { verificarCertificacionRequerida } from '@/app/actions/certificaciones'
+import { verificarActaTerminacionRequerida } from '@/app/actions/actas-terminacion'
 import {
   enviarPeriodo,
   aprobarComoAsesor,
@@ -75,6 +77,7 @@ interface InitialData {
   initialActividades: Actividad[]
   initialRevisiones?: Record<string, RevisionLocal>
   certDisponible?: boolean
+  actaTerminacionDisponible?: boolean
   periodosHermanos?: PeriodoHermano[]
   initialDuplicados?: Record<string, DuplicadoMatch[]>
   initialParaBackfill?: EvidenciaParaBackfill[]
@@ -96,6 +99,7 @@ export default function PeriodoDetallePage({
   initialActividades,
   initialRevisiones = {},
   certDisponible = false,
+  actaTerminacionDisponible = false,
   periodosHermanos = [],
   initialDuplicados = {},
   initialParaBackfill = [],
@@ -200,6 +204,9 @@ export default function PeriodoDetallePage({
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [enviando, setEnviando] = useState(false)
   // Certificación de retención — modal obligatorio previo al primer envío
+  const [mostrarActa, setMostrarActa] = useState(false)
+  const [actaPrefill, setActaPrefill] = useState<ActaPrefill | null>(null)
+  const [actaFaltaFirma, setActaFaltaFirma] = useState(false)
   const [mostrarCert, setMostrarCert] = useState(false)
   const [certPrefill, setCertPrefill] = useState<CertPrefill | null>(null)
   const [certFaltaFirma, setCertFaltaFirma] = useState(false)
@@ -688,6 +695,12 @@ export default function PeriodoDetallePage({
   )
   const mostrarCertificacion = esPrimerPeriodo && certDisponible
 
+  // El acta de terminación es única por contrato → su descarga se muestra SOLO
+  // en el último periodo (el de mayor número) y solo si ya fue aceptada.
+  const esUltimoPeriodo = periodo != null && periodosHermanos.length > 0 &&
+    periodo.numero_periodo === Math.max(...periodosHermanos.map(p => p.numero_periodo))
+  const mostrarActaTerminacion = esUltimoPeriodo && actaTerminacionDisponible
+
   // ── Descarga del pipeline (Opción B) — ZIP completo filtrado por rol ───────
   // Al tocar el nodo Aprobado/Radicado se descargan TODOS los documentos del
   // rol de una vez (un solo ZIP, ya existente): contratista → SECOP
@@ -751,6 +764,19 @@ export default function PeriodoDetallePage({
       setCertPrefill(cert.prefill)
       setCertFaltaFirma(cert.faltaFirma)
       setMostrarCert(true)
+      return
+    }
+
+    // Acta de terminación: obligatoria antes del ÚLTIMO informe del contrato.
+    // Se consulta después de la certificación —que es del primero— para que en
+    // un contrato de un solo periodo se pidan en orden y no las dos a la vez.
+    setEnviando(true)
+    const acta = await verificarActaTerminacionRequerida(periodoId)
+    setEnviando(false)
+    if (acta.requerida && acta.prefill) {
+      setActaPrefill(acta.prefill)
+      setActaFaltaFirma(acta.faltaFirma)
+      setMostrarActa(true)
       return
     }
 
@@ -3115,6 +3141,20 @@ export default function PeriodoDetallePage({
               </div>
             )}
 
+            {/* Acta de Terminación — única por contrato, solo en el último periodo */}
+            {mostrarActaTerminacion && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors">
+                <a href={`/api/acta-terminacion/${periodoId}`} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-lg shrink-0">🤝</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Acta de Terminación</p>
+                    <p className="text-xs text-gray-400">Terminación bilateral del contrato</p>
+                  </div>
+                </a>
+              </div>
+            )}
+
             {/* Acta de Supervisión + observación del supervisor */}
             <div className="flex flex-col gap-2">
               <div className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-colors ${
@@ -3916,6 +3956,16 @@ export default function PeriodoDetallePage({
         faltaFirma={certFaltaFirma}
         onCerrar={() => setMostrarCert(false)}
         onAceptada={() => { setMostrarCert(false); doEnviar() }}
+      />
+
+      {/* Acta de terminación — modal obligatorio previo al último envío */}
+      <ActaTerminacionModal
+        abierto={mostrarActa}
+        periodoId={periodoId}
+        prefill={actaPrefill}
+        faltaFirma={actaFaltaFirma}
+        onCerrar={() => setMostrarActa(false)}
+        onAceptada={() => { setMostrarActa(false); doEnviar() }}
       />
     </div>
   )
