@@ -14,7 +14,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import JSZip from 'jszip'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { descargarObjeto } from '@/lib/storage-firmado'
 import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-electronica'
@@ -143,26 +142,6 @@ export async function GET(
   if (planillaBuffer) {
     folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
   }
-
-  // Acta de terminación: se adjunta cuando el periodo que se descarga es aquel
-  // en el que se aceptó, de modo que el paquete del último informe salga con
-  // el cierre del contrato dentro. Se busca por `periodo_id` y no por contrato
-  // para no repetirla en todos los paquetes anteriores.
-  //
-  // No bloqueante: si falla, el paquete sale sin ella. Un ZIP incompleto es
-  // recuperable; un 500 en la descarga deja al contratista sin nada.
-  try {
-    const { data: acta } = await createAdminSupabaseClient()
-      .from('actas_terminacion')
-      .select('pdf_path')
-      .eq('periodo_id', periodoId)
-      .maybeSingle()
-    if (acta?.pdf_path) {
-      const { data: blob } = await createAdminSupabaseClient()
-        .storage.from('actas-terminacion').download(acta.pdf_path)
-      if (blob) folder.file('Acta_de_Terminacion.pdf', Buffer.from(await blob.arrayBuffer()))
-    }
-  } catch { /* el paquete sale sin el acta */ }
 
   // STORE (sin compresión): los PDFs ya vienen comprimidos, así que DEFLATE
   // gasta CPU sin reducir tamaño — y esa CPU cuenta contra maxDuration en el
