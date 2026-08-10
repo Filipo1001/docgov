@@ -245,7 +245,7 @@ function EmailModule({ stats }: { stats: AsesorStats }) {
     if (res.error) {
       toast.error(res.error)
     } else {
-      toast.success(`✅ ${res.data?.enviados} correo${res.data?.enviados !== 1 ? 's' : ''} enviado${res.data?.enviados !== 1 ? 's' : ''}`)
+      toast.success(`${res.data?.enviados} correo${res.data?.enviados !== 1 ? 's' : ''} enviado${res.data?.enviados !== 1 ? 's' : ''}`)
       setAsunto('')
       setMensaje('')
       setAbierto(false)

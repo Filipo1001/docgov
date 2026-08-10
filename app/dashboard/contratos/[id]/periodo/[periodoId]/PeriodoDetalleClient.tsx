@@ -867,7 +867,7 @@ export default function PeriodoDetallePage({
     const result = await actualizarNumeroRadicado(periodoId, numRadicadoEdit)
     if (result.error) toast.error(result.error)
     else {
-      toast.success('Número de radicado actualizado ✓')
+      toast.success('Número de radicado actualizado')
       setEditandoRadicado(false)
       cargarDatos()
     }
@@ -879,7 +879,7 @@ export default function PeriodoDetallePage({
     const result = await actualizarObservacionSupervisor(periodoId, texto)
     if (result.error) toast.error(result.error)
     else {
-      toast.success(texto?.trim() ? 'Observación guardada ✓' : 'Observación eliminada')
+      toast.success(texto?.trim() ? 'Observación guardada' : 'Observación eliminada')
       setEditandoObservacion(false)
       cargarDatos()
     }
@@ -916,7 +916,7 @@ export default function PeriodoDetallePage({
     const result = await actualizarBaseCotizacion(periodoId, valor)
     if (result.error) toast.error(result.error)
     else {
-      toast.success('Base de cotización actualizada ✓')
+      toast.success('Base de cotización actualizada')
       setEditandoBase(false)
       cargarDatos()
     }
@@ -990,7 +990,7 @@ export default function PeriodoDetallePage({
     if (result.error) {
       toast.error(result.error)
     } else {
-      toast.success('Actividad actualizada ✓')
+      toast.success('Actividad actualizada')
       handleCancelarEdicion()
       router.refresh()
       cargarActividades()
@@ -1217,7 +1217,7 @@ export default function PeriodoDetallePage({
       }
 
       if (successCount > 0) {
-        toast.success(successCount === 1 ? 'Imagen subida ✓' : `${successCount} imágenes subidas ✓`)
+        toast.success(successCount === 1 ? 'Imagen subida' : `${successCount} imágenes subidas`)
         if (mountedRef.current) {
           router.refresh()
           cargarActividades()
@@ -1246,7 +1246,7 @@ export default function PeriodoDetallePage({
         toast.error(`Reintento fallido: ${reg.error}`)
       } else {
         setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
-        toast.success('Evidencia registrada ✓')
+        toast.success('Evidencia registrada')
         if (mountedRef.current) { router.refresh(); cargarActividades() }
       }
     } finally {
@@ -1350,7 +1350,7 @@ export default function PeriodoDetallePage({
     const res = await revisarPlanilla(periodoId, estado, comentario)
     if (res.error) toast.error(res.error)
     else {
-      toast.success(estado === 'aprobada' ? 'Planilla aprobada ✓' : 'Planilla rechazada')
+      toast.success(estado === 'aprobada' ? 'Planilla aprobada' : 'Planilla rechazada')
       setPlanillaMenuAbierto(false)
       cargarDatos()
     }
@@ -1413,7 +1413,7 @@ export default function PeriodoDetallePage({
       a.remove()
       URL.revokeObjectURL(url)
 
-      toast.success('Descarga lista ✓', { id: toastId })
+      toast.success('Descarga lista', { id: toastId })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al descargar', { id: toastId })
     } finally {

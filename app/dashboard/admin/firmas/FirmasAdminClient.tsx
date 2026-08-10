@@ -39,7 +39,7 @@ function FirmaCard({
       if (result.error) {
         toast.error(result.error)
       } else {
-        toast.success(`Firma de ${contratista.nombre_completo.split(' ')[0]} actualizada ✓`)
+        toast.success(`Firma de ${contratista.nombre_completo.split(' ')[0]} actualizada`)
         onUpdated(contratista.id, result.data?.url ?? null)
       }
     } catch {
