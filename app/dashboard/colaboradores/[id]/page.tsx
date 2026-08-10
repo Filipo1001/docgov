@@ -140,8 +140,16 @@ function PeriodoRow({
               </Link>
             )}
 
+            {/* Un borrador era texto muerto: sin enlace, no había forma de
+                llegar al periodo desde aquí. Y es justo donde vive el
+                desbloqueo del envío tardío cuando el mes ya cerró. */}
             {periodo.estado === 'borrador' && (
-              <span className="text-xs text-gray-400 italic">Aun no enviado</span>
+              <Link
+                href={`/dashboard/contratos/${contratoId}/periodo/${periodo.id}`}
+                className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+              >
+                Aún no enviado — abrir →
+              </Link>
             )}
 
             {esRevisable && !rechazando && (
@@ -271,6 +279,18 @@ function ContratoSection({
       {/* Periods (collapsible) */}
       {abierto && (
         <div className="px-5 pb-5 pt-2 border-t border-gray-100">
+          {/* Esta vista resume la ejecución del contrato; el expediente
+              —obligaciones, documentos, CDP/CRP, SECOP— vive en su propia
+              pantalla y hasta ahora no se enlazaba desde ninguna parte. */}
+          <div className="flex justify-end pt-2">
+            <Link
+              href={`/dashboard/contratos/${contrato.id}`}
+              className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+            >
+              Ver expediente del contrato →
+            </Link>
+          </div>
+
           {contrato.periodos.length === 0 ? (
             <p className="text-xs text-gray-400 italic py-3">
               No se han generado periodos para este contrato.

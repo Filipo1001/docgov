@@ -54,6 +54,15 @@ export interface ContratoListItem {
       contratista no puede reportar aunque el contrato exista. */
   num_obligaciones?: number
   num_periodos?: number
+  /** Estado de cada periodo — alimenta la señal "requiere atención" de la
+      lista (informes por revisar y periodos atrasados sin enviar). */
+  periodos?: {
+    estado: string
+    mes: string
+    anio: number
+    es_historico: boolean | null
+    habilitado_tardio: boolean | null
+  }[]
 }
 
 export interface PaginaContratos {

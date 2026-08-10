@@ -83,6 +83,19 @@ export function esGestorContratos(rol?: Rol | null): boolean {
   return rol === 'admin' || rol === 'contratacion'
 }
 
+/**
+ * Roles que VIGILAN contratos ajenos: el supervisor los suyos, el asesor los
+ * de su dependencia. Ven la lista completa de su ámbito y actúan sobre los
+ * informes, pero no editan el contrato ni lo crean.
+ *
+ * Existe porque `esGestorContratos` no sirve para decidir quién necesita
+ * buscador y filtros: contratación gestiona 118 contratos y un supervisor
+ * llega a 48, pero hasta ahora solo el primero tenía con qué encontrarlos.
+ */
+export function esRolSupervision(rol?: Rol | null): boolean {
+  return rol === 'supervisor' || rol === 'asesor'
+}
+
 /** States where a contratista can edit activities and evidence */
 export const ESTADOS_EDITABLES: EstadoPeriodo[] = ['borrador', 'rechazado']
 
@@ -117,6 +130,29 @@ export function getMesActual() {
   return { mes: MESES[now.getMonth()], anio: now.getFullYear(), mesIndex: now.getMonth() }
 }
 
+/**
+ * Índice 0-11 del mes tal como se guarda en `periodos.mes`: texto en español,
+ * con mayúsculas variables según la época en que se creó la fila. Devuelve -1
+ * si no se reconoce, para que quien pregunte pueda decidir qué hacer en vez de
+ * recibir un 0 que significaría "enero".
+ */
+export function indiceMes(mes: string): number {
+  const objetivo = mes.trim().toUpperCase()
+  return MESES.findIndex(m => m.toUpperCase() === objetivo)
+}
+
+/**
+ * El mes del periodo ya terminó. Es la condición que habilita al supervisor a
+ * desbloquear el envío tardío: un periodo en borrador cuyo mes quedó atrás es
+ * trabajo que el contratista ya no puede entregar sin que alguien lo permita.
+ */
+export function esMesPasado(mes: string, anio: number, hoy = new Date()): boolean {
+  const idx = indiceMes(mes)
+  if (idx < 0) return false
+  if (anio < hoy.getFullYear()) return true
+  return anio === hoy.getFullYear() && idx < hoy.getMonth()
+}
+
 // ─── Sidebar navigation per role ─────────────
 
 /**
@@ -149,15 +185,22 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
       { href: '/dashboard/admin/historicos', label: 'Históricos', icono: 'historicos' },
       { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
+    // Supervisión (asesor y supervisor): la PERSONA y el EXPEDIENTE son dos
+    // lentes sobre el mismo ámbito, y ambas hacen falta. Por la persona se
+    // sigue el desempeño; por el contrato se llega a los periodos que aún no
+    // se han enviado —incluido el desbloqueo del envío tardío—, que no tienen
+    // otra puerta. Faltaba la segunda: había que escribir la URL a mano.
     asesor: [
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
       { href: '/dashboard/contratistas', label: 'Contratistas', icono: 'contratistas' },
+      { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
       { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
       { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
     supervisor: [
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
       { href: '/dashboard/colaboradores', label: 'Colaboradores', icono: 'colaboradores' },
+      { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
       { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
       { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
