@@ -12,6 +12,7 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import FilterTabs from '@/components/ui/FilterTabs'
 import EmptyState from '@/components/ui/EmptyState'
+import { Iconos } from '@/lib/iconos'
 
 type Tab = 'candidatos' | 'marcados'
 
@@ -207,7 +208,7 @@ export default function HistoricosClient({
         {lista.length === 0 ? (
           <Card>
             <EmptyState
-              icon={tab === 'candidatos' ? '✅' : '🔒'}
+              icono={tab === 'candidatos' ? Iconos.estado.aprobado : Iconos.estado.bloqueado}
               title={tab === 'candidatos' ? 'No hay candidatos' : 'Ningún periodo marcado aún'}
               description={
                 tab === 'candidatos'

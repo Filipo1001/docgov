@@ -28,6 +28,7 @@ import Badge from '@/components/ui/Badge'
 import FilterTabs from '@/components/ui/FilterTabs'
 import EmptyState from '@/components/ui/EmptyState'
 import SearchInput from '@/components/ui/SearchInput'
+import { Iconos } from '@/lib/iconos'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -948,7 +949,7 @@ export default function InformesPage({
       ) : periodosVisibles.length === 0 ? (
         <Card>
           <EmptyState
-            icon={buscando || filtro !== 'todos' ? '🔍' : '📭'}
+            icono={buscando || filtro !== 'todos' ? Iconos.accion.buscar : Iconos.navegacion.informes}
             title={buscando || filtro !== 'todos' ? 'Sin resultados' : 'Sin informes este mes'}
             description={
               buscando

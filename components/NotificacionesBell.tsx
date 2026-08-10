@@ -6,6 +6,8 @@ import { useUsuario } from '@/lib/user-context'
 import { createClient } from '@/lib/supabase'
 import { getNotificaciones, getConteoNoLeidas, marcarLeida, marcarTodasLeidas } from '@/services/notificaciones'
 import type { Notificacion } from '@/lib/types'
+import Icono from '@/components/ui/Icono'
+import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -21,14 +23,14 @@ function tiempoRelativo(fechaISO: string): string {
   return new Date(fechaISO).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
 }
 
-function iconoPorTipo(tipo: string): string {
+function iconoPorTipo(tipo: string): LucideIcon {
   switch (tipo) {
-    case 'revision': return '🔍'
-    case 'aprobado': return '🎉'
-    case 'rechazado': return '❌'
-    case 'enviado': return '📩'
-    case 'radicado': return '📁'
-    default: return '🔔'
+    case 'revision': return Iconos.accion.ver
+    case 'aprobado': return Iconos.estado.aprobado
+    case 'rechazado': return Iconos.estado.rechazado
+    case 'enviado': return Iconos.accion.enviar
+    case 'radicado': return Iconos.estado.verificado
+    default: return Iconos.aviso.notificaciones
   }
 }
 
@@ -182,7 +184,7 @@ export default function NotificacionesBell() {
         onClick={() => setAbierto(!abierto)}
         className="relative w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
       >
-        <span>🔔</span>
+        <Icono glifo={Iconos.aviso.notificaciones} tamano="md" etiqueta="Notificaciones" />
         <span className="flex-1 text-left">Notificaciones</span>
         {totalNoLeidas > 0 && (
           <span className="min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none">
@@ -210,7 +212,7 @@ export default function NotificacionesBell() {
           <div className="max-h-80 overflow-y-auto">
             {notificaciones.length === 0 ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-2xl mb-2">🔔</p>
+                <Icono glifo={Iconos.aviso.notificaciones} tamano="lg" className="mx-auto mb-2 text-gray-300" />
                 <p className="text-sm text-gray-500">Sin notificaciones</p>
               </div>
             ) : (
@@ -223,7 +225,7 @@ export default function NotificacionesBell() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-lg flex-shrink-0 mt-0.5">{iconoPorTipo(n.tipo)}</span>
+                    <Icono glifo={iconoPorTipo(n.tipo)} tamano="md" className="flex-shrink-0 mt-0.5 text-gray-400" />
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium leading-tight ${!n.leida ? 'text-gray-900' : 'text-gray-700'}`}>
                         {n.titulo}

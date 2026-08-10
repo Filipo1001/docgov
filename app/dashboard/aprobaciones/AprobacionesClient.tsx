@@ -19,6 +19,7 @@ import Badge from '@/components/ui/Badge'
 import SearchInput from '@/components/ui/SearchInput'
 import FilterTabs from '@/components/ui/FilterTabs'
 import EmptyState from '@/components/ui/EmptyState'
+import { Iconos } from '@/lib/iconos'
 
 // ─── Shared helpers ───────────────────────────────────────────
 
@@ -147,7 +148,7 @@ function SupervisorAprobaciones({ userId }: { userId: string }) {
       {filtrados.length === 0 && (
         <Card>
           <EmptyState
-            icon="🎉"
+            icono={Iconos.estado.aprobado}
             title="Todo al dia"
             description={busqueda ? 'No hay resultados para esa busqueda.' : 'No hay periodos pendientes de revision.'}
           />
@@ -349,7 +350,7 @@ function GenericAprobaciones({ rol, userId }: { rol: string; userId: string }) {
       {periodos.length === 0 ? (
         <Card>
           <EmptyState
-            icon="✅"
+            icono={Iconos.estado.aprobado}
             title="Todo al dia"
             description="No tienes periodos pendientes de revision."
           />
@@ -457,7 +458,7 @@ export default function AprobacionesPage() {
     return (
       <Card>
         <EmptyState
-          icon="🔒"
+          icono={Iconos.estado.bloqueado}
           title="Sin acceso"
           description="Tu rol no tiene acceso a la cola de aprobaciones."
         />

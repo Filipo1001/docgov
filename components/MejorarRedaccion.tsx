@@ -13,6 +13,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { corregirRedaccion, type ResultadoCorreccion } from '@/lib/redaccion'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 
 const MIN_CARACTERES = 15
 
@@ -84,7 +86,7 @@ export default function MejorarRedaccion({
                 Revisando…
               </>
             ) : (
-              <>✨ Mejorar redacción</>
+              <><Icono glifo={Iconos.dominio.ia} tamano="sm" /> Mejorar redacción</>
             )}
           </button>
         </div>
@@ -94,7 +96,8 @@ export default function MejorarRedaccion({
       {estado.fase === 'sin_cambios' && (
         <div className="flex justify-end">
           <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
-            ✓ Tu redacción está bien — sin correcciones
+            <Icono glifo={Iconos.estado.ok} tamano="sm" className="inline-block align-[-2px] mr-1" />
+            Tu redacción está bien — sin correcciones
           </span>
         </div>
       )}

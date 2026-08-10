@@ -10,6 +10,12 @@
 
 import type { EstadoPeriodo, Rol } from './types'
 
+/** Claves válidas del catálogo de navegación (ver lib/iconos.ts). */
+export type ClaveIconoNavegacion =
+  | 'inicio' | 'usuarios' | 'firmas' | 'contratos' | 'informes'
+  | 'dependencias' | 'municipio' | 'historicos' | 'configuracion'
+  | 'contratistas' | 'colaboradores'
+
 // ─── Period state display ────────────────────
 
 export const ESTADO_LABEL: Record<EstadoPeriodo, string> = {
@@ -113,38 +119,52 @@ export function getMesActual() {
 
 // ─── Sidebar navigation per role ─────────────
 
-export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; icon: string }> {
+/**
+ * Entrada del menú lateral.
+ *
+ * `icono` es una CLAVE del catálogo (`Iconos.navegacion` en lib/iconos.ts), no
+ * el componente: así este módulo, que consumen una docena de pantallas, no
+ * arrastra React ni la librería de iconos a donde no hacen falta. Quien pinta
+ * resuelve la clave.
+ */
+export interface ItemMenu {
+  href: string
+  label: string
+  icono: ClaveIconoNavegacion
+}
+
+export function getMenuPorRol(rol: Rol): ItemMenu[] {
   const { mes, anio } = getMesActual()
   const mesLabel = `${mes} ${anio}`
 
-  const menus: Record<Rol, Array<{ href: string; label: string; icon: string }>> = {
+  const menus: Record<Rol, ItemMenu[]> = {
     admin: [
-      { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-      { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: '👥' },
-      { href: '/dashboard/admin/firmas', label: 'Firmas', icon: '✍️' },
-      { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
-      { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
-      { href: '/dashboard/dependencias', label: 'Dependencias', icon: '🏢' },
-      { href: '/dashboard/admin/municipio', label: 'Municipio', icon: '🏛️' },
-      { href: '/dashboard/admin/historicos', label: 'Históricos', icon: '🔒' },
-      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
+      { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
+      { href: '/dashboard/admin/usuarios', label: 'Usuarios', icono: 'usuarios' },
+      { href: '/dashboard/admin/firmas', label: 'Firmas', icono: 'firmas' },
+      { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
+      { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
+      { href: '/dashboard/dependencias', label: 'Dependencias', icono: 'dependencias' },
+      { href: '/dashboard/admin/municipio', label: 'Municipio', icono: 'municipio' },
+      { href: '/dashboard/admin/historicos', label: 'Históricos', icono: 'historicos' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
     asesor: [
-      { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-      { href: '/dashboard/contratistas', label: 'Contratistas', icon: '👥' },
-      { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
-      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
+      { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
+      { href: '/dashboard/contratistas', label: 'Contratistas', icono: 'contratistas' },
+      { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
     supervisor: [
-      { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-      { href: '/dashboard/colaboradores', label: 'Colaboradores', icon: '👥' },
-      { href: '/dashboard/informes', label: mesLabel, icon: '📋' },
-      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
+      { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
+      { href: '/dashboard/colaboradores', label: 'Colaboradores', icono: 'colaboradores' },
+      { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
     contratista: [
-      { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-      { href: '/dashboard/contratos', label: 'Mis contratos', icon: '📄' },
-      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
+      { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
+      { href: '/dashboard/contratos', label: 'Mis contratos', icono: 'contratos' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
     // Dependencia de Contratación: ciclo de vida del contrato y de las cuentas
     // de contratista (crear, corregir, obligaciones, periodos, otrosíes).
@@ -153,10 +173,10 @@ export function getMenuPorRol(rol: Rol): Array<{ href: string; label: string; ic
     // del municipio. La creación del contratista va embebida en el formulario
     // de contrato.
     contratacion: [
-      { href: '/dashboard', label: 'Inicio', icon: '🏠' },
-      { href: '/dashboard/contratos', label: 'Contratos', icon: '📄' },
-      { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: '👥' },
-      { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
+      { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
+      { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
+      { href: '/dashboard/admin/usuarios', label: 'Usuarios', icono: 'usuarios' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
   }
 
