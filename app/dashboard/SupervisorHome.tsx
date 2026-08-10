@@ -12,6 +12,9 @@ import {
   type ActividadSupervisorItem,
 } from '@/services/supervisor'
 import { getMesActual, MESES } from '@/lib/constants'
+import { capitalizarNombre } from '@/lib/format'
+import Icono from '@/components/ui/Icono'
+import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -27,6 +30,26 @@ function fmt(n: number): string {
 
 function fmtFull(n: number): string {
   return '$' + n.toLocaleString('es-CO')
+}
+
+/**
+ * Icono, color y etiqueta de un tipo de actividad — una sola fuente para la
+ * fila de "Actividad reciente", en vez de un mapa de iconos por un lado y tres
+ * ternarios repetidos por otro decidiendo el mismo color.
+ */
+function estadoActividad(tipo: string): { icono: LucideIcon; color: string; fondo: string; label: string } {
+  switch (tipo) {
+    case 'aprobado':
+      return { icono: Iconos.estado.aprobado, color: 'text-emerald-600', fondo: 'bg-emerald-50', label: 'Aprobado' }
+    case 'radicado':
+      return { icono: Iconos.estado.verificado, color: 'text-emerald-600', fondo: 'bg-emerald-50', label: 'Radicado' }
+    case 'rechazado':
+      return { icono: Iconos.estado.rechazado, color: 'text-red-600', fondo: 'bg-red-50', label: 'Rechazado' }
+    case 'enviado':
+      return { icono: Iconos.accion.enviar, color: 'text-amber-600', fondo: 'bg-amber-50', label: 'Enviado' }
+    default:
+      return { icono: Iconos.navegacion.informes, color: 'text-gray-500', fondo: 'bg-gray-100', label: tipo }
+  }
 }
 
 function timeAgo(isoDate: string): string {
@@ -195,8 +218,14 @@ function PeriodoCard({
           </div>
           <p className="text-xs text-gray-500 mb-2">Cto. {c.numero} · {periodo.mes} {periodo.anio}</p>
           <div className="flex items-center gap-3 text-[11px] text-gray-400">
-            <span>📋 {periodo.num_actividades} act.</span>
-            <span>📷 {periodo.num_evidencias} foto{periodo.num_evidencias !== 1 ? 's' : ''}</span>
+            <span className="inline-flex items-center gap-1">
+              <Icono glifo={Iconos.dominio.actividades} tamano="sm" />
+              {periodo.num_actividades} act.
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Icono glifo={Iconos.dominio.evidencia} tamano="sm" />
+              {periodo.num_evidencias} foto{periodo.num_evidencias !== 1 ? 's' : ''}
+            </span>
           </div>
         </div>
         <div className="text-right flex-shrink-0">
@@ -222,7 +251,7 @@ function PeriodoCard({
           disabled={procesando === periodo.id}
           className="flex-1 text-xs py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 font-semibold"
         >
-          {procesando === periodo.id ? '…' : '✓ Aprobar'}
+          {procesando === periodo.id ? '…' : 'Aprobar'}
         </button>
       </div>
     </div>
@@ -290,7 +319,7 @@ export default function SupervisorHome({
   const [rechazando, setRechazando] = useState<string | null>(null)
   const [verTodos, setVerTodos] = useState(false)
 
-  const firstName = nombre.split(' ')[0]
+  const firstName = capitalizarNombre(nombre.split(' ')[0])
   const now = new Date()
   const hour = now.getHours()
   const saludo = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
@@ -358,7 +387,6 @@ export default function SupervisorHome({
   const consistentes = data.desempeno.filter(d => d.consistente)
   const enRiesgo = data.desempeno.filter(d => !d.consistente)
   const maxAprobados = Math.max(...data.tendencia.map(t => t.aprobados), 1)
-  const tipoIcono: Record<string, string> = { enviado: '📤', aprobado: '✅', rechazado: '❌', radicado: '🏛' }
 
   return (
     <div className="space-y-6">
@@ -366,7 +394,7 @@ export default function SupervisorHome({
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">{saludo}, {firstName} 👋</h1>
+          <h1 className="text-2xl font-black text-gray-900">{saludo}, {firstName}</h1>
           <p className="text-sm text-gray-400 mt-1 capitalize">
             {now.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
@@ -425,7 +453,7 @@ export default function SupervisorHome({
       {(data.alertasTardios.length > 0 || data.alertasRechazados.length > 0) && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">⚠️</span>
+            <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="text-amber-500" />
             <h2 className="font-semibold text-gray-900">Alertas</h2>
             <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium">
               {data.alertasTardios.length + data.alertasRechazados.length}
@@ -479,7 +507,7 @@ export default function SupervisorHome({
       {data.pendientes.length > 0 ? (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">📋</span>
+            <Icono glifo={Iconos.navegacion.informes} tamano="sm" className="text-gray-400" />
             <h2 className="font-semibold text-gray-900">Cola de aprobación</h2>
             <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium tabular-nums">
               {data.pendientes.length}
@@ -507,7 +535,9 @@ export default function SupervisorHome({
         </section>
       ) : (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
-          <p className="text-2xl mb-2">🎉</p>
+          <div className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 mb-3">
+            <Icono glifo={Iconos.estado.aprobado} tamano="lg" />
+          </div>
           <p className="font-semibold text-emerald-900">Todo al día</p>
           <p className="text-sm text-emerald-700 mt-1">
             No tienes informes pendientes de revisión
@@ -519,7 +549,7 @@ export default function SupervisorHome({
       {data.desempeno.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">📊</span>
+            <Icono glifo={Iconos.dominio.tendencia} tamano="sm" className="text-gray-400" />
             <h2 className="font-semibold text-gray-900">Desempeño de contratistas</h2>
             <span className="ml-auto text-xs text-gray-400">Últimos 5 meses</span>
           </div>
@@ -603,7 +633,7 @@ export default function SupervisorHome({
       {data.tendencia.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">📈</span>
+            <Icono glifo={Iconos.dominio.tendencia} tamano="sm" className="text-gray-400" />
             <h2 className="font-semibold text-gray-900">Tendencia mensual</h2>
           </div>
           <div className="bg-white border border-gray-200 rounded-2xl p-5">
@@ -638,36 +668,34 @@ export default function SupervisorHome({
       {data.actividad.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">🕐</span>
+            <Icono glifo={Iconos.dominio.actividad} tamano="sm" className="text-gray-400" />
             <h2 className="font-semibold text-gray-900">Actividad reciente</h2>
           </div>
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100">
-            {data.actividad.map(a => (
-              <div key={a.id} className="flex items-center gap-3 px-4 py-3">
-                <span className="text-base flex-shrink-0">{tipoIcono[a.tipo] ?? '📋'}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-800 truncate">
-                    {a.contratista_nombre.split(' ').slice(0, 2).join(' ')}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Cto. {a.contrato_numero} · {a.mes} {a.anio}
-                  </p>
+            {data.actividad.map(a => {
+              const e = estadoActividad(a.tipo)
+              return (
+                <div key={a.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${e.fondo} ${e.color}`}>
+                    <Icono glifo={e.icono} tamano="sm" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      {a.contratista_nombre.split(' ').slice(0, 2).join(' ')}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Cto. {a.contrato_numero} · {a.mes} {a.anio}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${e.fondo} ${e.color}`}>
+                      {e.label}
+                    </span>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{timeAgo(a.fecha)}</p>
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                    a.tipo === 'aprobado' || a.tipo === 'radicado' ? 'bg-emerald-100 text-emerald-700' :
-                    a.tipo === 'rechazado' ? 'bg-red-100 text-red-700' :
-                    'bg-amber-100 text-amber-700'
-                  }`}>
-                    {a.tipo === 'enviado'   ? 'Enviado'   :
-                     a.tipo === 'aprobado'  ? 'Aprobado'  :
-                     a.tipo === 'rechazado' ? 'Rechazado' :
-                     a.tipo === 'radicado'  ? 'Radicado'  : a.tipo}
-                  </span>
-                  <p className="text-[11px] text-gray-400 mt-0.5">{timeAgo(a.fecha)}</p>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       )}

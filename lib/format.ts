@@ -55,6 +55,26 @@ export function normalizeName(value: string | null | undefined): string {
 }
 
 /**
+ * "SARA" | "MARÍA JOSÉ" → "Sara" | "María José"
+ *
+ * Los nombres se guardan en mayúsculas (normalizeName) porque así los exige
+ * un documento oficial. Un saludo de bienvenida no es un documento oficial:
+ * "Buenos días, SARA" lee como si el sistema estuviera gritando. Se usa solo
+ * en superficies de trato directo (saludos, encabezados de bienvenida), nunca
+ * en un PDF ni en un dato que vaya a un ente de control.
+ */
+export function capitalizarNombre(value: string | null | undefined): string {
+  if (!value) return ''
+  return value
+    .trim()
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ')
+}
+
+/**
  * Normalize an email to lowercase and trimmed.
  */
 export function normalizeEmail(value: string | null | undefined): string {

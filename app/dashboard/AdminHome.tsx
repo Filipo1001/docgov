@@ -9,14 +9,17 @@ import {
   type ActividadReciente,
 } from '@/services/dashboard'
 import { MESES } from '@/lib/constants'
+import { capitalizarNombre } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
+import Icono from '@/components/ui/Icono'
+import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
 function saludo(): string {
   const h = new Date().getHours()
-  if (h < 12) return 'Buenos dias'
+  if (h < 12) return 'Buenos días'
   if (h < 18) return 'Buenas tardes'
   return 'Buenas noches'
 }
@@ -36,11 +39,11 @@ function timeAgo(iso: string): string {
   return `hace ${days}d`
 }
 
-const activityConfig: Record<string, { icon: string; label: string; color: string }> = {
-  enviado:   { icon: '📤', label: 'envio informe',  color: 'text-blue-600' },
-  aprobado:  { icon: '✅', label: 'aprobado',       color: 'text-emerald-600' },
-  rechazado: { icon: '❌', label: 'rechazado',      color: 'text-red-600' },
-  radicado:  { icon: '📁', label: 'radicado',       color: 'text-indigo-600' },
+const activityConfig: Record<string, { icon: LucideIcon; label: string; color: string }> = {
+  enviado:   { icon: Iconos.accion.enviar,     label: 'envió informe', color: 'text-amber-600' },
+  aprobado:  { icon: Iconos.estado.aprobado,   label: 'aprobado',      color: 'text-emerald-600' },
+  rechazado: { icon: Iconos.estado.rechazado,  label: 'rechazado',     color: 'text-red-600' },
+  radicado:  { icon: Iconos.estado.verificado, label: 'radicado',      color: 'text-emerald-600' },
 }
 
 // ─── Pipeline stage ──────────────────────────────────────────
@@ -91,7 +94,7 @@ export default function AdminHome({
 }: {
   nombre: string
 }) {
-  const firstName = nombre.split(' ')[0]
+  const firstName = capitalizarNombre(nombre.split(' ')[0])
 
   // Single combined query so both loads share one loading state.
   // staleTime: 5 min — navigating back shows cached data instantly.
@@ -138,9 +141,10 @@ export default function AdminHome({
             </Link>
             <Link
               href="/dashboard/informes"
-              className="flex-1 sm:flex-none text-center bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-center bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
             >
-              📅 {mesActualNombre()}
+              <Icono glifo={Iconos.dominio.periodo} tamano="sm" className="text-gray-400" />
+              {mesActualNombre()}
             </Link>
           </div>
         }
@@ -160,8 +164,9 @@ export default function AdminHome({
           <PipelineStage label="Radicado" value={pipeline.radicado} color="bg-emerald-100 text-emerald-800" isLast />
         </div>
         {pipeline.rechazado > 0 && (
-          <p className="text-xs text-red-500 mt-3 font-medium">
-            ⚠ {pipeline.rechazado} periodo{pipeline.rechazado !== 1 ? 's' : ''} rechazado{pipeline.rechazado !== 1 ? 's' : ''}
+          <p className="flex items-center gap-1.5 text-xs text-red-600 mt-3 font-medium">
+            <Icono glifo={Iconos.estado.advertencia} tamano="sm" />
+            {pipeline.rechazado} periodo{pipeline.rechazado !== 1 ? 's' : ''} rechazado{pipeline.rechazado !== 1 ? 's' : ''}
           </p>
         )}
       </Card>
@@ -203,7 +208,9 @@ export default function AdminHome({
                   href={`/dashboard/contratos/${a.contrato_id}/periodo/${a.periodo_id}`}
                   className="flex items-start gap-2.5 sm:gap-3 group hover:bg-gray-50 -mx-2 px-2 py-2 rounded-xl transition"
                 >
-                  <span className="text-base sm:text-lg flex-shrink-0 mt-0.5">{cfg.icon}</span>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-gray-50 ${cfg.color}`}>
+                    <Icono glifo={cfg.icon} tamano="sm" />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs sm:text-sm text-gray-900 group-hover:text-gray-700">
                       <span className="font-medium">{a.contratista_nombre.split(' ').slice(0, 2).join(' ')}</span>
@@ -226,8 +233,8 @@ export default function AdminHome({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Link href="/dashboard/contratos/nuevo" className="block">
           <Card className="hover:border-gray-300 transition-colors group h-full">
-            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-gray-200 transition-colors">
-              <span className="text-xl">➕</span>
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 text-gray-500 group-hover:bg-gray-200 transition-colors">
+              <Icono glifo={Iconos.accion.agregar} tamano="md" />
             </div>
             <h3 className="font-medium text-gray-900 text-sm">Registrar contrato</h3>
             <p className="text-xs text-gray-500 mt-1">Crear un nuevo contrato</p>
@@ -235,8 +242,8 @@ export default function AdminHome({
         </Link>
         <Link href="/dashboard/admin/usuarios" className="block">
           <Card className="hover:border-gray-300 transition-colors group h-full">
-            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-gray-200 transition-colors">
-              <span className="text-xl">👥</span>
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 text-gray-500 group-hover:bg-gray-200 transition-colors">
+              <Icono glifo={Iconos.navegacion.usuarios} tamano="md" />
             </div>
             <h3 className="font-medium text-gray-900 text-sm">Usuarios</h3>
             <p className="text-xs text-gray-500 mt-1">Gestionar usuarios del sistema</p>
@@ -244,8 +251,8 @@ export default function AdminHome({
         </Link>
         <Link href="/dashboard/admin/importar" className="block">
           <Card className="hover:border-emerald-200 border-emerald-100 bg-emerald-50/40 transition-colors group h-full">
-            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-emerald-200 transition-colors">
-              <span className="text-xl">📥</span>
+            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-3 text-emerald-600 group-hover:bg-emerald-200 transition-colors">
+              <Icono glifo={Iconos.documentos.subir} tamano="md" />
             </div>
             <h3 className="font-medium text-gray-900 text-sm">Importar Excel</h3>
             <p className="text-xs text-gray-500 mt-1">Crear usuarios y contratos en masa</p>
@@ -253,8 +260,8 @@ export default function AdminHome({
         </Link>
         <Link href="/dashboard/admin/firmas" className="block">
           <Card className="hover:border-gray-300 transition-colors group h-full">
-            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-gray-200 transition-colors">
-              <span className="text-xl">✍️</span>
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 text-gray-500 group-hover:bg-gray-200 transition-colors">
+              <Icono glifo={Iconos.navegacion.firmas} tamano="md" />
             </div>
             <h3 className="font-medium text-gray-900 text-sm">Firmas</h3>
             <p className="text-xs text-gray-500 mt-1">Gestionar firmas de contratistas</p>
@@ -262,11 +269,11 @@ export default function AdminHome({
         </Link>
         <Link href="/dashboard/admin/historicos" className="block">
           <Card className="hover:border-gray-300 transition-colors group h-full">
-            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-gray-200 transition-colors">
-              <span className="text-xl">🔒</span>
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 text-gray-500 group-hover:bg-gray-200 transition-colors">
+              <Icono glifo={Iconos.estado.bloqueado} tamano="md" />
             </div>
-            <h3 className="font-medium text-gray-900 text-sm">Historicos</h3>
-            <p className="text-xs text-gray-500 mt-1">Marcar periodos como historicos</p>
+            <h3 className="font-medium text-gray-900 text-sm">Históricos</h3>
+            <p className="text-xs text-gray-500 mt-1">Marcar periodos como históricos</p>
           </Card>
         </Link>
       </div>

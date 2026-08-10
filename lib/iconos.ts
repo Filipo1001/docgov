@@ -50,6 +50,7 @@ import {
   Bell, Mail, MessageSquare, UserPlus, Building,
   // Dominio
   CalendarDays, Coins, Stethoscope, Sparkles, QrCode, Hash, MapPin, Phone,
+  Briefcase, TrendingUp, History, Camera, ListChecks,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -138,6 +139,11 @@ export const Iconos = {
     numero: Hash,
     ubicacion: MapPin,
     telefono: Phone,
+    cargo: Briefcase,
+    tendencia: TrendingUp,
+    actividad: History,
+    evidencia: Camera,
+    actividades: ListChecks,
   },
 } as const
 
