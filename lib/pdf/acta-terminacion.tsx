@@ -11,20 +11,34 @@
  * firma registrada de los dos últimos y las estampa selladas, con su código de
  * verificación, igual que en el resto de documentos.
  *
- * El alcalde NO es usuario del sistema y no tiene firma registrada, así que su
- * espacio queda como línea en blanco para firma manuscrita — exactamente como
- * en el formato en papel. Es deliberado: inventar una firma de quien no ha
- * entrado a aceptar nada sería falsificarla.
+ * El alcalde no es usuario del sistema: no inicia sesión ni aprueba nada. Su
+ * firma es un atributo institucional del municipio y la carga el administrador
+ * desde /dashboard/admin/municipio. Se estampa cuando el supervisor aprueba el
+ * último informe, porque en el procedimiento del municipio esa aprobación es
+ * el acto con el que la administración suscribe el acta — el supervisor firma
+ * por sí y por el alcalde.
+ *
+ * Si el municipio aún no ha cargado esa firma, su espacio queda como línea en
+ * blanco para firma manuscrita, como en el formato en papel.
  */
 
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import path from 'path'
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 import type { PDFVerificacion } from './types'
 import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 
+/** Membrete institucional del formato, igual que en las otras actas. */
+const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-terminacion.png')
+
 export interface ActaTerminacionData {
-  municipio: { nombre: string; departamento?: string; nit?: string; representante_legal?: string }
+  municipio: {
+    nombre: string; departamento?: string; nit?: string
+    representante_legal?: string
+    /** Firma del alcalde, ya firmada para descarga. Ausente → línea en blanco. */
+    firma_representante_url?: string
+  }
   contrato: {
     numero: string
     anio: number
@@ -59,7 +73,7 @@ const COP = new Intl.NumberFormat('es-CO', {
 
 const s = StyleSheet.create({
   page: {
-    paddingTop: 34, paddingBottom: 76, paddingHorizontal: 46,
+    paddingTop: 30, paddingBottom: 62, paddingHorizontal: 46,
     fontSize: 9, fontFamily: 'Helvetica', color: '#111827', lineHeight: 1.42,
   },
   // Tabla de encabezado
@@ -98,11 +112,6 @@ const s = StyleSheet.create({
   manuscrita: { fontSize: 6.5, color: '#9CA3AF', marginTop: 1 },
   // Pie
   pie: { position: 'absolute', bottom: 20, left: 46, right: 46 },
-  pieFormato: {
-    flexDirection: 'row', borderWidth: 0.6, borderColor: '#9CA3AF',
-    fontSize: 6.5, marginBottom: 5,
-  },
-  pieCelda: { padding: 3, borderRightWidth: 0.6, borderRightColor: '#9CA3AF' },
 })
 
 function Casilla({ marcada, etiqueta }: { marcada: boolean; etiqueta: string }) {
@@ -144,6 +153,10 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
       creator="Contratista Digital"
     >
       <Page size="A4" style={s.page}>
+
+        {/* Membrete institucional. Lleva ya el código del formato, la versión
+            y la fecha, así que el pie no los repite. */}
+        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 10 }} fixed />
 
         {/* ── Grado de responsabilidad ─────────────────────────── */}
         <View style={[s.caja, { marginBottom: 10 }]}>
@@ -219,16 +232,31 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
         </Text>
 
         {/* ── Firmas ───────────────────────────────────────────── */}
-        <View style={s.firmas}>
-          {/* Alcalde — sin firma en el sistema: espacio para firma manuscrita. */}
+        <View style={s.firmas} wrap={false}>
+          {/* Alcalde — la firma la carga el municipio; si no hay, línea en blanco. */}
           <View style={s.firmaBloque}>
-            <View style={s.firmaEspacio} />
+            {municipio.firma_representante_url ? (
+              <View style={s.firmaEspacio}>
+                <FirmaSellada
+                  src={municipio.firma_representante_url}
+                  style={{ width: 190, height: 46, objectFit: 'contain' }}
+                  v={verificacion}
+                  contratoNumero={numeroContrato}
+                  documento="EL ACTA DE TERMINACIÓN"
+                  firmante={municipio.representante_legal ?? 'ALCALDE'}
+                />
+              </View>
+            ) : (
+              <View style={s.firmaEspacio} />
+            )}
             <View style={s.firmaLinea} />
             <Text style={s.firmaNombre}>
               {(municipio.representante_legal ?? '').toUpperCase() || ' '}
             </Text>
             <Text style={s.firmaCargo}>ALCALDE</Text>
-            <Text style={s.manuscrita}>Espacio para firma manuscrita</Text>
+            {!municipio.firma_representante_url && (
+              <Text style={s.manuscrita}>Espacio para firma manuscrita</Text>
+            )}
           </View>
 
           {/* Supervisor */}
@@ -276,15 +304,6 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
 
         {/* ── Pie institucional ────────────────────────────────── */}
         <View style={s.pie} fixed>
-          <View style={s.pieFormato}>
-            <Text style={[s.pieCelda, { width: 54, fontFamily: 'Helvetica-Bold' }]}>FORMATO</Text>
-            <Text style={[s.pieCelda, { flex: 1 }]}>
-              ACTA DE TERMINACIÓN BILATERAL DEL CONTRATO O CONVENIO
-            </Text>
-            <Text style={[s.pieCelda, { width: 62 }]}>F-SGG-037</Text>
-            <Text style={[s.pieCelda, { width: 52 }]}>Versión 00</Text>
-            <Text style={{ padding: 3, width: 60 }}>01/07/2021</Text>
-          </View>
           <SelloVerificacion v={verificacion} />
         </View>
       </Page>

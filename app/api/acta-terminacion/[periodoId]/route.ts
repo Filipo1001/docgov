@@ -40,8 +40,13 @@ export async function GET(
     .eq('contrato_id', periodo.contrato_id)
     .maybeSingle()
 
+  // Sin `pdf_path` el acta fue aceptada por el contratista pero la
+  // administración aún no la ha suscrito: no hay documento que servir.
   if (!acta?.pdf_path) {
-    return NextResponse.json({ error: 'El acta de terminación aún no ha sido generada.' }, { status: 404 })
+    return NextResponse.json(
+      { error: 'El acta de terminación se emitirá cuando el supervisor apruebe el informe final.' },
+      { status: 404 },
+    )
   }
 
   const { data: signed } = await admin.storage

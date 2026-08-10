@@ -155,12 +155,14 @@ export default async function PeriodoDetallePage({
 
   // Acta de terminación: única por contrato. Su descarga se ofrece solo en el
   // último periodo y solo si ya fue aceptada.
+  // Solo cuenta si ya está EMITIDA: aceptada sin aprobar todavía no es un
+  // documento descargable.
   const { data: actaRow } = await supabase
     .from('actas_terminacion')
-    .select('id')
+    .select('id, emitida_en')
     .eq('contrato_id', (contrato as { id: string }).id)
     .maybeSingle()
-  const actaTerminacionDisponible = !!actaRow
+  const actaTerminacionDisponible = !!actaRow?.emitida_en
 
   // ── Signed URLs (private buckets) ──────────────────────────────
   // The DB stores canonical public-form URLs; the buckets are private, so we

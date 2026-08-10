@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Toaster, toast } from 'sonner'
-import { actualizarMunicipio } from '@/app/actions/admin'
+import {
+  actualizarMunicipio, subirFirmaMunicipio, obtenerFirmaMunicipio, eliminarFirmaMunicipio,
+} from '@/app/actions/admin'
 import type { MunicipioAdmin } from '@/services/admin'
 
 export default function MunicipioClient({ municipio }: { municipio: MunicipioAdmin | null }) {
@@ -13,6 +15,35 @@ export default function MunicipioClient({ municipio }: { municipio: MunicipioAdm
   const [nit, setNit]                 = useState(municipio?.nit ?? '')
   const [repLegal, setRepLegal]       = useState(municipio?.representante_legal ?? '')
   const [cedulaRep, setCedulaRep]     = useState(municipio?.cedula_representante ?? '')
+
+  // Firma del alcalde. El bucket es privado, así que la vista previa va por
+  // URL firmada; nunca se pinta la URL cruda.
+  const [firma, setFirma] = useState<string | null>(null)
+  const [subiendoFirma, setSubiendoFirma] = useState(false)
+  const firmaInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { obtenerFirmaMunicipio().then(setFirma).catch(() => {}) }, [])
+
+  async function handleSubirFirma(file: File) {
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED.includes(file.type)) {
+      toast.error('Solo se permiten imágenes JPG, PNG o WEBP')
+      return
+    }
+    setSubiendoFirma(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    const result = await subirFirmaMunicipio(fd)
+    setSubiendoFirma(false)
+    if (result.error) toast.error(result.error)
+    else { setFirma(result.data?.url ?? null); toast.success('Firma del alcalde actualizada') }
+  }
+
+  async function handleEliminarFirma() {
+    const result = await eliminarFirmaMunicipio()
+    if (result.error) toast.error(result.error)
+    else { setFirma(null); toast.success('Firma eliminada') }
+  }
 
   if (!municipio) {
     return (
@@ -105,6 +136,61 @@ export default function MunicipioClient({ municipio }: { municipio: MunicipioAdm
               placeholder="Ej. 8.461.720"
             />
           </div>
+        </div>
+
+        {/* Firma del alcalde ─────────────────────────────────────
+            Se estampa en el Acta de Terminación cuando el supervisor aprueba
+            el último informe del contrato. */}
+        <div className="pt-4 border-t border-gray-100">
+          <label className="block text-sm font-medium text-gray-700">Firma del representante legal</label>
+          <p className="text-xs text-gray-500 mt-1 mb-3">
+            Se estampa en el Acta de Terminación cuando el supervisor aprueba el último informe del
+            contrato. Imagen con fondo transparente, preferiblemente PNG.
+          </p>
+
+          <input
+            ref={firmaInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleSubirFirma(f); e.target.value = '' }}
+          />
+
+          {firma ? (
+            <div className="flex items-end gap-4 flex-wrap">
+              <div className="border border-gray-200 rounded-xl px-4 py-3 bg-[repeating-conic-gradient(#F3F4F6_0%_25%,#FFFFFF_0%_50%)] bg-[length:16px_16px]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={firma} alt="Firma del representante legal" className="h-16 object-contain" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => firmaInputRef.current?.click()}
+                  disabled={subiendoFirma}
+                  className="text-sm px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {subiendoFirma ? 'Subiendo…' : 'Reemplazar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEliminarFirma}
+                  disabled={subiendoFirma}
+                  className="text-sm px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Quitar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => firmaInputRef.current?.click()}
+              disabled={subiendoFirma}
+              className="text-sm px-4 py-2.5 rounded-lg border border-dashed border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {subiendoFirma ? 'Subiendo…' : 'Subir firma del alcalde'}
+            </button>
+          )}
         </div>
       </div>
 
