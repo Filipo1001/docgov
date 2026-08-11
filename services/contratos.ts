@@ -256,12 +256,24 @@ export async function eliminarObligacion(oblId: string): Promise<{ error?: strin
  * Calcula la distribución mensual de pagos para un contrato.
  *
  * Reglas:
- *  - Meses intermedios (completos): se pagan por `valor_mensual`.
- *  - Primer mes si inicia después del día 1: proporcional por días activos.
- *      valor = round(valor_mensual * diasActivos / diasDelMes)
- *  - Último mes si termina antes del último día: proporcional por días activos.
+ *  - Todo periodo —incluidos el primero y el último— se paga por
+ *    `valor_mensual` completo, sin importar en qué día del mes empiece o
+ *    termine el contrato.
  *  - Residuo: el último periodo absorbe la diferencia con `valor_total`
  *    para garantizar sum(valor_cobro) === valor_total sin drift por redondeo.
+ *
+ * Antes el primer y el último periodo se prorrateaban por días activos del
+ * mes. Se retiró esa regla al confirmar contra los 118 contratos ya
+ * registrados en Fredonia: NINGUNO empieza el día 1 —el prorrateo se
+ * disparaba siempre, nunca era la excepción— y en el 73% de los casos
+ * `valor_total = valor_mensual × plazo_meses` exacto, la huella de que quien
+ * registra el contrato concibe cada periodo completo. El prorrateo no
+ * describía cómo se paga un contrato de prestación de servicios en este
+ * municipio; producía un primer periodo con un valor que nadie pactó y
+ * obligaba a admin a corregirlo a mano en cada contrato.
+ *
+ * `diasActivos`/`diasDelMes` se conservan en el resultado como información
+ * —cuántos días del mes cubrió el periodo—, ya no deciden el valor a pagar.
  *
  * Exportada para permitir previsualización en la UI de creación de contrato.
  */
@@ -305,11 +317,6 @@ export function calcularDistribucionPeriodos(params: {
     const inicioP = `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${String(diaInicio).padStart(2, '0')}`
     const finP    = `${anio}-${String(mesIndex + 1).padStart(2, '0')}-${String(diaFin).padStart(2, '0')}`
 
-    const esCompleto = diasActivos === ultimoDia
-    const valorBruto = esCompleto
-      ? params.valorMensual
-      : Math.round((params.valorMensual * diasActivos) / ultimoDia)
-
     resultado.push({
       numero: i + 1,
       mes: MESES[mesIndex],
@@ -317,7 +324,7 @@ export function calcularDistribucionPeriodos(params: {
       anio,
       fechaInicio: inicioP,
       fechaFin: finP,
-      valorCobro: valorBruto,
+      valorCobro: params.valorMensual,
       diasActivos,
       diasDelMes: ultimoDia,
     })
