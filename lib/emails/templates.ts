@@ -4,6 +4,7 @@
  */
 
 import { ORIGEN_APP } from '@/lib/dominio'
+import { MARCA } from '@/lib/marca'
 
 interface TemplateData {
   nombreDestinatario: string
@@ -15,6 +16,8 @@ interface TemplateData {
   nombreRemitente?: string
   /** Texto libre para alertas agregadas (lista de cuentas, días restantes, etc.) */
   detalle?: string
+  /** Correo de acceso — solo lo usa la bienvenida, para mostrarlo como usuario. */
+  email?: string
 }
 
 const APP_URL = `${ORIGEN_APP}/`
@@ -229,6 +232,31 @@ export function emailRadicacionPendiente(data: TemplateData) {
   }
 }
 
+export function emailBienvenida(data: TemplateData) {
+  return {
+    subject: 'Bienvenido a Contratista Digital',
+    html: baseHtml(
+      '¡Bienvenido a Contratista Digital!',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Ya tienes una cuenta en Contratista Digital, la plataforma donde se gestionan
+         los informes, documentos y pagos de tu contrato con el municipio.
+       </p>
+       <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:16px 20px;margin:20px 0;border-radius:12px;">
+         <p style="color:#64748b;font-size:12px;margin:0 0 4px;">Tu usuario</p>
+         <p style="color:#0f172a;font-size:15px;font-weight:700;margin:0 0 14px;">${data.email ?? ''}</p>
+         <p style="color:#64748b;font-size:12px;margin:0 0 4px;">Contraseña inicial</p>
+         <p style="color:#0f172a;font-size:14px;margin:0;">Tu número de documento, sin puntos ni espacios.</p>
+       </div>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Por seguridad, puedes cambiarla cuando quieras desde Configuración,
+         una vez inicies sesión.
+       </p>`,
+      MARCA
+    ),
+  }
+}
+
 export function emailContratoVencimiento(data: TemplateData) {
   return {
     subject: `Contrato ${data.contrato} próximo a vencer`,
@@ -261,4 +289,5 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   recordatorio_vencido: emailRecordatorioVencido,
   radicacion_pendiente: emailRadicacionPendiente,
   contrato_vencimiento: emailContratoVencimiento,
+  bienvenida: emailBienvenida,
 }

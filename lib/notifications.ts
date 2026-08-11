@@ -10,6 +10,7 @@ import { getResendClient, RESEND_FROM } from './resend'
 import { getTwilioClient, TWILIO_WHATSAPP_FROM } from './twilio'
 import { EMAIL_TEMPLATES } from './emails/templates'
 import { getWhatsAppMessage } from './whatsapp'
+import { capitalizarNombre } from './format'
 
 export interface NotificationPayload {
   destinatarioId: string
@@ -66,7 +67,9 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   const whatsappEnabled = prefMap.get('whatsapp') === true // default: false
 
   const templateData = {
-    nombreDestinatario: usuario.nombre_completo?.split(' ')[0] || 'Usuario',
+    // Los nombres se guardan en mayúsculas (normalizeName); un correo no es
+    // un documento oficial, y "Hola JUAN" lee como si el sistema gritara.
+    nombreDestinatario: capitalizarNombre(usuario.nombre_completo?.split(' ')[0]) || 'Usuario',
     mes: payload.mes || '',
     anio: payload.anio || 0,
     contrato: payload.contrato || '',
@@ -74,6 +77,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
     numeroRadicado: payload.numeroRadicado,
     nombreRemitente: payload.nombreRemitente,
     detalle: payload.detalle,
+    email: usuario.email,
   }
 
   // 3. Send email (if enabled and configured)
