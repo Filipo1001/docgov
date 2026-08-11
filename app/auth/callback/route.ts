@@ -4,20 +4,16 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  // Supabase agrega `type=recovery` al enlace de resetPasswordForEmail, para
-  // distinguirlo de un login normal. Sin este chequeo, quien pide recuperar
-  // su contraseña terminaba con sesión iniciada en /dashboard sin que nadie
-  // le pidiera la contraseña nueva.
-  const type = searchParams.get('type')
 
   if (code) {
     const supabase = await createServerSupabaseClient()
     await supabase.auth.exchangeCodeForSession(code)
   }
 
-  if (type === 'recovery') {
-    return NextResponse.redirect(`${origin}/auth/nueva-contrasena`)
-  }
-
+  // La recuperación de contraseña NO pasa por aquí: su enlace apunta directo
+  // a /auth/nueva-contrasena. Supabase no conserva `type=recovery` al redirigir
+  // después de verificar, así que este punto no puede distinguir el motivo del
+  // enlace y cualquier intento de hacerlo acaba mandando la recuperación al
+  // panel, con la contraseña sin cambiar.
   return NextResponse.redirect(`${origin}/dashboard`)
 }

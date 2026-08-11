@@ -3,18 +3,23 @@
 /**
  * Último paso del flujo "¿Olvidó su contraseña?".
  *
- * Se llega aquí solo desde /auth/callback, después de que Supabase ya
- * canjeó el código de recuperación por una sesión. Antes el callback mandaba
- * directo a /dashboard sin pasar por aquí: la sesión quedaba iniciada, pero
- * nadie le pedía a la persona una contraseña nueva, así que "recuperar"
- * terminaba siendo un ingreso de un solo uso sin que la contraseña cambiara.
+ * Es el destino DIRECTO del enlace del correo: `resetPasswordForEmail` apunta
+ * aquí, no a /auth/callback. Ese rodeo no servía porque Supabase no conserva
+ * `type=recovery` como parámetro al redirigir después de verificar, así que el
+ * callback no podía distinguir una recuperación de un ingreso normal y mandaba
+ * a /dashboard — con la sesión sin establecer, dejando la pantalla en blanco.
  *
- * Si alguien llega a esta URL sin la sesión que deja ese canje (bookmark,
- * enlace reenviado, sesión expirada), se le manda a /login: no tiene sentido
- * pedir una contraseña nueva sin saber para qué cuenta es.
+ * La sesión se establece aquí, cubriendo las dos formas en que Supabase la
+ * entrega: `?code=` (PKCE, hay que canjearlo) o `#access_token=` (el cliente
+ * del navegador lo detecta solo al inicializarse).
+ *
+ * El enlace es de UN SOLO USO y caduca. Cuando ya se gastó, Supabase responde
+ * "Email link is invalid or has expired": eso se muestra como un mensaje con
+ * salida —pedir otro enlace—, no como una pantalla vacía.
  */
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Toaster, toast } from 'sonner'
@@ -22,6 +27,7 @@ import { LogoCD } from '@/components/Logo'
 
 export default function NuevaContrasenaPage() {
   const [verificando, setVerificando] = useState(true)
+  const [errorEnlace, setErrorEnlace] = useState<string | null>(null)
   const [nueva, setNueva] = useState('')
   const [confirmar, setConfirmar] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -29,16 +35,42 @@ export default function NuevaContrasenaPage() {
   const router = useRouter()
 
   useEffect(() => {
-    async function verificarSesion() {
+    async function establecerSesion() {
       const supabase = createClient()
-      const { data } = await supabase.auth.getUser()
-      if (!data.user) {
-        router.replace('/login')
+      const query = new URLSearchParams(window.location.search)
+      // Supabase informa los fallos del enlace por query o por fragmento,
+      // según el flujo; hay que mirar en ambos.
+      const fragmento = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+
+      const descripcion = query.get('error_description') ?? fragmento.get('error_description')
+      if (descripcion) {
+        setErrorEnlace(descripcion)
+        setVerificando(false)
         return
       }
+
+      const code = query.get('code')
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) {
+          setErrorEnlace(error.message)
+          setVerificando(false)
+          return
+        }
+      }
+
+      // Sin `code` la sesión pudo llegar en el fragmento, que el cliente
+      // procesa al inicializarse: en ambos casos basta con preguntar.
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) {
+        setErrorEnlace('El enlace no es válido o ya fue utilizado.')
+        setVerificando(false)
+        return
+      }
+
       setVerificando(false)
     }
-    verificarSesion()
+    establecerSesion()
   }, [router])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -84,6 +116,29 @@ export default function NuevaContrasenaPage() {
 
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
           <div className="p-8">
+            {errorEnlace ? (
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 mb-4">
+                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                  Este enlace ya no sirve
+                </h2>
+                <p className="text-sm text-gray-500 mb-6">
+                  Los enlaces de recuperación son de un solo uso y caducan.
+                  Solicita uno nuevo para continuar.
+                </p>
+                <Link
+                  href="/login"
+                  className="inline-block w-full bg-gray-900 text-white py-3 px-4 rounded-xl font-medium hover:bg-gray-800 active:scale-[0.98] transition-all"
+                >
+                  Volver al inicio de sesión
+                </Link>
+              </div>
+            ) : (
+            <>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">
               Crea tu nueva contraseña
             </h2>
@@ -147,6 +202,8 @@ export default function NuevaContrasenaPage() {
                 {guardando ? 'Guardando...' : 'Guardar contraseña'}
               </button>
             </form>
+            </>
+            )}
           </div>
         </div>
 

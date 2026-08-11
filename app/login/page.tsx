@@ -58,8 +58,12 @@ export default function LoginPage() {
     setEnviando(true)
     const supabase = createClient()
 
+    // Apunta DIRECTO a la pantalla de contraseña nueva, sin pasar por
+    // /auth/callback. Supabase no conserva `type=recovery` como parámetro al
+    // redirigir después de verificar, así que el callback no podía distinguir
+    // una recuperación de un ingreso normal y mandaba todo a /dashboard.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback`,
+      redirectTo: `${window.location.origin}/auth/nueva-contrasena`,
     })
 
     if (error) {
