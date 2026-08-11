@@ -13,9 +13,11 @@
  * entrega: `?code=` (PKCE, hay que canjearlo) o `#access_token=` (el cliente
  * del navegador lo detecta solo al inicializarse).
  *
- * El enlace es de UN SOLO USO y caduca. Cuando ya se gastó, Supabase responde
- * "Email link is invalid or has expired": eso se muestra como un mensaje con
- * salida —pedir otro enlace—, no como una pantalla vacía.
+ * El enlace es de UN SOLO USO y caduca, así que lo que decide es SI HAY SESIÓN,
+ * no si la URL trae un mensaje de error: abrirlo dos veces deja la segunda
+ * visita con "Email link is invalid or has expired" aunque la primera ya haya
+ * autenticado. Sin sesión sí se muestra el aviso, con salida a pedir otro
+ * enlace, en vez de una pantalla vacía.
  */
 
 import { useEffect, useState } from 'react'
@@ -41,33 +43,29 @@ export default function NuevaContrasenaPage() {
       // Supabase informa los fallos del enlace por query o por fragmento,
       // según el flujo; hay que mirar en ambos.
       const fragmento = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-
       const descripcion = query.get('error_description') ?? fragmento.get('error_description')
-      if (descripcion) {
-        setErrorEnlace(descripcion)
-        setVerificando(false)
-        return
-      }
 
       const code = query.get('code')
       if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (error) {
-          setErrorEnlace(error.message)
-          setVerificando(false)
-          return
-        }
+        await supabase.auth.exchangeCodeForSession(code)
       }
 
-      // Sin `code` la sesión pudo llegar en el fragmento, que el cliente
-      // procesa al inicializarse: en ambos casos basta con preguntar.
+      // LA SESIÓN MANDA, no el mensaje de error. El enlace es de un solo uso:
+      // abrirlo dos veces —otra pestaña, un refresco, el prefetch de un cliente
+      // de correo— hace que la segunda visita traiga "Email link is invalid or
+      // has expired" aunque la PRIMERA ya haya dejado la sesión establecida.
+      // Rechazar por ese mensaje echaba a quien sí estaba autenticado.
       const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        setErrorEnlace('El enlace no es válido o ya fue utilizado.')
+
+      if (data.session) {
+        // La URL conserva el código ya canjeado; al recargar volvería a
+        // intentarse y fallaría. Se limpia sin dejar rastro en el historial.
+        window.history.replaceState({}, '', window.location.pathname)
         setVerificando(false)
         return
       }
 
+      setErrorEnlace(descripcion ?? 'El enlace no es válido o ya fue utilizado.')
       setVerificando(false)
     }
     establecerSesion()
