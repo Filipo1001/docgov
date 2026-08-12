@@ -38,6 +38,12 @@ import { formatCedula } from '@/lib/format'
 /** Membrete institucional del formato, igual que en las otras actas. */
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-terminacion.png')
 
+export interface OtrosiResumen {
+  numero: number
+  tipo: 'adicion' | 'prorroga' | 'modificatorio' | 'aclaratorio'
+  fecha_inicio: string
+}
+
 export interface ActaTerminacionData {
   municipio: {
     nombre: string; departamento?: string; nit?: string
@@ -53,6 +59,8 @@ export interface ActaTerminacionData {
     valor_letras_total?: string
     fecha_inicio: string
     fecha_fin: string
+    /** Vacío si el contrato nunca se modificó — el caso normal, no la excepción. */
+    otrosies: OtrosiResumen[]
   }
   contratista: { nombre_completo: string; cedula: string; firma_url?: string }
   supervisor: { nombre_completo: string; cargo?: string; firma_url?: string }
@@ -79,6 +87,17 @@ function fechaConstancia(iso: string): string {
   return `${d} días del mes de ${MESES[m - 1]} de ${y}`
 }
 
+const TIPO_OTROSI_LABEL: Record<OtrosiResumen['tipo'], string> = {
+  adicion: 'Adición', prorroga: 'Prórroga', modificatorio: 'Modificatorio', aclaratorio: 'Aclaratorio',
+}
+
+/** [1,2,3] → "No. 1, No. 2 y No. 3" — para nombrar otrosíes en prosa legal. */
+function listaNumeros(nums: number[]): string {
+  const etiquetas = nums.map(n => `No. ${n}`)
+  if (etiquetas.length <= 1) return etiquetas.join('')
+  return `${etiquetas.slice(0, -1).join(', ')} y ${etiquetas[etiquetas.length - 1]}`
+}
+
 const COP = new Intl.NumberFormat('es-CO', {
   style: 'currency', currency: 'COP', maximumFractionDigits: 0,
 })
@@ -89,41 +108,45 @@ const s = StyleSheet.create({
   // OJO: sin `lineHeight` aquí. Heredado desde Page rompe el pie posicionado
   // en absoluto — deja de pintar su texto y estira el bloque a media página.
   // El interlineado se aplica en los estilos que lo necesitan.
+  //
+  // Espaciado alineado con acta-pago.tsx (paddingTop 36, lineHeight de
+  // prosa 1.5-1.7): esta acta usaba valores más apretados que sus hermanas
+  // —paddingTop 30, lineHeight 1.3, padding de celda 5— y se notaba.
   page: {
-    paddingTop: 30, paddingBottom: 64, paddingHorizontal: 46,
+    paddingTop: 36, paddingBottom: 64, paddingHorizontal: 46,
     fontSize: 9, fontFamily: 'Helvetica', color: '#111827',
   },
 
   // ── Cuadros ──
-  caja: { borderWidth: 0.8, borderColor: BORDE, marginBottom: 10 },
+  caja: { borderWidth: 0.8, borderColor: BORDE, marginBottom: 14 },
   fila: { flexDirection: 'row', borderBottomWidth: 0.8, borderBottomColor: BORDE },
   filaUlt: { flexDirection: 'row' },
   barra: {
-    fontFamily: 'Helvetica-Bold', textAlign: 'center', padding: 5,
+    fontFamily: 'Helvetica-Bold', textAlign: 'center', padding: 6,
     backgroundColor: '#E5E7EB', borderBottomWidth: 0.8, borderBottomColor: BORDE,
   },
   etiqueta: {
-    width: 122, padding: 5, fontFamily: 'Helvetica-Bold',
+    width: 122, padding: 6, fontFamily: 'Helvetica-Bold',
     borderRightWidth: 0.8, borderRightColor: BORDE, backgroundColor: '#F3F4F6',
   },
-  valor: { flex: 1, padding: 5 },
-  celdaAncha: { padding: 5, lineHeight: 1.3 },
-  cuerpoCaja: { padding: 8 },
+  valor: { flex: 1, padding: 6 },
+  celdaAncha: { padding: 6, lineHeight: 1.4 },
+  cuerpoCaja: { padding: 12 },
 
   // Casillas del tipo de vínculo
-  tipos: { flexDirection: 'row', padding: 5, gap: 24 },
+  tipos: { flexDirection: 'row', padding: 6, gap: 24 },
   tipoItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   casilla: {
     width: 11, height: 11, borderWidth: 0.8, borderColor: BORDE,
     fontSize: 8, fontFamily: 'Helvetica-Bold', textAlign: 'center', lineHeight: 1.25,
   },
 
-  p: { textAlign: 'justify', marginBottom: 7, lineHeight: 1.3 },
+  p: { textAlign: 'justify', marginBottom: 10, lineHeight: 1.5 },
   b: { fontFamily: 'Helvetica-Bold' },
 
   // ── Firmas ──
-  firmas: { marginTop: 18 },
-  firmaBloque: { width: 300, marginBottom: 18 },
+  firmas: { marginTop: 24 },
+  firmaBloque: { width: 300, marginBottom: 20 },
   firmaEspacio: { height: 46, justifyContent: 'flex-end' },
   firmaLinea: { borderTopWidth: 0.8, borderTopColor: BORDE, marginBottom: 3 },
   firmaNombre: { fontFamily: 'Helvetica-Bold', fontSize: 8.5 },
@@ -159,11 +182,17 @@ function Fila({ etiqueta, children, ultima }: { etiqueta: string; children: Reac
   )
 }
 
-/** Cuadro con fila de encabezado — la forma de CONSIDERANDO y ACUERDAN. */
+/**
+ * Cuadro con fila de encabezado — la forma de CONSIDERANDO y ACUERDAN.
+ * `s.barra` ya centra por defecto; antes se forzaba a la izquierda solo
+ * aquí, así que estos dos títulos quedaban desalineados frente a los otros
+ * dos encabezados del documento (GRADO DE RESPONSABILIDAD, INFORMACIÓN
+ * GENERAL DEL CONTRATO), que sí usan el centrado normal.
+ */
 function CajaTitulada({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <View style={s.caja}>
-      <Text style={[s.barra, { textAlign: 'left' }]}>{titulo}</Text>
+      <Text style={s.barra}>{titulo}</Text>
       <View style={s.cuerpoCaja}>{children}</View>
     </View>
   )
@@ -182,6 +211,13 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
   const nit = municipio.nit ? ` NIT ${municipio.nit}` : ''
   const depto = municipio.departamento ? ` - ${municipio.departamento}` : ''
 
+  const otrosies = contrato.otrosies
+  const hayOtrosies = otrosies.length > 0
+  // Solo la prórroga mueve la fecha que CONSIDERANDO usa para justificar la
+  // terminación; una adición o un aclaratorio no la afectan y no necesitan
+  // aparecer en esa frase — sí en el inventario del Cuadro 1, ese es completo.
+  const prorrogas = otrosies.filter(o => o.tipo === 'prorroga')
+
   return (
     <Document
       title={`Acta de Terminación — Contrato ${numeroContrato}`}
@@ -192,7 +228,7 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
       <Page size="A4" style={s.page}>
 
         {/* Membrete institucional: lleva el bloque FORMATO / código / versión. */}
-        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 10 }} fixed />
+        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 14 }} fixed />
 
         {/* ── Cuadro 1: responsabilidad + información general ──────
             En el original es una sola tabla, no dos. */}
@@ -229,10 +265,20 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
           </Fila>
           <Fila etiqueta="Contratista">{nombreContratista}   C.C. {cedula}</Fila>
           <Fila etiqueta="Valor del Contrato">{valorTexto}</Fila>
-          <Fila etiqueta="Plazo de ejecución inicial:">
+          {/* Sin "inicial": el contrato pudo prorrogarse por otrosí, y esta
+              fecha ya es la vigente —la fila de Otrosíes de abajo aclara si
+              cambió—, no la que se pactó el primer día. */}
+          <Fila etiqueta="Plazo de ejecución:">
             Desde la suscripción del acta de inicio y hasta el {fechaLarga(contrato.fecha_fin)}
           </Fila>
-          <Fila etiqueta="Acta de inicio:" ultima>{fechaLarga(contrato.fecha_inicio)}</Fila>
+          <Fila etiqueta="Acta de inicio:" ultima={!hayOtrosies}>
+            {fechaLarga(contrato.fecha_inicio)}
+          </Fila>
+          {hayOtrosies && (
+            <Fila etiqueta="Otrosíes:" ultima>
+              {otrosies.map(o => `No. ${o.numero} (${TIPO_OTROSI_LABEL[o.tipo]}, ${fechaLarga(o.fecha_inicio)})`).join('; ')}
+            </Fila>
+          )}
         </View>
 
         {/* ── Cuadro 2: CONSIDERANDO ──────────────────────────────── */}
@@ -242,9 +288,11 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
             C.C. {cedula}, se celebró un contrato cuyo objeto es {objeto}. {valorTexto}
           </Text>
           <Text style={s.p}>
-            Que de acuerdo con la cláusula cuarta del contrato, la finalización sería el{' '}
-            {fechaLarga(fechaTerminacion)}, razón por la cual, las partes declaramos la terminación del
-            contrato por haber ocurrido el vencimiento del plazo fijado en dicho acuerdo de voluntades.
+            Que de acuerdo con la cláusula cuarta del contrato
+            {prorrogas.length > 0 && `, modificada mediante ${prorrogas.length === 1 ? 'el Otrosí' : 'los Otrosíes'} ${listaNumeros(prorrogas.map(o => o.numero))}`},
+            {' '}la finalización sería el {fechaLarga(fechaTerminacion)}, razón por la cual, las partes
+            declaramos la terminación del contrato por haber ocurrido el vencimiento del plazo fijado en
+            dicho acuerdo de voluntades.
           </Text>
           <Text style={[s.p, { marginBottom: 0 }]}>Que, en virtud de lo anterior, las partes:</Text>
         </CajaTitulada>

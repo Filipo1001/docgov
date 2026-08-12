@@ -7,7 +7,7 @@ import {
   maskCedula, type DatosVerificacion,
 } from './verificacion'
 import type { PDFVerificacion } from './pdf/types'
-import type { ActaTerminacionData } from './pdf/acta-terminacion'
+import type { ActaTerminacionData, OtrosiResumen } from './pdf/acta-terminacion'
 
 const BUCKET = 'actas-terminacion'
 
@@ -97,6 +97,8 @@ export interface ContextoActa {
   valorLetras: string | null
   fechaInicio: string
   fechaFin: string
+  /** Vacío si el contrato nunca se modificó — el caso normal, no la excepción. */
+  otrosies: OtrosiResumen[]
   contratistaId: string
   nombre: string
   cedula: string
@@ -135,6 +137,18 @@ export async function cargarContextoActa(periodoId: string): Promise<ContextoAct
   const c = (p as unknown as { contrato: Record<string, any> }).contrato
   if (!c || !c.contratista || !c.supervisor) return null
 
+  // El acta declara la terminación con base en "la cláusula cuarta del
+  // contrato" (el plazo). Si un otrosí de tipo prórroga movió esa fecha, el
+  // texto tiene que decirlo — citar la cláusula original como si nunca se
+  // hubiera tocado es jurídicamente impreciso, aunque la fecha que se
+  // muestre ya sea la correcta.
+  const { data: otrosiesRaw } = await admin
+    .from('otrosies')
+    .select('numero, tipo, fecha_inicio')
+    .eq('contrato_id', c.id)
+    .order('numero')
+  const otrosies = (otrosiesRaw ?? []) as OtrosiResumen[]
+
   return {
     periodoId,
     contratoId: c.id,
@@ -145,6 +159,7 @@ export async function cargarContextoActa(periodoId: string): Promise<ContextoAct
     valorLetras: c.valor_letras_total ?? null,
     fechaInicio: c.fecha_inicio,
     fechaFin: c.fecha_fin,
+    otrosies,
     contratistaId: c.contratista.id,
     nombre: c.contratista.nombre_completo,
     cedula: c.contratista.cedula,
@@ -244,6 +259,7 @@ export async function emitirActaTerminacion(
         valor_letras_total: ctx.valorLetras ?? undefined,
         fecha_inicio: ctx.fechaInicio,
         fecha_fin: ctx.fechaFin,
+        otrosies: ctx.otrosies,
       },
       contratista: { nombre_completo: ctx.nombre, cedula: ctx.cedula, firma_url: firmaCt ?? undefined },
       supervisor: {
