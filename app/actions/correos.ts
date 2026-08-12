@@ -8,42 +8,26 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getResendClient, RESEND_FROM } from '@/lib/resend'
 import { getMesActual } from '@/lib/constants'
-import { ORIGEN_APP } from '@/lib/dominio'
+import { baseHtml } from '@/lib/emails/templates'
+import { MARCA } from '@/lib/marca'
 import type { ActionResult } from '@/lib/types'
 
 export type FiltroCorreo = 'sin_enviar' | 'enviaron' | 'rechazados' | 'todos'
 
 // ─── Helper: build plain HTML email ──────────────────────────
 
+/**
+ * Reutiliza el sobre compartido (logo + barra + botón + pie) en vez de la
+ * copia propia que este archivo mantenía —ya había divergido en el color
+ * de la barra (#1a1a1a en vez de MARCA)—. El asunto que escribe el asesor
+ * hace de título de la barra.
+ */
 function buildEmailHtml(asunto: string, contenidoHtml: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
-  <div style="max-width:560px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
-    <div style="background:#1a1a1a;padding:24px 32px;">
-      <h1 style="color:#fff;font-size:18px;margin:0;font-weight:700;">${asunto}</h1>
-    </div>
-    <div style="padding:32px;">
-      <div style="color:#333;font-size:14px;line-height:1.8;">${contenidoHtml}</div>
-      <div style="margin-top:28px;text-align:center;">
-        <a href="${ORIGEN_APP}/"
-           style="display:inline-block;background:#1a1a1a;color:#fff;padding:13px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;">
-          Abrir Contratista Digital
-        </a>
-      </div>
-    </div>
-    <div style="padding:16px 32px;border-top:1px solid #eee;text-align:center;">
-      <p style="color:#999;font-size:12px;margin:0;">
-        Contratista Digital
-      </p>
-    </div>
-  </div>
-</body>
-</html>`
+  return baseHtml(
+    asunto,
+    `<div style="color:#333;font-size:14px;line-height:1.8;">${contenidoHtml}</div>`,
+    MARCA,
+  )
 }
 
 // ─── Main action ──────────────────────────────────────────────

@@ -31,15 +31,16 @@ const APP_URL = `${ORIGEN_APP}/`
 const LOGO_URL = `${ORIGEN_APP}/marca/icono-96.png`
 
 /**
- * `conLogo` es aparte del rediseño completo de las plantillas —pendiente—:
- * solo la bienvenida lo pide por ahora. Las otras diez no pasan el parámetro,
- * así que su salida no cambia ni un byte.
+ * Exportada: app/actions/correos.ts (el correo masivo del asesor) la usa
+ * también, en vez de mantener su propia copia casi idéntica de este layout
+ * —que ya había empezado a divergir en el color de la barra (#1a1a1a en vez
+ * de MARCA). Un solo lugar que arma el sobre del correo, para toda la app.
  */
-function baseHtml(titulo: string, contenido: string, color: string, conLogo = false): string {
-  const encabezadoLogo = conLogo ? `
+export function baseHtml(titulo: string, contenido: string, color: string): string {
+  const encabezadoLogo = `
     <div style="background:#fff;padding:32px 32px 24px;text-align:center;border-bottom:1px solid #f0f0f0;">
       <img src="${LOGO_URL}" width="72" height="72" alt="Contratista Digital" style="display:block;margin:0 auto;border-radius:16px;" />
-    </div>` : ''
+    </div>`
 
   return `
 <!DOCTYPE html>
@@ -270,7 +271,6 @@ export function emailBienvenida(data: TemplateData) {
          <p style="color:#0f172a;font-size:14px;margin:0;">Tu número de documento, sin puntos ni espacios.</p>
        </div>`,
       MARCA,
-      true,
     ),
   }
 }
