@@ -21,6 +21,8 @@
  */
 
 import { useEffect, useState } from 'react'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 
 /** Día de la migración y último día que el aviso se muestra (America/Bogotá). */
 const DIA_MIGRACION = '2026-08-07'
@@ -86,9 +88,11 @@ export default function AvisoMigracion() {
       }`}
     >
       <div className="flex items-start gap-3">
-        <span className="text-lg leading-none mt-0.5 shrink-0" aria-hidden>
-          {esElDia ? '🔧' : yaPaso ? '✅' : '📢'}
-        </span>
+        <Icono
+          glifo={esElDia ? Iconos.accion.recargar : yaPaso ? Iconos.estado.aprobado : Iconos.aviso.notificaciones}
+          tamano="md"
+          className={`mt-0.5 shrink-0 ${esElDia ? 'text-amber-600' : yaPaso ? 'text-emerald-600' : 'text-blue-600'}`}
+        />
 
         <div className="flex-1 min-w-0">
           <p className={`text-sm font-semibold ${

@@ -57,6 +57,8 @@ import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions
 import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 import MejorarRedaccion from '@/components/MejorarRedaccion'
 import Badge from '@/components/ui/Badge'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 
 /** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
 type RevisionLocal = { aprobada: boolean; nota: string | null }
@@ -203,10 +205,11 @@ export default function PeriodoDetallePage({
   const [mostrarRechazo, setMostrarRechazo] = useState(false)
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [enviando, setEnviando] = useState(false)
-  // Certificación de retención — modal obligatorio previo al primer envío
+  // Acta de terminación — modal obligatorio previo al último envío
   const [mostrarActa, setMostrarActa] = useState(false)
   const [actaPrefill, setActaPrefill] = useState<ActaPrefill | null>(null)
   const [actaFaltaFirma, setActaFaltaFirma] = useState(false)
+  // Certificación de retención — modal obligatorio previo al primer envío
   const [mostrarCert, setMostrarCert] = useState(false)
   const [certPrefill, setCertPrefill] = useState<CertPrefill | null>(null)
   const [certFaltaFirma, setCertFaltaFirma] = useState(false)
@@ -547,8 +550,8 @@ export default function PeriodoDetallePage({
     ) {
       radicadoToastMostrado.current = true
       const msg = periodo.numero_radicado
-        ? `Tu informe ha sido radicado con el No. ${periodo.numero_radicado} 📁`
-        : 'Tu informe ha sido radicado exitosamente 📁'
+        ? `Tu informe ha sido radicado con el No. ${periodo.numero_radicado}`
+        : 'Tu informe ha sido radicado exitosamente'
       toast.success(msg, { duration: 6000 })
     }
   }, [periodo?.estado, periodo?.numero_radicado, usuario?.rol])
@@ -875,7 +878,7 @@ export default function PeriodoDetallePage({
     if (result.error) toast.error(result.error)
     else {
       const msg = numRadicado.trim()
-        ? `Radicado con No. ${numRadicado.trim()} ✓`
+        ? `Radicado con No. ${numRadicado.trim()}`
         : 'Periodo marcado como radicado'
       toast.success(msg)
       router.refresh(); cargarDatos()
@@ -893,7 +896,7 @@ export default function PeriodoDetallePage({
     const result = await actualizarNumeroRadicado(periodoId, numRadicadoEdit)
     if (result.error) toast.error(result.error)
     else {
-      toast.success('Número de radicado actualizado ✓')
+      toast.success('Número de radicado actualizado')
       setEditandoRadicado(false)
       cargarDatos()
     }
@@ -905,7 +908,7 @@ export default function PeriodoDetallePage({
     const result = await actualizarObservacionSupervisor(periodoId, texto)
     if (result.error) toast.error(result.error)
     else {
-      toast.success(texto?.trim() ? 'Observación guardada ✓' : 'Observación eliminada')
+      toast.success(texto?.trim() ? 'Observación guardada' : 'Observación eliminada')
       setEditandoObservacion(false)
       cargarDatos()
     }
@@ -942,7 +945,7 @@ export default function PeriodoDetallePage({
     const result = await actualizarBaseCotizacion(periodoId, valor)
     if (result.error) toast.error(result.error)
     else {
-      toast.success('Base de cotización actualizada ✓')
+      toast.success('Base de cotización actualizada')
       setEditandoBase(false)
       cargarDatos()
     }
@@ -1016,7 +1019,7 @@ export default function PeriodoDetallePage({
     if (result.error) {
       toast.error(result.error)
     } else {
-      toast.success('Actividad actualizada ✓')
+      toast.success('Actividad actualizada')
       handleCancelarEdicion()
       router.refresh()
       cargarActividades()
@@ -1243,7 +1246,7 @@ export default function PeriodoDetallePage({
       }
 
       if (successCount > 0) {
-        toast.success(successCount === 1 ? 'Imagen subida ✓' : `${successCount} imágenes subidas ✓`)
+        toast.success(successCount === 1 ? 'Imagen subida' : `${successCount} imágenes subidas`)
         if (mountedRef.current) {
           router.refresh()
           cargarActividades()
@@ -1272,7 +1275,7 @@ export default function PeriodoDetallePage({
         toast.error(`Reintento fallido: ${reg.error}`)
       } else {
         setPendienteRegistro(prev => ({ ...prev, [actividadId]: null }))
-        toast.success('Evidencia registrada ✓')
+        toast.success('Evidencia registrada')
         if (mountedRef.current) { router.refresh(); cargarActividades() }
       }
     } finally {
@@ -1376,7 +1379,7 @@ export default function PeriodoDetallePage({
     const res = await revisarPlanilla(periodoId, estado, comentario)
     if (res.error) toast.error(res.error)
     else {
-      toast.success(estado === 'aprobada' ? 'Planilla aprobada ✓' : 'Planilla rechazada')
+      toast.success(estado === 'aprobada' ? 'Planilla aprobada' : 'Planilla rechazada')
       setPlanillaMenuAbierto(false)
       cargarDatos()
     }
@@ -1439,7 +1442,7 @@ export default function PeriodoDetallePage({
       a.remove()
       URL.revokeObjectURL(url)
 
-      toast.success('Descarga lista ✓', { id: toastId })
+      toast.success('Descarga lista', { id: toastId })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al descargar', { id: toastId })
     } finally {
@@ -1474,7 +1477,7 @@ export default function PeriodoDetallePage({
             : 'bg-orange-50 border-orange-200'
         }`}
       >
-        <span className="text-base flex-shrink-0 leading-none mt-0.5">{nivelAlertaPlanilla === 'roja' ? '🔴' : '🟠'}</span>
+        <Icono glifo={Iconos.estado.advertencia} tamano="sm" className={`flex-shrink-0 mt-0.5 ${nivelAlertaPlanilla === 'roja' ? 'text-red-600' : 'text-amber-600'}`} />
         <div className="min-w-0">
           <p className={`text-xs font-semibold ${nivelAlertaPlanilla === 'roja' ? 'text-red-700' : 'text-orange-700'}`}>
             {nivelAlertaPlanilla === 'roja'
@@ -1493,12 +1496,12 @@ export default function PeriodoDetallePage({
   const selectorMesCotizacion = (esAsesor || esSecretaria) && periodo?.planilla_ss_url ? (
     <div className="px-4 py-3">
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-base">🗓️</span>
+        <Icono glifo={Iconos.dominio.periodo} tamano="sm" className="text-gray-400" />
         <p className="text-sm font-medium text-gray-900">Mes de cotización</p>
         {mesCotizacionSinVerificar ? (
           <span className="text-[10px] font-medium text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-full">sin verificar</span>
         ) : (
-          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">✓ confirmado</span>
+          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">confirmado</span>
         )}
       </div>
       <p className="text-[11px] text-gray-400 mb-2">
@@ -1622,7 +1625,7 @@ export default function PeriodoDetallePage({
       {esEditable && esContratista && !usuario?.firma_url && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-base shrink-0">✍️</span>
+            <Icono glifo={Iconos.navegacion.firmas} tamano="sm" className="shrink-0 text-gray-400" />
             <p className="text-xs text-amber-700">
               <strong>Recomendado:</strong> Registra tu firma para completar correctamente tus informes.
             </p>
@@ -1639,7 +1642,7 @@ export default function PeriodoDetallePage({
       {/* ── Historical lock banner ──────────────────────────── */}
       {esHistorico && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
-          <span className="text-xl flex-shrink-0">🔒</span>
+          <Icono glifo={Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
           <div>
             <p className="text-sm font-semibold text-amber-800">Periodo histórico — solo lectura</p>
             <p className="text-xs text-amber-700 mt-0.5">
@@ -1653,7 +1656,7 @@ export default function PeriodoDetallePage({
       {/* ── Past-month supervisor control panel ───────────────── */}
       {esPeriodoPasado && esSecretaria && !esAsesor && (
         <div className={`border rounded-2xl px-5 py-4 mb-6 flex items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
-          <span className="text-xl flex-shrink-0">{periodo.habilitado_tardio ? '🔓' : '🔒'}</span>
+          <Icono glifo={periodo.habilitado_tardio ? Iconos.estado.desbloqueado : Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
           <div className="flex-1 min-w-0">
             <p className={`text-sm font-semibold ${periodo.habilitado_tardio ? 'text-emerald-800' : 'text-blue-800'}`}>
               {periodo.habilitado_tardio ? 'Envío tardío activo' : 'Periodo vencido'}
@@ -1690,7 +1693,7 @@ export default function PeriodoDetallePage({
       {/* ── Past-month lock banner (contratista, not unlocked) ── */}
       {periodoVencido && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
-          <span className="text-xl flex-shrink-0">📅</span>
+          <Icono glifo={Iconos.dominio.periodo} tamano="lg" className="flex-shrink-0 text-gray-400" />
           <div>
             <p className="text-sm font-semibold text-orange-800">Periodo cerrado para envío</p>
             <p className="text-xs text-orange-700 mt-0.5">
@@ -1704,7 +1707,7 @@ export default function PeriodoDetallePage({
       {/* ── Late submission unlocked banner (contratista only) ── */}
       {esContratista && periodo.habilitado_tardio && !esHistorico && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
-          <span className="text-xl flex-shrink-0">✅</span>
+          <Icono glifo={Iconos.estado.aprobado} tamano="lg" className="flex-shrink-0 text-emerald-600" />
           <div>
             <p className="text-sm font-semibold text-emerald-800">Envío tardío habilitado</p>
             <p className="text-xs text-emerald-700 mt-0.5">
@@ -1823,7 +1826,7 @@ export default function PeriodoDetallePage({
             <span className="text-xs text-gray-400">Pre-aprobado por:</span>
             {preaprobaciones.map(pa => (
               <span key={pa.id} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                ✓ {pa.asesor?.nombre_completo || 'Asesor'}
+                {pa.asesor?.nombre_completo || 'Asesor'}
               </span>
             ))}
           </div>
@@ -1889,7 +1892,7 @@ export default function PeriodoDetallePage({
           {/* ── Planilla rechazada ─────────────────────────────── */}
           {periodo.planilla_estado === 'rechazada' && (
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">🏥</div>
+              <div className="w-9 h-9 bg-red-50 rounded-xl flex items-center justify-center flex-shrink-0 text-red-600"><Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" /></div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-red-800">Tu planilla de seguridad social fue rechazada</p>
                 {periodo.planilla_comentario ? (
@@ -1942,7 +1945,7 @@ export default function PeriodoDetallePage({
             <>
               <span className="text-gray-300">|</span>
               <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
-                📁 Radicado No. {periodo.numero_radicado}
+                Radicado No. {periodo.numero_radicado}
               </span>
             </>
           )}
@@ -1953,7 +1956,7 @@ export default function PeriodoDetallePage({
       {usuario?.rol === 'admin' && periodo.estado !== 'borrador' && (
         <div className="bg-white rounded-2xl border border-orange-100 p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-sm">⚙️</span>
+            <Icono glifo={Iconos.navegacion.configuracion} tamano="sm" className="text-gray-400" />
             <h3 className="text-sm font-semibold text-gray-800">Devolución de periodo</h3>
             <span className="text-xs text-gray-400">Solo admin</span>
           </div>
@@ -2017,7 +2020,7 @@ export default function PeriodoDetallePage({
       {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && (esAsesor || esSecretaria) && (
         <div className="bg-white rounded-2xl border border-blue-200 p-4 sm:p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-base">🔍</div>
+            <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"><Icono glifo={Iconos.accion.ver} tamano="sm" /></div>
             <div>
               <h3 className="font-medium text-gray-900">Revisión del informe</h3>
               <p className="text-xs text-gray-400">
@@ -2055,7 +2058,7 @@ export default function PeriodoDetallePage({
                   disabled={procesando}
                   className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
                 >
-                  {procesando ? 'Procesando...' : periodo.estado === 'rechazado' ? '✓ Aprobar ahora' : '✓ Aprobar'}
+                  {procesando ? 'Procesando...' : periodo.estado === 'rechazado' ? 'Aprobar ahora' : 'Aprobar'}
                 </button>
               )}
               {(periodo.estado === 'enviado' || periodo.estado === 'revision') && (
@@ -2063,7 +2066,7 @@ export default function PeriodoDetallePage({
                   onClick={() => setMostrarRechazo(true)}
                   className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
                 >
-                  ✕ Rechazar
+                  Rechazar
                 </button>
               )}
             </div>
@@ -2204,7 +2207,7 @@ export default function PeriodoDetallePage({
                         verde se lee como "acción disponible", no como "hecho". */}
                     <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                       {estadoRev === 'aprobada' && (
-                        <Badge variant="green" size="xs">✓ Aprobada por la supervisión</Badge>
+                        <Badge variant="green" size="xs">Aprobada por la supervisión</Badge>
                       )}
                       {estadoRev === 'sin_aprobar' && (
                         <Badge variant="amber" size="xs">Sin aprobar</Badge>
@@ -2640,7 +2643,7 @@ export default function PeriodoDetallePage({
                     ? 'bg-green-50 border-green-200'
                     : 'bg-amber-50 border-amber-300'
                 }`}>
-                  <span className="text-lg shrink-0">🧾</span>
+                  <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-400" />
 
                   <label className={`flex-1 min-w-0 transition-opacity ${
                     puedeAdjuntarFactura ? 'cursor-pointer hover:opacity-75' : ''
@@ -2652,7 +2655,7 @@ export default function PeriodoDetallePage({
                       {subiendoFactura
                         ? 'Subiendo...'
                         : periodo.factura_electronica_url
-                          ? '✓ Adjuntada — clic para reemplazar'
+                          ? 'Adjuntada — clic para reemplazar'
                           : 'Requerida — sustituye a la Cuenta de Cobro'}
                     </p>
                     {puedeAdjuntarFactura && (
@@ -2716,7 +2719,7 @@ export default function PeriodoDetallePage({
                     ? 'bg-green-50 border-green-200'
                     : 'bg-gray-50 border-gray-200'
               }`}>
-                <span className="text-lg shrink-0">🏥</span>
+                <Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" className="shrink-0 text-gray-400" />
 
                 {/* Clickable label area */}
                 <label className="flex-1 min-w-0 cursor-pointer hover:opacity-75 transition-opacity">
@@ -2725,7 +2728,7 @@ export default function PeriodoDetallePage({
                     {subiendoPlanilla
                       ? 'Subiendo...'
                       : periodo.planilla_ss_url
-                        ? '✓ Cargada — clic para reemplazar'
+                        ? 'Cargada — clic para reemplazar'
                         : erroresCampos.planilla
                           ? 'Requerida — adjunta el archivo'
                           : 'Subir PDF'}
@@ -2824,7 +2827,7 @@ export default function PeriodoDetallePage({
             <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
               {preaprobaciones.map(pa => (
                 <span key={pa.id} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                  ✓ Pre-aprobado por {pa.asesor?.nombre_completo || 'Asesor'}
+                  Pre-aprobado por {pa.asesor?.nombre_completo || 'Asesor'}
                 </span>
               ))}
             </div>
@@ -2836,7 +2839,7 @@ export default function PeriodoDetallePage({
         <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">📁</span>
+              <Icono glifo={Iconos.estado.verificado} tamano="lg" className="text-gray-400" />
               <p className="text-base font-bold text-emerald-700">Periodo radicado</p>
             </div>
             {/* Edit button — only for asesor/supervisor/admin */}
@@ -2904,19 +2907,19 @@ export default function PeriodoDetallePage({
           <div className="space-y-0">
             {historial.map((h, i) => {
               const esUltimo = i === historial.length - 1
-              const icono = h.estado_nuevo === 'aprobado' ? '✅' :
-                            h.estado_nuevo === 'revision' ? '🔍' :
-                            h.estado_nuevo === 'rechazado' ? '❌' :
-                            h.estado_nuevo === 'enviado' ? '📩' :
-                            h.estado_nuevo === 'radicado' ? '📁' : '•'
+              const icono = h.estado_nuevo === 'aprobado' ? Iconos.estado.aprobado :
+                            h.estado_nuevo === 'revision' ? Iconos.accion.ver :
+                            h.estado_nuevo === 'rechazado' ? Iconos.estado.rechazado :
+                            h.estado_nuevo === 'enviado' ? Iconos.accion.enviar :
+                            h.estado_nuevo === 'radicado' ? Iconos.estado.verificado : Iconos.estado.pendiente
               const fecha = new Date(h.created_at)
               const fechaLabel = fecha.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) +
                 ' · ' + fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
               return (
                 <div key={h.id} className="flex gap-3">
                   <div className="flex flex-col items-center">
-                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-sm flex-shrink-0">
-                      {icono}
+                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 flex-shrink-0">
+                      <Icono glifo={icono} tamano="sm" />
                     </div>
                     {!esUltimo && <div className="w-0.5 bg-gray-100 flex-1 my-1" />}
                   </div>
@@ -2946,14 +2949,16 @@ export default function PeriodoDetallePage({
         <div className="bg-white rounded-2xl border border-amber-100 p-5 mb-6">
           {/* Header */}
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-lg flex-shrink-0">📋</div>
+            <div className="w-9 h-9 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-amber-600 flex-shrink-0">
+              <Icono glifo={Iconos.documentos.actaSupervision} tamano="md" />
+            </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-gray-900">Revisión de supervisión</h3>
               {tienePreaprobaciones && (
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   {preaprobaciones.map(pa => (
                     <span key={pa.id} className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                      ✓ {pa.asesor?.nombre_completo || 'Asesor'}
+                      {pa.asesor?.nombre_completo || 'Asesor'}
                     </span>
                   ))}
                 </div>
@@ -2995,7 +3000,7 @@ export default function PeriodoDetallePage({
                   : 'bg-green-100 hover:bg-green-200 text-green-700 border border-green-200'
               }`}
             >
-              {procesando ? 'Aprobando...' : '✓ Aprobar informe'}
+              {procesando ? 'Aprobando...' : 'Aprobar informe'}
             </button>
             <button
               onClick={() => { setMostrarDevolverModal(true); setDestinoDevolucion(null); setMotivoDevolucion('') }}
@@ -3084,7 +3089,7 @@ export default function PeriodoDetallePage({
             <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
               <a href={`/api/pdf/${periodoId}/informe`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="text-lg shrink-0">📝</span>
+                <Icono glifo={Iconos.documentos.informe} tamano="md" className="shrink-0 text-gray-400" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">Informe de Actividades</p>
                   <p className="text-xs text-gray-400">Generado automáticamente</p>
@@ -3106,7 +3111,7 @@ export default function PeriodoDetallePage({
             <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
               <a href={`/api/pdf/${periodoId}/cuenta-cobro`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="text-lg shrink-0">{exigeFacturaElectronica ? '🧾' : '💰'}</span>
+                <Icono glifo={exigeFacturaElectronica ? Iconos.documentos.certificacion : Iconos.documentos.cuentaCobro} tamano="md" className="shrink-0 text-gray-400" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">
                     {exigeFacturaElectronica ? 'Factura electrónica' : 'Cuenta de Cobro'}
@@ -3132,7 +3137,7 @@ export default function PeriodoDetallePage({
               <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                 <a href={`/api/certificacion/${periodoId}`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className="text-lg shrink-0">🧾</span>
+                  <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-400" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">Certificación de Retención</p>
                     <p className="text-xs text-gray-400">Bajo la gravedad de juramento</p>
@@ -3146,7 +3151,7 @@ export default function PeriodoDetallePage({
               <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors">
                 <a href={`/api/acta-terminacion/${periodoId}`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className="text-lg shrink-0">🤝</span>
+                  <Icono glifo={Iconos.documentos.actaTerminacion} tamano="md" className="shrink-0 text-emerald-600" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">Acta de Terminación</p>
                     <p className="text-xs text-gray-400">Terminación bilateral del contrato</p>
@@ -3162,11 +3167,11 @@ export default function PeriodoDetallePage({
               }`}>
                 <a href={`/api/pdf/${periodoId}/acta-supervision`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className="text-lg shrink-0">📋</span>
+                  <Icono glifo={Iconos.documentos.actaSupervision} tamano="md" className="shrink-0 text-gray-400" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">Acta de Supervisión</p>
                     <p className="text-xs text-gray-400">
-                      {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
+                      {puedeDescargarPaquete ? 'Firmada' : 'Pendiente aprobación'}
                     </p>
                   </div>
                 </a>
@@ -3254,11 +3259,11 @@ export default function PeriodoDetallePage({
             }`}>
               <a href={`/api/pdf/${periodoId}/acta-pago`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="text-lg shrink-0">🧾</span>
+                <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-400" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">Acta de Pago</p>
                   <p className="text-xs text-gray-400">
-                    {puedeDescargarPaquete ? '✓ Firmada' : 'Pendiente aprobación'}
+                    {puedeDescargarPaquete ? 'Firmada' : 'Pendiente aprobación'}
                   </p>
                 </div>
               </a>
@@ -3292,8 +3297,8 @@ export default function PeriodoDetallePage({
                               : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
-                  <span className="relative text-lg">
-                    🏥
+                  <span className="relative inline-flex text-gray-500">
+                    <Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" />
                     {nivelAlertaPlanilla && (esAsesor || esSecretaria) && (
                       <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
                         nivelAlertaPlanilla === 'roja' ? 'bg-red-500' : 'bg-orange-400'
@@ -3308,9 +3313,9 @@ export default function PeriodoDetallePage({
                         : !periodo.planilla_ss_url
                           ? 'Sin cargar — haz clic para subir'
                           : periodo.planilla_estado === 'aprobada'
-                            ? `✓ Aprobada${periodo.numero_planilla ? ` · No. ${periodo.numero_planilla}` : ''}`
+                            ? `Aprobada${periodo.numero_planilla ? ` · No. ${periodo.numero_planilla}` : ''}`
                             : periodo.planilla_estado === 'rechazada'
-                              ? `✕ Rechazada${periodo.numero_planilla ? ` · No. ${periodo.numero_planilla}` : ''} — requiere corrección`
+                              ? `Rechazada${periodo.numero_planilla ? ` · No. ${periodo.numero_planilla}` : ''} — requiere corrección`
                               : periodo.numero_planilla
                                 ? `No. ${periodo.numero_planilla} · Pendiente revisión asesor`
                                 : 'Cargada · Pendiente No. planilla y revisión'}
@@ -3341,7 +3346,7 @@ export default function PeriodoDetallePage({
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
                       >
-                        <span className="text-base">👁️</span>
+                        <Icono glifo={Iconos.accion.ver} tamano="sm" />
                         <span className="text-sm text-gray-700 font-medium">Ver documento</span>
                       </a>
                     )}
@@ -3352,7 +3357,7 @@ export default function PeriodoDetallePage({
                     {/* Subir / Reemplazar (contratista, hasta aprobado) */}
                     {esPlanillaGestionable && (
                       <label className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
-                        <span className="text-base">{periodo.planilla_ss_url ? '🔄' : '⬆️'}</span>
+                        <Icono glifo={periodo.planilla_ss_url ? Iconos.accion.recargar : Iconos.documentos.subir} tamano="sm" />
                         <span className="text-sm text-gray-700 font-medium">
                           {subiendoPlanilla
                             ? 'Subiendo...'
@@ -3378,7 +3383,7 @@ export default function PeriodoDetallePage({
                     {esPlanillaGestionable && (
                       <div className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-base">🔢</span>
+                          <Icono glifo={Iconos.dominio.numero} tamano="sm" />
                           <input
                             value={numPlanilla}
                             onChange={(e) => { setNumPlanilla(e.target.value); setErrorFormatoPlanilla(null) }}
@@ -3406,7 +3411,7 @@ export default function PeriodoDetallePage({
                         onClick={() => handleRevisarPlanilla('aprobada')}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-green-50 transition-colors text-left"
                       >
-                        <span className="text-base">✅</span>
+                        <Icono glifo={Iconos.estado.aprobado} tamano="sm" />
                         <div>
                           <p className="text-sm font-medium text-green-700">Aprobar planilla</p>
                           <p className="text-xs text-gray-400">
@@ -3458,7 +3463,7 @@ export default function PeriodoDetallePage({
                           onClick={() => setMostrarFormRechazo(true)}
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left"
                         >
-                          <span className="text-base">❌</span>
+                          <Icono glifo={Iconos.estado.rechazado} tamano="sm" />
                           <div>
                             <p className="text-sm font-medium text-red-600">Rechazar planilla</p>
                             {periodo.planilla_comentario
@@ -3475,7 +3480,7 @@ export default function PeriodoDetallePage({
                         onClick={handleEliminarPlanilla}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left"
                       >
-                        <span className="text-base">🗑️</span>
+                        <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
                         <span className="text-sm text-red-600 font-medium">Eliminar planilla</span>
                       </button>
                     )}
@@ -3483,7 +3488,7 @@ export default function PeriodoDetallePage({
                     {/* Número de planilla readonly (cuando no es gestionable) */}
                     {!esPlanillaGestionable && periodo.numero_planilla && (
                       <div className="px-4 py-3 flex items-center gap-2">
-                        <span className="text-base">🔢</span>
+                        <Icono glifo={Iconos.dominio.numero} tamano="sm" />
                         <p className="text-sm text-gray-700">
                           N.° de planilla: <strong className="text-gray-900">{periodo.numero_planilla}</strong>
                         </p>
@@ -3511,7 +3516,7 @@ export default function PeriodoDetallePage({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center text-lg flex-shrink-0">⚠️</div>
+              <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 flex-shrink-0"><Icono glifo={Iconos.estado.advertencia} tamano="md" /></div>
               <h3 className="text-sm font-semibold text-gray-900">Obligaciones sin revisar</h3>
             </div>
             <p className="text-xs text-gray-500 mb-3">
@@ -3571,7 +3576,7 @@ export default function PeriodoDetallePage({
                     : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                <span className="text-lg flex-shrink-0">🔍</span>
+                <Icono glifo={Iconos.accion.ver} tamano="md" className="flex-shrink-0 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium">Devolver a asesor</p>
                   <p className="text-xs text-gray-400 mt-0.5">El asesor revisará y reenviará a secretaría</p>

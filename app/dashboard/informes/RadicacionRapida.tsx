@@ -96,7 +96,7 @@ export default function RadicacionRapida({
     if (radicados > 0) {
       const ok = items.filter(i => !errores.some(e => e.periodoId === i.periodoId))
       onRadicados(ok)
-      toast.success(`${radicados} cuenta${radicados === 1 ? '' : 's'} radicada${radicados === 1 ? '' : 's'} ✓`)
+      toast.success(`${radicados} cuenta${radicados === 1 ? '' : 's'} radicada${radicados === 1 ? '' : 's'}`)
     }
     if (errores.length > 0) {
       setErroresFila(Object.fromEntries(errores.map(e => [e.periodoId, e.error])))

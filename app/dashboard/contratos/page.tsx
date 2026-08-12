@@ -20,17 +20,49 @@ import { useQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula } from '@/lib/format'
+import { esGestorContratos, esRolSupervision, esMesPasado } from '@/lib/constants'
 import { type ContratoListItem } from '@/services/contratos'
 import { getTodosContratosConBanco } from '@/app/actions/contratos-lista'
+import Icono from '@/components/ui/Icono'
+import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type ContratistaInfo = NonNullable<ContratoListItem['contratista']>
 
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+/**
+ * Lo que este contrato espera de quien lo vigila.
+ *
+ * Son los dos únicos motivos por los que un supervisor necesita abrir un
+ * contrato sin que nadie se lo pida:
+ *
+ *  · POR REVISAR — informes enviados esperando su aprobación.
+ *  · ATRASADOS   — periodos en borrador cuyo mes ya terminó y que nadie ha
+ *                  desbloqueado. El contratista ya no puede entregarlos por su
+ *                  cuenta: hasta que el supervisor habilite el envío tardío,
+ *                  quedan congelados. Antes no había forma de saber que
+ *                  existían sin abrir los contratos uno por uno.
+ *
+ * Los históricos se excluyen: son periodos anteriores a la digitalización y
+ * nadie va a actuar sobre ellos.
+ */
+type Atencion = { porRevisar: number; atrasados: number; total: number }
+
+function calcularAtencion(c: ContratoListItem): Atencion {
+  let porRevisar = 0
+  let atrasados = 0
+  for (const p of c.periodos ?? []) {
+    if (p.es_historico) continue
+    if (p.estado === 'enviado') porRevisar++
+    else if (p.estado === 'borrador' && !p.habilitado_tardio && esMesPasado(p.mes, p.anio)) atrasados++
+  }
+  return { porRevisar, atrasados, total: porRevisar + atrasados }
+}
+
+function InfoRow({ icono, label, value }: { icono: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="text-base shrink-0 mt-0.5">{icon}</span>
+      <Icono glifo={icono} tamano="sm" className="shrink-0 mt-0.5 text-gray-400" />
       <div className="min-w-0">
         <p className="text-xs text-gray-400">{label}</p>
         <p className="text-sm text-gray-800 break-all">{value}</p>
@@ -105,17 +137,17 @@ function VerUsuarioModal({
 
         {/* Info rows */}
         <div className="px-6 py-5 space-y-4">
-          <InfoRow icon="📧" label="Correo electrónico" value={emailVisible ?? '—'} />
-          <InfoRow icon="📱" label="Celular" value={contratista.telefono ?? '—'} />
+          <InfoRow icono={Iconos.aviso.correo} label="Correo electrónico" value={emailVisible ?? '—'} />
+          <InfoRow icono={Iconos.dominio.telefono} label="Celular" value={contratista.telefono ?? '—'} />
 
           {tieneCuenta && (
             <>
               <div className="border-t border-gray-100 pt-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Cuenta bancaria</p>
                 <div className="space-y-4">
-                  <InfoRow icon="🏦" label="Banco" value={contratista.banco ?? '—'} />
+                  <InfoRow icono={Iconos.dominio.banco} label="Banco" value={contratista.banco ?? '—'} />
                   <InfoRow
-                    icon="💳"
+                    icono={Iconos.dominio.cuentaBancaria}
                     label="Tipo · Número"
                     value={`${contratista.tipo_cuenta ?? '—'} · ${contratista.numero_cuenta ?? '—'}`}
                   />
@@ -190,9 +222,14 @@ function useDebounced<T>(value: T, ms = 300): T {
 
 export default function ContratosPage() {
   const { usuario, cargando: cargandoUser } = useUsuario()
-  // Vista de gestión: admin y contratación ven todos los contratos, buscador,
-  // filtros, crear y exportar. Contratista/supervisor ven solo los suyos.
-  const esGestor = usuario?.rol === 'admin' || usuario?.rol === 'contratacion'
+  // GESTIÓN (admin, contratación): todo el municipio, más crear y exportar.
+  // SUPERVISIÓN (supervisor, asesor): su ámbito, sin crear ni exportar, pero
+  // con el mismo buscador — un supervisor llega a 48 contratos y hasta ahora
+  // recorría la lista entera a ojo.
+  // El contratista se queda con su lista corta y sin herramientas.
+  const esGestor = esGestorContratos(usuario?.rol)
+  const esSupervision = esRolSupervision(usuario?.rol)
+  const puedeBuscar = esGestor || esSupervision
   const hoy = new Date().toISOString().split('T')[0]
 
   // ── Modal state ────────────────────────────────────────────────
@@ -204,18 +241,40 @@ export default function ContratosPage() {
   const [filtroSup, setFiltroSup] = useState('')
   const [filtroRango, setFiltroRango] = useState(0)
   const [soloIncompletos, setSoloInc] = useState(false)
+  const [soloAtencion, setSoloAtencion] = useState(false)
   const [filtroVigencia, setFiltroVig] = useState<'todos' | 'vigentes' | 'vencidos'>('todos')
 
   const busquedaDebounced = useDebounced(busqueda, 200)
 
-  // Filtros que llegan por URL desde las tarjetas del panel de contratación.
-  // Se aplican tras montar y no en el useState inicial: el servidor no ve la
-  // query string de la misma forma y la hidratación no cuadraría.
+  // Filtros iniciales. Se aplican tras montar y no en el useState: dependen de
+  // la query string (tarjetas del panel de contratación) y del rol, y el
+  // servidor no ve ninguno de los dos igual — la hidratación no cuadraría.
+  //
+  // Supervisión arranca en "Vigentes": el supervisor con más carga tiene 48
+  // contratos y solo 8 vigentes, así que abrir en "Todos" es abrir sobre 40
+  // contratos terminados. Las otras pestañas quedan a un clic y con su cuenta
+  // a la vista, así que no se esconde nada, se ordena.
+  const [filtrosIniciados, setFiltrosIniciados] = useState(false)
   useEffect(() => {
+    if (!usuario || filtrosIniciados) return
     const q = new URLSearchParams(window.location.search)
     if (q.get('incompletos') === '1') setSoloInc(true)
     if (q.get('vigencia') === 'vigentes') setFiltroVig('vigentes')
-  }, [])
+    else if (esRolSupervision(usuario.rol)) setFiltroVig('vigentes')
+    setFiltrosIniciados(true)
+  }, [usuario, filtrosIniciados])
+
+  /**
+   * Un periodo atrasado suele estar en un contrato YA VENCIDO — es el caso más
+   * probable, porque el contrato terminó y quedó un informe sin entregar. Si
+   * este filtro respetara "Vigentes" escondería justo lo que se pide ver, así
+   * que al activarlo se abre la vigencia a todos.
+   */
+  function alternarAtencion() {
+    const siguiente = !soloAtencion
+    setSoloAtencion(siguiente)
+    if (siguiente) setFiltroVig('todos')
+  }
 
   // ── Carga única de todos los contratos del rol ─────────────────
   const {
@@ -283,10 +342,23 @@ export default function ContratosPage() {
       if (filtroVigencia === 'vencidos' && c.fecha_fin >= hoy) return false
       // Solo incompletos
       if (soloIncompletos && datosFaltantes(c).length === 0) return false
+      // Solo los que esperan algo de mí
+      if (soloAtencion && calcularAtencion(c).total === 0) return false
       return true
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todosCargados, busquedaDebounced, filtroDep, filtroSup, filtroRango, filtroVigencia, soloIncompletos, esGestor, hoy])
+  }, [todosCargados, busquedaDebounced, filtroDep, filtroSup, filtroRango, filtroVigencia, soloIncompletos, soloAtencion, esGestor, hoy])
+
+  // Se cuenta sobre TODO el dataset, no sobre lo visible: es la cifra que
+  // justifica pulsar el filtro, así que no puede depender del filtro.
+  const totalAtencion = useMemo(
+    () => todosCargados.filter(c => calcularAtencion(c).total > 0).length,
+    [todosCargados],
+  )
+  const totalVigentes = useMemo(
+    () => todosCargados.filter(c => c.fecha_fin >= hoy).length,
+    [todosCargados, hoy],
+  )
 
   // ── Opciones de filtro derivadas de TODO el dataset ───────────
   const dependencias = useMemo(() => {
@@ -316,7 +388,7 @@ export default function ContratosPage() {
 
   // ── Misc ──────────────────────────────────────────────────────
   const hayFiltrosActivos =
-    busqueda || filtroDep || filtroSup || filtroRango > 0 || soloIncompletos || filtroVigencia !== 'todos'
+    busqueda || filtroDep || filtroSup || filtroRango > 0 || soloIncompletos || soloAtencion || filtroVigencia !== 'todos'
 
   function limpiarFiltros() {
     setBusqueda('')
@@ -324,6 +396,7 @@ export default function ContratosPage() {
     setFiltroSup('')
     setFiltroRango(0)
     setSoloInc(false)
+    setSoloAtencion(false)
     setFiltroVig('todos')
   }
 
@@ -359,8 +432,10 @@ export default function ContratosPage() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
+        {/* "Mis contratos" solo es literal para el contratista: son suyos.
+            Quien los vigila no los posee, así que ve "Contratos". */}
         <h2 className="text-2xl font-bold text-gray-900">
-          {esGestor ? 'Contratos' : 'Mis contratos'}
+          {puedeBuscar ? 'Contratos' : 'Mis contratos'}
         </h2>
         {esGestor && (
           <div className="flex items-center gap-2">
@@ -383,8 +458,8 @@ export default function ContratosPage() {
         )}
       </div>
 
-      {/* ── Search + Filters (admin only) ───────────────────────── */}
-      {esGestor && (
+      {/* ── Buscador + filtros (gestión y supervisión) ──────────── */}
+      {puedeBuscar && (
         <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 space-y-3">
           {/* Search bar */}
           <div className="relative">
@@ -408,37 +483,44 @@ export default function ContratosPage() {
 
           {/* Filter row */}
           <div className="flex flex-wrap gap-2 items-center">
-            <select
-              value={filtroDep}
-              onChange={(e) => setFiltroDep(e.target.value)}
-              className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroDep ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
-            >
-              <option value="">Todas las secretarías</option>
-              {dependencias.map(([id, nombre]) => (
-                <option key={id} value={id}>{nombre.replace(/^Secretaría\s+/i, 'Sec. ')}</option>
-              ))}
-            </select>
+            {/* Secretaría, supervisor y rango solo tienen sentido con todo el
+                municipio delante: en supervisión la dependencia es una sola y
+                el supervisor es quien mira. */}
+            {esGestor && (
+              <>
+                <select
+                  value={filtroDep}
+                  onChange={(e) => setFiltroDep(e.target.value)}
+                  className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroDep ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
+                >
+                  <option value="">Todas las secretarías</option>
+                  {dependencias.map(([id, nombre]) => (
+                    <option key={id} value={id}>{nombre.replace(/^Secretaría\s+/i, 'Sec. ')}</option>
+                  ))}
+                </select>
 
-            <select
-              value={filtroSup}
-              onChange={(e) => setFiltroSup(e.target.value)}
-              className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroSup ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
-            >
-              <option value="">Todos los supervisores</option>
-              {supervisores.map(([id, nombre]) => (
-                <option key={id} value={id}>{nombre.split(' ').slice(0, 2).join(' ')}</option>
-              ))}
-            </select>
+                <select
+                  value={filtroSup}
+                  onChange={(e) => setFiltroSup(e.target.value)}
+                  className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroSup ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
+                >
+                  <option value="">Todos los supervisores</option>
+                  {supervisores.map(([id, nombre]) => (
+                    <option key={id} value={id}>{nombre.split(' ').slice(0, 2).join(' ')}</option>
+                  ))}
+                </select>
 
-            <select
-              value={filtroRango}
-              onChange={(e) => setFiltroRango(Number(e.target.value))}
-              className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroRango > 0 ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
-            >
-              {RANGOS.map((r, i) => (
-                <option key={i} value={i}>{r.label}</option>
-              ))}
-            </select>
+                <select
+                  value={filtroRango}
+                  onChange={(e) => setFiltroRango(Number(e.target.value))}
+                  className={`px-3 py-2 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 ${filtroRango > 0 ? 'border-gray-900 text-gray-900 font-medium' : 'border-gray-200 text-gray-500'}`}
+                >
+                  {RANGOS.map((r, i) => (
+                    <option key={i} value={i}>{r.label}</option>
+                  ))}
+                </select>
+              </>
+            )}
 
             <div className="flex border border-gray-200 rounded-xl overflow-hidden text-sm">
               {(['todos', 'vigentes', 'vencidos'] as const).map((v) => (
@@ -452,19 +534,39 @@ export default function ContratosPage() {
               ))}
             </div>
 
-            <button
-              onClick={() => setSoloInc((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-sm transition-colors ${
-                soloIncompletos
-                  ? 'bg-red-50 border-red-300 text-red-700 font-medium'
-                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-              }`}
-            >
-              <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center text-[9px] ${soloIncompletos ? 'bg-red-500 border-red-500 text-white' : 'border-gray-300'}`}>
-                {soloIncompletos ? '✓' : ''}
-              </span>
-              Solo incompletos
-            </button>
+            {esGestor && (
+              <button
+                onClick={() => setSoloInc((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-sm transition-colors ${
+                  soloIncompletos
+                    ? 'bg-red-50 border-red-300 text-red-700 font-medium'
+                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center ${soloIncompletos ? 'bg-red-500 border-red-500 text-white' : 'border-gray-300'}`}>
+                  {soloIncompletos && <Icono glifo={Iconos.estado.ok} tamano="sm" className="w-2.5 h-2.5" />}
+                </span>
+                Solo incompletos
+              </button>
+            )}
+
+            {/* El equivalente de "incompletos" para quien vigila: no le falta
+                un dato al contrato, le falta una acción suya. */}
+            {esSupervision && totalAtencion > 0 && (
+              <button
+                onClick={alternarAtencion}
+                className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-sm transition-colors ${
+                  soloAtencion
+                    ? 'bg-amber-50 border-amber-300 text-amber-800 font-medium'
+                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center ${soloAtencion ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-300'}`}>
+                  {soloAtencion && <Icono glifo={Iconos.estado.ok} tamano="sm" className="w-2.5 h-2.5" />}
+                </span>
+                Requieren atención ({totalAtencion})
+              </button>
+            )}
 
             {hayFiltrosActivos && (
               <button onClick={limpiarFiltros} className="px-3 py-2 text-sm text-gray-400 hover:text-gray-700 underline">
@@ -476,7 +578,7 @@ export default function ContratosPage() {
           <p className="text-xs text-gray-400">
             {hayFiltrosActivos
               ? `Mostrando ${visibles.length} de ${total} contratos`
-              : `${total} contratos en total`}
+              : `${total} contratos · ${totalVigentes} vigentes`}
           </p>
         </div>
       )}
@@ -484,16 +586,24 @@ export default function ContratosPage() {
       {/* ── List ─────────────────────────────────────────────────── */}
       {total === 0 ? (
         <div className="bg-white rounded-2xl border p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">📄</span>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-50 text-gray-300 mb-4">
+            <Icono glifo={Iconos.navegacion.contratos} tamano="lg" />
           </div>
           <h3 className="font-medium text-gray-900 mb-2">
-            {esGestor ? 'No hay contratos registrados' : 'No tienes contratos asignados'}
+            {esGestor
+              ? 'No hay contratos registrados'
+              : usuario?.rol === 'supervisor'
+                ? 'No supervisas ningún contrato'
+                : usuario?.rol === 'asesor'
+                  ? 'No hay contratos en tu dependencia'
+                  : 'No tienes contratos asignados'}
           </h3>
           <p className="text-sm text-gray-500 mb-4">
             {esGestor
               ? 'Registra el primer contrato para comenzar a gestionar los pagos.'
-              : 'Cuando el administrador te asigne un contrato, aparecerá aquí.'}
+              : esSupervision
+                ? 'Cuando contratación registre un contrato en tu ámbito, aparecerá aquí.'
+                : 'Cuando el administrador te asigne un contrato, aparecerá aquí.'}
           </p>
           {esGestor && (
             <Link
@@ -506,7 +616,9 @@ export default function ContratosPage() {
         </div>
       ) : visibles.length === 0 ? (
         <div className="bg-white rounded-2xl border p-10 text-center">
-          <p className="text-2xl mb-2">🔍</p>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-50 text-gray-300 mb-3">
+            <Icono glifo={Iconos.accion.buscar} tamano="lg" />
+          </div>
           <p className="text-sm font-medium text-gray-700">Sin resultados</p>
           <p className="text-xs text-gray-400 mt-1">Prueba con otros filtros</p>
           <button onClick={limpiarFiltros} className="mt-3 text-sm text-gray-500 underline hover:text-gray-700">
@@ -528,6 +640,9 @@ export default function ContratosPage() {
                 const faltantes = datosFaltantes(contrato)
                 const incompleto = faltantes.length > 0
                 const vencido = contrato.fecha_fin < hoy
+                const atencion = esSupervision
+                  ? calcularAtencion(contrato)
+                  : { porRevisar: 0, atrasados: 0, total: 0 }
 
                 return (
                   <div
@@ -547,7 +662,9 @@ export default function ContratosPage() {
                       className={`rounded-2xl border transition-colors ${
                         incompleto
                           ? 'bg-red-50 border-red-200 hover:border-red-300'
-                          : 'bg-white hover:border-gray-300'
+                          : atencion.total > 0
+                            ? 'bg-white border-amber-200 hover:border-amber-300'
+                            : 'bg-white hover:border-gray-300'
                       }`}
                     >
                       <Link
@@ -575,6 +692,19 @@ export default function ContratosPage() {
                                   Faltan: {faltantes.join(' · ')}
                                 </span>
                               )}
+                              {/* Ámbar: espera una decisión mía. Azul: espera
+                                  que yo desbloquee al contratista. Mismo par de
+                                  colores que usa el panel del periodo. */}
+                              {atencion.porRevisar > 0 && (
+                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                                  {atencion.porRevisar} por revisar
+                                </span>
+                              )}
+                              {atencion.atrasados > 0 && (
+                                <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                                  {atencion.atrasados} sin enviar
+                                </span>
+                              )}
                             </div>
 
                             <p className="text-sm text-gray-600 line-clamp-1 mb-2">{contrato.objeto}</p>
@@ -586,9 +716,13 @@ export default function ContratosPage() {
                               {contrato.contratista?.cedula && (
                                 <span className="font-mono">{contrato.contratista.cedula}</span>
                               )}
-                              <span>
-                                Sup: {contrato.supervisor?.nombre_completo?.split(' ').slice(0, 2).join(' ')}
-                              </span>
+                              {/* Para un supervisor este dato es su propio
+                                  nombre repetido en cada tarjeta. */}
+                              {usuario?.rol !== 'supervisor' && (
+                                <span>
+                                  Sup: {contrato.supervisor?.nombre_completo?.split(' ').slice(0, 2).join(' ')}
+                                </span>
+                              )}
                             </div>
                           </div>
 

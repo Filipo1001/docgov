@@ -8,9 +8,12 @@
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { getContratacionStats } from '@/app/actions/contratacion'
+import { capitalizarNombre } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
 import StatCard from '@/components/ui/StatCard'
+import Icono from '@/components/ui/Icono'
+import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 function saludo(): string {
   const h = new Date().getHours()
@@ -24,10 +27,11 @@ function fmtFecha(iso: string): string {
     .format(new Date(iso + 'T12:00:00'))
 }
 
-const ACCESOS = [
-  { href: '/dashboard/contratos/nuevo', icon: '📝', titulo: 'Nuevo contrato', desc: 'Registra el contrato y crea al contratista en un solo paso' },
-  { href: '/dashboard/contratos', icon: '📄', titulo: 'Ver contratos', desc: 'Listado, edición y exportación' },
-  { href: '/dashboard/admin/usuarios', icon: '👥', titulo: 'Contratistas', desc: 'Activar cuentas y editar sus datos' },
+const ACCESOS: { href: string; icono: LucideIcon; titulo: string; desc: string }[] = [
+  // Mismo icono que "Registrar contrato" en AdminHome: es el mismo concepto.
+  { href: '/dashboard/contratos/nuevo', icono: Iconos.accion.agregar, titulo: 'Nuevo contrato', desc: 'Registra el contrato y crea al contratista en un solo paso' },
+  { href: '/dashboard/contratos', icono: Iconos.navegacion.contratos, titulo: 'Ver contratos', desc: 'Listado, edición y exportación' },
+  { href: '/dashboard/admin/usuarios', icono: Iconos.navegacion.contratistas, titulo: 'Contratistas', desc: 'Activar cuentas y editar sus datos' },
 ]
 
 export default function ContratacionHome({ nombre }: { nombre: string }) {
@@ -41,7 +45,7 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
   return (
     <div className="max-w-5xl">
       <PageHeader
-        title={`${saludo()}, ${nombre.split(' ')[0]}`}
+        title={`${saludo()}, ${capitalizarNombre(nombre.split(' ')[0])}`}
         subtitle="Gestión de contratación — usuarios y contratos"
       />
 
@@ -67,7 +71,7 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
         {ACCESOS.map(a => (
           <Link key={a.href} href={a.href} className="block">
             <Card className="h-full hover:shadow-md hover:border-gray-300 transition-all">
-              <span className="text-2xl">{a.icon}</span>
+              <Icono glifo={a.icono} tamano="lg" className="text-gray-400" />
               <h3 className="font-medium text-gray-900 text-sm mt-2">{a.titulo}</h3>
               <p className="text-xs text-gray-500 mt-1">{a.desc}</p>
             </Card>
@@ -78,8 +82,9 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
       {/* Contratos próximos a vencer */}
       {(stats?.proximosVencer?.length ?? 0) > 0 && (
         <Card>
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">
-            ⚠️ Contratos próximos a vencer
+          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+            <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="text-amber-500" />
+            Contratos próximos a vencer
           </h3>
           <div className="divide-y divide-gray-100">
             {stats!.proximosVencer.map(c => (

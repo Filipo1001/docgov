@@ -7,6 +7,9 @@ import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
 import { ESTADO_LABEL, ESTADO_COLOR } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
+import Avatar from '@/components/ui/Avatar'
+import Icono from '@/components/ui/Icono'
+import { Iconos, type LucideIcon } from '@/lib/iconos'
 import type {
   PersonaDetalle,
   ContratoConPeriodos,
@@ -20,31 +23,14 @@ function fmt(n: number) {
   return '$' + n.toLocaleString('es-CO')
 }
 
-function Avatar({ foto, nombre, size = 'lg' }: { foto?: string | null; nombre: string; size?: 'lg' | 'sm' }) {
-  const initials = nombre.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-  const sizeClass = size === 'lg' ? 'w-20 h-20 text-2xl ring-4' : 'w-10 h-10 text-sm ring-2'
-
-  if (foto) {
-    return (
-      <img src={foto} alt={nombre}
-        className={`${sizeClass} rounded-full object-cover ring-white shadow-lg`} />
-    )
-  }
-  return (
-    <div className={`${sizeClass} rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center font-bold text-white ring-white shadow-lg`}>
-      {initials}
-    </div>
-  )
-}
-
-function estadoIcon(estado: string) {
+function estadoIcon(estado: string): LucideIcon {
   switch (estado) {
-    case 'aprobado': return '✅'
-    case 'pagado': return '💰'
-    case 'rechazado': return '❌'
-    case 'enviado': return '📩'
-    case 'borrador': return '📝'
-    default: return '⏳'
+    case 'aprobado': return Iconos.estado.aprobado
+    case 'pagado': return Iconos.dominio.valor
+    case 'rechazado': return Iconos.estado.rechazado
+    case 'enviado': return Iconos.accion.enviar
+    case 'borrador': return Iconos.accion.editar
+    default: return Iconos.estado.enEspera
   }
 }
 
@@ -91,18 +77,18 @@ function PeriodoRow({
     <div className="relative flex gap-3">
       {/* Timeline dot */}
       <div className="flex flex-col items-center flex-shrink-0 w-7">
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
           periodo.estado === 'aprobado' || periodo.estado === 'pagado'
-            ? 'bg-emerald-100'
+            ? 'bg-emerald-100 text-emerald-600'
             : periodo.estado === 'rechazado'
-              ? 'bg-red-100'
+              ? 'bg-red-100 text-red-600'
               : periodo.estado === 'enviado'
-                ? 'bg-blue-100'
+                ? 'bg-blue-100 text-blue-600'
                 : periodo.estado === 'borrador'
-                  ? 'bg-gray-100'
-                  : 'bg-amber-100'
+                  ? 'bg-gray-100 text-gray-500'
+                  : 'bg-amber-100 text-amber-600'
         }`}>
-          {estadoIcon(periodo.estado)}
+          <Icono glifo={estadoIcon(periodo.estado)} tamano="sm" />
         </div>
         <div className="w-px flex-1 bg-gray-200 mt-1" />
       </div>
@@ -154,8 +140,16 @@ function PeriodoRow({
               </Link>
             )}
 
+            {/* Un borrador era texto muerto: sin enlace, no había forma de
+                llegar al periodo desde aquí. Y es justo donde vive el
+                desbloqueo del envío tardío cuando el mes ya cerró. */}
             {periodo.estado === 'borrador' && (
-              <span className="text-xs text-gray-400 italic">Aun no enviado</span>
+              <Link
+                href={`/dashboard/contratos/${contratoId}/periodo/${periodo.id}`}
+                className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+              >
+                Aún no enviado — abrir →
+              </Link>
             )}
 
             {esRevisable && !rechazando && (
@@ -285,6 +279,18 @@ function ContratoSection({
       {/* Periods (collapsible) */}
       {abierto && (
         <div className="px-5 pb-5 pt-2 border-t border-gray-100">
+          {/* Esta vista resume la ejecución del contrato; el expediente
+              —obligaciones, documentos, CDP/CRP, SECOP— vive en su propia
+              pantalla y hasta ahora no se enlazaba desde ninguna parte. */}
+          <div className="flex justify-end pt-2">
+            <Link
+              href={`/dashboard/contratos/${contrato.id}`}
+              className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+            >
+              Ver expediente del contrato →
+            </Link>
+          </div>
+
           {contrato.periodos.length === 0 ? (
             <p className="text-xs text-gray-400 italic py-3">
               No se han generado periodos para este contrato.
@@ -351,7 +357,9 @@ export default function PersonaDetallePage() {
   if (!data) {
     return (
       <div className="bg-white rounded-2xl border p-12 text-center">
-        <div className="text-4xl mb-3">🔒</div>
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-50 text-gray-300 mb-3">
+          <Icono glifo={Iconos.estado.vetado} tamano="lg" />
+        </div>
         <h3 className="font-semibold text-gray-900 mb-1">No encontrado</h3>
         <p className="text-sm text-gray-500 mb-4">
           Esta persona no existe o no pertenece a tu dependencia.
@@ -383,7 +391,9 @@ export default function PersonaDetallePage() {
       {/* Profile card */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
         <div className="flex items-start gap-5">
-          <Avatar foto={user?.foto_url} nombre={nombre} />
+          <div className="ring-4 ring-white rounded-full shadow-lg shrink-0">
+            <Avatar foto={user?.foto_url} nombre={nombre} size="xl" />
+          </div>
 
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-gray-900 leading-tight">{nombre}</h1>
@@ -412,20 +422,28 @@ export default function PersonaDetallePage() {
             {user && (
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-gray-500">
                 {user.telefono && (
-                  <a href={`tel:${user.telefono}`} className="flex items-center gap-1 hover:text-gray-700">
-                    📞 {user.telefono}
+                  <a href={`tel:${user.telefono}`} className="flex items-center gap-1.5 hover:text-gray-700">
+                    <Icono glifo={Iconos.dominio.telefono} tamano="sm" className="text-gray-400" />
+                    {user.telefono}
                   </a>
                 )}
                 {user.email && (
-                  <a href={`mailto:${user.email}`} className="flex items-center gap-1 hover:text-gray-700">
-                    📧 {user.email}
+                  <a href={`mailto:${user.email}`} className="flex items-center gap-1.5 hover:text-gray-700">
+                    <Icono glifo={Iconos.aviso.correo} tamano="sm" className="text-gray-400" />
+                    {user.email}
                   </a>
                 )}
                 {user.direccion && (
-                  <span className="flex items-center gap-1">📍 {user.direccion}</span>
+                  <span className="flex items-center gap-1.5">
+                    <Icono glifo={Iconos.dominio.ubicacion} tamano="sm" className="text-gray-400" />
+                    {user.direccion}
+                  </span>
                 )}
                 {user.cargo && (
-                  <span className="flex items-center gap-1">💼 {user.cargo}</span>
+                  <span className="flex items-center gap-1.5">
+                    <Icono glifo={Iconos.dominio.cargo} tamano="sm" className="text-gray-400" />
+                    {user.cargo}
+                  </span>
                 )}
               </div>
             )}
@@ -444,7 +462,9 @@ export default function PersonaDetallePage() {
       {/* Contracts */}
       {contratos.length === 0 ? (
         <div className="bg-white rounded-2xl border p-8 text-center">
-          <div className="text-3xl mb-2">📋</div>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-50 text-gray-300 mb-3">
+            <Icono glifo={Iconos.navegacion.contratos} tamano="lg" />
+          </div>
           <p className="text-sm text-gray-500">
             {persona.activado
               ? 'Esta persona no tiene contratos asignados bajo tu supervision.'

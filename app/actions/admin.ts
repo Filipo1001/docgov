@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import { passwordInicialDesdeCedula } from '@/lib/password-inicial'
+import { enviarNotificacion } from '@/lib/notifications'
 import type { ActionResult } from '@/lib/types'
 
 // ─── Auth guard ───────────────────────────────────────────────
@@ -132,6 +133,13 @@ export async function crearUsuario(formData: {
     return { error: dbError.message }
   }
 
+  await enviarNotificacion({
+    destinatarioId: userId,
+    tipo: 'bienvenida',
+    titulo: 'Bienvenido a Contratista Digital',
+    mensaje: 'Tu cuenta fue creada. Ingresa con tu correo y tu número de documento como contraseña inicial.',
+  })
+
   revalidatePath('/dashboard/admin/usuarios')
   return { data: { id: userId, passwordInicial } }
 }
@@ -214,6 +222,13 @@ export async function activarContratista(
     .from('contratistas_importados')
     .update({ activado: true, usuario_id: userId })
     .eq('id', importId)
+
+  await enviarNotificacion({
+    destinatarioId: userId,
+    tipo: 'bienvenida',
+    titulo: 'Bienvenido a Contratista Digital',
+    mensaje: 'Tu cuenta fue creada. Ingresa con tu correo y tu número de documento como contraseña inicial.',
+  })
 
   revalidatePath('/dashboard/admin/usuarios')
   return { data: { id: userId, passwordInicial } }

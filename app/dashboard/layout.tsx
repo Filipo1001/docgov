@@ -11,6 +11,8 @@ import { avatarThumb, alFallarAvatar } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
 import AvisoMigracion from '@/components/AvisoMigracion'
 import { LogoCD } from '@/components/Logo'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 
 // ─── User avatar (photo or initials) ─────────────────────────
 function getInitiales(nombre: string): string {
@@ -177,7 +179,11 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                         activo ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                       }`}
                     >
-                      <span>{item.icon}</span>
+                      <Icono
+                        glifo={Iconos.navegacion[item.icono]}
+                        tamano="md"
+                        className={activo ? 'text-white' : 'text-gray-400'}
+                      />
                       <span className="flex-1">{item.label}</span>
                       {esInformes && pendientes > 0 && <PendingBadge n={pendientes} />}
                     </Link>

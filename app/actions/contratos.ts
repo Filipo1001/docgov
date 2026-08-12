@@ -15,6 +15,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import { extraerPath } from '@/lib/storage-firmado'
 import { passwordInicialDesdeCedula } from '@/lib/password-inicial'
+import { enviarNotificacion } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
 import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
@@ -263,6 +264,19 @@ export async function crearContratoConContratista(
         return { error: `Ya existe un contrato con el número ${input.numero} en este municipio.` }
       }
       return { error: `Error al crear el contrato: ${error.message}` }
+    }
+
+    // Recién aquí el contrato quedó confirmado: si algo hubiera fallado antes,
+    // rollbackUsuario habría borrado la cuenta. Enviar la bienvenida más
+    // temprano habría dado la bienvenida a una cuenta que un instante después
+    // deja de existir.
+    if (usuarioCreadoId) {
+      await enviarNotificacion({
+        destinatarioId: usuarioCreadoId,
+        tipo: 'bienvenida',
+        titulo: 'Bienvenido a Contratista Digital',
+        mensaje: 'Tu cuenta fue creada. Ingresa con tu correo y tu número de documento como contraseña inicial.',
+      })
     }
 
     revalidatePath('/dashboard/contratos')

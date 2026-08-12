@@ -1,6 +1,7 @@
 'use client'
 
 import { avatarThumb, alFallarAvatar } from '@/lib/avatar'
+import { MARCA } from '@/lib/marca'
 
 interface AvatarProps {
   nombre: string
@@ -38,7 +39,10 @@ export default function Avatar({ nombre, foto, size = 'md' }: AvatarProps) {
 
   return (
     <div
-      className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center font-bold text-white flex-shrink-0`}
+      /* Sólido en la tinta de marca. El degradado azul venía de antes de que
+         existiera una identidad y era el color más visible de la aplicación. */
+      className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`}
+      style={{ backgroundColor: MARCA }}
     >
       {initials}
     </div>

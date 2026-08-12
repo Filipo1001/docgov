@@ -12,6 +12,7 @@ import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import SearchInput from '@/components/ui/SearchInput'
 import EmptyState from '@/components/ui/EmptyState'
+import { Iconos } from '@/lib/iconos'
 
 export default function ContratistasPage() {
   const { usuario, cargando: cargandoUser } = useUsuario()
@@ -41,7 +42,7 @@ export default function ContratistasPage() {
     return (
       <Card className="p-12">
         <EmptyState
-          icon="⚠️"
+          icono={Iconos.estado.advertencia}
           title="Sin dependencia asignada"
           description="Tu usuario no tiene una dependencia asignada. Contacta al administrador."
         />
@@ -85,7 +86,7 @@ export default function ContratistasPage() {
       {filtrados.length === 0 ? (
         <Card>
           <EmptyState
-            icon="📭"
+            icono={Iconos.navegacion.contratistas}
             title="Sin contratistas"
             description={busqueda ? 'No hay resultados para esa busqueda.' : 'No hay contratistas en tu dependencia.'}
           />

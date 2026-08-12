@@ -15,6 +15,8 @@ import { etiquetaEstado } from '@/lib/estado-contrato'
 import ExpedienteContrato from './ExpedienteContrato'
 import CopiarObligaciones from './CopiarObligaciones'
 import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 
 export default function ContratoDetallePage({
   initialContrato,
@@ -265,7 +267,8 @@ export default function ContratoDetallePage({
                   href={`/dashboard/contratos/${id}/editar`}
                   className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
                 >
-                  ✏️ Editar
+                  <Icono glifo={Iconos.accion.editar} tamano="sm" />
+                  Editar
                 </Link>
                 <Link
                   href={`/dashboard/contratos/${id}/avanzado`}
@@ -273,7 +276,11 @@ export default function ContratoDetallePage({
                 >
                   {/* Contratación solo encuentra otrosíes al otro lado del
                       enlace; nombrarlo "Opciones avanzadas" prometería de más. */}
-                  {usuario?.rol === 'contratacion' ? '📑 Otrosíes' : '⚙️ Opciones avanzadas'}
+                  <Icono
+                    glifo={usuario?.rol === 'contratacion' ? Iconos.documentos.paquete : Iconos.navegacion.configuracion}
+                    tamano="sm"
+                  />
+                  {usuario?.rol === 'contratacion' ? 'Otrosíes' : 'Opciones avanzadas'}
                 </Link>
               </div>
             )}
@@ -344,7 +351,8 @@ export default function ContratoDetallePage({
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 mt-1 text-sm text-blue-600 hover:text-blue-800 hover:underline truncate"
             >
-              🔗 Ver contrato en SECOP II
+              <Icono glifo={Iconos.accion.abrirFuera} tamano="sm" className="shrink-0" />
+              Ver contrato en SECOP II
             </a>
           </div>
         )}
@@ -436,9 +444,9 @@ export default function ContratoDetallePage({
                           onClick={() => eliminarObligacion(obl.id)}
                           title="Eliminar obligación"
                           aria-label="Eliminar obligación"
-                          className="text-gray-300 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all text-xs"
+                          className="text-gray-300 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
                         >
-                          ✕
+                          <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
                         </button>
                       </>
                     )}

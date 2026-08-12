@@ -21,7 +21,7 @@ export async function getTodosContratosConBanco(): Promise<ContratoListItem[]> {
 
   const { data: yo } = await supabase
     .from('usuarios')
-    .select('rol')
+    .select('rol, dependencia_id')
     .eq('id', user.id)
     .single()
   if (!yo) return []
@@ -40,23 +40,31 @@ export async function getTodosContratosConBanco(): Promise<ContratoListItem[]> {
       dependencia:dependencias(id, nombre, abreviatura),
       estado, estado_fecha,
       obligaciones(count),
-      periodos(count)
+      periodos(estado, mes, anio, es_historico, habilitado_tardio)
     `)
     .order('numero', { ascending: true })
 
-  // Scoping espejo del RLS, derivado del rol verificado en servidor
+  // Scoping derivado del rol verificado en servidor.
   if (yo.rol === 'supervisor') query = query.eq('supervisor_id', user.id)
   else if (yo.rol === 'contratista') query = query.eq('contratista_id', user.id)
-  // admin y asesor: todos los contratos (igual que sus policies de lectura)
+  // El asesor se acota a SU DEPENDENCIA, no a todo el municipio. Su política de
+  // lectura es más amplia, pero `requireContractAccess` solo le abre los de su
+  // dependencia y /dashboard/informes ya lo filtraba igual: devolver aquí los
+  // 118 contratos le llenaba la lista de tarjetas que al abrirlas rebotan.
+  else if (yo.rol === 'asesor' && yo.dependencia_id) {
+    query = query.eq('dependencia_id', yo.dependencia_id)
+  }
+  // admin y contratación: todo el municipio.
 
   const { data, error } = await query
   if (error) throw error
 
-  // Los conteos llegan como [{ count }]; se aplanan para que la tarjeta pueda
-  // señalar el contrato que quedó a medias sin consultas extra.
+  // Las obligaciones llegan como [{ count }]; los periodos, como filas, porque
+  // la tarjeta necesita algo más que cuántos hay: cuáles esperan revisión y
+  // cuáles quedaron atrás sin enviar. Son cinco campos escalares por periodo.
   return ((data ?? []) as any[]).map(c => ({
     ...c,
     num_obligaciones: c.obligaciones?.[0]?.count ?? 0,
-    num_periodos: c.periodos?.[0]?.count ?? 0,
+    num_periodos: c.periodos?.length ?? 0,
   })) as unknown as ContratoListItem[]
 }

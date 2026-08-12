@@ -1,5 +1,8 @@
 'use client'
 
+import Icono from './Icono'
+import { Iconos } from '@/lib/iconos'
+
 interface SearchInputProps {
   value: string
   onChange: (value: string) => void
@@ -9,7 +12,11 @@ interface SearchInputProps {
 export default function SearchInput({ value, onChange, placeholder = 'Buscar...' }: SearchInputProps) {
   return (
     <div className="relative flex-1 max-w-md">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+      <Icono
+        glifo={Iconos.accion.buscar}
+        tamano="sm"
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+      />
       <input
         type="text"
         placeholder={placeholder}

@@ -92,7 +92,7 @@ export default function DescargaMasiva({
       if (nErrores > 0) {
         toast.warning(`ZIP descargado — ${nErrores} documento(s) no se pudieron incluir (ver ERRORES.txt dentro del ZIP)`, { id: toastId, duration: 8000 })
       } else {
-        toast.success('ZIP descargado ✓', { id: toastId })
+        toast.success('ZIP descargado', { id: toastId })
       }
       onClose()
     } catch (e) {

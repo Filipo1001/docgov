@@ -14,6 +14,7 @@ import Badge from '@/components/ui/Badge'
 import SearchInput from '@/components/ui/SearchInput'
 import FilterTabs from '@/components/ui/FilterTabs'
 import EmptyState from '@/components/ui/EmptyState'
+import { Iconos } from '@/lib/iconos'
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ export default function ColaboradoresPage() {
       {resultado.length === 0 && (
         <Card>
           <EmptyState
-            icon={busqueda || filtro !== 'todos' ? '🔍' : '👥'}
+            icono={busqueda || filtro !== 'todos' ? Iconos.accion.buscar : Iconos.navegacion.colaboradores}
             title={busqueda || filtro !== 'todos' ? 'Sin resultados' : 'Sin colaboradores'}
             description={
               busqueda || filtro !== 'todos'
