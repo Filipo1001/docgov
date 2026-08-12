@@ -37,9 +37,8 @@ const LOGO_URL = `${ORIGEN_APP}/marca/icono-96.png`
  */
 function baseHtml(titulo: string, contenido: string, color: string, conLogo = false): string {
   const encabezadoLogo = conLogo ? `
-    <div style="background:#fff;padding:22px 32px 14px;text-align:center;border-bottom:1px solid #f0f0f0;">
-      <img src="${LOGO_URL}" width="36" height="36" alt="Contratista Digital" style="display:block;margin:0 auto 6px;border-radius:8px;" />
-      <p style="color:#192031;font-size:13px;font-weight:700;margin:0;">Contratista Digital</p>
+    <div style="background:#fff;padding:32px 32px 24px;text-align:center;border-bottom:1px solid #f0f0f0;">
+      <img src="${LOGO_URL}" width="72" height="72" alt="Contratista Digital" style="display:block;margin:0 auto;border-radius:16px;" />
     </div>` : ''
 
   return `
@@ -269,11 +268,7 @@ export function emailBienvenida(data: TemplateData) {
          <p style="color:#0f172a;font-size:15px;font-weight:700;margin:0 0 14px;">${data.email ?? ''}</p>
          <p style="color:#64748b;font-size:12px;margin:0 0 4px;">Contraseña inicial</p>
          <p style="color:#0f172a;font-size:14px;margin:0;">Tu número de documento, sin puntos ni espacios.</p>
-       </div>
-       <p style="color:#555;font-size:13px;line-height:1.6;">
-         Por seguridad, puedes cambiarla cuando quieras desde Configuración,
-         una vez inicies sesión.
-       </p>`,
+       </div>`,
       MARCA,
       true,
     ),
