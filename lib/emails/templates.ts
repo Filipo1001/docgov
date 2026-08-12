@@ -22,13 +22,33 @@ interface TemplateData {
 
 const APP_URL = `${ORIGEN_APP}/`
 
-function baseHtml(titulo: string, contenido: string, color: string): string {
+/**
+ * El folleto de marca (icono-96.png, ya usado por el manifest y el favicon)
+ * en su color navy natural, sobre una franja clara. En ningún lugar de la
+ * app aparece invertido en blanco —LogoCD nunca recibe `color="#fff"`—, así
+ * que va sobre fondo claro aquí también, no sobre la barra de color.
+ */
+const LOGO_URL = `${ORIGEN_APP}/marca/icono-96.png`
+
+/**
+ * `conLogo` es aparte del rediseño completo de las plantillas —pendiente—:
+ * solo la bienvenida lo pide por ahora. Las otras diez no pasan el parámetro,
+ * así que su salida no cambia ni un byte.
+ */
+function baseHtml(titulo: string, contenido: string, color: string, conLogo = false): string {
+  const encabezadoLogo = conLogo ? `
+    <div style="background:#fff;padding:22px 32px 14px;text-align:center;border-bottom:1px solid #f0f0f0;">
+      <img src="${LOGO_URL}" width="36" height="36" alt="Contratista Digital" style="display:block;margin:0 auto 6px;border-radius:8px;" />
+      <p style="color:#192031;font-size:13px;font-weight:700;margin:0;">Contratista Digital</p>
+    </div>` : ''
+
   return `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
   <div style="max-width:560px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    ${encabezadoLogo}
     <div style="background:${color};padding:24px 32px;">
       <h1 style="color:#fff;font-size:18px;margin:0;">${titulo}</h1>
     </div>
@@ -236,7 +256,9 @@ export function emailBienvenida(data: TemplateData) {
   return {
     subject: 'Bienvenido a Contratista Digital',
     html: baseHtml(
-      '¡Bienvenido a Contratista Digital!',
+      // El nombre completo ya lo dice el logo de arriba — repetirlo en la
+      // barra sería el mismo texto dos veces en la altura de una pantalla.
+      '¡Bienvenido!',
       `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
        <p style="color:#333;font-size:14px;line-height:1.6;">
          Ya tienes una cuenta en Contratista Digital, la plataforma donde se gestionan
@@ -252,7 +274,8 @@ export function emailBienvenida(data: TemplateData) {
          Por seguridad, puedes cambiarla cuando quieras desde Configuración,
          una vez inicies sesión.
        </p>`,
-      MARCA
+      MARCA,
+      true,
     ),
   }
 }
