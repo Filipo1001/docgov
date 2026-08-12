@@ -189,18 +189,21 @@ function Fila({ etiqueta, children, ultima }: { etiqueta: string; children: Reac
  * dos encabezados del documento (GRADO DE RESPONSABILIDAD, INFORMACIÓN
  * GENERAL DEL CONTRATO), que sí usan el centrado normal.
  *
- * `minPresenceAhead` en el título: si al título no le siguen al menos 40pt
- * de cuerpo en la página actual, el título se empuja completo a la
- * siguiente en vez de quedar huérfano al pie de la página (lo que pasaba
- * con ACUERDAN antes de esto). No se usa `wrap={false}` en todo el cuadro:
- * eso sí evita el huérfano, pero empuja el cuadro entero —y en cascada, las
- * firmas que le siguen— dejando páginas casi vacías cuando el cuadro no
- * cabe entero en el resto de la página.
+ * `nuevaPagina` (usado en ACUERDAN): dos intentos previos de evitar que el
+ * título quedara huérfano no sirvieron. `wrap={false}` en todo el cuadro sí
+ * evitaba el huérfano, pero empujaba el cuadro entero —y en cascada, las
+ * firmas que le siguen— dejando páginas casi vacías. `minPresenceAhead` en
+ * el título tampoco: ese prop mide contenido dentro del propio nodo de
+ * texto, no en el cuerpo del cuadro, que es un `View` hermano. Un salto de
+ * página explícito antes de ACUERDAN es además fiel al formato en papel:
+ * con el espaciado ya ajustado, el cuadro 1 + CONSIDERANDO llenan la
+ * primera página por sí solos en la práctica, así que el salto no roba
+ * espacio real — solo lo hace predecible en vez de accidental.
  */
-function CajaTitulada({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function CajaTitulada({ titulo, children, nuevaPagina }: { titulo: string; children: React.ReactNode; nuevaPagina?: boolean }) {
   return (
-    <View style={s.caja}>
-      <Text style={s.barra} minPresenceAhead={40}>{titulo}</Text>
+    <View style={s.caja} break={nuevaPagina}>
+      <Text style={s.barra}>{titulo}</Text>
       <View style={s.cuerpoCaja}>{children}</View>
     </View>
   )
@@ -306,7 +309,7 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
         </CajaTitulada>
 
         {/* ── Cuadro 3: ACUERDAN ──────────────────────────────────── */}
-        <CajaTitulada titulo="ACUERDAN:">
+        <CajaTitulada titulo="ACUERDAN:" nuevaPagina>
           <Text style={s.p}>
             <Text style={s.b}>PRIMERO:</Text> Fijar el {fechaLarga(fechaTerminacion)} como fecha de Terminación
             del contrato No {numeroContrato} cuyo objeto: {objeto}, por cuanto el contratista acreditó el
