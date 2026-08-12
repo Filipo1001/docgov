@@ -36,7 +36,7 @@ function baseUrl(): string {
   return 'http://localhost:3000'
 }
 
-export type TipoDocumento = 'informe' | 'cuenta-cobro' | 'acta-supervision' | 'acta-pago' | 'certificacion-retencion'
+export type TipoDocumento = 'informe' | 'cuenta-cobro' | 'acta-supervision' | 'acta-pago' | 'certificacion-retencion' | 'acta-terminacion'
 
 export const TIPO_LABEL: Record<TipoDocumento, string> = {
   'informe': 'Informe de Actividades',
@@ -44,6 +44,7 @@ export const TIPO_LABEL: Record<TipoDocumento, string> = {
   'acta-supervision': 'Acta de Supervisión',
   'acta-pago': 'Acta de Pago',
   'certificacion-retencion': 'Certificación de Retención en la Fuente',
+  'acta-terminacion': 'Acta de Terminación',
 }
 
 /** Datos NO sensibles que se muestran en la página pública de verificación. */

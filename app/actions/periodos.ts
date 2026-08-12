@@ -23,6 +23,7 @@ import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
 import { certificacionPendiente } from '@/lib/certificaciones'
+import { actaTerminacionPendiente, emitirActaTerminacion } from '@/lib/actas-terminacion'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
 import { enviarNotificacion, enviarNotificacionMultiple } from '@/lib/notifications'
@@ -198,6 +199,15 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       const pendiente = await certificacionPendiente(periodo.contrato_id, periodoId, periodo.anio)
       if (pendiente) {
         return { error: 'Antes de enviar tu informe debes aceptar la Certificación de Retención en la Fuente.' }
+      }
+
+      // Acta de terminación: obligatoria antes del ÚLTIMO informe del
+      // contrato. Misma defensa en profundidad — el modal ya la exige en el
+      // cliente, pero la regla manda aquí para que no pueda saltarse llamando
+      // la acción directamente.
+      const actaPendiente = await actaTerminacionPendiente(periodo.contrato_id, periodoId)
+      if (actaPendiente) {
+        return { error: 'Este es el último informe de tu contrato. Antes de enviarlo debes aceptar el Acta de Terminación.' }
       }
     }
 
@@ -559,6 +569,12 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
         })
       ),
     ])
+
+    // El Acta de Terminación se emite aquí, no cuando el contratista la acepta:
+    // esta aprobación es el acto con el que la administración la suscribe, y
+    // solo entonces el documento tiene sus tres firmas. Es idempotente y no
+    // lanza — un fallo emitiendo no puede tumbar una aprobación ya guardada.
+    await Promise.allSettled(validIds.map(id => emitirActaTerminacion(id, usuario.id)))
 
     validIds.forEach(id => invalidarCachePDF(createAdminSupabaseClient(), id).catch(() => {}))
     revalidar()

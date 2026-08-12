@@ -586,3 +586,101 @@ export async function eliminarFirmaAdmin(userId: string): Promise<ActionResult> 
   revalidatePath('/dashboard')
   return {}
 }
+
+// ─── Firma del representante legal (alcalde) ──────────────────
+
+/**
+ * Sube la firma del alcalde al bucket privado y la asocia al municipio.
+ *
+ * Vive aquí y no en el perfil de un usuario porque el alcalde no es usuario
+ * del sistema: no inicia sesión ni aprueba nada. Su firma es un atributo
+ * institucional del municipio, como el NIT o el escudo, y la administra el
+ * admin desde /dashboard/admin/municipio.
+ *
+ * Se estampa en el Acta de Terminación cuando el supervisor aprueba el último
+ * informe, que es el acto con el que la administración suscribe el acta.
+ */
+export async function subirFirmaMunicipio(formData: FormData): Promise<ActionResult<{ url: string }>> {
+  try {
+    const auth = await requireAdmin()
+    if (!auth) return { error: 'Solo el administrador puede gestionar la firma del municipio' }
+
+    const file = formData.get('file') as File
+    if (!file) return { error: 'No se recibió el archivo' }
+
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED.includes(file.type)) return { error: 'Solo se permiten imágenes (JPG, PNG, WEBP)' }
+    if (file.size > 10 * 1024 * 1024) return { error: 'La firma no puede superar 10 MB' }
+
+    const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/jpeg' ? 'jpg' : 'png'
+    const path = `firmas/municipio/${auth.municipioId}/${Date.now()}.${ext}`
+
+    const admin = createAdminSupabaseClient()
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const { error: upErr } = await admin.storage
+      .from('documentos')
+      .upload(path, buffer, { contentType: file.type, upsert: true })
+    if (upErr) return { error: `Error al subir: ${upErr.message}` }
+
+    // Se guarda la URL en forma pública canónica; para mostrarla se firma,
+    // porque el bucket es privado. Mismo criterio que las firmas de usuario.
+    const { data: { publicUrl } } = admin.storage.from('documentos').getPublicUrl(path)
+
+    const { error: updErr } = await admin
+      .from('municipios')
+      .update({ firma_representante_url: publicUrl })
+      .eq('id', auth.municipioId)
+    if (updErr) return { error: `Error al guardar: ${updErr.message}` }
+
+    const { data: firmada } = await admin.storage.from('documentos').createSignedUrl(path, 3600)
+
+    revalidatePath('/dashboard/admin/municipio')
+    return { data: { url: firmada?.signedUrl ?? publicUrl } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/** URL firmada de la firma del alcalde, para previsualizarla en el panel. */
+export async function obtenerFirmaMunicipio(): Promise<string | null> {
+  try {
+    const auth = await requireAdmin()
+    if (!auth) return null
+
+    const admin = createAdminSupabaseClient()
+    const { data: m } = await admin
+      .from('municipios')
+      .select('firma_representante_url')
+      .eq('id', auth.municipioId)
+      .maybeSingle()
+
+    const url = m?.firma_representante_url as string | undefined
+    if (!url) return null
+
+    const path = url.split('/documentos/')[1]
+    if (!path) return null
+    const { data } = await admin.storage.from('documentos').createSignedUrl(path, 3600)
+    return data?.signedUrl ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Quita la firma del alcalde. El archivo queda en el bucket como histórico. */
+export async function eliminarFirmaMunicipio(): Promise<ActionResult> {
+  try {
+    const auth = await requireAdmin()
+    if (!auth) return { error: 'Solo el administrador puede gestionar la firma del municipio' }
+
+    const { error } = await createAdminSupabaseClient()
+      .from('municipios')
+      .update({ firma_representante_url: null })
+      .eq('id', auth.municipioId)
+    if (error) return { error: error.message }
+
+    revalidatePath('/dashboard/admin/municipio')
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}

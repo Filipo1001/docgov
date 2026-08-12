@@ -153,6 +153,17 @@ export default async function PeriodoDetallePage({
     .maybeSingle()
   const certDisponible = !!certRow
 
+  // Acta de terminación: única por contrato. Su descarga se ofrece solo en el
+  // último periodo y solo si ya fue aceptada.
+  // Solo cuenta si ya está EMITIDA: aceptada sin aprobar todavía no es un
+  // documento descargable.
+  const { data: actaRow } = await supabase
+    .from('actas_terminacion')
+    .select('id, emitida_en')
+    .eq('contrato_id', (contrato as { id: string }).id)
+    .maybeSingle()
+  const actaTerminacionDisponible = !!actaRow?.emitida_en
+
   // ── Signed URLs (private buckets) ──────────────────────────────
   // The DB stores canonical public-form URLs; the buckets are private, so we
   // convert everything the client will render into signed URLs here.
@@ -201,6 +212,7 @@ export default async function PeriodoDetallePage({
       initialActividades={(actividades ?? []) as unknown as Actividad[]}
       initialRevisiones={initialRevisiones}
       certDisponible={certDisponible}
+      actaTerminacionDisponible={actaTerminacionDisponible}
       periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
       initialDuplicados={duplicadosResult.matches ?? {}}
       initialParaBackfill={duplicadosResult.paraBackfill ?? []}
