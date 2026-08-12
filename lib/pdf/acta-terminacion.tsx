@@ -188,11 +188,19 @@ function Fila({ etiqueta, children, ultima }: { etiqueta: string; children: Reac
  * aquí, así que estos dos títulos quedaban desalineados frente a los otros
  * dos encabezados del documento (GRADO DE RESPONSABILIDAD, INFORMACIÓN
  * GENERAL DEL CONTRATO), que sí usan el centrado normal.
+ *
+ * `minPresenceAhead` en el título: si al título no le siguen al menos 40pt
+ * de cuerpo en la página actual, el título se empuja completo a la
+ * siguiente en vez de quedar huérfano al pie de la página (lo que pasaba
+ * con ACUERDAN antes de esto). No se usa `wrap={false}` en todo el cuadro:
+ * eso sí evita el huérfano, pero empuja el cuadro entero —y en cascada, las
+ * firmas que le siguen— dejando páginas casi vacías cuando el cuadro no
+ * cabe entero en el resto de la página.
  */
 function CajaTitulada({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <View style={s.caja}>
-      <Text style={s.barra}>{titulo}</Text>
+      <Text style={s.barra} minPresenceAhead={40}>{titulo}</Text>
       <View style={s.cuerpoCaja}>{children}</View>
     </View>
   )
