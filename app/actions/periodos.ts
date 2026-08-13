@@ -26,6 +26,7 @@ import { certificacionPendiente } from '@/lib/certificaciones'
 import { actaTerminacionPendiente, emitirActaTerminacion } from '@/lib/actas-terminacion'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { enviarNotificacion, enviarNotificacionMultiple } from '@/lib/notifications'
 
 // ─── Internal helpers ────────────────────────────────────────
@@ -150,9 +151,27 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       return { error: 'El plazo para enviar este periodo ya venció. Solo puedes enviar el informe del mes actual.' }
     }
 
+    // Las cuatro comprobaciones siguientes son independientes entre sí: se
+    // lanzan juntas y se evalúan en orden, en vez de encadenar cuatro viajes
+    // de ida y vuelta esperando uno por uno. El contrato se carga UNA vez y
+    // se reutiliza más abajo para las notificaciones, que antes lo volvían a
+    // pedir. El orden de los mensajes de error no cambia.
+    const [contrato, { count }, { data: planillaData }, factura] = await Promise.all([
+      getContratoIds(supabase, periodo.contrato_id),
+      supabase
+        .from('actividades')
+        .select('*', { count: 'exact', head: true })
+        .eq('periodo_id', periodoId),
+      supabase
+        .from('periodos')
+        .select('planilla_ss_url, numero_planilla')
+        .eq('id', periodoId)
+        .single(),
+      estadoFacturaPeriodo(periodoId),
+    ])
+
     // Verify ownership
     if (usuario.rol === 'contratista') {
-      const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.contratista_id !== usuario.id) {
         return { error: 'No tienes permiso para enviar este periodo' }
       }
@@ -163,22 +182,11 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
     }
 
     // Must have at least one activity
-    const { count } = await supabase
-      .from('actividades')
-      .select('*', { count: 'exact', head: true })
-      .eq('periodo_id', periodoId)
-
     if (!count || count === 0) {
       return { error: 'Debes registrar al menos una actividad antes de enviar' }
     }
 
     // Planilla de seguridad social obligatoria
-    const { data: planillaData } = await supabase
-      .from('periodos')
-      .select('planilla_ss_url, numero_planilla')
-      .eq('id', periodoId)
-      .single()
-
     if (!planillaData?.planilla_ss_url || !planillaData?.numero_planilla?.trim()) {
       return { error: 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida' }
     }
@@ -186,7 +194,6 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
     // La factura electrónica sustituye a la Cuenta de Cobro para quien está
     // obligado a emitirla. Se exige igual que la planilla: sin ella el paquete
     // que recibe la alcaldía sale sin ningún documento de cobro.
-    const factura = await estadoFacturaPeriodo(periodoId)
     if (factura.exigeFactura && !factura.facturaUrl) {
       return { error: 'Debes adjuntar tu factura electrónica antes de enviar el informe. En tu caso sustituye a la Cuenta de Cobro.' }
     }
@@ -223,10 +230,22 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
 
     await insertHistorial(supabase, periodoId, estadoAnterior, 'enviado', usuario.id)
 
-    // Notify asesor(es) and supervisor about the submission (non-blocking)
-    try {
-      const contrato = await getContratoIds(supabase, periodo.contrato_id)
-      if (contrato) {
+    // Notificaciones — FUERA del camino crítico.
+    //
+    // El comentario anterior ya decía "non-blocking", pero estaban `await`-eadas
+    // y eran, de lejos, lo más lento del envío: tres tandas secuenciales
+    // (supervisor → asesores → contratista) y cada `enviarNotificacion` hace
+    // tres consultas MÁS una llamada HTTP a Resend. El contratista esperaba a
+    // que salieran todos los correos para ver que su informe se había enviado.
+    //
+    // `after` las ejecuta cuando la respuesta ya viajó al navegador, dentro del
+    // mismo invocation de la función: se envían igual, pero nadie las espera.
+    // El envío ya está confirmado en la base de datos en este punto, así que un
+    // fallo de correo no puede dejar el informe a medias — que es exactamente
+    // lo que el try/catch original ya asumía.
+    after(async () => {
+      try {
+        if (!contrato) return
         const titulo = `Nuevo informe enviado — ${periodo.mes} ${periodo.anio}`
         const mensaje = `${usuario.nombre_completo} envió su informe de ${periodo.mes} ${periodo.anio} para revisión.`
 
@@ -241,40 +260,45 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
           nombreRemitente: usuario.nombre_completo,
         }
 
-        // Notify supervisor
-        if (contrato.supervisor_id) {
-          await enviarNotificacion({ ...notifBase, destinatarioId: contrato.supervisor_id })
-        }
+        // Los asesores de la dependencia se resuelven en paralelo con el aviso
+        // al supervisor y la confirmación al contratista: ya nadie espera esto,
+        // pero encadenarlo alargaría la vida de la función sin motivo.
+        const asesoresPromise = contrato.dependencia_id
+          ? createAdminSupabaseClient()
+              .from('usuarios')
+              .select('id')
+              .eq('rol', 'asesor')
+              .eq('dependencia_id', contrato.dependencia_id)
+              .then(({ data }) => data ?? [])
+          : Promise.resolve([] as { id: string }[])
 
-        // Notify asesores in the same dependencia
-        if (contrato.dependencia_id) {
-          const adminClient = createAdminSupabaseClient()
-          const { data: asesores } = await adminClient
-            .from('usuarios')
-            .select('id')
-            .eq('rol', 'asesor')
-            .eq('dependencia_id', contrato.dependencia_id)
-          if (asesores) {
-            await enviarNotificacionMultiple(
-              asesores.map(a => a.id),
-              notifBase
-            )
-          }
-        }
+        await Promise.allSettled([
+          // Supervisor
+          contrato.supervisor_id
+            ? enviarNotificacion({ ...notifBase, destinatarioId: contrato.supervisor_id })
+            : Promise.resolve(),
 
-        // Confirm submission to the contratista
-        await enviarNotificacion({
-          tipo: 'enviado_confirmacion',
-          titulo: `Informe enviado — ${periodo.mes} ${periodo.anio}`,
-          mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue enviado exitosamente y está en revisión.`,
-          periodoId,
-          mes: periodo.mes,
-          anio: periodo.anio,
-          contrato: contrato.numero || '',
-          destinatarioId: usuario.id,
-        })
-      }
-    } catch { /* notification failure must not block a successful submit */ }
+          // Asesores de la misma dependencia
+          asesoresPromise.then(asesores =>
+            asesores.length
+              ? enviarNotificacionMultiple(asesores.map(a => a.id), notifBase)
+              : undefined
+          ),
+
+          // Confirmación al contratista
+          enviarNotificacion({
+            tipo: 'enviado_confirmacion',
+            titulo: `Informe enviado — ${periodo.mes} ${periodo.anio}`,
+            mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue enviado exitosamente y está en revisión.`,
+            periodoId,
+            mes: periodo.mes,
+            anio: periodo.anio,
+            contrato: contrato.numero || '',
+            destinatarioId: usuario.id,
+          }),
+        ])
+      } catch { /* notification failure must not block a successful submit */ }
+    })
 
     // Await invalidation — do NOT fire-and-forget here.
     // A race exists: the client receives the success response and can immediately

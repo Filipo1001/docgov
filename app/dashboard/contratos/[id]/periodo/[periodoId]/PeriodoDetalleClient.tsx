@@ -202,7 +202,11 @@ export default function PeriodoDetallePage({
   const [procesando, setProcesando] = useState(false)
   const [mostrarRechazo, setMostrarRechazo] = useState(false)
   const [motivoRechazo, setMotivoRechazo] = useState('')
-  const [enviando, setEnviando] = useState(false)
+  // Fases del envío. Una sola variable en vez de un booleano: el botón queda
+  // bloqueado de principio a fin —incluida la recarga del expediente— y a la
+  // vez puede decir en qué va, que es lo que faltaba para no dejar al
+  // contratista mirando un botón mudo sin saber si su informe salió.
+  const [faseEnvio, setFaseEnvio] = useState<null | 'verificando' | 'enviando' | 'actualizando'>(null)
   // Acta de terminación — modal obligatorio previo al último envío
   const [mostrarActa, setMostrarActa] = useState(false)
   const [actaPrefill, setActaPrefill] = useState<ActaPrefill | null>(null)
@@ -731,14 +735,35 @@ export default function PeriodoDetallePage({
   // ── Handlers ────────────────────────────────────────────────
 
   async function doEnviar() {
-    setEnviando(true)
-    const result = await enviarPeriodo(periodoId)
-    if (result.error) toast.error(result.error)
-    else { toast.success('Informe enviado a revisión'); router.refresh(); cargarDatos() }
-    setEnviando(false)
+    setFaseEnvio('enviando')
+    try {
+      const result = await enviarPeriodo(periodoId)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+
+      // El expediente se recarga ANTES de soltar el botón. Antes se disparaban
+      // router.refresh() y cargarDatos() sin esperarlos y se rehabilitaba el
+      // botón de inmediato: durante ese hueco la pantalla seguía mostrando el
+      // periodo como borrador, con el botón activo, y era fácil creer que el
+      // envío no había funcionado y volver a pulsarlo.
+      setFaseEnvio('actualizando')
+      toast.success('Informe enviado a revisión')
+      router.refresh()
+      await cargarDatos()
+    } catch {
+      // Caída de red al invocar la acción. Sin este catch el botón se quedaría
+      // deshabilitado para siempre y solo un F5 lo recuperaría.
+      toast.error('No se pudo completar el envío. Revisa tu conexión e inténtalo de nuevo.')
+    } finally {
+      setFaseEnvio(null)
+    }
   }
 
   async function handleEnviar() {
+    if (faseEnvio) return
+
     const faltaPlanilla = !periodo?.planilla_ss_url
     const faltaNumero = !numPlanilla.trim()
 
@@ -752,17 +777,28 @@ export default function PeriodoDetallePage({
     setErroresCampos({ planilla: false, numero: false })
 
     // Acta de terminación: obligatoria antes del ÚLTIMO informe del contrato.
-    setEnviando(true)
-    const acta = await verificarActaTerminacionRequerida(periodoId)
-    setEnviando(false)
+    setFaseEnvio('verificando')
+    let acta: Awaited<ReturnType<typeof verificarActaTerminacionRequerida>>
+    try {
+      acta = await verificarActaTerminacionRequerida(periodoId)
+    } catch {
+      toast.error('No se pudo verificar el informe. Revisa tu conexión e inténtalo de nuevo.')
+      setFaseEnvio(null)
+      return
+    }
+
     if (acta.requerida && acta.prefill) {
       setActaPrefill(acta.prefill)
       setActaFaltaFirma(acta.faltaFirma)
       setMostrarActa(true)
+      setFaseEnvio(null)
       return
     }
 
-    doEnviar()
+    // Sin soltar la fase entre la verificación y el envío: si se pusiera a
+    // null aquí, el botón parpadearía «Enviar a revisión» un instante y
+    // admitiría un segundo clic.
+    await doEnviar()
   }
 
   async function handleAprobarAsesor() {
@@ -2775,22 +2811,35 @@ export default function PeriodoDetallePage({
           </div>
 
           <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-            <p className="text-sm text-gray-400">
-              {rechazado
-                ? 'El asesor recibirá el informe corregido para revisión.'
-                : 'Los asesores y la secretaria recibirán este informe para revisión.'
+            <p className="text-sm text-gray-400" aria-live="polite">
+              {faseEnvio === 'verificando' ? 'Verificando los requisitos del informe…'
+                : faseEnvio === 'enviando' ? 'Enviando el informe. No cierres esta página.'
+                : faseEnvio === 'actualizando' ? 'Listo. Actualizando tu expediente…'
+                : rechazado
+                  ? 'El asesor recibirá el informe corregido para revisión.'
+                  : 'Los asesores y la secretaria recibirán este informe para revisión.'
               }
             </p>
             <button
               onClick={handleEnviar}
-              disabled={enviando || actividades.length === 0}
-              className={`text-white px-6 py-3 rounded-xl font-medium active:scale-[0.98] transition-all disabled:opacity-50 flex-shrink-0 ml-4 ${
+              disabled={faseEnvio !== null || actividades.length === 0}
+              aria-busy={faseEnvio !== null}
+              className={`text-white px-6 py-3 rounded-xl font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed flex-shrink-0 ml-4 flex items-center gap-2 ${
                 rechazado
                   ? 'bg-red-600 hover:bg-red-700'
                   : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              {enviando ? 'Enviando...' : rechazado ? '↩ Reenviar a revisión' : 'Enviar a revisión'}
+              {faseEnvio && (
+                <svg className="w-4 h-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+              )}
+              {faseEnvio === 'verificando' ? 'Verificando…'
+                : faseEnvio === 'enviando' ? 'Enviando…'
+                : faseEnvio === 'actualizando' ? 'Actualizando…'
+                : rechazado ? '↩ Reenviar a revisión' : 'Enviar a revisión'}
             </button>
           </div>
         </div>
