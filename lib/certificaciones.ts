@@ -1,6 +1,13 @@
 import 'server-only'
 import { createAdminSupabaseClient } from './supabase-admin'
 
+// Desactivada a petición del usuario: la certificación deja de ser
+// obligatoria en el primer informe. La tarjeta y la generación del PDF
+// siguen disponibles para quien quiera subirla por su cuenta — este
+// interruptor solo apaga la exigencia. Volver a `true` reactiva la regla
+// tal como estaba.
+const RETENCION_OBLIGATORIA = false
+
 /**
  * ¿Debe exigirse la Certificación de Retención en la Fuente antes de este envío?
  *
@@ -19,6 +26,8 @@ export async function certificacionPendiente(
   periodoId: string,
   anioGravable: number,
 ): Promise<boolean> {
+  if (!RETENCION_OBLIGATORIA) return false
+
   const admin = createAdminSupabaseClient()
 
   // 1. ¿Ya existe la certificación para (contrato, año)?
