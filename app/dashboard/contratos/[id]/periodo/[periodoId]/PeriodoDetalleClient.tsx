@@ -15,7 +15,6 @@ import {
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
-import CertificacionModal, { type CertPrefill } from './CertificacionModal'
 import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import TarjetaAdjunto from '@/components/TarjetaAdjunto'
@@ -23,7 +22,6 @@ import {
   prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
   type AdjuntoDTO,
 } from '@/app/actions/adjuntos'
-import { verificarCertificacionRequerida } from '@/app/actions/certificaciones'
 import { verificarActaTerminacionRequerida } from '@/app/actions/actas-terminacion'
 import {
   enviarPeriodo,
@@ -209,10 +207,6 @@ export default function PeriodoDetallePage({
   const [mostrarActa, setMostrarActa] = useState(false)
   const [actaPrefill, setActaPrefill] = useState<ActaPrefill | null>(null)
   const [actaFaltaFirma, setActaFaltaFirma] = useState(false)
-  // Certificación de retención — modal obligatorio previo al primer envío
-  const [mostrarCert, setMostrarCert] = useState(false)
-  const [certPrefill, setCertPrefill] = useState<CertPrefill | null>(null)
-  const [certFaltaFirma, setCertFaltaFirma] = useState(false)
 
   // Activity form state
   const [formActivo, setFormActivo] = useState<string | null>(null)
@@ -757,22 +751,7 @@ export default function PeriodoDetallePage({
 
     setErroresCampos({ planilla: false, numero: false })
 
-    // Certificación de retención (Ley 1819/2016): obligatoria una vez por año
-    // gravable antes del primer envío. Si falta, se abre el modal de juramento
-    // en lugar de enviar; tras aceptarlo, el envío continúa automáticamente.
-    setEnviando(true)
-    const cert = await verificarCertificacionRequerida(periodoId)
-    setEnviando(false)
-    if (cert.requerida && cert.prefill) {
-      setCertPrefill(cert.prefill)
-      setCertFaltaFirma(cert.faltaFirma)
-      setMostrarCert(true)
-      return
-    }
-
     // Acta de terminación: obligatoria antes del ÚLTIMO informe del contrato.
-    // Se consulta después de la certificación —que es del primero— para que en
-    // un contrato de un solo periodo se pidan en orden y no las dos a la vez.
     setEnviando(true)
     const acta = await verificarActaTerminacionRequerida(periodoId)
     setEnviando(false)
@@ -3952,16 +3931,6 @@ export default function PeriodoDetallePage({
           onClose={() => setVisorPDF(null)}
         />
       )}
-
-      {/* Certificación de retención — modal obligatorio previo al primer envío */}
-      <CertificacionModal
-        abierto={mostrarCert}
-        periodoId={periodoId}
-        prefill={certPrefill}
-        faltaFirma={certFaltaFirma}
-        onCerrar={() => setMostrarCert(false)}
-        onAceptada={() => { setMostrarCert(false); doEnviar() }}
-      />
 
       {/* Acta de terminación — modal obligatorio previo al último envío */}
       <ActaTerminacionModal
