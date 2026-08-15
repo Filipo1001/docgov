@@ -12,14 +12,18 @@
  *
  * ── Plantillas registradas ────────────────────────────────────────────────
  *
+ * El tuteo no es un capricho: el resto del producto tutea —el correo dice «Tu
+ * informe … fue enviado»— y un canal que trata de usted al mismo destinatario
+ * suena a que lo escribió otra empresa.
+ *
  *   bienvenida_contratista  (Utilidad · es)
- *     Hola {{1}}, su cuenta en Contratista Digital ya está activa. Ingrese con
- *     su correo y su número de documento como contraseña inicial.
- *     Acceda en: {{2}}
+ *     Hola {{1}}, tu cuenta en Contratista Digital ya está activa. Ingresa con
+ *     tu correo y tu número de documento como contraseña inicial.
+ *     Accede en: {{2}}
  *
  *   informe_enviado  (Utilidad · es)
- *     Hola {{1}}, su informe de {{2}} del contrato {{3}} fue enviado
- *     correctamente y está en revisión. Le avisaremos cuando sea aprobado.
+ *     Hola {{1}}, tu informe de {{2}} del contrato {{3}} fue enviado
+ *     correctamente y está en revisión. Te avisaremos cuando sea aprobado.
  *
  * Los tipos que no aparecen aquí (aprobado, rechazado, radicado…) siguen
  * saliendo por correo y quedan sin enviar por WhatsApp — a propósito: se
