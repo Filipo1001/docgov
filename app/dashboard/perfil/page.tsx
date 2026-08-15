@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/lib/user-context'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import type { Contrato } from '@/lib/types'
 import { formatCedula } from '@/lib/format'
 import { subirFirma } from '@/app/actions/periodos'
-import { obtenerFirmaFirmada } from '@/app/actions/usuario'
+import { obtenerFirmaFirmada, obtenerDatosPerfil } from '@/app/actions/usuario'
+import ErrorState from '@/components/ui/ErrorState'
 import { normalizarFirma } from '@/lib/compress'
 
 // ─── Display maps ──────────────────────────────────────────────
@@ -140,100 +140,73 @@ export default function PerfilPage() {
   const [firmaError,     setFirmaError]     = useState<string | null>(null)
   const firmaInputRef = useRef<HTMLInputElement>(null)
 
+  // Los datos llegan por Server Action, no por el cliente del navegador.
+  //
+  // Esta página es estática: navegar hasta ella no toca el servidor, así que la
+  // cookie de sesión no se renueva por el camino, y el cliente del navegador
+  // tiene `autoRefreshToken:false` a propósito (ver lib/supabase.ts). Con las
+  // consultas del navegador, tras un rato dentro de la app el token quedaba
+  // viejo y esta pantalla se quedaba cargando indefinidamente, mientras la
+  // barra lateral se veía perfecta — porque ella ya cargaba por Server Action.
+  // Al pasar por el servidor, la petición cruza el middleware, que renueva la
+  // cookie: el mismo camino que ya funcionaba, aplicado también aquí.
+  //
+  // `intento` permite reintentar sin recargar la página.
+  const [intento, setIntento] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  // El id basta como dependencia: el proveedor de sesión entrega un objeto
+  // `usuario` nuevo en cada reconciliación, y depender del objeto entero
+  // reiniciaba esta carga cada vez que el usuario volvía de otra aplicación.
+  const usuarioId = usuario?.id
+
   useEffect(() => {
-    if (!usuario) return
+    if (!usuarioId) return
     let cancelado = false
 
-    // Resiliencia móvil: esta página es estática (la navegación no pasa por el
-    // servidor) y depende de queries del navegador. Tras volver de segundo
-    // plano en iOS, cualquiera de estas llamadas puede fallar o tardar
-    // (token vencido, fetch abortado). Reglas:
-    //   1. Nada cosmético bloquea el render ("Miembro desde" va aparte).
-    //   2. Las queries corren en paralelo y toleran fallos individuales.
-    //   3. setLoading(false) SIEMPRE se ejecuta (finally) — la página nunca
-    //      queda atrapada en el skeleton; si algo falló, la reconciliación de
-    //      sesión re-dispara este efecto (nuevo objeto usuario) y se completa.
-    async function load() {
-      const supabase = createClient()
-
-      // Member since — cosmético, no bloqueante
-      supabase.auth.getUser()
-        .then(({ data: { user: authUser } }: { data: { user: { created_at?: string } | null } }) => {
-          if (!cancelado && authUser?.created_at) {
-            setMemberSince(
-              new Intl.DateTimeFormat('es-CO', { year: 'numeric', month: 'long' }).format(
-                new Date(authUser.created_at)
-              )
-            )
-          }
-        })
-        .catch(() => {})
-
-      try {
-        const rol = usuario!.rol
-        const tareas: Promise<void>[] = []
-
-        if (usuario!.dependencia_id) {
-          tareas.push(
-            supabase
-              .from('dependencias')
-              .select('nombre')
-              .eq('id', usuario!.dependencia_id)
-              .single()
-              .then(({ data: dep }: { data: { nombre?: string } | null }) => {
-                if (!cancelado && dep?.nombre) setDependencia(dep.nombre)
-              })
-          )
+    obtenerDatosPerfil()
+      .then(res => {
+        if (cancelado) return
+        if (!res.ok) {
+          setError(res.error)
+          return
         }
+        setError(null)
+        const d = res.datos
+        setDependencia(d.dependencia)
+        setContratos(d.contratos)
+        setSupervisedCount(d.supervisedCount)
+        setAsesoredCount(d.asesoredCount)
+        setMemberSince(
+          d.creadoEn
+            ? new Intl.DateTimeFormat('es-CO', { year: 'numeric', month: 'long' }).format(new Date(d.creadoEn))
+            : null
+        )
+      })
+      .catch(() => {
+        if (!cancelado) setError('No se pudieron cargar los datos. Revisa tu conexión e inténtalo de nuevo.')
+      })
+      .finally(() => {
+        // Sin condición de cancelado: si esta carga quedó obsoleta es porque
+        // ya arrancó otra, que volverá a poner el indicador donde corresponda.
+        // Saltárselo aquí era justo lo que dejaba la pantalla cargando para
+        // siempre cuando una reconciliación interrumpía la carga en vuelo.
+        setLoading(false)
+      })
 
-        if (rol === 'contratista') {
-          tareas.push(
-            supabase
-              .from('contratos')
-              .select('id, numero, objeto, valor_total, fecha_inicio, fecha_fin, banco, tipo_cuenta, numero_cuenta')
-              .eq('contratista_id', usuario!.id)
-              .order('created_at', { ascending: false })
-              .then(({ data }: { data: unknown }) => {
-                if (!cancelado) setContratos(((data as Contrato[]) ?? []))
-              })
-          )
-        }
-
-        if (rol === 'supervisor') {
-          tareas.push(
-            supabase
-              .from('contratos')
-              .select('id', { count: 'exact', head: true })
-              .eq('supervisor_id', usuario!.id)
-              .then(({ count }: { count: number | null }) => {
-                if (!cancelado) setSupervisedCount(count ?? 0)
-              })
-          )
-        }
-
-        if (rol === 'asesor') {
-          tareas.push(
-            supabase
-              .from('preaprobaciones')
-              .select('id', { count: 'exact', head: true })
-              .eq('asesor_id', usuario!.id)
-              .then(({ count }: { count: number | null }) => {
-                if (!cancelado) setAsesoredCount(count ?? 0)
-              })
-          )
-        }
-
-        await Promise.allSettled(tareas)
-      } finally {
-        if (!cancelado) setLoading(false)
-      }
-    }
-
-    load()
     return () => { cancelado = true }
-  }, [usuario])
+  }, [usuarioId, intento])
 
-  if (loading || !usuario) return <Skeleton />
+  if (!usuario || (loading && !error)) return <Skeleton />
+  if (error) {
+    return (
+      <ErrorState
+        mensaje={error}
+        onReintentar={() => { setError(null); setLoading(true); setIntento(n => n + 1) }}
+        reintentando={loading}
+      />
+    )
+  }
 
   async function handleSubirFirma(file: File) {
     setFirmaError(null)

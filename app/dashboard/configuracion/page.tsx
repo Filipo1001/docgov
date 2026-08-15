@@ -3,8 +3,14 @@
 import { useEffect, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/lib/user-context'
+import {
+  obtenerDatosConfiguracion,
+  guardarPreferenciaNotificacion,
+  guardarTelefonoUsuario,
+} from '@/app/actions/usuario'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
+import ErrorState from '@/components/ui/ErrorState'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -240,93 +246,97 @@ export default function PerfilPage() {
   const [memberSince,  setMemberSince]  = useState<string | null>(null)
   const [loading,      setLoading]      = useState(true)
 
+  // Ver la explicación en app/dashboard/perfil/page.tsx: los datos llegan por
+  // Server Action para que la pantalla no dependa del token del navegador, que
+  // en esta ruta estática no se renueva nunca.
+  //
+  // Esta pantalla era además la más frágil del panel: la carga era secuencial y
+  // `setLoading(false)` era su última línea, sin `try/finally`. Cualquier fallo
+  // —empezando por el `await getUser()` bloqueante que solo servía para el dato
+  // decorativo «Miembro desde»— dejaba el esqueleto puesto para siempre. Es el
+  // mismo defecto que ya se había corregido en /perfil, que aquí nunca se aplicó.
+  const [intento, setIntento] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
+
+  const usuarioId = usuario?.id
+
   useEffect(() => {
-    if (!usuario) return
+    if (!usuarioId) return
+    let cancelado = false
 
-    async function load() {
-      const supabase = createClient()
-
-      // Load notification preferences
-      const { data: prefData } = await supabase
-        .from('preferencias_notificacion')
-        .select('canal, habilitado')
-        .eq('usuario_id', usuario!.id)
-
-      if (prefData) {
+    obtenerDatosConfiguracion()
+      .then(res => {
+        if (cancelado) return
+        if (!res.ok) {
+          setError(res.error)
+          return
+        }
+        setError(null)
+        const d = res.datos
+        setTelefono(d.telefono)
+        setTelOriginal(d.telefono)
         const map = { ...DEFAULTS }
-        for (const p of prefData as { canal: Canal; habilitado: boolean }[]) {
+        for (const p of d.preferencias as { canal: Canal; habilitado: boolean }[]) {
           map[p.canal] = p.habilitado
         }
         setPrefs(map)
-      }
-
-      // Phone number
-      if (usuario!.telefono) {
-        setTelefono(usuario!.telefono)
-        setTelOriginal(usuario!.telefono)
-      }
-
-      // Member since from auth
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (authUser?.created_at) {
+        setDependencia(d.dependencia)
+        setContratos(d.contratos)
         setMemberSince(
-          new Intl.DateTimeFormat('es-CO', { year: 'numeric', month: 'long' }).format(
-            new Date(authUser.created_at)
-          )
+          d.creadoEn
+            ? new Intl.DateTimeFormat('es-CO', { year: 'numeric', month: 'long' }).format(new Date(d.creadoEn))
+            : null
         )
-      }
+      })
+      .catch(() => {
+        if (!cancelado) setError('No se pudieron cargar los datos. Revisa tu conexión e inténtalo de nuevo.')
+      })
+      .finally(() => setLoading(false))
 
-      // Dependencia name for asesor / supervisor / admin
-      if (usuario!.dependencia_id) {
-        const { data: dep } = await supabase
-          .from('dependencias')
-          .select('nombre')
-          .eq('id', usuario!.dependencia_id)
-          .single()
-        if (dep?.nombre) setDependencia(dep.nombre)
-      }
+    return () => { cancelado = true }
+  }, [usuarioId, intento])
 
-      // Active contracts count for contratistas
-      if (usuario!.rol === 'contratista') {
-        const { count } = await supabase
-          .from('contratos')
-          .select('id', { count: 'exact', head: true })
-          .eq('contratista_id', usuario!.id)
-        setContratos(count ?? 0)
-      }
-
-      setLoading(false)
-    }
-
-    load()
-  }, [usuario])
-
+  // El interruptor solo se mueve si el servidor confirma. Antes se movía
+  // siempre, mirara o no el resultado: con el token viejo el guardado fallaba
+  // sin decir nada y quedaba encendido sobre un cambio que nunca se guardó.
   async function toggleCanal(canal: Canal) {
-    if (!usuario) return
+    if (savingCanal) return
+    setErrorGuardado(null)
     setSavingCanal(canal)
     const next = !prefs[canal]
-    const supabase = createClient()
-    await supabase.from('preferencias_notificacion').upsert(
-      { usuario_id: usuario.id, canal, habilitado: next, updated_at: new Date().toISOString() },
-      { onConflict: 'usuario_id,canal' }
-    )
-    setPrefs(prev => ({ ...prev, [canal]: next }))
+    const res = await guardarPreferenciaNotificacion(canal, next).catch(() => ({
+      ok: false as const,
+      error: 'No se pudo guardar la preferencia. Revisa tu conexión.',
+    }))
+    if (res.ok) setPrefs(prev => ({ ...prev, [canal]: next }))
+    else setErrorGuardado(res.error ?? 'No se pudo guardar la preferencia.')
     setSavingCanal(null)
   }
 
-  async function guardarTelefono() {
-    if (!usuario) return
-    const supabase = createClient()
+  function guardarTelefono() {
+    setErrorGuardado(null)
+    const valor = telefono.trim()
     startTransition(async () => {
-      await supabase
-        .from('usuarios')
-        .update({ telefono: telefono.trim() || null })
-        .eq('id', usuario.id)
-      setTelOriginal(telefono.trim())
+      const res = await guardarTelefonoUsuario(valor).catch(() => ({
+        ok: false as const,
+        error: 'No se pudo guardar el teléfono. Revisa tu conexión.',
+      }))
+      if (res.ok) setTelOriginal(valor)
+      else setErrorGuardado(res.error ?? 'No se pudo guardar el teléfono.')
     })
   }
 
-  if (loading || !usuario) return <PageSkeleton />
+  if (!usuario || (loading && !error)) return <PageSkeleton />
+  if (error) {
+    return (
+      <ErrorState
+        mensaje={error}
+        onReintentar={() => { setError(null); setLoading(true); setIntento(n => n + 1) }}
+        reintentando={loading}
+      />
+    )
+  }
 
   const rolLabel   = ROL_LABEL[usuario.rol]  ?? usuario.rol
   const badgeColor = ROL_BADGE[usuario.rol]  ?? 'gray'
@@ -335,6 +345,20 @@ export default function PerfilPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-5">
+
+      {/* Un guardado que falla tiene que verse: antes se perdía en silencio. */}
+      {errorGuardado && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-start gap-3" role="alert">
+          <p className="text-xs text-amber-800 flex-1">{errorGuardado}</p>
+          <button
+            type="button"
+            onClick={() => setErrorGuardado(null)}
+            className="text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900 shrink-0"
+          >
+            Descartar
+          </button>
+        </div>
+      )}
 
       {/* ── Hero card ─────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6">

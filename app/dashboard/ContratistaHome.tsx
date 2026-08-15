@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
+import ErrorState from '@/components/ui/ErrorState'
 import {
   getDashboardContratista,
   type DashboardContratista,
@@ -273,12 +274,24 @@ export default function ContratistaHome({
 
   // staleTime: 5 min — navigating back shows cached data instantly;
   // background refetch runs if data is older than 5 minutes.
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-contratista', userId],
     queryFn:  () => getDashboardContratista(userId),
     staleTime: 5 * 60_000,
   })
 
+  // `isError` se consultaba en ningún sitio: la compuerta solo preguntaba si
+  // faltaban datos, así que un fallo se dibujaba como esqueleto eterno. El
+  // error ya estaba detectado; solo faltaba mostrarlo.
+  if (isError && !data) {
+    return (
+      <ErrorState
+        mensaje="No pudimos cargar tu información. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
   if (isLoading || !data) return <Skeleton />
 
   const { contrato, periodos, periodoActual, progreso, stats } = data

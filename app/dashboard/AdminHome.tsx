@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
+import ErrorState from '@/components/ui/ErrorState'
 import {
   getAdminPipeline,
   getActividadReciente,
@@ -98,7 +99,7 @@ export default function AdminHome({
 
   // Single combined query so both loads share one loading state.
   // staleTime: 5 min — navigating back shows cached data instantly.
-  const { data: dashData, isLoading } = useQuery({
+  const { data: dashData, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-admin'],
     queryFn:  async () => {
       const [pipeline, actividad] = await Promise.all([
@@ -113,6 +114,17 @@ export default function AdminHome({
   const pipeline  = dashData?.pipeline  ?? null
   const actividad = dashData?.actividad ?? []
 
+  // Ver ContratistaHome: el fallo se detectaba y se descartaba, dejando el
+  // esqueleto puesto como si siguiera cargando.
+  if (isError && !pipeline) {
+    return (
+      <ErrorState
+        mensaje="No pudimos cargar el panel. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
   if (isLoading || !pipeline) return <Skeleton />
 
   const fechaHoy = new Date().toLocaleDateString('es-CO', {
