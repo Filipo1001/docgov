@@ -7,9 +7,10 @@
 
 import { createAdminSupabaseClient } from './supabase-admin'
 import { getResendClient, RESEND_FROM } from './resend'
-import { getTwilioClient, TWILIO_WHATSAPP_FROM } from './twilio'
 import { EMAIL_TEMPLATES } from './emails/templates'
-import { getWhatsAppMessage } from './whatsapp'
+import { plantillaPara } from './whatsapp'
+import { enviarPlantillaWhatsApp, whatsappDisponible } from './whatsapp-cloud'
+import { normalizarTelefono } from './telefono'
 import { capitalizarNombre } from './format'
 
 export interface NotificationPayload {
@@ -64,7 +65,23 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
 
   const prefMap = new Map(prefs?.map(p => [p.canal, p.habilitado]) ?? [])
   const emailEnabled = prefMap.get('email') !== false // default: true
-  const whatsappEnabled = prefMap.get('whatsapp') === true // default: false
+
+  // WhatsApp pasa a comportarse como el correo: activo salvo que la persona lo
+  // desactive. Antes exigía un «sí» explícito y la tabla de preferencias está
+  // vacía —cero filas en producción—, así que el canal no habría enviado nada
+  // nunca. Además había un problema de origen: la bienvenida es el primer
+  // contacto, cuando la persona todavía no tiene cuenta donde marcar una
+  // preferencia; pedir opt-in previo hacía imposible justo el mensaje que más
+  // se necesita.
+  //
+  // Es defendible porque solo se usan plantillas de UTILIDAD sobre un trámite
+  // que la persona ya inició con el municipio, y porque el teléfono lo entregó
+  // ella misma al firmar el contrato. No se envía nada promocional.
+  //
+  // Lo que contiene el alcance real no es esta bandera sino `whatsappDisponible()`:
+  // sin las variables de entorno de Meta no sale ni un mensaje. Mientras esas
+  // variables existan solo en Preview, producción permanece en silencio.
+  const whatsappEnabled = prefMap.get('whatsapp') !== false
 
   const templateData = {
     // Los nombres se guardan en mayúsculas (normalizeName); un correo no es
@@ -81,16 +98,23 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   }
 
   // 3. Send email (if enabled and configured)
+  //
+  // Los registros ya no incluyen el correo del destinatario. Cada notificación
+  // dejaba la dirección escrita en los registros de Vercel, que se conservan y
+  // consulta cualquiera con acceso al panel: es un dato personal de
+  // contratistas del municipio y no hace falta para diagnosticar nada. El id
+  // de usuario permite rastrear el mismo caso sin exponerlo.
   const emailReal = usuario.email && !usuario.email.endsWith('@pendiente.local') ? usuario.email : null
-  console.log(`[Notif] tipo=${payload.tipo} to=${emailReal ?? 'SKIPPED(pendiente.local)'} emailEnabled=${emailEnabled} RESEND_FROM=${RESEND_FROM}`)
   if (emailEnabled && emailReal) {
     try {
       const resend = getResendClient()
-      console.log(`[Notif] resend=${resend ? 'OK' : 'NULL (missing RESEND_API_KEY)'}`)
-      if (resend) {
+      if (!resend) {
+        console.error('[Notif] Resend no configurado (falta RESEND_API_KEY)')
+      } else {
         const template = (EMAIL_TEMPLATES as Record<string, typeof EMAIL_TEMPLATES[string] | undefined>)[payload.tipo]
-        console.log(`[Notif] template=${template ? 'found' : 'NOT FOUND for tipo=' + payload.tipo}`)
-        if (template) {
+        if (!template) {
+          console.error(`[Notif] sin plantilla de correo para tipo=${payload.tipo}`)
+        } else {
           const { subject, html } = template(templateData)
           const result = await resend.emails.send({
             from: RESEND_FROM,
@@ -98,31 +122,53 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
             subject,
             html,
           })
-          console.log(`[Notif] Email result:`, JSON.stringify(result))
+          if (result.error) {
+            console.error(`[Notif] correo rechazado tipo=${payload.tipo} usuario=${payload.destinatarioId}: ${result.error.message}`)
+          } else {
+            console.log(`[Notif] correo enviado tipo=${payload.tipo} usuario=${payload.destinatarioId} id=${result.data?.id ?? '-'}`)
+          }
         }
       }
     } catch (err) {
-      console.error('[Notif] Email failed:', err)
+      console.error(`[Notif] fallo de correo tipo=${payload.tipo} usuario=${payload.destinatarioId}:`, err)
     }
+  } else if (emailEnabled && !emailReal) {
+    console.log(`[Notif] correo omitido tipo=${payload.tipo} usuario=${payload.destinatarioId} motivo=sin_correo_real`)
   }
 
-  // 4. Send WhatsApp (if enabled and configured)
-  if (whatsappEnabled && usuario.telefono) {
-    try {
-      const twilio = getTwilioClient()
-      if (twilio) {
-        const body = getWhatsAppMessage(payload.tipo, templateData)
-        const to = usuario.telefono.startsWith('whatsapp:')
-          ? usuario.telefono
-          : `whatsapp:+57${usuario.telefono.replace(/\D/g, '').replace(/^57/, '')}`
-        await twilio.messages.create({
-          body,
-          from: TWILIO_WHATSAPP_FROM,
-          to,
-        })
+  // 4. WhatsApp — solo plantillas aprobadas por Meta (ver lib/whatsapp.ts)
+  if (whatsappEnabled && whatsappDisponible()) {
+    const tel = normalizarTelefono(usuario.telefono)
+    const plantilla = plantillaPara(payload.tipo, {
+      nombreDestinatario: templateData.nombreDestinatario,
+      mes: payload.mes,
+      anio: payload.anio,
+      contrato: payload.contrato,
+      motivo: payload.motivo,
+      numeroRadicado: payload.numeroRadicado,
+      nombreRemitente: payload.nombreRemitente,
+    })
+
+    // Cada rama se registra distinto a propósito. Un número fijo o un tipo sin
+    // plantilla no son fallos: son casos esperados, y anotarlos como error
+    // manda a buscar una avería que no existe. Solo el envío rechazado por
+    // Meta merece nivel de error.
+    if (!tel.ok) {
+      console.log(`[WhatsApp] omitido tipo=${payload.tipo} motivo=telefono_${tel.motivo}`)
+    } else if (!plantilla) {
+      console.log(`[WhatsApp] omitido tipo=${payload.tipo} motivo=sin_plantilla_aprobada`)
+    } else {
+      const res = await enviarPlantillaWhatsApp(
+        tel.e164,
+        plantilla.nombre,
+        plantilla.parametros,
+        plantilla.idioma,
+      )
+      if (res.ok) {
+        console.log(`[WhatsApp] enviado tipo=${payload.tipo} plantilla=${plantilla.nombre} id=${res.id}`)
+      } else {
+        console.error(`[WhatsApp] fallo tipo=${payload.tipo} plantilla=${plantilla.nombre} codigo=${res.codigo ?? '-'}: ${res.error}`)
       }
-    } catch (err) {
-      console.error('[Notification] WhatsApp failed:', err)
     }
   }
 }
