@@ -11,11 +11,17 @@ import {
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import ErrorState from '@/components/ui/ErrorState'
+import { normalizarTelefono, motivoTelefonoInvalido } from '@/lib/telefono'
 
 // ─── Types ────────────────────────────────────────────────────
 
 type Canal = 'app' | 'email' | 'whatsapp'
-const DEFAULTS: Record<Canal, boolean> = { app: true, email: true, whatsapp: false }
+// WhatsApp pasa a comportarse como el correo: activo salvo que la persona lo
+// apague. Tiene que coincidir con el criterio del servidor (lib/notifications.ts):
+// mientras aquí figuraba `false` y allá se enviaba por defecto, el interruptor
+// se veía apagado y los mensajes salían igual — la peor combinación posible,
+// porque quien quisiera dejar de recibirlos ya lo veía en «no».
+const DEFAULTS: Record<Canal, boolean> = { app: true, email: true, whatsapp: true }
 
 // ─── Display maps ─────────────────────────────────────────────
 
@@ -327,6 +333,18 @@ export default function PerfilPage() {
     })
   }
 
+  // Validación en vivo del número, con el mismo criterio que usa el envío real
+  // (lib/telefono.ts): lo que aquí se ve en verde es exactamente lo que allá
+  // se considera alcanzable.
+  const estadoTelefono: { ok: boolean; texto: string } | null = (() => {
+    const valor = telefono.trim()
+    if (!valor) return null
+    const r = normalizarTelefono(valor)
+    return r.ok
+      ? { ok: true, texto: `Se enviará a +${r.e164}` }
+      : { ok: false, texto: motivoTelefonoInvalido(r.motivo) }
+  })()
+
   if (!usuario || (loading && !error)) return <PageSkeleton />
   if (error) {
     return (
@@ -471,6 +489,16 @@ export default function PerfilPage() {
                     {isPending ? '...' : 'Guardar'}
                   </button>
                 </div>
+
+                {/* Un número que WhatsApp no puede alcanzar —un fijo, sobre todo—
+                    no da ningún aviso: el interruptor queda encendido y los
+                    mensajes simplemente no llegan nunca. Decirlo aquí evita esa
+                    espera silenciosa. */}
+                {estadoTelefono && (
+                  <p className={`text-[11px] mt-2 ${estadoTelefono.ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {estadoTelefono.texto}
+                  </p>
+                )}
               </div>
             )}
           </div>
