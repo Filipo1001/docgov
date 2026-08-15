@@ -16,12 +16,12 @@
  * informe … fue enviado»— y un canal que trata de usted al mismo destinatario
  * suena a que lo escribió otra empresa.
  *
- *   bienvenida_contratista  (Utilidad · es)
+ *   bienvenida_contratista  (Utilidad · es_CO)
  *     Hola {{1}}, tu cuenta en Contratista Digital ya está activa. Ingresa con
  *     tu correo y tu número de documento como contraseña inicial.
  *     Accede en: {{2}}
  *
- *   informe_enviado  (Utilidad · es)
+ *   informe_enviado  (Utilidad · es_CO)
  *     Hola {{1}}, tu informe de {{2}} del contrato {{3}} fue enviado
  *     correctamente y está en revisión. Te avisaremos cuando sea aprobado.
  *
@@ -31,6 +31,20 @@
  */
 
 import { HOST_APP } from '@/lib/dominio'
+
+/**
+ * Código de idioma de las plantillas, tal y como quedaron registradas en Meta.
+ *
+ * Tiene que coincidir EXACTAMENTE con el que se eligió al crearlas: si la
+ * plantilla se registró como «Spanish (COL)» y aquí se envía `es`, Meta
+ * responde 132001 «Template name does not exist» — el mismo error que si la
+ * plantilla no existiera, lo que despista por completo. Se registraron como
+ * es_CO, que además es el español que corresponde al municipio.
+ *
+ * Configurable porque el día que se atienda otro país habrá que registrar las
+ * plantillas en su variante y no debería hacer falta desplegar código.
+ */
+const IDIOMA = process.env.WHATSAPP_TEMPLATE_LANG || 'es_CO'
 
 export interface DatosWhatsApp {
   nombreDestinatario: string
@@ -53,14 +67,14 @@ type Constructor = (d: DatosWhatsApp) => PlantillaWhatsApp
 const PLANTILLAS: Record<string, Constructor> = {
   bienvenida: (d) => ({
     nombre: 'bienvenida_contratista',
-    idioma: 'es',
+    idioma: IDIOMA,
     parametros: [d.nombreDestinatario, HOST_APP],
   }),
 
   // La confirmación al propio contratista de que su informe salió.
   enviado_confirmacion: (d) => ({
     nombre: 'informe_enviado',
-    idioma: 'es',
+    idioma: IDIOMA,
     parametros: [
       d.nombreDestinatario,
       `${d.mes ?? ''} ${d.anio ?? ''}`.trim(),
