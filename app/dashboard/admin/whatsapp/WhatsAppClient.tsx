@@ -8,15 +8,25 @@ import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 
 const ETIQUETA_TIPO: Record<string, string> = {
+  hello_world: '1. Prueba de conexión (plantilla de Meta)',
   bienvenida: 'Bienvenida (cuenta nueva)',
   enviado_confirmacion: 'Confirmación de informe enviado',
+}
+
+const AYUDA_TIPO: Record<string, string> = {
+  hello_world:
+    'Empieza por aquí. Usa una plantilla que Meta trae aprobada de fábrica, así que comprueba el token, el número y el destinatario sin depender de que ya hayan aprobado las nuestras.',
+  bienvenida:
+    'Requiere que la plantilla «bienvenida_contratista» esté aprobada en WhatsApp Manager.',
+  enviado_confirmacion:
+    'Requiere que la plantilla «informe_enviado» esté aprobada en WhatsApp Manager.',
 }
 
 export default function WhatsAppClient() {
   const [estado, setEstado] = useState<EstadoWhatsApp | null>(null)
   const [errorEstado, setErrorEstado] = useState<string | null>(null)
   const [telefono, setTelefono] = useState('')
-  const [tipo, setTipo] = useState('bienvenida')
+  const [tipo, setTipo] = useState('hello_world')
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState<{ ok: boolean; detalle: string } | null>(null)
 
@@ -115,10 +125,13 @@ export default function WhatsAppClient() {
               onChange={e => setTipo(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              {(estado?.tiposDisponibles ?? ['bienvenida']).map(t => (
+              {(estado?.tiposDisponibles ?? ['hello_world']).map(t => (
                 <option key={t} value={t}>{ETIQUETA_TIPO[t] ?? t}</option>
               ))}
             </select>
+            {AYUDA_TIPO[tipo] && (
+              <p className="text-[11px] text-gray-400 mt-1">{AYUDA_TIPO[tipo]}</p>
+            )}
           </div>
 
           <button

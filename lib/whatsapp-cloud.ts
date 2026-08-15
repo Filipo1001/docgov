@@ -17,7 +17,11 @@ import 'server-only'
  * construía `lib/whatsapp.ts` habrían sido rechazados en producción.
  */
 
-const API_VERSION = 'v21.0'
+// Meta mantiene varias versiones vivas a la vez y las va retirando por fecha.
+// Se deja configurable para poder subirla sin desplegar código el día que la
+// actual quede obsoleta; el valor por defecto es el que la propia consola de
+// Meta genera hoy en sus ejemplos.
+const API_VERSION = process.env.WHATSAPP_API_VERSION || 'v25.0'
 
 export interface ParametroPlantilla {
   type: 'text'

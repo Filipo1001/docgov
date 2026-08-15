@@ -53,7 +53,10 @@ export async function estadoWhatsApp(): Promise<EstadoWhatsApp | { error: string
   return {
     configurado: whatsappDisponible(),
     faltantes,
-    tiposDisponibles: tiposConWhatsApp(),
+    // `hello_world` va primero a propósito: es la prueba que hay que hacer
+    // ANTES que ninguna otra, porque valida la conexión sin depender de que
+    // Meta haya aprobado ya nuestras plantillas.
+    tiposDisponibles: ['hello_world', ...tiposConWhatsApp()],
   }
 }
 
@@ -78,6 +81,19 @@ export async function probarWhatsApp(
   const tel = normalizarTelefono(telefono)
   if (!tel.ok) {
     return { ok: false, detalle: motivoTelefonoInvalido(tel.motivo) }
+  }
+
+  // Prueba de conexión pura, con la plantilla que Meta trae aprobada de
+  // fábrica. Separa dos preguntas que de otro modo se confunden: «¿funcionan
+  // el token, el número y el destinatario?» y «¿ya aprobaron NUESTRAS
+  // plantillas?». Sin esto, un fallo mientras Meta revisa nuestras plantillas
+  // es indistinguible de una credencial mal puesta, y no habría forma de
+  // avanzar hasta que terminara la revisión.
+  if (tipo === 'hello_world') {
+    const res = await enviarPlantillaWhatsApp(tel.e164, 'hello_world', [], 'en_US')
+    return res.ok
+      ? { ok: true, detalle: `Conexión correcta. Mensaje de prueba enviado a +${tel.e164} (id: ${res.id}).` }
+      : { ok: false, detalle: `Meta rechazó el envío${res.codigo ? ` (código ${res.codigo})` : ''}: ${res.error}` }
   }
 
   const plantilla = plantillaPara(tipo, {
