@@ -52,9 +52,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    // `translate="no"` + la meta de Google: el navegador NO debe traducir esta
+    // aplicación.
+    //
+    // No es una precaución teórica. Con la traducción automática encendida,
+    // Chrome tomaba «Mayo» por la palabra inglesa y la mostraba como
+    // «Mayonesa» en el selector de mes de cotización; «Agosto» aparecía como
+    // «Atrás». El valor enviado seguía siendo el correcto —se traduce el texto
+    // visible, no el `value` de la opción—, pero alguien que elige el mes que
+    // cubre su planilla no puede estar leyendo «Mayonesa».
+    //
+    // `lang="es"` por sí solo no basta: Chrome recuerda «traducir siempre este
+    // sitio» y pasa por encima de esa declaración. Esta aplicación es
+    // monolingüe para municipios colombianos, así que no hay ningún caso en el
+    // que traducirla sea correcto.
+    <html lang="es" translate="no">
+      <head>
+        <meta name="google" content="notranslate" />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased notranslate`}
       >
         {children}
       </body>

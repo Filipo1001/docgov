@@ -52,15 +52,39 @@ async function getAuthContext() {
   return { supabase, usuario: usuario as { id: string; rol: Rol; nombre_completo: string; dependencia_id: string | null } }
 }
 
-async function getPeriodo(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, periodoId: string) {
+/**
+ * Carga el periodo. Distingue «no existe» de «la consulta falló».
+ *
+ * Antes devolvía `null` en ambos casos, y quien llamaba respondía «Periodo no
+ * encontrado». Un corte de red o un error transitorio de la base producían ese
+ * mensaje sobre un periodo que existe perfectamente: el contratista lo veía en
+ * pantalla, pulsaba enviar, le decían que no existe, y al reintentar
+ * funcionaba. El mensaje mandaba a buscar un problema inexistente y —lo peor—
+ * hacía dudar de si el envío se había registrado.
+ *
+ * `PostgrestError` con código PGRST116 es «cero filas» con `.single()`: eso sí
+ * es «no existe». Cualquier otro error es una falla, y se dice como tal.
+ */
+type PeriodoCargado = { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number; es_historico: boolean; habilitado_tardio: boolean }
+
+async function getPeriodo(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  periodoId: string,
+): Promise<{ ok: true; periodo: PeriodoCargado } | { ok: false; error: string }> {
   const { data, error } = await supabase
     .from('periodos')
     .select('id, estado, contrato_id, mes, anio, es_historico, habilitado_tardio')
     .eq('id', periodoId)
     .single()
 
-  if (error || !data) return null
-  return data as { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number; es_historico: boolean; habilitado_tardio: boolean }
+  if (error) {
+    if ((error as { code?: string }).code === 'PGRST116') {
+      return { ok: false, error: 'Periodo no encontrado' }
+    }
+    return { ok: false, error: 'No se pudo leer el periodo. Revisa tu conexión e inténtalo de nuevo.' }
+  }
+  if (!data) return { ok: false, error: 'Periodo no encontrado' }
+  return { ok: true, periodo: data as PeriodoCargado }
 }
 
 // ── Past-month lock ───────────────────────────────────────────
@@ -134,8 +158,9 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
       return { error: 'Solo el contratista puede enviar periodos a revisión' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'Este periodo es histórico y no puede ser modificado' }
 
     if (periodo.es_historico) {
@@ -326,8 +351,9 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
       return { error: 'Solo asesores o supervisores pueden aprobar informes' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'enviado' && periodo.estado !== 'rechazado') {
@@ -405,8 +431,9 @@ export async function rechazarComoAsesor(
       return { error: 'Solo asesores o supervisores pueden rechazar informes' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'enviado' && periodo.estado !== 'revision') {
@@ -486,8 +513,9 @@ export async function revocarPreaprobacion(periodoId: string): Promise<ActionRes
       return { error: 'Solo asesores o supervisores pueden revocar revisiones' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'revision') {
@@ -719,8 +747,9 @@ export async function devolverPeriodoAContratista(
       return { error: 'Solo la secretaria puede devolver directamente al contratista' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
     if (periodo.estado !== 'enviado' && periodo.estado !== 'revision') {
       return { error: `No se puede devolver un periodo en estado "${periodo.estado}"` }
@@ -779,8 +808,9 @@ export async function marcarRadicado(
       return { error: 'Solo el asesor, la secretaria o el admin pueden radicar periodos' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (periodo.estado !== 'aprobado') {
@@ -868,8 +898,9 @@ export async function revisarPlanilla(
       return { error: 'Solo asesores o supervisores pueden revisar la planilla' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
     if (!['enviado', 'revision', 'aprobado'].includes(periodo.estado)) {
       return { error: 'La planilla solo puede revisarse cuando el periodo ha sido enviado' }
@@ -949,8 +980,9 @@ export async function prepararUploadPlanilla(
       return { error: 'Solo el contratista puede subir la planilla' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     if (usuario.rol !== 'admin') {
       if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
@@ -1028,8 +1060,9 @@ export async function subirPlanilla(
       return { error: 'Solo el contratista puede subir la planilla' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     // Admin bypass: can upload planilla to any period regardless of state or historico flag.
     // Non-admin (contratista) is still restricted to editable states.
     if (usuario.rol !== 'admin') {
@@ -1101,8 +1134,9 @@ export async function eliminarPlanilla(periodoId: string): Promise<ActionResult>
       return { error: 'Solo el contratista puede eliminar la planilla' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
@@ -1146,8 +1180,9 @@ export async function guardarNumeroPlanilla(
     const errorFormato = validarNumeroPlanilla(numeroPlanilla)
     if (errorFormato) return { error: errorFormato }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
@@ -1199,8 +1234,9 @@ export async function guardarMesCotizacion(
       return { error: 'Mes de cotización inválido' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     // Si es supervisor, verificar que supervisa este contrato
     if (usuario.rol === 'supervisor') {
@@ -1264,8 +1300,9 @@ export async function actualizarValorCobroPeriodo(
       return { error: 'El valor debe ser un número mayor o igual a 0' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     // Admin puede modificar cualquier periodo, incluyendo históricos y radicados.
 
     // Obtener valor anterior para auditoría
@@ -1322,8 +1359,9 @@ export async function actualizarPlanillaHistorica(
       return { error: 'Solo administradores o supervisores pueden editar datos históricos de planilla' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     const valor = numeroPlanilla.trim()
 
@@ -1385,8 +1423,9 @@ export async function actualizarObservacionSupervisor(
       return { error: 'Solo el supervisor o un administrador pueden agregar observaciones al acta' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
     // State guard (admin bypasses)
@@ -1516,8 +1555,9 @@ export async function actualizarNumeroRadicado(
       return { error: 'Solo el asesor, la secretaria o el admin pueden editar el número de radicado' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'Este periodo es histórico y no puede ser modificado' }
 
     if (periodo.estado !== 'radicado') {
@@ -1607,8 +1647,9 @@ export async function adminDevolverPeriodo(
       return { error: 'Solo el administrador puede usar esta acción' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     if (periodo.estado === 'borrador') {
       return { error: 'No se puede devolver un periodo en estado borrador' }
@@ -1695,8 +1736,9 @@ export async function actualizarBaseCotizacion(
       return { error: 'El valor debe ser un número positivo' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     const adminClient = createAdminSupabaseClient()
     const { data: updated, error } = await adminClient
@@ -2094,8 +2136,9 @@ export async function prepararUploadFactura(
       return { error: 'Solo el contratista puede adjuntar su factura electrónica' }
     }
 
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     // Pedirla a quien no factura electrónicamente sería un error de flujo: a él
     // el sistema le genera la Cuenta de Cobro.
@@ -2138,8 +2181,9 @@ export async function confirmarUploadFactura(
     if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
       return { error: 'No autorizado' }
     }
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     // La ruta se deriva del periodo: una falsificada que apunte a otro se rechaza.
     if (!storagePath.startsWith(`facturas/${periodoId}/`)) {
@@ -2183,8 +2227,9 @@ export async function eliminarFactura(periodoId: string): Promise<ActionResult> 
     if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
       return { error: 'No autorizado' }
     }
-    const periodo = await getPeriodo(supabase, periodoId)
-    if (!periodo) return { error: 'Periodo no encontrado' }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
 
     if (usuario.rol !== 'admin' && !ESTADOS_EDITABLES.includes(periodo.estado)) {
       return { error: 'No se puede eliminar la factura de un informe ya enviado' }
