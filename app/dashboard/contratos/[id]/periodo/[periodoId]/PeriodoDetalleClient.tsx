@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
+import EnvioExpediente, { type PiezaExpediente } from '@/components/EnvioExpediente'
 import TarjetaAdjunto from '@/components/TarjetaAdjunto'
 import {
   prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
@@ -207,6 +208,14 @@ export default function PeriodoDetallePage({
   // vez puede decir en qué va, que es lo que faltaba para no dejar al
   // contratista mirando un botón mudo sin saber si su informe salió.
   const [faseEnvio, setFaseEnvio] = useState<null | 'verificando' | 'enviando' | 'actualizando'>(null)
+
+  // Animación del expediente. Se separa de `faseEnvio` a propósito: la capa
+  // sigue en pantalla un instante DESPUÉS de que el envío terminó, para sellar
+  // la carpeta. Atarla a la misma variable la haría desaparecer justo cuando
+  // toca mostrar que salió bien.
+  const [mostrarExpediente, setMostrarExpediente] = useState(false)
+  const [envioCompletado, setEnvioCompletado] = useState(false)
+  const [envioError, setEnvioError] = useState<string | null>(null)
   // Acta de terminación — modal obligatorio previo al último envío
   const [mostrarActa, setMostrarActa] = useState(false)
   const [actaPrefill, setActaPrefill] = useState<ActaPrefill | null>(null)
@@ -619,6 +628,35 @@ export default function PeriodoDetallePage({
 
   // ── Mes de cotización: meses disponibles (rango del contrato) ──────────────
   // El selector ofrece cualquier mes dentro del rango del contrato.
+  // ── Inventario del expediente, para la animación de envío ─────────────────
+  // Son cifras reales del periodo, no adornos: el contratista ve entrar SU
+  // trabajo —sus actividades, sus fotos, su planilla— y no una secuencia
+  // genérica que serviría igual para cualquier sistema. El informe va último
+  // porque es lo que resulta de todo lo anterior.
+  const piezasExpediente = (() => {
+    const evidencias = actividades.reduce((n, a) => n + (a.evidencias?.length ?? 0), 0)
+    const piezas: PiezaExpediente[] = [
+      {
+        icono: Iconos.navegacion.informes,
+        etiqueta: `${actividades.length} ${actividades.length === 1 ? 'actividad registrada' : 'actividades registradas'}`,
+      },
+    ]
+    if (evidencias > 0) {
+      piezas.push({
+        icono: Iconos.dominio.evidencia,
+        etiqueta: `${evidencias} ${evidencias === 1 ? 'evidencia adjunta' : 'evidencias adjuntas'}`,
+      })
+    }
+    if (periodo?.planilla_ss_url) {
+      piezas.push({ icono: Iconos.documentos.planilla, etiqueta: 'Planilla de seguridad social' })
+    }
+    if (exigeFacturaElectronica && periodo?.factura_electronica_url) {
+      piezas.push({ icono: Iconos.documentos.cuentaCobro, etiqueta: 'Factura electrónica' })
+    }
+    piezas.push({ icono: Iconos.documentos.informe, etiqueta: 'Informe de actividades' })
+    return piezas
+  })()
+
   const mesesContrato = (() => {
     if (!contrato?.fecha_inicio || !contrato?.fecha_fin) return [...MESES]
     const ini = new Date(contrato.fecha_inicio + 'T00:00:00')
@@ -736,10 +774,15 @@ export default function PeriodoDetallePage({
 
   async function doEnviar() {
     setFaseEnvio('enviando')
+    setEnvioError(null)
+    setEnvioCompletado(false)
+    setMostrarExpediente(true)
     try {
       const result = await enviarPeriodo(periodoId)
       if (result.error) {
-        toast.error(result.error)
+        // El error se muestra DENTRO de la animación: un aviso flotante detrás
+        // de una capa a pantalla completa no se lee.
+        setEnvioError(result.error)
         return
       }
 
@@ -749,13 +792,15 @@ export default function PeriodoDetallePage({
       // periodo como borrador, con el botón activo, y era fácil creer que el
       // envío no había funcionado y volver a pulsarlo.
       setFaseEnvio('actualizando')
-      toast.success('Informe enviado a revisión')
       router.refresh()
       await cargarDatos()
+
+      // Se marca completado al FINAL, con los datos ya recargados: la carpeta
+      // solo se cierra y se sella cuando el envío es un hecho consumado, no
+      // cuando la petición salió. Si algo falla antes, nunca llega a sellarse.
+      setEnvioCompletado(true)
     } catch {
-      // Caída de red al invocar la acción. Sin este catch el botón se quedaría
-      // deshabilitado para siempre y solo un F5 lo recuperaría.
-      toast.error('No se pudo completar el envío. Revisa tu conexión e inténtalo de nuevo.')
+      setEnvioError('No se pudo completar el envío. Revisa tu conexión e inténtalo de nuevo.')
     } finally {
       setFaseEnvio(null)
     }
@@ -3980,6 +4025,15 @@ export default function PeriodoDetallePage({
           onClose={() => setVisorPDF(null)}
         />
       )}
+
+      {/* Envío a revisión — el expediente que se arma */}
+      <EnvioExpediente
+        abierto={mostrarExpediente}
+        piezas={piezasExpediente}
+        completado={envioCompletado}
+        error={envioError}
+        onCerrar={() => { setMostrarExpediente(false); setEnvioError(null) }}
+      />
 
       {/* Acta de terminación — modal obligatorio previo al último envío */}
       <ActaTerminacionModal
