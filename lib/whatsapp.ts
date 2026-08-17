@@ -16,18 +16,26 @@
  * informe … fue enviado»— y un canal que trata de usted al mismo destinatario
  * suena a que lo escribió otra empresa.
  *
- *   bienvenida_contratista  (Utilidad · es_CO)
- *     Hola {{1}}, tu cuenta en Contratista Digital ya está activa. Ingresa con
- *     tu correo y tu número de documento como contraseña inicial.
- *     Accede en: {{2}}
+ * Todas van en categoría UTILIDAD e idioma es_CO. Los nombres de abajo deben
+ * coincidir EXACTAMENTE con los registrados; el texto completo de cada una
+ * está en la guía que se entregó para registrarlas.
  *
- *   informe_enviado  (Utilidad · es_CO)
- *     Hola {{1}}, tu informe de {{2}} del contrato {{3}} fue enviado
- *     correctamente y está en revisión. Te avisaremos cuando sea aprobado.
+ *   bienvenida_contratista   {{1}} nombre · {{2}} dirección de la aplicación
+ *   informe_enviado          {{1}} nombre · {{2}} periodo · {{3}} contrato
+ *   informe_recibido         {{1}} nombre · {{2}} contratista · {{3}} periodo · {{4}} contrato
+ *   informe_en_revision      {{1}} nombre · {{2}} periodo · {{3}} contrato
+ *   informe_aprobado         {{1}} nombre · {{2}} periodo · {{3}} contrato
+ *   informe_rechazado        {{1}} nombre · {{2}} periodo · {{3}} contrato · {{4}} motivo
+ *   informe_radicado         {{1}} nombre · {{2}} periodo · {{3}} contrato · {{4}} radicado
+ *   recordatorio_informe     {{1}} nombre · {{2}} periodo · {{3}} contrato
+ *   recordatorio_urgente     {{1}} nombre · {{2}} periodo · {{3}} contrato
+ *   recordatorio_vencido     {{1}} nombre · {{2}} periodo · {{3}} contrato
+ *   radicacion_pendiente     {{1}} nombre · {{2}} detalle
+ *   contrato_por_vencer      {{1}} nombre · {{2}} detalle
  *
- * Los tipos que no aparecen aquí (aprobado, rechazado, radicado…) siguen
- * saliendo por correo y quedan sin enviar por WhatsApp — a propósito: se
- * habilitan a medida que sus plantillas se aprueben, no antes.
+ * Un tipo sin plantilla aquí no falla: sigue saliendo por correo y se omite en
+ * WhatsApp deliberadamente. Mientras una plantilla no esté APROBADA en Meta,
+ * su envío será rechazado con 132001 aunque figure en esta lista.
  */
 
 import { HOST_APP } from '@/lib/dominio'
@@ -54,6 +62,29 @@ export interface DatosWhatsApp {
   motivo?: string
   numeroRadicado?: string
   nombreRemitente?: string
+  detalle?: string
+}
+
+/**
+ * Limpia un valor antes de mandarlo como parámetro de plantilla.
+ *
+ * Meta rechaza los parámetros que traen saltos de línea o más de cuatro
+ * espacios seguidos — y un motivo de rechazo lo escribe a mano el supervisor,
+ * así que puede traer cualquier cosa. Sin esta limpieza, un supervisor que
+ * pulse Enter al redactar tumba el envío con un error que no dice eso.
+ *
+ * El recorte a 300 caracteres evita el otro extremo: un motivo larguísimo que
+ * empuje el cuerpo por encima del límite de la plantilla.
+ */
+function limpiar(valor: string | undefined | null, max = 300): string {
+  if (!valor) return ''
+  const plano = valor.replace(/\s+/g, ' ').trim()
+  return plano.length > max ? `${plano.slice(0, max - 1)}…` : plano
+}
+
+/** «Septiembre 2026», o solo el mes si no hay año. */
+function periodoTexto(d: DatosWhatsApp): string {
+  return limpiar(`${d.mes ?? ''} ${d.anio ?? ''}`, 40) || 'el periodo'
 }
 
 export interface PlantillaWhatsApp {
@@ -65,21 +96,100 @@ export interface PlantillaWhatsApp {
 type Constructor = (d: DatosWhatsApp) => PlantillaWhatsApp
 
 const PLANTILLAS: Record<string, Constructor> = {
+  // ── Cuenta ──────────────────────────────────────────────────────────────
   bienvenida: (d) => ({
     nombre: 'bienvenida_contratista',
     idioma: IDIOMA,
     parametros: [d.nombreDestinatario, HOST_APP],
   }),
 
-  // La confirmación al propio contratista de que su informe salió.
+  // ── Ciclo del informe, hacia el contratista ─────────────────────────────
   enviado_confirmacion: (d) => ({
     nombre: 'informe_enviado',
     idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
+  }),
+
+  revision: (d) => ({
+    nombre: 'informe_en_revision',
+    idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
+  }),
+
+  aprobado: (d) => ({
+    nombre: 'informe_aprobado',
+    idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
+  }),
+
+  rechazado: (d) => ({
+    nombre: 'informe_rechazado',
+    idioma: IDIOMA,
+    // El motivo lo escribe el supervisor a mano: pasa por `limpiar` porque un
+    // salto de línea suyo bastaría para que Meta rechace el envío.
     parametros: [
       d.nombreDestinatario,
-      `${d.mes ?? ''} ${d.anio ?? ''}`.trim(),
-      d.contrato ?? '',
+      periodoTexto(d),
+      limpiar(d.contrato, 40),
+      limpiar(d.motivo) || 'Revisa las observaciones en la plataforma',
     ],
+  }),
+
+  radicado: (d) => ({
+    nombre: 'informe_radicado',
+    idioma: IDIOMA,
+    parametros: [
+      d.nombreDestinatario,
+      periodoTexto(d),
+      limpiar(d.contrato, 40),
+      limpiar(d.numeroRadicado, 40) || 'sin número asignado',
+    ],
+  }),
+
+  // ── Ciclo del informe, hacia supervisor y asesores ──────────────────────
+  enviado: (d) => ({
+    nombre: 'informe_recibido',
+    idioma: IDIOMA,
+    parametros: [
+      d.nombreDestinatario,
+      limpiar(d.nombreRemitente, 60) || 'Un contratista',
+      periodoTexto(d),
+      limpiar(d.contrato, 40),
+    ],
+  }),
+
+  // ── Recordatorios automáticos (cron diario) ─────────────────────────────
+  recordatorio: (d) => ({
+    nombre: 'recordatorio_informe',
+    idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
+  }),
+
+  recordatorio_urgente: (d) => ({
+    nombre: 'recordatorio_urgente',
+    idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
+  }),
+
+  recordatorio_vencido: (d) => ({
+    nombre: 'recordatorio_vencido',
+    idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
+  }),
+
+  // ── Avisos de gestión (secretaría y supervisión) ────────────────────────
+  // Estos dos no traen mes ni periodo: su contenido ya viene redactado como
+  // una frase completa en `detalle`, así que se pasa tal cual, saneada.
+  radicacion_pendiente: (d) => ({
+    nombre: 'radicacion_pendiente',
+    idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, limpiar(d.detalle) || 'Hay cuentas aprobadas esperando radicación'],
+  }),
+
+  contrato_vencimiento: (d) => ({
+    nombre: 'contrato_por_vencer',
+    idioma: IDIOMA,
+    parametros: [d.nombreDestinatario, limpiar(d.detalle) || `El contrato ${limpiar(d.contrato, 40)} está por vencer`],
   }),
 }
 

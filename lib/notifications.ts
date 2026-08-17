@@ -147,6 +147,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
       motivo: payload.motivo,
       numeroRadicado: payload.numeroRadicado,
       nombreRemitente: payload.nombreRemitente,
+      detalle: payload.detalle,
     })
 
     // Cada rama se registra distinto a propósito. Un número fijo o un tipo sin

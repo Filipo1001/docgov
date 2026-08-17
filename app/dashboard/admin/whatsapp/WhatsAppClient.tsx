@@ -9,17 +9,34 @@ import { Iconos } from '@/lib/iconos'
 
 const ETIQUETA_TIPO: Record<string, string> = {
   hello_world: '1. Prueba de conexión (plantilla de Meta)',
-  bienvenida: 'Bienvenida (cuenta nueva)',
-  enviado_confirmacion: 'Confirmación de informe enviado',
+  bienvenida: 'Bienvenida — cuenta nueva',
+  enviado_confirmacion: 'Informe enviado — al contratista',
+  enviado: 'Informe recibido — al supervisor',
+  revision: 'Informe en revisión',
+  aprobado: 'Informe aprobado',
+  rechazado: 'Informe devuelto',
+  radicado: 'Informe radicado',
+  recordatorio: 'Recordatorio — informe pendiente',
+  recordatorio_urgente: 'Recordatorio urgente',
+  recordatorio_vencido: 'Plazo vencido',
+  radicacion_pendiente: 'Cuentas esperando radicación',
+  contrato_vencimiento: 'Contrato por vencer',
 }
 
-const AYUDA_TIPO: Record<string, string> = {
-  hello_world:
-    'Empieza por aquí. Usa una plantilla que Meta trae aprobada de fábrica, así que comprueba el token, el número y el destinatario sin depender de que ya hayan aprobado las nuestras.',
-  bienvenida:
-    'Requiere que la plantilla «bienvenida_contratista» esté aprobada en WhatsApp Manager.',
-  enviado_confirmacion:
-    'Requiere que la plantilla «informe_enviado» esté aprobada en WhatsApp Manager.',
+/** Nombre de la plantilla en Meta, para diagnosticar un 132001 de un vistazo. */
+const PLANTILLA_META: Record<string, string> = {
+  bienvenida: 'bienvenida_contratista',
+  enviado_confirmacion: 'informe_enviado',
+  enviado: 'informe_recibido',
+  revision: 'informe_en_revision',
+  aprobado: 'informe_aprobado',
+  rechazado: 'informe_rechazado',
+  radicado: 'informe_radicado',
+  recordatorio: 'recordatorio_informe',
+  recordatorio_urgente: 'recordatorio_urgente',
+  recordatorio_vencido: 'recordatorio_vencido',
+  radicacion_pendiente: 'radicacion_pendiente',
+  contrato_vencimiento: 'contrato_por_vencer',
 }
 
 export default function WhatsAppClient() {
@@ -151,9 +168,11 @@ export default function WhatsAppClient() {
                 <option key={t} value={t}>{ETIQUETA_TIPO[t] ?? t}</option>
               ))}
             </select>
-            {AYUDA_TIPO[tipo] && (
-              <p className="text-[11px] text-gray-400 mt-1">{AYUDA_TIPO[tipo]}</p>
-            )}
+            <p className="text-[11px] text-gray-400 mt-1">
+              {tipo === 'hello_world'
+                ? 'Empieza por aquí. Usa una plantilla que Meta trae aprobada de fábrica, así que comprueba el token, el número y el destinatario sin depender de las nuestras.'
+                : `Requiere que la plantilla «${PLANTILLA_META[tipo] ?? tipo}» esté APROBADA en WhatsApp Manager.`}
+            </p>
           </div>
 
           <button
