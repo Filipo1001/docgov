@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import { Iconos } from '@/lib/iconos'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { subirFirma } from '@/app/actions/periodos'
@@ -169,6 +171,14 @@ function FirmaCard({
           if (file) handleFile(file)
           e.target.value = ''
         }}
+      />
+
+      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
+      <SubiendoArchivo
+        abierto={subiendo}
+        icono={Iconos.navegacion.firmas}
+        etiqueta={'Subiendo firma'}
+        detalle="No cierres esta página."
       />
     </div>
   )

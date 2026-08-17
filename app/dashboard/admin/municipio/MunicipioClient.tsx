@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import { Iconos } from '@/lib/iconos'
 import { Toaster, toast } from 'sonner'
 import {
   actualizarMunicipio, subirFirmaMunicipio, obtenerFirmaMunicipio, eliminarFirmaMunicipio,
@@ -217,6 +219,14 @@ export default function MunicipioClient({ municipio }: { municipio: MunicipioAdm
           {saving ? 'Guardando…' : 'Guardar cambios'}
         </button>
       </div>
+      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
+      <SubiendoArchivo
+        abierto={subiendoFirma}
+        icono={Iconos.navegacion.firmas}
+        etiqueta={'Subiendo firma del alcalde'}
+        detalle="No cierres esta página."
+      />
+
     </div>
   )
 }

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import { Iconos } from '@/lib/iconos'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
@@ -986,6 +988,14 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
           anio={contrato.anio}
         />
       )}
+      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
+      <SubiendoArchivo
+        abierto={subiendoPdfId !== null}
+        icono={Iconos.documentos.planilla}
+        etiqueta={'Subiendo planilla'}
+        detalle="No cierres esta página."
+      />
+
     </div>
   )
 }

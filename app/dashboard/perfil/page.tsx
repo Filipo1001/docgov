@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import { Iconos } from '@/lib/iconos'
 import { useUsuario } from '@/lib/user-context'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
@@ -565,6 +567,14 @@ export default function PerfilPage() {
           }}
         />
       </div>
+
+      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
+      <SubiendoArchivo
+        abierto={subiendoFirma}
+        icono={Iconos.navegacion.firmas}
+        etiqueta={'Subiendo firma'}
+        detalle="No cierres esta página."
+      />
 
     </div>
   )

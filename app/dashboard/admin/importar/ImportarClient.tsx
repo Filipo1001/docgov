@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import { Iconos } from '@/lib/iconos'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { parsearExcel, confirmarImportacion } from '@/app/actions/importar'
@@ -389,6 +391,14 @@ export default function ImportarClient() {
           </div>
         </div>
       )}
+      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
+      <SubiendoArchivo
+        abierto={cargando}
+        icono={Iconos.navegacion.historicos}
+        etiqueta={'Procesando archivo'}
+        detalle="No cierres esta página."
+      />
+
     </div>
   )
 }

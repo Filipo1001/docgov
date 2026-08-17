@@ -1,6 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import { Iconos } from '@/lib/iconos'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { actualizarUsuario, prepararUploadFoto, confirmarFotoUsuario, cambiarContrasena } from '@/app/actions/admin'
@@ -438,6 +440,15 @@ export default function EditarUsuarioClient({
           </button>
         </div>
       </div>
+      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
+      <SubiendoArchivo
+        abierto={uploading}
+        icono={Iconos.navegacion.usuarios}
+        etiqueta={'Subiendo foto de perfil'}
+        progreso={uploadPct}
+        detalle="No cierres esta página."
+      />
+
     </div>
   )
 }

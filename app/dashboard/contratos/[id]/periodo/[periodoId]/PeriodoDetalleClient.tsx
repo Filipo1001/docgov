@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
 import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
 import TarjetaAdjunto from '@/components/TarjetaAdjunto'
 import {
   prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
@@ -3883,93 +3884,59 @@ export default function PeriodoDetallePage({
         }}
       />
 
-      {/* ── Upload overlay ──────────────────────────────────────────────────────
-           Conditional render (NOT always-mounted) — a permanently rendered
-           backdrop-filter element covering the full viewport causes GPU
-           compositing issues in some browsers even at opacity:0, making
-           page content appear blank. Only mount when actually uploading.
-           Entry animation via globals.css keyframes (overlay-fade-in / card-scale-in).
+      {/* ── Indicador de subida ─────────────────────────────────────────────
+           Antes esta capa vivía escrita aquí dentro, con su propio SVG y su
+           propio azul, y era la única bonita de las doce que tiene la
+           aplicación. Ahora sale del componente compartido: mismo anillo, pero
+           en tinta de marca y con el icono del catálogo.
+
+           Se monta solo mientras hay subida: un elemento con backdrop-filter
+           siempre presente sobre todo el viewport provoca problemas de
+           composición en algunos navegadores aunque esté a opacidad cero.
         ──────────────────────────────────────────────────────────────────── */}
       {(() => {
-        const totalEvidencias: number = Object.values(subiendoEvidencia).reduce((s: number, v) => s + (v ?? 0), 0)
-        const isUploading = totalEvidencias > 0 || subiendoPlanilla
-        if (!isUploading) return null
+        const enCurso = Object.keys(subiendoEvidencia).filter(k => subiendoEvidencia[k] != null)
+        const totalEvidencias = Object.values(subiendoEvidencia).reduce((s: number, v) => s + (v ?? 0), 0)
 
-        const esPlanilla = subiendoPlanilla
+        if (subiendoPlanilla) {
+          return (
+            <SubiendoArchivo
+              abierto
+              icono={Iconos.documentos.planilla}
+              etiqueta="Subiendo planilla"
+              detalle="No cierres esta página."
+            />
+          )
+        }
 
-        // M-1: aggregate byte progress across all uploading activities (0-100)
-        const activeIds = Object.keys(subiendoEvidencia).filter(k => subiendoEvidencia[k] != null)
-        const progresoTotal = activeIds.length > 0
-          ? Math.round(activeIds.reduce((sum, k) => sum + (progresoEvidencia[k] ?? 0), 0) / activeIds.length)
-          : 0
+        if (subiendoFactura) {
+          return (
+            <SubiendoArchivo
+              abierto
+              icono={Iconos.documentos.cuentaCobro}
+              etiqueta="Subiendo factura electrónica"
+              detalle="No cierres esta página."
+            />
+          )
+        }
 
-        const label = esPlanilla
-          ? 'Subiendo planilla...'
-          : totalEvidencias > 1
-            ? `Subiendo ${totalEvidencias} imágenes...`
-            : 'Subiendo imagen...'
+        if (totalEvidencias > 0) {
+          // Progreso real: se promedia el avance en bytes de las subidas en curso.
+          const progreso = enCurso.length
+            ? Math.round(enCurso.reduce((sum, k) => sum + (progresoEvidencia[k] ?? 0), 0) / enCurso.length)
+            : 0
+          return (
+            <SubiendoArchivo
+              abierto
+              icono={Iconos.dominio.evidencia}
+              etiqueta={totalEvidencias > 1 ? `Subiendo ${totalEvidencias} imágenes` : 'Subiendo imagen'}
+              progreso={progreso}
+              detalle="No cierres esta página."
+            />
+          )
+        }
 
-        // SVG circle metrics
-        const R = 40
-        const CIRCUNFERENCIA = 2 * Math.PI * R // ≈ 251.33
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm upload-overlay-enter">
-            <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs upload-card-enter">
-
-              <div className="relative w-24 h-24">
-                {/* Static track ring */}
-                <svg className="absolute inset-0 w-24 h-24" viewBox="0 0 96 96">
-                  <circle cx="48" cy="48" r={R} fill="none" stroke="#e5e7eb" strokeWidth="6" />
-                </svg>
-
-                {esPlanilla ? (
-                  /* Planilla: indeterminate spinning arc (no byte-level progress available) */
-                  <div className="absolute inset-0 -rotate-90">
-                    <div className="w-full h-full animate-spin" style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}>
-                      <svg className="w-24 h-24" viewBox="0 0 96 96">
-                        <circle cx="48" cy="48" r={R} fill="none" stroke="#2563eb" strokeWidth="6" strokeLinecap="round"
-                          strokeDasharray={`${CIRCUNFERENCIA * 0.28} ${CIRCUNFERENCIA * 0.72}`}
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                ) : (
-                  /* Evidencias: determinate progress arc — grows from 0 → 100% (M-1) */
-                  <div className="absolute inset-0 -rotate-90">
-                    <svg className="w-24 h-24" viewBox="0 0 96 96">
-                      <circle
-                        cx="48" cy="48" r={R}
-                        fill="none" stroke="#2563eb" strokeWidth="6" strokeLinecap="round"
-                        strokeDasharray={CIRCUNFERENCIA}
-                        strokeDashoffset={CIRCUNFERENCIA * (1 - progresoTotal / 100)}
-                        style={{ transition: 'stroke-dashoffset 0.2s ease' }}
-                      />
-                    </svg>
-                  </div>
-                )}
-
-                {/* Center content */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {esPlanilla ? (
-                    <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                    </svg>
-                  ) : (
-                    /* M-1: show real percentage instead of a static icon */
-                    <span className="text-xl font-bold text-blue-600 tabular-nums">{progresoTotal}%</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Text */}
-              <div className="text-center">
-                <p className="text-base font-semibold text-gray-800">{label}</p>
-                <p className="text-sm text-gray-400 mt-1 animate-pulse">Por favor espera</p>
-              </div>
-            </div>
-          </div>
-        )
+        return null
       })()}
 
       {/* Visor de PDF integrado — el usuario nunca sale de la aplicación */}

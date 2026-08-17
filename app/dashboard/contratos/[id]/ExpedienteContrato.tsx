@@ -20,6 +20,7 @@
  */
 
 import { useState } from 'react'
+import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
 import { toast } from 'sonner'
 import VisorPDF from '@/components/VisorPDF'
 import Icono from '@/components/ui/Icono'
@@ -275,6 +276,14 @@ export default function ExpedienteContrato({
       {visor && (
         <VisorPDF url={visor.url} nombre={visor.nombre} onClose={() => setVisor(null)} />
       )}
+      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
+      <SubiendoArchivo
+        abierto={subiendo !== null}
+        icono={Iconos.documentos.adjunto}
+        etiqueta={'Subiendo documento'}
+        detalle="No cierres esta página."
+      />
+
     </div>
   )
 }
