@@ -2482,19 +2482,6 @@ export default function PeriodoDetallePage({
                               </div>
                             )}
 
-                            {/* Subida de documento en curso */}
-                            {subiendoAdjunto[act.id] && (
-                              <div className="mb-2 flex items-center gap-2 text-blue-600">
-                                <svg className="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                </svg>
-                                <span className="text-xs font-medium truncate">
-                                  Subiendo {subiendoAdjunto[act.id]}…
-                                </span>
-                              </div>
-                            )}
-
                             {/* Retry banner — file uploaded but DB registration failed */}
                             {pendienteRegistro[act.id] && subiendoEvidencia[act.id] == null && (
                               <div className="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -2505,21 +2492,6 @@ export default function PeriodoDetallePage({
                                 >
                                   Reintentar
                                 </button>
-                              </div>
-                            )}
-
-                            {/* In-flight indicator — shown while overlay is up */}
-                            {subiendoEvidencia[act.id] != null && (
-                              <div className="mb-2 flex items-center gap-2 text-blue-600">
-                                <svg className="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                </svg>
-                                <span className="text-xs font-medium">
-                                  {(subiendoEvidencia[act.id] ?? 0) > 1
-                                    ? `Subiendo ${subiendoEvidencia[act.id]} imágenes...`
-                                    : 'Subiendo imagen...'}
-                                </span>
                               </div>
                             )}
 
@@ -3919,6 +3891,21 @@ export default function PeriodoDetallePage({
               abierto
               icono={Iconos.documentos.cuentaCobro}
               etiqueta="Subiendo factura electrónica"
+              detalle="No cierres esta página."
+            />
+          )
+        }
+
+        // Anexos: un PDF adjunto a una actividad. Tenía su propio spinner azul
+        // en línea, que era justo la clase de indicador suelto que se venía a
+        // unificar.
+        const anexoEnCurso = Object.values(subiendoAdjunto).find(Boolean)
+        if (anexoEnCurso) {
+          return (
+            <SubiendoArchivo
+              abierto
+              icono={Iconos.documentos.adjunto}
+              etiqueta="Subiendo anexo"
               detalle="No cierres esta página."
             />
           )
