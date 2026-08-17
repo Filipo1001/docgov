@@ -22,20 +22,19 @@
  *
  *   bienvenida_contratista   {{1}} nombre · {{2}} dirección de la aplicación
  *   informe_enviado          {{1}} nombre · {{2}} periodo · {{3}} contrato
- *   informe_recibido         {{1}} nombre · {{2}} contratista · {{3}} periodo · {{4}} contrato
  *   informe_en_revision      {{1}} nombre · {{2}} periodo · {{3}} contrato
  *   informe_aprobado         {{1}} nombre · {{2}} periodo · {{3}} contrato
  *   informe_rechazado        {{1}} nombre · {{2}} periodo · {{3}} contrato · {{4}} motivo
  *   informe_radicado         {{1}} nombre · {{2}} periodo · {{3}} contrato · {{4}} radicado
- *   recordatorio_informe     {{1}} nombre · {{2}} periodo · {{3}} contrato
- *   recordatorio_urgente     {{1}} nombre · {{2}} periodo · {{3}} contrato
- *   recordatorio_vencido     {{1}} nombre · {{2}} periodo · {{3}} contrato
- *   radicacion_pendiente     {{1}} nombre · {{2}} detalle
- *   contrato_por_vencer      {{1}} nombre · {{2}} detalle
  *
- * Un tipo sin plantilla aquí no falla: sigue saliendo por correo y se omite en
- * WhatsApp deliberadamente. Mientras una plantilla no esté APROBADA en Meta,
- * su envío será rechazado con 132001 aunque figure en esta lista.
+ * Son las SEIS que se registraron, todas dirigidas al contratista. Los avisos
+ * a supervisión y secretaría —y los recordatorios del cron— siguen saliendo
+ * solo por correo.
+ *
+ * Un tipo que no figure en el mapa de abajo se omite en silencio, que es lo
+ * correcto. Uno que figure sin plantilla APROBADA en Meta se intentaría enviar
+ * y sería rechazado con 132001 en cada intento: por eso el mapa y esta lista
+ * tienen que moverse juntos.
  */
 
 import { HOST_APP } from '@/lib/dominio'
@@ -146,51 +145,21 @@ const PLANTILLAS: Record<string, Constructor> = {
     ],
   }),
 
-  // ── Ciclo del informe, hacia supervisor y asesores ──────────────────────
-  enviado: (d) => ({
-    nombre: 'informe_recibido',
-    idioma: IDIOMA,
-    parametros: [
-      d.nombreDestinatario,
-      limpiar(d.nombreRemitente, 60) || 'Un contratista',
-      periodoTexto(d),
-      limpiar(d.contrato, 40),
-    ],
-  }),
-
-  // ── Recordatorios automáticos (cron diario) ─────────────────────────────
-  recordatorio: (d) => ({
-    nombre: 'recordatorio_informe',
-    idioma: IDIOMA,
-    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
-  }),
-
-  recordatorio_urgente: (d) => ({
-    nombre: 'recordatorio_urgente',
-    idioma: IDIOMA,
-    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
-  }),
-
-  recordatorio_vencido: (d) => ({
-    nombre: 'recordatorio_vencido',
-    idioma: IDIOMA,
-    parametros: [d.nombreDestinatario, periodoTexto(d), limpiar(d.contrato, 40)],
-  }),
-
-  // ── Avisos de gestión (secretaría y supervisión) ────────────────────────
-  // Estos dos no traen mes ni periodo: su contenido ya viene redactado como
-  // una frase completa en `detalle`, así que se pasa tal cual, saneada.
-  radicacion_pendiente: (d) => ({
-    nombre: 'radicacion_pendiente',
-    idioma: IDIOMA,
-    parametros: [d.nombreDestinatario, limpiar(d.detalle) || 'Hay cuentas aprobadas esperando radicación'],
-  }),
-
-  contrato_vencimiento: (d) => ({
-    nombre: 'contrato_por_vencer',
-    idioma: IDIOMA,
-    parametros: [d.nombreDestinatario, limpiar(d.detalle) || `El contrato ${limpiar(d.contrato, 40)} está por vencer`],
-  }),
+  // ── Sin plantilla registrada, a propósito ───────────────────────────────
+  //
+  // `enviado` (aviso al supervisor), los tres recordatorios del cron,
+  // `radicacion_pendiente` y `contrato_vencimiento` NO están aquí porque sus
+  // plantillas no se registraron en Meta.
+  //
+  // La ausencia es deliberada y no es lo mismo que un olvido: un tipo que no
+  // figura en este mapa se omite en silencio y sigue saliendo por correo,
+  // mientras que uno que figure sin plantilla aprobada intentaría enviarse y
+  // sería rechazado con 132001 en cada intento. El recordatorio del cron corre
+  // a diario sobre todos los borradores del municipio, así que mapearlo sin su
+  // plantilla llenaría los registros de errores todas las mañanas.
+  //
+  // Para habilitar cualquiera de ellos: registrar la plantilla en Meta,
+  // esperar la aprobación y añadir aquí su entrada.
 }
 
 /**

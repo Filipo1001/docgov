@@ -11,32 +11,20 @@ const ETIQUETA_TIPO: Record<string, string> = {
   hello_world: '1. Prueba de conexión (plantilla de Meta)',
   bienvenida: 'Bienvenida — cuenta nueva',
   enviado_confirmacion: 'Informe enviado — al contratista',
-  enviado: 'Informe recibido — al supervisor',
   revision: 'Informe en revisión',
   aprobado: 'Informe aprobado',
   rechazado: 'Informe devuelto',
   radicado: 'Informe radicado',
-  recordatorio: 'Recordatorio — informe pendiente',
-  recordatorio_urgente: 'Recordatorio urgente',
-  recordatorio_vencido: 'Plazo vencido',
-  radicacion_pendiente: 'Cuentas esperando radicación',
-  contrato_vencimiento: 'Contrato por vencer',
 }
 
 /** Nombre de la plantilla en Meta, para diagnosticar un 132001 de un vistazo. */
 const PLANTILLA_META: Record<string, string> = {
   bienvenida: 'bienvenida_contratista',
   enviado_confirmacion: 'informe_enviado',
-  enviado: 'informe_recibido',
   revision: 'informe_en_revision',
   aprobado: 'informe_aprobado',
   rechazado: 'informe_rechazado',
   radicado: 'informe_radicado',
-  recordatorio: 'recordatorio_informe',
-  recordatorio_urgente: 'recordatorio_urgente',
-  recordatorio_vencido: 'recordatorio_vencido',
-  radicacion_pendiente: 'radicacion_pendiente',
-  contrato_vencimiento: 'contrato_por_vencer',
 }
 
 export default function WhatsAppClient() {
