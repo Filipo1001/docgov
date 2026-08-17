@@ -6,28 +6,26 @@ import { useEffect, useState } from 'react'
 import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
 
-const CASOS: { icono: LucideIcon; etiqueta: string; determinado: boolean }[] = [
-  { icono: Iconos.dominio.evidencia, etiqueta: 'Subiendo 3 imágenes', determinado: true },
-  { icono: Iconos.documentos.planilla, etiqueta: 'Subiendo planilla', determinado: false },
-  { icono: Iconos.documentos.cuentaCobro, etiqueta: 'Subiendo factura electrónica', determinado: false },
-  { icono: Iconos.navegacion.firmas, etiqueta: 'Subiendo firma', determinado: false },
-  { icono: Iconos.documentos.adjunto, etiqueta: 'Subiendo documento del contrato', determinado: true },
-  { icono: Iconos.navegacion.historicos, etiqueta: 'Importando Excel', determinado: false },
+const CASOS: { icono: LucideIcon; etiqueta: string }[] = [
+  { icono: Iconos.dominio.evidencia, etiqueta: 'Subiendo 3 imágenes' },
+  { icono: Iconos.documentos.adjunto, etiqueta: 'Subiendo documento' },
+  { icono: Iconos.documentos.planilla, etiqueta: 'Subiendo planilla' },
+  { icono: Iconos.documentos.cuentaCobro, etiqueta: 'Subiendo factura electrónica' },
+  { icono: Iconos.navegacion.firmas, etiqueta: 'Subiendo firma' },
+  { icono: Iconos.navegacion.usuarios, etiqueta: 'Subiendo foto de perfil' },
+  { icono: Iconos.navegacion.historicos, etiqueta: 'Procesando archivo' },
 ]
 
 export default function DemoSubida() {
   const [activo, setActivo] = useState<number | null>(null)
-  const [pct, setPct] = useState(0)
 
   // Sin cierre automático: se cierra con la tecla Escape o el botón. Así se
   // puede mirar con calma.
   useEffect(() => {
     if (activo === null) return
-    setPct(0)
-    const t = setInterval(() => setPct(p => (p >= 100 ? 0 : p + 4)), 120)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setActivo(null) }
     window.addEventListener('keydown', esc)
-    return () => { clearInterval(t); window.removeEventListener('keydown', esc) }
+    return () => window.removeEventListener('keydown', esc)
   }, [activo])
 
   const caso = activo !== null ? CASOS[activo] : null
@@ -46,7 +44,7 @@ export default function DemoSubida() {
             onClick={() => setActivo(i)}
             className="px-4 py-2 bg-gray-900 text-white rounded-xl text-sm"
           >
-            {c.etiqueta}{c.determinado ? ' (con %)' : ' (sin %)'}
+            {c.etiqueta}
           </button>
         ))}
       </div>
@@ -64,7 +62,6 @@ export default function DemoSubida() {
         abierto={caso !== null}
         icono={caso?.icono ?? Iconos.documentos.adjunto}
         etiqueta={caso?.etiqueta ?? ''}
-        progreso={caso?.determinado ? pct : null}
         detalle="No cierres esta página."
       />
     </div>

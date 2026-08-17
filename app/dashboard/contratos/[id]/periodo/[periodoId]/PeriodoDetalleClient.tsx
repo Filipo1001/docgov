@@ -208,6 +208,11 @@ export default function PeriodoDetallePage({
   // vez puede decir en qué va, que es lo que faltaba para no dejar al
   // contratista mirando un botón mudo sin saber si su informe salió.
   const [faseEnvio, setFaseEnvio] = useState<null | 'verificando' | 'enviando' | 'actualizando'>(null)
+
+  // Qué clase de archivo se está adjuntando como evidencia. La galería admite
+  // imágenes y PDF por el mismo camino, y el indicador necesita saberlo para no
+  // llamar «imagen» a un documento.
+  const [tipoEvidencia, setTipoEvidencia] = useState<'imagen' | 'documento'>('imagen')
   // Acta de terminación — modal obligatorio previo al último envío
   const [mostrarActa, setMostrarActa] = useState(false)
   const [actaPrefill, setActaPrefill] = useState<ActaPrefill | null>(null)
@@ -1154,6 +1159,7 @@ export default function PeriodoDetallePage({
       toast.warning('Solo se permiten 5 imágenes a la vez. Se subirán las primeras 5.')
     }
 
+    setTipoEvidencia(limited.every(f => f.type === 'application/pdf') ? 'documento' : 'imagen')
     setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: limited.length }))
 
     try {
@@ -3921,16 +3927,18 @@ export default function PeriodoDetallePage({
         }
 
         if (totalEvidencias > 0) {
-          // Progreso real: se promedia el avance en bytes de las subidas en curso.
-          const progreso = enCurso.length
-            ? Math.round(enCurso.reduce((sum, k) => sum + (progresoEvidencia[k] ?? 0), 0) / enCurso.length)
-            : 0
+          // La galería acepta imágenes Y PDF (ver el input con accept), así que
+          // llamar «imagen» a todo dejaba a quien adjunta un documento viendo un
+          // icono de cámara y un texto que no era el suyo.
+          const soloDocumentos = tipoEvidencia === 'documento'
+          const etiqueta = totalEvidencias > 1
+            ? `Subiendo ${totalEvidencias} ${soloDocumentos ? 'documentos' : 'archivos'}`
+            : soloDocumentos ? 'Subiendo documento' : 'Subiendo imagen'
           return (
             <SubiendoArchivo
               abierto
-              icono={Iconos.dominio.evidencia}
-              etiqueta={totalEvidencias > 1 ? `Subiendo ${totalEvidencias} imágenes` : 'Subiendo imagen'}
-              progreso={progreso}
+              icono={soloDocumentos ? Iconos.documentos.adjunto : Iconos.dominio.evidencia}
+              etiqueta={etiqueta}
               detalle="No cierres esta página."
             />
           )

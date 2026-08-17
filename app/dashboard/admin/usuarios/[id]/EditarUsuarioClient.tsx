@@ -445,7 +445,6 @@ export default function EditarUsuarioClient({
         abierto={uploading}
         icono={Iconos.navegacion.usuarios}
         etiqueta={'Subiendo foto de perfil'}
-        progreso={uploadPct}
         detalle="No cierres esta página."
       />
 
