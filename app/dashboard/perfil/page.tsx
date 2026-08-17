@@ -514,20 +514,13 @@ export default function PerfilPage() {
           >
             {/* Icon */}
             <div className="shrink-0 w-14 h-14 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm">
-              {subiendoFirma ? (
-                <svg className="w-6 h-6 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              ) : (
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-gray-300">
-                  <path
-                    d="M4 20 C6 13, 9 11, 11 15 C13 19, 11 22, 14 20 C17 18, 19 12, 22 16"
-                    stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" fill="none"
-                  />
-                  <line x1="3" y1="23" x2="25" y2="23" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-                </svg>
-              )}
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-gray-300">
+                <path
+                  d="M4 20 C6 13, 9 11, 11 15 C13 19, 11 22, 14 20 C17 18, 19 12, 22 16"
+                  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" fill="none"
+                />
+                <line x1="3" y1="23" x2="25" y2="23" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+              </svg>
             </div>
 
             <div>

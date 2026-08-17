@@ -261,7 +261,6 @@ export default function PeriodoDetallePage({
   const [visorPDF, setVisorPDF] = useState<{ url: string; nombre: string } | null>(null)
   const [subiendoFactura, setSubiendoFactura] = useState(false)
   // Byte-level progress 0-100 per activity (M-1)
-  const [progresoEvidencia, setProgresoEvidencia] = useState<Record<string, number>>({})
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
   // Persisted to localStorage so the user can retry step 3 after a page refresh.
   const PENDING_KEY = `pendiente_reg_${periodoId}`
@@ -1227,11 +1226,11 @@ export default function PeriodoDetallePage({
 
           const { signedUrl, path, publicUrl } = prep.data
 
-          // Step 2: upload with retry + byte-level progress tracking
+          // Step 2: upload with retry. El avance en bytes ya no se muestra —el
+          // indicador es igual en los doce puntos de carga— pero el callback
+          // sigue existiendo porque subirConReintentos lo exige.
           await subirConReintentos(signedUrl, fileToUpload, mime, (loaded) => {
             loadedBytes[idx] = loaded
-            const pct = Math.min(99, Math.round(loadedBytes.reduce((a, b) => a + b, 0) / totalBytes * 100))
-            setProgresoEvidencia(prev => ({ ...prev, [actividadId]: pct }))
           })
 
           return { publicUrl, storagePath: path, nombre: fileToUpload.name, bytes: fileToUpload.size }
@@ -1277,7 +1276,6 @@ export default function PeriodoDetallePage({
     } finally {
       // F: Always clear overlay + progress — no more "stuck loading" state
       setSubiendoEvidencia(prev => ({ ...prev, [actividadId]: null }))
-      setProgresoEvidencia(prev => { const n = { ...prev }; delete n[actividadId]; return n })
     }
   }
 
