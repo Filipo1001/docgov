@@ -628,35 +628,6 @@ export default function PeriodoDetallePage({
 
   // ── Mes de cotización: meses disponibles (rango del contrato) ──────────────
   // El selector ofrece cualquier mes dentro del rango del contrato.
-  // ── Inventario del expediente, para la animación de envío ─────────────────
-  // Son cifras reales del periodo, no adornos: el contratista ve entrar SU
-  // trabajo —sus actividades, sus fotos, su planilla— y no una secuencia
-  // genérica que serviría igual para cualquier sistema. El informe va último
-  // porque es lo que resulta de todo lo anterior.
-  const piezasExpediente = (() => {
-    const evidencias = actividades.reduce((n, a) => n + (a.evidencias?.length ?? 0), 0)
-    const piezas: PiezaExpediente[] = [
-      {
-        icono: Iconos.navegacion.informes,
-        etiqueta: `${actividades.length} ${actividades.length === 1 ? 'actividad registrada' : 'actividades registradas'}`,
-      },
-    ]
-    if (evidencias > 0) {
-      piezas.push({
-        icono: Iconos.dominio.evidencia,
-        etiqueta: `${evidencias} ${evidencias === 1 ? 'evidencia adjunta' : 'evidencias adjuntas'}`,
-      })
-    }
-    if (periodo?.planilla_ss_url) {
-      piezas.push({ icono: Iconos.documentos.planilla, etiqueta: 'Planilla de seguridad social' })
-    }
-    if (exigeFacturaElectronica && periodo?.factura_electronica_url) {
-      piezas.push({ icono: Iconos.documentos.cuentaCobro, etiqueta: 'Factura electrónica' })
-    }
-    piezas.push({ icono: Iconos.documentos.informe, etiqueta: 'Informe de actividades' })
-    return piezas
-  })()
-
   const mesesContrato = (() => {
     if (!contrato?.fecha_inicio || !contrato?.fecha_fin) return [...MESES]
     const ini = new Date(contrato.fecha_inicio + 'T00:00:00')
@@ -740,6 +711,44 @@ export default function PeriodoDetallePage({
     periodo.numero_periodo === Math.max(...periodosHermanos.map(p => p.numero_periodo))
   const mostrarActaTerminacion = esUltimoPeriodo && actaTerminacionDisponible
 
+  // ── Inventario del expediente, para la animación de envío ─────────────────
+  // Son cifras reales del periodo, no adornos: el contratista ve entrar SU
+  // trabajo —sus actividades, sus fotos, su planilla— y no una secuencia
+  // genérica que serviría igual para cualquier sistema. El informe va último
+  // porque es lo que resulta de todo lo anterior.
+  const piezasExpediente = (() => {
+    const evidencias = actividades.reduce((n, a) => n + (a.evidencias?.length ?? 0), 0)
+    const piezas: PiezaExpediente[] = [
+      {
+        icono: Iconos.navegacion.informes,
+        etiqueta: `${actividades.length} ${actividades.length === 1 ? 'actividad registrada' : 'actividades registradas'}`,
+      },
+    ]
+    if (evidencias > 0) {
+      piezas.push({
+        icono: Iconos.dominio.evidencia,
+        etiqueta: `${evidencias} ${evidencias === 1 ? 'evidencia adjunta' : 'evidencias adjuntas'}`,
+      })
+    }
+    if (periodo?.planilla_ss_url) {
+      piezas.push({ icono: Iconos.documentos.planilla, etiqueta: 'Planilla de seguridad social' })
+    }
+    if (exigeFacturaElectronica && periodo?.factura_electronica_url) {
+      piezas.push({ icono: Iconos.documentos.cuentaCobro, etiqueta: 'Factura electrónica' })
+    }
+    // En el ÚLTIMO periodo el acta de terminación no es un trámite aparte: al
+    // aceptarla se generó y guardó un PDF de verdad (ver lib/actas-terminacion.ts),
+    // así que forma parte de lo que se está radicando y debe verse entrar a la
+    // carpeta. Omitirla dejaba el inventario incompleto justo en el envío que
+    // más documentos mueve.
+    if (mostrarActaTerminacion) {
+      piezas.push({ icono: Iconos.documentos.actaTerminacion, etiqueta: 'Acta de terminación' })
+    }
+    piezas.push({ icono: Iconos.documentos.informe, etiqueta: 'Informe de actividades' })
+    return piezas
+  })()
+
+
   // ── Descarga del pipeline (Opción B) — ZIP completo filtrado por rol ───────
   // Al tocar el nodo Aprobado/Radicado se descargan TODOS los documentos del
   // rol de una vez (un solo ZIP, ya existente): contratista → SECOP
@@ -751,8 +760,17 @@ export default function PeriodoDetallePage({
       : null
 
   // Can see documents after sending
+  // La sección de documentos se destapa en cuanto el periodo deja de ser
+  // borrador. Durante el envío eso ocurría MIENTRAS la animación seguía en
+  // pantalla: el expediente completo —informe, cuenta de cobro, actas— se
+  // materializaba de golpe al fondo mientras la carpeta decía «archivando».
+  // Dos procesos contándose a la vez, y contradiciéndose.
+  //
+  // Con la animación visible el fondo se queda quieto; los documentos aparecen
+  // al cerrarse, y así se leen como consecuencia de lo que se acaba de ver.
+  // Importa más ahora que el velo es tenue y el fondo se distingue bien.
   const puedeVerDocumentos = periodo
-    ? periodo.estado !== 'borrador'
+    ? periodo.estado !== 'borrador' && !mostrarExpediente
     : false
 
   function actividadesPorObligacion(obligacionId: string) {

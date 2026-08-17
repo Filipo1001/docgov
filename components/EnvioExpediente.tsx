@@ -9,14 +9,19 @@
  * papeleo del contratista entrando a la carpeta digital que reemplaza a la
  * física. La metáfora no hay que explicarla.
  *
+ * PROTAGONISTA, NO INVASIVA. Es una tarjeta centrada sobre un velo tenue, no
+ * una capa opaca a pantalla completa: la aplicación sigue visible alrededor,
+ * así que el envío se lee como algo que ocurre DENTRO del expediente que el
+ * contratista está mirando, y no como una pantalla aparte que lo secuestra.
+ *
  * QUÉ SE MUESTRA, Y POR QUÉ NO ES UNA BARRA DE PROGRESO. Las tarjetas son un
  * INVENTARIO de lo que se está radicando —las actividades, las evidencias, la
  * planilla, el informe—, no una lista de pasos del servidor. Es una distinción
  * deliberada: el envío es UNA sola operación en el servidor, así que fingir
- * cuatro etapas con temporizadores sería inventar un progreso que nadie está
- * midiendo. Lo que sí está atado a la realidad es el final: la carpeta solo se
- * cierra y aparece el sello cuando el envío terminó DE VERDAD. Si falla, la
- * animación no llega nunca a ese estado.
+ * etapas con temporizadores sería inventar un progreso que nadie está midiendo.
+ * Lo que sí está atado a la realidad es el final: la carpeta solo se cierra y
+ * aparece el sello cuando el envío terminó DE VERDAD. Si falla, la animación no
+ * llega nunca a ese estado.
  *
  * SOBRE EL COLOR. Toda la secuencia es monocroma salvo el sello final, en
  * esmeralda. lib/iconos.ts es explícito: el color solo aparece cuando significa
@@ -28,6 +33,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LogoCD } from '@/components/Logo'
 import Icono from '@/components/ui/Icono'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
+import { MARCA } from '@/lib/marca'
 
 export interface PiezaExpediente {
   icono: LucideIcon
@@ -38,8 +44,14 @@ export interface PiezaExpediente {
 const MS_POR_PIEZA = 420
 /** Tiempo mínimo en pantalla: un destello se percibe peor que no mostrar nada. */
 const MS_MINIMO = 1200
-/** A partir de aquí se avisa de que va lento, en vez de callar. */
-const MS_AVISO_LENTITUD = 5000
+/**
+ * A partir de aquí se avisa de que va lento.
+ *
+ * Ocho segundos y no cinco: en móvil con señal irregular —y en el último
+ * periodo, donde además se generó el PDF del acta de terminación— pasar de
+ * cinco segundos es normal, y el aviso salía en envíos que iban bien.
+ */
+const MS_AVISO_LENTITUD = 8000
 
 export default function EnvioExpediente({
   abierto,
@@ -61,6 +73,14 @@ export default function EnvioExpediente({
   const [lento, setLento] = useState(false)
   const abiertoDesde = useRef<number>(0)
 
+  // `onCerrar` llega como función anónima desde el padre, así que cambia de
+  // identidad en cada render. Tenerla como dependencia del efecto de cierre lo
+  // reiniciaba sin parar: los temporizadores se cancelaban y volvían a crearse,
+  // y el cierre podía no llegar nunca. Guardada en una referencia, el efecto
+  // depende solo de lo que de verdad importa.
+  const cerrarRef = useRef(onCerrar)
+  useEffect(() => { cerrarRef.current = onCerrar }, [onCerrar])
+
   // Entrada escalonada de las tarjetas mientras el envío está en vuelo.
   useEffect(() => {
     if (!abierto) {
@@ -79,9 +99,7 @@ export default function EnvioExpediente({
     for (let i = 0; i < hastaAnimar; i++) {
       temporizadores.push(setTimeout(() => setArchivadas(i + 1), MS_POR_PIEZA * (i + 1)))
     }
-
-    const avisoLento = setTimeout(() => setLento(true), MS_AVISO_LENTITUD)
-    temporizadores.push(avisoLento)
+    temporizadores.push(setTimeout(() => setLento(true), MS_AVISO_LENTITUD))
 
     return () => temporizadores.forEach(clearTimeout)
   }, [abierto, piezas.length])
@@ -90,19 +108,27 @@ export default function EnvioExpediente({
   useEffect(() => {
     if (!abierto || !completado || error) return
 
-    const transcurrido = Date.now() - abiertoDesde.current
-    const espera = Math.max(0, MS_MINIMO - transcurrido)
+    // Los tres temporizadores se declaran fuera para que la limpieza del efecto
+    // los alcance. Antes los dos últimos se creaban DENTRO de la callback del
+    // primero y su `return` no limpiaba nada —era el retorno de la callback, no
+    // del efecto—, así que quedaban sueltos.
+    const espera = Math.max(0, MS_MINIMO - (Date.now() - abiertoDesde.current))
+    let tSello: ReturnType<typeof setTimeout>
+    let tCierre: ReturnType<typeof setTimeout>
 
-    const t1 = setTimeout(() => {
+    const tLlenado = setTimeout(() => {
       setArchivadas(piezas.length)
       setLento(false)
-      const t2 = setTimeout(() => setSellado(true), 320)
-      const t3 = setTimeout(onCerrar, 1400)
-      return () => { clearTimeout(t2); clearTimeout(t3) }
+      tSello = setTimeout(() => setSellado(true), 320)
+      tCierre = setTimeout(() => cerrarRef.current(), 1400)
     }, espera)
 
-    return () => clearTimeout(t1)
-  }, [abierto, completado, error, piezas.length, onCerrar])
+    return () => {
+      clearTimeout(tLlenado)
+      clearTimeout(tSello)
+      clearTimeout(tCierre)
+    }
+  }, [abierto, completado, error, piezas.length])
 
   if (!abierto) return null
 
@@ -115,16 +141,18 @@ export default function EnvioExpediente({
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center px-6 upload-overlay-enter"
-      style={{ backgroundColor: 'rgba(25, 32, 49, 0.88)' }}
+      // Velo tenue: la aplicación se sigue viendo alrededor. El envío ocurre
+      // dentro del expediente que el contratista ya está mirando.
+      style={{ backgroundColor: 'rgba(25, 32, 49, 0.45)' }}
       role="status"
       aria-live="polite"
       // Sin cierre al tocar fuera: alguien podría creer que canceló el envío.
       aria-label={error ? 'Error al enviar el informe' : 'Enviando el informe a revisión'}
     >
-      <div className="flex flex-col items-center max-w-sm w-full">
+      <div className="bg-white rounded-2xl shadow-2xl px-8 py-7 w-full max-w-xs flex flex-col items-center upload-card-enter">
 
         {/* ── Zona de la carpeta ───────────────────────────────── */}
-        <div className="relative h-32 sm:h-36 flex items-end justify-center mb-6">
+        <div className="relative h-24 flex items-end justify-center mb-4">
 
           {/* Tarjetas: entran por arriba y se archivan tras el borde superior.
               El logo es una silueta rellena, sin boca, así que «meterse detrás»
@@ -136,15 +164,15 @@ export default function EnvioExpediente({
             return (
               <div
                 key={pieza.etiqueta}
-                className={`absolute left-1/2 flex flex-col items-center transition-all duration-300 ease-out ${
+                className={`absolute left-1/2 transition-all duration-300 ease-out ${
                   dentro
-                    ? 'opacity-0 -translate-x-1/2 translate-y-4 scale-[0.7]'
-                    : 'opacity-100 -translate-x-1/2 -translate-y-2 scale-100'
+                    ? 'opacity-0 -translate-x-1/2 translate-y-3 scale-[0.7]'
+                    : 'opacity-100 -translate-x-1/2 -translate-y-1 scale-100'
                 } motion-reduce:transition-opacity motion-reduce:translate-y-0 motion-reduce:scale-100`}
-                style={{ bottom: '3.5rem' }}
+                style={{ bottom: '2.5rem' }}
               >
-                <div className="w-14 h-14 rounded-xl bg-white shadow-lg flex items-center justify-center">
-                  <Icono glifo={pieza.icono} tamano="lg" className="text-gray-500" />
+                <div className="w-11 h-11 rounded-lg bg-white border border-gray-200 shadow-md flex items-center justify-center">
+                  <Icono glifo={pieza.icono} tamano="md" className="text-gray-500" />
                 </div>
               </div>
             )
@@ -155,13 +183,13 @@ export default function EnvioExpediente({
             className={`transition-all duration-300 ${sellado ? 'scale-[1.04]' : 'scale-100'} motion-reduce:transition-opacity`}
             style={{ opacity: opacidadCarpeta }}
           >
-            <LogoCD size={88} color="#FFFFFF" />
+            <LogoCD size={64} color={MARCA} />
           </div>
 
           {/* Sello final — el único color de toda la secuencia */}
           {sellado && (
-            <div className="absolute bottom-2 right-1/2 translate-x-10 w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg upload-card-enter">
-              <Icono glifo={Iconos.estado.ok} tamano="md" className="text-white" />
+            <div className="absolute bottom-0 right-1/2 translate-x-8 w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shadow-md upload-card-enter">
+              <Icono glifo={Iconos.estado.ok} tamano="sm" className="text-white" />
             </div>
           )}
         </div>
@@ -169,27 +197,27 @@ export default function EnvioExpediente({
         {/* ── Texto ────────────────────────────────────────────── */}
         {error ? (
           <>
-            <p className="text-white text-sm font-medium text-center">No se pudo enviar</p>
-            <p className="text-white/60 text-xs text-center mt-1.5 leading-relaxed">{error}</p>
+            <p className="text-gray-900 text-sm font-semibold text-center">No se pudo enviar</p>
+            <p className="text-gray-500 text-xs text-center mt-1.5 leading-relaxed">{error}</p>
             <button
               type="button"
               onClick={onCerrar}
-              className="mt-5 px-5 py-2 rounded-xl bg-white/10 text-white text-sm font-medium hover:bg-white/20 transition-colors"
+              className="mt-5 px-5 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
             >
               Cerrar
             </button>
           </>
         ) : sellado ? (
-          <p className="text-white text-sm font-medium text-center">Informe enviado a revisión</p>
+          <p className="text-gray-900 text-sm font-semibold text-center">Informe enviado a revisión</p>
         ) : (
           <>
-            <p className="text-white text-sm font-medium text-center">Archivando tu informe</p>
-            <p className="text-white/60 text-xs text-center mt-1.5 h-4">
+            <p className="text-gray-900 text-sm font-semibold text-center">Archivando tu informe</p>
+            <p className="text-gray-500 text-xs text-center mt-1.5 h-4">
               {enCurso?.etiqueta ?? ''}
             </p>
             {lento && (
-              <p className="text-white/50 text-[11px] text-center mt-4 leading-relaxed">
-                Está tardando más de lo normal.<br />No cierres esta página.
+              <p className="text-gray-400 text-[11px] text-center mt-3 leading-relaxed">
+                Sigue en curso. No cierres esta página.
               </p>
             )}
           </>
