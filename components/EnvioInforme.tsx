@@ -9,9 +9,7 @@
  * tres cosas: el logotipo, el anillo que ya se usa en las subidas de archivo, y
  * un check al terminar.
  *
- * SIN ICONOGRAFÍA, A PROPÓSITO. El único símbolo es el logotipo. No hay iconos
- * de documento ni de periodo: en una pantalla que dura dos segundos, cada
- * elemento extra compite con el que importa.
+ * SIN ICONOGRAFÍA, A PROPÓSITO. El único símbolo es el logotipo.
  *
  * EL ANILLO ES EL MISMO DE LAS SUBIDAS. Mismo radio, mismo grosor, mismo arco
  * del 28 %, misma vuelta de 1,1 s (ver components/ui/SubiendoArchivo.tsx). Que
@@ -22,44 +20,112 @@
  * que se traza se lee como algo que acaba de suceder. Por eso no sale del
  * catálogo —Lucide no permite animar el trazo— y su keyframe vive en
  * globals.css, con el resto del sistema.
+ *
+ * ── LOS TIEMPOS VIVEN AQUÍ DENTRO ────────────────────────────────────────
+ *
+ * El componente gestiona su propio ritmo y su propio cierre. Quien lo usa solo
+ * dice qué está pasando —en curso, listo, falló— y no puede equivocarse con los
+ * temporizadores. En la versión anterior esa lógica estaba repartida entre el
+ * componente y la pantalla que lo llamaba, y de ahí salieron dos fallos reales:
+ * un aviso de lentitud que se disparaba en envíos correctos, y temporizadores
+ * que no se limpiaban porque su `return` estaba dentro de una callback.
  */
 
+import { useEffect, useRef, useState } from 'react'
 import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 
 const R = 40
 const CIRCUNFERENCIA = 2 * Math.PI * R
 
-export type VarianteEnvio = 'sello' | 'releva'
+/** Un destello se percibe peor que no mostrar nada. */
+const MS_MINIMO = 1100
+/** Margen para que el check se dibuje y se lea antes de cerrar. */
+const MS_TRAS_CHECK = 1200
+/**
+ * Umbral del aviso de lentitud. Ocho segundos y no cinco: en móvil con señal
+ * irregular —y en el último periodo, donde además se generó el PDF del acta de
+ * terminación— pasar de cinco segundos es normal.
+ */
+const MS_AVISO_LENTITUD = 8000
 
 export default function EnvioInforme({
   abierto,
   completado,
   error,
-  variante = 'sello',
   onCerrar,
 }: {
   abierto: boolean
-  /** true solo cuando el envío terminó de verdad. */
+  /** true SOLO cuando el envío terminó de verdad y los datos ya se recargaron. */
   completado: boolean
   error?: string | null
-  /**
-   * `sello`  — el logotipo se queda y el check lo firma en una esquina.
-   * `releva` — el logotipo cede su sitio y el check ocupa el centro.
-   */
-  variante?: VarianteEnvio
   onCerrar: () => void
 }) {
-  if (!abierto) return null
+  const [sellado, setSellado] = useState(false)
+  const [lento, setLento] = useState(false)
+  const abiertoDesde = useRef(0)
 
-  const listo = completado && !error
+  // `onCerrar` llega como función anónima y cambia de identidad en cada render
+  // del padre. Tenerla como dependencia reiniciaba el efecto sin parar y sus
+  // temporizadores se cancelaban y recreaban indefinidamente.
+  const cerrarRef = useRef(onCerrar)
+  useEffect(() => { cerrarRef.current = onCerrar }, [onCerrar])
+
+  // Reinicio al abrir o cerrar, ajustando el estado durante el render.
+  //
+  // Es el patrón que React documenta para «estado derivado de props», y no un
+  // atajo: hacerlo dentro de un efecto provoca un render de más con los valores
+  // viejos —el check del envío anterior alcanzaría a verse un instante al abrir
+  // el siguiente— además de que el linter lo marca con razón.
+  const [previoAbierto, setPrevioAbierto] = useState(abierto)
+  if (abierto !== previoAbierto) {
+    setPrevioAbierto(abierto)
+    setSellado(false)
+    setLento(false)
+  }
+
+  // Marca de apertura y aviso de lentitud. El reloj se lee aquí y no en el
+  // render: leer la hora durante el render es impuro y da un valor distinto en
+  // cada pasada. Este efecto se declara ANTES que el de cierre, así que la
+  // marca ya está puesta cuando aquel calcula cuánto falta para el mínimo.
+  useEffect(() => {
+    if (!abierto) return
+    abiertoDesde.current = Date.now()
+    const t = setTimeout(() => setLento(true), MS_AVISO_LENTITUD)
+    return () => clearTimeout(t)
+  }, [abierto])
+
+  // Cierre: solo con éxito real, respetando el tiempo mínimo en pantalla.
+  useEffect(() => {
+    if (!abierto || !completado || error) return
+
+    // Se declaran fuera para que la limpieza del efecto los alcance. En la
+    // versión anterior el segundo se creaba DENTRO de la callback del primero y
+    // su `return` no limpiaba nada —era el retorno de la callback, no del
+    // efecto—, así que quedaba suelto.
+    let tCierre: ReturnType<typeof setTimeout> | undefined
+    const espera = Math.max(0, MS_MINIMO - (Date.now() - abiertoDesde.current))
+
+    const tEspera = setTimeout(() => {
+      setLento(false)
+      setSellado(true)
+      tCierre = setTimeout(() => cerrarRef.current(), MS_TRAS_CHECK)
+    }, espera)
+
+    return () => {
+      clearTimeout(tEspera)
+      if (tCierre) clearTimeout(tCierre)
+    }
+  }, [abierto, completado, error])
+
+  if (!abierto) return null
 
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm upload-overlay-enter"
       role="status"
       aria-live="polite"
-      aria-label={error ? 'Error al enviar el informe' : listo ? 'Informe enviado' : 'Enviando el informe'}
+      aria-label={error ? 'Error al enviar el informe' : sellado ? 'Informe enviado a revisión' : 'Enviando el informe'}
     >
       <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs upload-card-enter">
 
@@ -71,7 +137,7 @@ export default function EnvioInforme({
 
           {/* Anillo: gira mientras dura; al terminar se cierra en verde. */}
           <div className="absolute inset-0 -rotate-90">
-            {listo ? (
+            {sellado ? (
               <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
                 <circle
                   cx="48" cy="48" r={R}
@@ -96,24 +162,18 @@ export default function EnvioInforme({
             )}
           </div>
 
-          {/* Centro */}
+          {/* El logotipo se queda: acompaña la confirmación. */}
           <div className="absolute inset-0 flex items-center justify-center">
-            {listo && variante === 'releva' ? (
-              // Grande a propósito: en esta variante el check ES la
-              // confirmación, no un adorno junto a ella.
-              <Check tamano={54} />
-            ) : (
-              <div
-                className={`transition-all duration-300 ${listo ? 'scale-95' : 'scale-100'}`}
-                style={{ opacity: error ? 0.35 : 1 }}
-              >
-                <LogoCD size={42} color={MARCA} />
-              </div>
-            )}
+            <div
+              className={`transition-transform duration-300 ${sellado ? 'scale-95' : 'scale-100'}`}
+              style={{ opacity: error ? 0.35 : 1 }}
+            >
+              <LogoCD size={42} color={MARCA} />
+            </div>
           </div>
 
-          {/* Sello en la esquina, solo en la variante que conserva el logotipo */}
-          {listo && variante === 'sello' && (
+          {/* El check firma en la esquina */}
+          {sellado && (
             <div className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shadow-md sello-entra">
               <Check tamano={18} color="#FFFFFF" />
             </div>
@@ -134,9 +194,16 @@ export default function EnvioInforme({
               </button>
             </>
           ) : (
-            <p className="text-sm font-medium text-gray-900">
-              {listo ? 'Informe enviado a revisión' : 'Enviando tu informe'}
-            </p>
+            <>
+              <p className="text-sm font-medium text-gray-900">
+                {sellado ? 'Informe enviado a revisión' : 'Enviando tu informe'}
+              </p>
+              {lento && !sellado && (
+                <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                  Sigue en curso. No cierres esta página.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

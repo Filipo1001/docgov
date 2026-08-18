@@ -18,6 +18,7 @@ import { getPeriodoConContrato } from '@/services/periodos'
 import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import EnvioInforme from '@/components/EnvioInforme'
 import TarjetaAdjunto from '@/components/TarjetaAdjunto'
 import {
   prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
@@ -208,6 +209,14 @@ export default function PeriodoDetallePage({
   // vez puede decir en qué va, que es lo que faltaba para no dejar al
   // contratista mirando un botón mudo sin saber si su informe salió.
   const [faseEnvio, setFaseEnvio] = useState<null | 'verificando' | 'enviando' | 'actualizando'>(null)
+
+  // Confirmación del envío. Se separa de `faseEnvio` a propósito: la capa sigue
+  // en pantalla un instante DESPUÉS de que el envío terminó, para dibujar el
+  // check. Atarla a la misma variable la haría desaparecer justo cuando toca
+  // mostrar que salió bien.
+  const [mostrarEnvio, setMostrarEnvio] = useState(false)
+  const [envioCompletado, setEnvioCompletado] = useState(false)
+  const [envioError, setEnvioError] = useState<string | null>(null)
 
   // Qué clase de archivo se está adjuntando como evidencia. La galería admite
   // imágenes y PDF por el mismo camino, y el indicador necesita saberlo para no
@@ -718,8 +727,14 @@ export default function PeriodoDetallePage({
       : null
 
   // Can see documents after sending
+  // La sección de documentos se destapa en cuanto el periodo deja de ser
+  // borrador. Durante el envío eso ocurría MIENTRAS la confirmación seguía en
+  // pantalla: el expediente completo se materializaba al fondo, tras un velo
+  // que deja verlo. Con la capa visible el fondo se queda quieto; los
+  // documentos aparecen al cerrarse, como consecuencia de lo que se acaba de
+  // ver.
   const puedeVerDocumentos = periodo
-    ? periodo.estado !== 'borrador'
+    ? periodo.estado !== 'borrador' && !mostrarEnvio
     : false
 
   function actividadesPorObligacion(obligacionId: string) {
@@ -741,10 +756,15 @@ export default function PeriodoDetallePage({
 
   async function doEnviar() {
     setFaseEnvio('enviando')
+    setEnvioError(null)
+    setEnvioCompletado(false)
+    setMostrarEnvio(true)
     try {
       const result = await enviarPeriodo(periodoId)
       if (result.error) {
-        toast.error(result.error)
+        // El error se muestra DENTRO de la confirmación: un aviso flotante
+        // detrás de una capa a pantalla completa no se lee.
+        setEnvioError(result.error)
         return
       }
 
@@ -754,13 +774,17 @@ export default function PeriodoDetallePage({
       // periodo como borrador, con el botón activo, y era fácil creer que el
       // envío no había funcionado y volver a pulsarlo.
       setFaseEnvio('actualizando')
-      toast.success('Informe enviado a revisión')
       router.refresh()
       await cargarDatos()
+
+      // Se marca completado al FINAL, con los datos ya recargados: el check
+      // solo aparece cuando el envío es un hecho consumado, no cuando la
+      // petición salió. Si algo falla antes, nunca llega a sellarse.
+      setEnvioCompletado(true)
     } catch {
       // Caída de red al invocar la acción. Sin este catch el botón se quedaría
       // deshabilitado para siempre y solo un F5 lo recuperaría.
-      toast.error('No se pudo completar el envío. Revisa tu conexión e inténtalo de nuevo.')
+      setEnvioError('No se pudo completar el envío. Revisa tu conexión e inténtalo de nuevo.')
     } finally {
       setFaseEnvio(null)
     }
@@ -3940,6 +3964,14 @@ export default function PeriodoDetallePage({
           onClose={() => setVisorPDF(null)}
         />
       )}
+
+      {/* Confirmación del envío */}
+      <EnvioInforme
+        abierto={mostrarEnvio}
+        completado={envioCompletado}
+        error={envioError}
+        onCerrar={() => { setMostrarEnvio(false); setEnvioError(null) }}
+      />
 
       {/* Acta de terminación — modal obligatorio previo al último envío */}
       <ActaTerminacionModal
