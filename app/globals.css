@@ -40,3 +40,32 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 }
 .upload-overlay-enter { animation: overlay-fade-in 0.18s ease-out; }
 .upload-card-enter    { animation: card-scale-in  0.18s ease-out; }
+
+/* ── Confirmación de envío ────────────────────────────────────────────────
+   El check se DIBUJA, no aparece. Un icono que se desvanece se lee como un
+   estado más; un trazo que se traza se lee como algo que acaba de ocurrir, que
+   es justo lo que hay que comunicar al terminar un envío.
+
+   No sale del catálogo de iconos a propósito: Lucide entrega el glifo ya
+   dibujado y no hay forma de animar su trazo. Es la excepción que justifica un
+   <svg> propio, y vive aquí —en el sistema— y no suelto en una pantalla.     */
+@keyframes check-trazo {
+  from { stroke-dashoffset: 34; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes anillo-cierre {
+  from { stroke-dashoffset: 251.33; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes sello-entra {
+  0%   { opacity: 0; transform: scale(0.4); }
+  60%  { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.check-trazo   { animation: check-trazo 340ms ease-out forwards; }
+.anillo-cierre { animation: anillo-cierre 420ms ease-out forwards; }
+.sello-entra   { animation: sello-entra 380ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .check-trazo, .anillo-cierre, .sello-entra { animation-duration: 1ms; }
+}
