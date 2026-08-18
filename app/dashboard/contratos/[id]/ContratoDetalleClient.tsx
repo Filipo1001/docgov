@@ -11,6 +11,7 @@ import { crearObligacion, eliminarObligacion as eliminarObligacionAction, actual
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
 import { esGestorContratos } from '@/lib/constants'
+import { totalConAdiciones, valorPorPeriodo, pesos } from '@/lib/valor-contrato'
 import { etiquetaEstado } from '@/lib/estado-contrato'
 import ExpedienteContrato from './ExpedienteContrato'
 import CopiarObligaciones from './CopiarObligaciones'
@@ -232,6 +233,25 @@ export default function ContratoDetallePage({
   // pantalla era lo único que lo impedía.
   const esGestor = esGestorContratos(usuario?.rol)
 
+  // Las dos cifras de dinero del encabezado se derivan; no se leen de la fila
+  // del contrato. `valor_total` no incluye los otrosíes de adición y
+  // `valor_mensual` supone que todos los meses se cobra lo mismo, que es falso
+  // en cuanto un contrato empieza a mitad de mes. Ver lib/valor-contrato.ts.
+  const valorContrato = totalConAdiciones(contrato.valor_total, otrosies)
+  const porPeriodo = valorPorPeriodo(periodos)
+  // Los periodos en blanco se nombran: si no, un contrato con diez periodos sin
+  // cargar se describiría por los dos que sí tienen valor.
+  const pendientes = porPeriodo.clase === 'sin-periodos' ? 0 : porPeriodo.sinValor
+  const sufijo = pendientes > 0 ? ` · ${pendientes} sin valor` : ''
+  const cobro =
+    porPeriodo.clase === 'uniforme'
+      ? { monto: pesos(porPeriodo.valor),
+          nota: `Igual en los ${porPeriodo.periodos} periodos${sufijo}` }
+      : porPeriodo.clase === 'variable'
+        ? { monto: `${pesos(porPeriodo.minimo)} – ${pesos(porPeriodo.maximo)}`,
+            nota: `Varía entre los ${porPeriodo.periodos} periodos${sufijo}` }
+        : { monto: '—', nota: 'Sin periodos generados' }
+
   return (
     <div className="max-w-4xl">
       <Toaster position="top-center" richColors />
@@ -256,10 +276,15 @@ export default function ContratoDetallePage({
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="text-right">
-              <p className="text-lg font-bold text-gray-900">
-                ${contrato.valor_total?.toLocaleString('es-CO')}
+              <p className="text-lg font-bold text-gray-900">{pesos(valorContrato.total)}</p>
+              {/* Con adiciones, el valor en letras del contrato quedó obsoleto:
+                  corresponde a lo firmado, no a lo que vale hoy. Se sustituye
+                  por lo que explica la diferencia. */}
+              <p className="text-xs text-gray-400">
+                {valorContrato.adiciones > 0
+                  ? `Incluye ${pesos(valorContrato.adiciones)} en adiciones`
+                  : contrato.valor_letras_total}
               </p>
-              <p className="text-xs text-gray-400">{contrato.valor_letras_total}</p>
             </div>
             {esGestor && (
               <div className="flex items-center gap-2">
@@ -323,9 +348,13 @@ export default function ContratoDetallePage({
             <p className="text-xs text-gray-400">{formatDateMedium(contrato.fecha_inicio)} — {formatDateMedium(contrato.fecha_fin)}</p>
           </div>
           <div className="min-w-0">
-            <span className="text-gray-400 text-xs">Valor mensual</span>
-            <p className="font-medium text-gray-900">${contrato.valor_mensual?.toLocaleString('es-CO')}</p>
-            <p className="text-xs text-gray-400 truncate">{contrato.valor_letras_mensual}</p>
+            {/* Antes decía «Valor mensual» y mostraba `contrato.valor_mensual`.
+                En los contratos que no lo tienen cargado salía «$0», y en los
+                que empiezan a mitad de mes escondía que el primer periodo se
+                cobra proporcional. */}
+            <span className="text-gray-400 text-xs">Valor por periodo</span>
+            <p className="font-medium text-gray-900">{cobro.monto}</p>
+            <p className="text-xs text-gray-400 truncate">{cobro.nota}</p>
           </div>
         </div>
 
