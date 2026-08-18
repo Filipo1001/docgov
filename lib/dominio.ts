@@ -64,6 +64,10 @@ export const HOSTS_REDIRIGIDOS = [
  */
 const RUTAS_COMERCIALES = [
   '/inicio',
+  // Presentaciones comerciales: viven en el ápice porque el enlace se comparte
+  // con alcaldías y `contratistadigital.com/propuesta/...` lee como la empresa,
+  // mientras que `app.` lee como la herramienta interna de otro cliente.
+  '/propuesta',
   '/robots.txt',
   '/sitemap.xml',
   '/manifest.webmanifest',
