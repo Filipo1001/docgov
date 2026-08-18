@@ -25,8 +25,9 @@
  *   informe_en_revision      {{1}} nombre · {{2}} periodo · {{3}} contrato
  *   informe_aprobado         {{1}} nombre · {{2}} periodo · {{3}} contrato
  *   informe_rechazado        {{1}} nombre · {{2}} periodo · {{3}} contrato · {{4}} motivo
+ *   informe_radicado         {{1}} nombre · {{2}} periodo · {{3}} contrato · {{4}} radicado
  *
- * Son las CINCO activas en Meta, todas dirigidas al contratista. Los avisos
+ * Son las SEIS activas en Meta, todas dirigidas al contratista. Los avisos
  * a supervisión y secretaría —y los recordatorios del cron— siguen saliendo
  * solo por correo.
  *
@@ -133,17 +134,22 @@ const PLANTILLAS: Record<string, Constructor> = {
     ],
   }),
 
+  radicado: (d) => ({
+    nombre: 'informe_radicado',
+    idioma: IDIOMA,
+    parametros: [
+      d.nombreDestinatario,
+      periodoTexto(d),
+      limpiar(d.contrato, 40),
+      limpiar(d.numeroRadicado, 40) || 'sin número asignado',
+    ],
+  }),
+
   // ── Sin plantilla registrada, a propósito ───────────────────────────────
   //
-  // `radicado` estuvo aquí, pero su plantilla se registró en INGLÉS y quedó
-  // pendiente de recrear en Spanish (COL). Mientras no exista con ese idioma,
-  // mapearla no la haría funcionar: Meta respondería 132001 en cada radicación.
-  // Para reactivarla basta con volver a añadir su entrada —los parámetros son
-  // nombre · periodo · contrato · número de radicado— cuando esté aprobada.
-  //
-  // Tampoco están `enviado` (aviso al supervisor), los tres recordatorios del
-  // cron, `radicacion_pendiente` ni `contrato_vencimiento`: sus plantillas
-  // nunca se registraron.
+  // No están `enviado` (aviso al supervisor), los tres recordatorios del cron,
+  // `radicacion_pendiente` ni `contrato_vencimiento`: sus plantillas nunca se
+  // registraron en Meta.
   //
   // La ausencia es deliberada y no es lo mismo que un olvido: un tipo que no
   // figura en este mapa se omite en silencio y sigue saliendo por correo,
