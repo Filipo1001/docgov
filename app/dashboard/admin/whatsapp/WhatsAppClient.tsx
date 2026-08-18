@@ -14,7 +14,6 @@ const ETIQUETA_TIPO: Record<string, string> = {
   revision: 'Informe en revisión',
   aprobado: 'Informe aprobado',
   rechazado: 'Informe devuelto',
-  radicado: 'Informe radicado',
 }
 
 /** Nombre de la plantilla en Meta, para diagnosticar un 132001 de un vistazo. */
@@ -24,7 +23,6 @@ const PLANTILLA_META: Record<string, string> = {
   revision: 'informe_en_revision',
   aprobado: 'informe_aprobado',
   rechazado: 'informe_rechazado',
-  radicado: 'informe_radicado',
 }
 
 export default function WhatsAppClient() {
