@@ -48,6 +48,17 @@ const MS_TRAS_CHECK = 1200
  * terminación— pasar de cinco segundos es normal.
  */
 const MS_AVISO_LENTITUD = 8000
+/**
+ * A partir de aquí se ofrece cerrar a mano.
+ *
+ * Red de seguridad, no un plazo esperado: una capa a pantalla completa que
+ * depende de que alguien le diga que terminó puede quedarse puesta para
+ * siempre si ese aviso no llega —ya pasó una vez, por una consulta del
+ * navegador colgada—, y entonces la única salida era recargar. El envío en sí
+ * no se cancela: ya viajó al servidor. Esto solo devuelve el control de la
+ * pantalla.
+ */
+const MS_ESCAPE = 20000
 
 export default function EnvioInforme({
   abierto,
@@ -56,13 +67,16 @@ export default function EnvioInforme({
   onCerrar,
 }: {
   abierto: boolean
-  /** true SOLO cuando el envío terminó de verdad y los datos ya se recargaron. */
+  /** true SOLO cuando el servidor confirmó el envío. NO esperar a recargar
+   *  la pantalla: atarlo a una consulta del navegador —que no tiene timeout—
+   *  es lo que dejaba esta capa puesta indefinidamente. */
   completado: boolean
   error?: string | null
   onCerrar: () => void
 }) {
   const [sellado, setSellado] = useState(false)
   const [lento, setLento] = useState(false)
+  const [escape, setEscape] = useState(false)
   const abiertoDesde = useRef(0)
 
   // `onCerrar` llega como función anónima y cambia de identidad en cada render
@@ -82,6 +96,7 @@ export default function EnvioInforme({
     setPrevioAbierto(abierto)
     setSellado(false)
     setLento(false)
+    setEscape(false)
   }
 
   // Marca de apertura y aviso de lentitud. El reloj se lee aquí y no en el
@@ -91,8 +106,9 @@ export default function EnvioInforme({
   useEffect(() => {
     if (!abierto) return
     abiertoDesde.current = Date.now()
-    const t = setTimeout(() => setLento(true), MS_AVISO_LENTITUD)
-    return () => clearTimeout(t)
+    const tLento = setTimeout(() => setLento(true), MS_AVISO_LENTITUD)
+    const tEscape = setTimeout(() => setEscape(true), MS_ESCAPE)
+    return () => { clearTimeout(tLento); clearTimeout(tEscape) }
   }, [abierto])
 
   // Cierre: solo con éxito real, respetando el tiempo mínimo en pantalla.
@@ -202,6 +218,21 @@ export default function EnvioInforme({
                 <p className="text-xs text-gray-400 mt-2 leading-relaxed">
                   Sigue en curso. No cierres esta página.
                 </p>
+              )}
+              {escape && !sellado && (
+                <>
+                  <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                    Tu informe ya fue enviado. Si esta ventana no se cierra sola,
+                    puedes cerrarla y recargar para ver el estado.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onCerrar}
+                    className="mt-3 px-5 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                </>
               )}
             </>
           )}

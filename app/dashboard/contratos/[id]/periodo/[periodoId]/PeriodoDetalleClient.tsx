@@ -768,19 +768,24 @@ export default function PeriodoDetallePage({
         return
       }
 
-      // El expediente se recarga ANTES de soltar el botón. Antes se disparaban
-      // router.refresh() y cargarDatos() sin esperarlos y se rehabilitaba el
-      // botón de inmediato: durante ese hueco la pantalla seguía mostrando el
-      // periodo como borrador, con el botón activo, y era fácil creer que el
-      // envío no había funcionado y volver a pulsarlo.
+      // AQUÍ el envío ya es un hecho: el servidor respondió sin error, el
+      // periodo cambió de estado y los avisos salieron. La confirmación se
+      // marca en este punto y NO después de recargar la pantalla.
+      //
+      // Antes esperaba a `cargarDatos()`, y eso ataba la confirmación a una
+      // consulta del navegador que no tiene timeout (ver lib/supabase.ts: el
+      // corte de 15 s cubre solo /auth/v1/, para no abortar subidas lentas).
+      // Si esa consulta se colgaba, el aviso se quedaba en pantalla para
+      // siempre pese a que el informe se había enviado correctamente —llegaba
+      // el correo y todo—, y solo recargando se veía que había funcionado.
+      setEnvioCompletado(true)
+
+      // La recarga es cortesía visual, no parte de la confirmación: refresca
+      // el expediente por detrás mientras la capa termina su animación. Si
+      // tarda o falla, la pantalla se actualizará igual cuando responda.
       setFaseEnvio('actualizando')
       router.refresh()
-      await cargarDatos()
-
-      // Se marca completado al FINAL, con los datos ya recargados: el check
-      // solo aparece cuando el envío es un hecho consumado, no cuando la
-      // petición salió. Si algo falla antes, nunca llega a sellarse.
-      setEnvioCompletado(true)
+      void cargarDatos()
     } catch {
       // Caída de red al invocar la acción. Sin este catch el botón se quedaría
       // deshabilitado para siempre y solo un F5 lo recuperaría.
