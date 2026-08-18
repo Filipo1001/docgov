@@ -14,7 +14,7 @@
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { enviarPlantillaWhatsApp, whatsappDisponible } from '@/lib/whatsapp-cloud'
+import { enviarPlantillaWhatsApp, registrarNumeroWhatsApp, whatsappDisponible } from '@/lib/whatsapp-cloud'
 import { normalizarTelefono, motivoTelefonoInvalido } from '@/lib/telefono'
 import { plantillaPara, tiposConWhatsApp } from '@/lib/whatsapp'
 
@@ -120,4 +120,29 @@ export async function probarWhatsApp(
     ok: false,
     detalle: `Meta rechazó el envío${res.codigo ? ` (código ${res.codigo})` : ''}: ${res.error}`,
   }
+}
+
+/**
+ * Registra el número en la API de la nube.
+ *
+ * Existe porque el paso está escondido en sitios distintos según la cuenta de
+ * Meta, y sin él todo envío responde 133010 «Account not registered» aunque el
+ * token y el identificador sean correctos. El PIN lo elige quien administra;
+ * no se guarda aquí.
+ */
+export async function registrarNumero(pin: string): Promise<{ ok: boolean; detalle: string }> {
+  const permiso = await exigirAdmin()
+  if (!permiso.ok) return { ok: false, detalle: permiso.error }
+
+  if (!/^\d{6}$/.test(pin)) {
+    return { ok: false, detalle: 'El PIN debe ser exactamente 6 dígitos.' }
+  }
+  if (!whatsappDisponible()) {
+    return { ok: false, detalle: 'Faltan las variables de entorno de WhatsApp en este entorno.' }
+  }
+
+  const res = await registrarNumeroWhatsApp(pin)
+  return res.ok
+    ? { ok: true, detalle: 'Número registrado. Ya puedes enviar la prueba de conexión.' }
+    : { ok: false, detalle: `Meta rechazó el registro${res.codigo ? ` (código ${res.codigo})` : ''}: ${res.error}` }
 }

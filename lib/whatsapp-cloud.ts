@@ -119,3 +119,44 @@ export async function enviarPlantillaWhatsApp(
     return { ok: false, error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }
+
+/**
+ * Registra el número en la API de la nube.
+ *
+ * Añadir un número en WhatsApp Manager y REGISTRARLO son dos pasos distintos, y
+ * el segundo es fácil de pasar por alto: el número aparece en la lista, todo
+ * parece listo, y cada envío responde 133010 «Account not registered».
+ *
+ * Meta esconde este paso en sitios distintos según la cuenta, así que se ofrece
+ * también por API. El PIN son seis dígitos que elige quien administra: queda
+ * como verificación en dos pasos del número y hace falta si algún día hay que
+ * volver a registrarlo. No se guarda en ningún sitio de la aplicación — viaja
+ * a Meta y ahí termina.
+ */
+export async function registrarNumeroWhatsApp(pin: string): Promise<ResultadoWhatsApp> {
+  const cfg = configurado()
+  if (!cfg) return { ok: false, error: 'WhatsApp no configurado en este entorno' }
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${API_VERSION}/${cfg.phoneNumberId}/register`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${cfg.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messaging_product: 'whatsapp', pin }),
+      },
+    )
+    const cuerpo = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      const err = cuerpo?.error
+      return { ok: false, error: err?.message ?? `HTTP ${res.status}`, codigo: err?.code }
+    }
+    return { ok: true, id: 'registrado' }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}

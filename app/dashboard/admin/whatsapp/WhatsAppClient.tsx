@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { estadoWhatsApp, probarWhatsApp, type EstadoWhatsApp } from '@/app/actions/whatsapp-diagnostico'
+import { estadoWhatsApp, probarWhatsApp, registrarNumero, type EstadoWhatsApp } from '@/app/actions/whatsapp-diagnostico'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
 import Icono from '@/components/ui/Icono'
@@ -34,6 +34,9 @@ export default function WhatsAppClient() {
   const [tipo, setTipo] = useState('hello_world')
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState<{ ok: boolean; detalle: string } | null>(null)
+  const [pin, setPin] = useState('')
+  const [registrando, setRegistrando] = useState(false)
+  const [resultadoRegistro, setResultadoRegistro] = useState<{ ok: boolean; detalle: string } | null>(null)
 
   useEffect(() => {
     estadoWhatsApp()
@@ -54,6 +57,19 @@ export default function WhatsAppClient() {
       setResultado({ ok: false, detalle: 'Error de red al invocar la prueba.' })
     } finally {
       setEnviando(false)
+    }
+  }
+
+  async function registrar() {
+    if (registrando || pin.length !== 6) return
+    setRegistrando(true)
+    setResultadoRegistro(null)
+    try {
+      setResultadoRegistro(await registrarNumero(pin))
+    } catch {
+      setResultadoRegistro({ ok: false, detalle: 'Error de red al invocar el registro.' })
+    } finally {
+      setRegistrando(false)
     }
   }
 
@@ -122,6 +138,54 @@ export default function WhatsAppClient() {
           </p>
         </Card>
       )}
+
+      <Card>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Registrar el número</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Solo hace falta una vez por número. Añadirlo en WhatsApp Manager y registrarlo
+          son pasos distintos: si falta este, todo envío responde <span className="font-mono">133010
+          «Account not registered»</span> aunque el token sea correcto. El PIN lo eliges tú
+          —seis dígitos— y queda como verificación en dos pasos del número. Guárdalo: hace
+          falta si algún día hay que volver a registrarlo.
+        </p>
+
+        <div className="flex flex-wrap gap-2 items-start">
+          <input
+            value={pin}
+            onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6 dígitos"
+            inputMode="numeric"
+            autoComplete="off"
+            className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <button
+            type="button"
+            onClick={registrar}
+            disabled={registrando || pin.length !== 6}
+            className="bg-gray-900 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {registrando ? 'Registrando…' : 'Registrar'}
+          </button>
+        </div>
+
+        {resultadoRegistro && (
+          <div
+            role="status"
+            className={`mt-4 rounded-xl p-4 border ${resultadoRegistro.ok ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}
+          >
+            <div className="flex items-start gap-2">
+              <Icono
+                glifo={resultadoRegistro.ok ? Iconos.estado.aprobado : Iconos.estado.rechazado}
+                tamano="sm"
+                className={`shrink-0 mt-0.5 ${resultadoRegistro.ok ? 'text-emerald-600' : 'text-red-500'}`}
+              />
+              <p className={`text-xs leading-relaxed ${resultadoRegistro.ok ? 'text-emerald-800' : 'text-red-700'}`}>
+                {resultadoRegistro.detalle}
+              </p>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Card>
         <h3 className="text-sm font-semibold text-gray-900 mb-1">Enviar mensaje de prueba</h3>
