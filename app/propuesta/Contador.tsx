@@ -7,9 +7,23 @@
  * se lean: un dato quieto se salta, uno que se mueve detiene el ojo el segundo
  * que hace falta para registrarlo.
  *
- * El valor final se escribe también en el DOM desde el primer render (en un
- * nodo accesible) para que un lector de pantalla —y un buscador, si algún día
- * la página se indexara— reciba la cifra real y no un cero animándose.
+ * ── EL ESTADO ARRANCA EN EL VALOR FINAL, NO EN CERO ──────────────────────
+ *
+ * Esta es la decisión que gobierna el componente. La primera versión partía de
+ * cero y contaba hacia arriba, de modo que CUALQUIER cosa que impidiera animar
+ * dejaba un cero en pantalla — y pasó: un `useState` en las dependencias del
+ * efecto lo reejecutaba al arrancar, su limpieza cancelaba el fotograma, y la
+ * sección titulada «no es una promesa, son cifras» mostraba seis ceros.
+ *
+ * Ahora el número correcto está ahí desde el primer render, incluido el HTML
+ * que llega del servidor. Solo se baja a cero dentro del primer fotograma de
+ * la animación —es decir, cuando ya hay constancia de que se está pintando— y
+ * con el bloque entrando en pantalla, todavía sin verse. Si el observador no
+ * dispara, si el navegador es viejo, si la pestaña está en segundo plano y
+ * `requestAnimationFrame` no corre: no pasa nada, la cifra ya era la buena.
+ *
+ * El fallo por defecto pasa de «un cero» a «un número sin animar», que en un
+ * documento comercial no es un fallo en absoluto.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -30,30 +44,36 @@ export default function Contador({
   className?: string
 }) {
   const ref = useRef<HTMLSpanElement>(null)
-  const [n, setN] = useState(0)
-  const [arrancado, setArrancado] = useState(false)
+  // Referencia y no estado: fijar estado aquí reejecutaría el efecto, y su
+  // limpieza cancelaría la animación que acaba de empezar.
+  const usado = useRef(false)
+  const [n, setN] = useState(valor)
 
   useEffect(() => {
     const nodo = ref.current
-    if (!nodo || arrancado) return
+    if (!nodo) return
 
-    // Sin observador, o con movimiento reducido, se muestra el valor final.
-    // Se difiere un tick para no fijar estado de forma síncrona dentro del
-    // efecto, que provoca un render en cascada.
     const reducido = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (typeof IntersectionObserver === 'undefined' || reducido) {
-      const t = setTimeout(() => { setN(valor); setArrancado(true) }, 0)
-      return () => clearTimeout(t)
-    }
+    if (reducido || typeof IntersectionObserver === 'undefined') return
+
+    // Si el bloque ya está a la vista al cargar, no se anima: bajarlo a cero
+    // delante de alguien que lo está mirando se vería como un parpadeo.
+    if (nodo.getBoundingClientRect().top < window.innerHeight) return
 
     let cuadro = 0
     const obs = new IntersectionObserver(
       ([e]) => {
-        if (!e.isIntersecting) return
+        if (!e.isIntersecting || usado.current) return
+        usado.current = true
         obs.disconnect()
-        setArrancado(true)
-        const inicio = performance.now()
+
+        // El cero vive dentro del primer fotograma, no antes de pedirlo. Así,
+        // si `requestAnimationFrame` no llega a correr —pestaña en segundo
+        // plano, que es justo donde no corre— la cifra nunca se baja a cero:
+        // se queda en su valor y sencillamente no se anima.
+        let inicio = 0
         const paso = (ahora: number) => {
+          if (!inicio) inicio = ahora
           const t = Math.min(1, (ahora - inicio) / MS_DURACION)
           setN(Math.round(valor * suavizar(t)))
           if (t < 1) cuadro = requestAnimationFrame(paso)
@@ -64,28 +84,17 @@ export default function Contador({
     )
     obs.observe(nodo)
 
-    // Red de seguridad: si el observador no llega a disparar —pestaña en
-    // segundo plano al abrirse, navegador antiguo— la cifra se muestra igual.
-    // Un número en cero delante de un secretario sería peor que no animarlo.
-    const respaldo = setTimeout(() => {
-      if (nodo.getBoundingClientRect().top < window.innerHeight) {
-        obs.disconnect()
-        setN(valor)
-        setArrancado(true)
-      }
-    }, 2500)
-
     return () => {
       obs.disconnect()
       cancelAnimationFrame(cuadro)
-      clearTimeout(respaldo)
+      // Si se desmonta a mitad de la cuenta, queda el valor bueno.
+      setN(valor)
     }
-  }, [valor, arrancado])
+  }, [valor])
 
   return (
-    <span ref={ref} className={className}>
-      <span aria-hidden="true" className="tabular-nums">{n.toLocaleString('es-CO')}</span>
-      <span className="sr-only">{valor.toLocaleString('es-CO')}</span>
+    <span ref={ref} className={`tabular-nums ${className}`}>
+      {n.toLocaleString('es-CO')}
     </span>
   )
 }
