@@ -4,6 +4,10 @@ import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp, ORIGEN_APP } from '@/lib/dominio'
 import Revelar from '../Revelar'
+import Contador from '../Contador'
+import ProgresoScroll from '../ProgresoScroll'
+import Icono from '@/components/ui/Icono'
+import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 /**
  * Propuesta comercial para la Alcaldía de El Bagre.
@@ -44,7 +48,7 @@ const DIAGNOSTICO = [
   'Si no sabe cuántos contratistas tiene ni si están trabajando, lo está haciendo mal.',
   'Si a fin de mes sus contratistas están armando papeles en vez de trabajando, lo está haciendo mal.',
   'Si no tiene la alcaldía en la palma de la mano —en cualquier lugar, a cualquier hora—, lo está haciendo mal.',
-  'Si una cuenta de cobro se devuelve porque el valor en letras no coincide con la cifra, lo está haciendo mal.',
+  'Si errores de redacción y transcripción entorpecen el pago de su gente, lo está haciendo mal.',
   'Si un contratista tiene que llamar a preguntar por qué se retrasó su pago, lo está haciendo mal.',
 ]
 
@@ -64,13 +68,13 @@ const NORMAS = [
   ['Trazabilidad', 'Cada movimiento con fecha, hora y responsable'],
 ]
 
-const CIFRAS = [
-  ['122', 'contratos gestionados'],
-  ['508', 'periodos procesados'],
-  ['138', 'cuentas radicadas'],
-  ['184', 'históricos migrados'],
-  ['2.966', 'evidencias cargadas'],
-  ['1.066', 'movimientos trazados'],
+const CIFRAS: [number, string][] = [
+  [122, 'contratos gestionados'],
+  [508, 'periodos procesados'],
+  [138, 'cuentas radicadas'],
+  [184, 'históricos migrados'],
+  [2966, 'evidencias cargadas'],
+  [1066, 'movimientos trazados'],
 ]
 
 // ── Piezas ──────────────────────────────────────────────────────────────────
@@ -108,11 +112,24 @@ function Titulo({ children, oscura = false }: { children: React.ReactNode; oscur
   )
 }
 
-function Rol({ emoji, titulo, puntos }: { emoji: string; titulo: string; puntos: string[] }) {
+/**
+ * Tarjeta de rol.
+ *
+ * El icono sale del catálogo del proyecto y no de un emoji: los emojis los
+ * dibuja cada sistema operativo a su manera —un 👔 en Android no se parece al
+ * de un iPhone— y en un documento que se reenvía y se proyecta eso rompe la
+ * identidad. Ver lib/iconos.ts.
+ */
+function Rol({ glifo, titulo, puntos }: { glifo: LucideIcon; titulo: string; puntos: string[] }) {
   return (
     <div className="rounded-2xl border border-gray-100 p-6 h-full">
-      <p className="text-2xl" aria-hidden="true">{emoji}</p>
-      <h3 className="mt-3 font-semibold text-gray-900">{titulo}</h3>
+      <div
+        className="w-11 h-11 rounded-xl flex items-center justify-center"
+        style={{ backgroundColor: '#F1F3F6' }}
+      >
+        <Icono glifo={glifo} tamano="lg" className="text-[#192031]" />
+      </div>
+      <h3 className="mt-4 font-semibold text-gray-900">{titulo}</h3>
       <ul className="mt-3 space-y-2.5">
         {puntos.map(p => (
           <li key={p} className="flex gap-2.5 text-sm text-gray-600 leading-relaxed">
@@ -139,6 +156,7 @@ export default async function PropuestaElBagre() {
 
   return (
     <main className="bg-white">
+      <ProgresoScroll color={VERDE} />
 
       {/* ── Portada ───────────────────────────────────────────────── */}
       <section
@@ -162,9 +180,17 @@ export default async function PropuestaElBagre() {
           </Revelar>
 
           <Revelar retraso={400}>
-            <p className="mt-16 text-xs text-white/30">
-              Propuesta preparada para la Alcaldía Municipal de El Bagre
-            </p>
+            <div className="mt-16 flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/marca/escudo-el-bagre.png"
+                alt="Escudo del municipio de El Bagre"
+                className="w-9 h-9 object-contain"
+              />
+              <p className="text-xs text-white/40 leading-snug">
+                Propuesta preparada para la<br />Alcaldía Municipal de El Bagre
+              </p>
+            </div>
           </Revelar>
         </div>
       </section>
@@ -178,7 +204,7 @@ export default async function PropuestaElBagre() {
 
         <div className="mt-12 space-y-px rounded-2xl overflow-hidden border border-gray-100">
           {DIAGNOSTICO.map((t, i) => (
-            <Revelar key={t} retraso={i * 80}>
+            <Revelar key={t} retraso={i * 80} desde="izquierda">
               <div className="flex gap-5 bg-gray-50/60 px-6 py-6">
                 <span className="text-2xl font-bold tabular-nums text-gray-300 shrink-0 leading-none pt-0.5">
                   {i + 1}
@@ -231,7 +257,7 @@ export default async function PropuestaElBagre() {
 
         <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-gray-100">
           {DOCUMENTOS.map(([d, q], i) => (
-            <Revelar key={d} retraso={i * 80}>
+            <Revelar key={d} retraso={i * 80} desde="izquierda">
               <div className="flex items-center justify-between gap-4 bg-gray-50/60 px-6 py-5">
                 <span className="font-medium text-gray-900">{d}</span>
                 <span className="text-sm text-gray-500 text-right shrink-0">{q}</span>
@@ -244,69 +270,6 @@ export default async function PropuestaElBagre() {
           <p className="mt-8 text-lg font-semibold text-gray-900">
             Cero Word. Cero transcripción. Cero devoluciones por un valor en letras mal escrito.
           </p>
-        </Revelar>
-      </Seccion>
-
-      {/* ── La cuenta de cobro ────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>En detalle</Etiqueta>
-          <Titulo>La cuenta de cobro, sin errores posibles</Titulo>
-        </Revelar>
-
-        <div className="mt-10 grid sm:grid-cols-2 gap-4">
-          {[
-            ['El valor en letras', 'Lo escribe el sistema, no una persona'],
-            ['Las fechas', 'Salen del contrato'],
-            ['El número de contrato', 'No se digita'],
-            ['Los datos bancarios', 'Vienen del expediente del contratista'],
-          ].map(([t, d], i) => (
-            <Revelar key={t} retraso={i * 90}>
-              <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 h-full">
-                <p className="font-semibold text-gray-900">{t}</p>
-                <p className="mt-1 text-sm text-gray-500">{d}</p>
-              </div>
-            </Revelar>
-          ))}
-        </div>
-
-        <Revelar retraso={400}>
-          <p className="mt-8 text-gray-600 leading-relaxed">
-            Y para quien está obligado a facturar electrónicamente, la factura
-            sustituye automáticamente a la cuenta de cobro — sin que nadie tenga
-            que acordarse de la excepción.
-          </p>
-        </Revelar>
-      </Seccion>
-
-      {/* ── El contrato completo ──────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>El contrato completo</Etiqueta>
-          <Titulo>No solo los informes del mes</Titulo>
-        </Revelar>
-
-        <Revelar retraso={120}>
-          <div className="mt-10 flex flex-wrap gap-2">
-            {['Contrato firmado', 'CDP', 'RP', 'RUT', 'Certificación bancaria', 'Póliza', 'Otros'].map(d => (
-              <span key={d} className="rounded-full border border-gray-200 px-4 py-2 text-sm text-gray-700">{d}</span>
-            ))}
-          </div>
-        </Revelar>
-
-        <Revelar retraso={240}>
-          <div className="mt-10 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
-            <h3 className="font-semibold text-gray-900">El contrato cambia y el sistema lo sabe</h3>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {['Adición', 'Prórroga', 'Modificatorio', 'Aclaratorio'].map(t => (
-                <span key={t} className="rounded-lg bg-white border border-gray-200 px-3 py-1.5 text-sm text-gray-700">{t}</span>
-              ))}
-            </div>
-            <p className="mt-4 text-sm text-gray-600 leading-relaxed">
-              Los documentos siguientes se generan con la información vigente, y el
-              acta de terminación cita los otrosíes que correspondan.
-            </p>
-          </div>
         </Revelar>
       </Seccion>
 
@@ -389,7 +352,7 @@ export default async function PropuestaElBagre() {
         <div className="mt-12 grid md:grid-cols-3 gap-4">
           <Revelar retraso={100}>
             <Rol
-              emoji="👷"
+              glifo={Iconos.navegacion.contratistas}
               titulo="El contratista"
               puntos={[
                 'Carga sus evidencias desde el celular, donde esté',
@@ -400,7 +363,7 @@ export default async function PropuestaElBagre() {
           </Revelar>
           <Revelar retraso={200}>
             <Rol
-              emoji="👔"
+              glifo={Iconos.estado.verificado}
               titulo="El supervisor"
               puntos={[
                 'Revisa evidencias y aprueba pagos desde el móvil, sin abrir un computador',
@@ -411,7 +374,7 @@ export default async function PropuestaElBagre() {
           </Revelar>
           <Revelar retraso={300}>
             <Rol
-              emoji="🏛️"
+              glifo={Iconos.navegacion.municipio}
               titulo="La secretaría"
               puntos={[
                 'Radica en lote todas las cuentas aprobadas del mes, con numeración consecutiva automática',
@@ -471,7 +434,7 @@ export default async function PropuestaElBagre() {
         </Revelar>
 
         <div className="mt-12 flex flex-col sm:flex-row items-center gap-10">
-          <Revelar retraso={150}>
+          <Revelar retraso={150} desde="zoom">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qr}
@@ -501,7 +464,7 @@ export default async function PropuestaElBagre() {
 
         <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-gray-100">
           {NORMAS.map(([norma, que], i) => (
-            <Revelar key={norma} retraso={i * 80}>
+            <Revelar key={norma} retraso={i * 80} desde="izquierda">
               <div className="grid sm:grid-cols-[1fr_1.4fr] gap-1 sm:gap-6 bg-gray-50/60 px-6 py-5">
                 <span className="font-semibold text-gray-900 text-sm">{norma}</span>
                 <span className="text-sm text-gray-600">{que}</span>
@@ -517,7 +480,7 @@ export default async function PropuestaElBagre() {
           <Etiqueta>Inversión</Etiqueta>
         </Revelar>
 
-        <Revelar retraso={100}>
+        <Revelar retraso={100} desde="zoom">
           <div className="mt-4 text-center py-10">
             <p className="text-5xl sm:text-6xl font-bold tracking-tight text-gray-900">
               $4.990.000
@@ -605,9 +568,9 @@ export default async function PropuestaElBagre() {
 
         <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 gap-px rounded-2xl overflow-hidden">
           {CIFRAS.map(([n, t], i) => (
-            <Revelar key={t} retraso={i * 80}>
+            <Revelar key={t} retraso={i * 80} desde="zoom">
               <div className="bg-white/[0.06] p-6 h-full">
-                <p className="text-3xl sm:text-4xl font-bold tracking-tight">{n}</p>
+                <Contador valor={n} className="block text-3xl sm:text-4xl font-bold tracking-tight" />
                 <p className="mt-1 text-sm text-white/50 leading-snug">{t}</p>
               </div>
             </Revelar>
@@ -615,9 +578,17 @@ export default async function PropuestaElBagre() {
         </div>
 
         <Revelar retraso={520}>
-          <p className="mt-6 text-xs text-white/30">
-            Operación real del municipio de Fredonia, Antioquia.
-          </p>
+          <div className="mt-6 flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/marca/escudo-fredonia.png"
+              alt="Escudo del municipio de Fredonia"
+              className="w-8 h-8 object-contain opacity-80"
+            />
+            <p className="text-xs text-white/40">
+              Operación real del municipio de Fredonia, Antioquia.
+            </p>
+          </div>
         </Revelar>
 
         <Revelar retraso={620}>
@@ -649,7 +620,7 @@ export default async function PropuestaElBagre() {
               className="mt-10 inline-flex items-center gap-3 rounded-xl bg-white px-7 py-4 font-semibold transition-transform hover:scale-[1.02]"
               style={{ color: MARCA }}
             >
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: VERDE }} />
+              <span className="w-2 h-2 rounded-full latido" style={{ backgroundColor: VERDE }} />
               Escribir por WhatsApp
             </a>
           </Revelar>

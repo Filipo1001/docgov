@@ -15,13 +15,17 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 export default function Revelar({
   children,
   retraso = 0,
+  desde = 'abajo',
   className = '',
 }: {
   children: ReactNode
   /** Milisegundos de retardo, para escalonar elementos de una misma fila. */
   retraso?: number
+  /** Dirección de entrada. Variar el gesto evita que 70 bloques se sientan iguales. */
+  desde?: 'abajo' | 'izquierda' | 'zoom'
   className?: string
 }) {
+  const base = desde === 'izquierda' ? 'revelar-izq' : desde === 'zoom' ? 'revelar-zoom' : 'revelar'
   const ref = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
 
@@ -69,7 +73,7 @@ export default function Revelar({
   return (
     <div
       ref={ref}
-      className={`revelar ${visible ? 'visible' : ''} ${className}`}
+      className={`${base} ${visible ? 'visible' : ''} ${className}`}
       style={retraso ? { transitionDelay: `${retraso}ms` } : undefined}
     >
       {children}

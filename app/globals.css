@@ -86,3 +86,27 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 @media (prefers-reduced-motion: reduce) {
   .revelar { opacity: 1; transform: none; transition: none; }
 }
+
+/* Entradas laterales, para que no todo suba desde abajo: una propuesta larga
+   con un solo gesto repetido 70 veces se vuelve monótona. */
+.revelar-izq { opacity: 0; transform: translateX(-28px); }
+.revelar-izq.visible { opacity: 1; transform: none; }
+.revelar-zoom { opacity: 0; transform: scale(0.94); }
+.revelar-zoom.visible { opacity: 1; transform: none; }
+
+.revelar-izq, .revelar-zoom {
+  transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Latido lento del punto verde del cierre: señal de que esto está vivo. */
+@keyframes latido-suave {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.82); }
+}
+.latido { animation: latido-suave 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .revelar-izq, .revelar-zoom { opacity: 1; transform: none; transition: none; }
+  .latido { animation: none; }
+}
