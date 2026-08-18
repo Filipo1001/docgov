@@ -13,13 +13,21 @@ import Revelar from '../Revelar'
  * despacho, y `app.` lee como la herramienta interna de otro cliente.
  *
  * NO SE INDEXA. Es un documento dirigido a una alcaldía concreta, con su
- * nombre y su precio. Que aparezca en un buscador sería un problema comercial
- * —cualquier otro municipio vería la tarifa— y de discreción.
+ * nombre y su precio. Que apareciera en un buscador sería un problema
+ * comercial —cualquier otro municipio vería la tarifa— y de discreción.
  *
- * EL PRECIO SE PRESENTA POR CONTRATISTA, no en total. El número de contratistas
- * de El Bagre es aproximado, así que un total impreso podría estar mal y además
- * invita a negociar contra una cifra grande. Por contratista, la propuesta
- * escala sola y la cifra que se ve es pequeña.
+ * ── Dos decisiones de fondo ───────────────────────────────────────────────
+ *
+ * EL DIAGNÓSTICO ACUSA, PERO ABSUELVE AL FINAL. Los seis «lo está haciendo
+ * mal» son deliberadamente punzantes: despiertan más que una lista de
+ * beneficios. Pero cierran con «ninguno es de las personas, son del método»,
+ * porque un secretario que se siente juzgado deja de escuchar. Sin esa salida,
+ * la sección jugaría en contra.
+ *
+ * LAS CIFRAS VAN AL FINAL. La prueba de que esto ya opera cierra la propuesta,
+ * justo antes de la llamada a la acción, en vez de abrirla. La atribución al
+ * municipio queda en una línea discreta: los números mandan, pero sin origen
+ * valdrían mucho menos si alguien pregunta de dónde salen.
  */
 
 export const metadata: Metadata = {
@@ -30,22 +38,22 @@ export const metadata: Metadata = {
 
 const VERDE = '#10b981'
 
-/** Datos verificables de la operación en Fredonia. */
-const CIFRAS_FREDONIA = [
-  { n: '122', t: 'contratos gestionados' },
-  { n: '508', t: 'periodos procesados' },
-  { n: '138', t: 'cuentas radicadas' },
-  { n: '184', t: 'históricos migrados' },
-  { n: '2.966', t: 'evidencias cargadas' },
-  { n: '1.066', t: 'movimientos trazados' },
+/** El diagnóstico. Cuatro son de la alcaldía y dos del contratista, a propósito. */
+const DIAGNOSTICO = [
+  'Si le piden el expediente de un contrato y toca buscarlo en un arrume de documentos, lo está haciendo mal.',
+  'Si no sabe cuántos contratistas tiene ni si están trabajando, lo está haciendo mal.',
+  'Si a fin de mes sus contratistas están armando papeles en vez de trabajando, lo está haciendo mal.',
+  'Si no tiene la alcaldía en la palma de la mano —en cualquier lugar, a cualquier hora—, lo está haciendo mal.',
+  'Si una cuenta de cobro se devuelve porque el valor en letras no coincide con la cifra, lo está haciendo mal.',
+  'Si un contratista tiene que llamar a preguntar por qué se retrasó su pago, lo está haciendo mal.',
 ]
 
 const DOCUMENTOS = [
-  { d: 'Informe de actividades', q: 'Contratista' },
-  { d: 'Cuenta de cobro', q: 'Contratista' },
-  { d: 'Acta de supervisión', q: 'Supervisor' },
-  { d: 'Acta de pago', q: 'Secretaría' },
-  { d: 'Acta de terminación bilateral', q: 'Al cerrar el contrato' },
+  ['Informe de actividades', 'Contratista'],
+  ['Cuenta de cobro', 'Contratista'],
+  ['Acta de supervisión', 'Supervisor'],
+  ['Acta de pago', 'Secretaría'],
+  ['Acta de terminación bilateral', 'Al cerrar el contrato'],
 ]
 
 const NORMAS = [
@@ -56,20 +64,26 @@ const NORMAS = [
   ['Trazabilidad', 'Cada movimiento con fecha, hora y responsable'],
 ]
 
+const CIFRAS = [
+  ['122', 'contratos gestionados'],
+  ['508', 'periodos procesados'],
+  ['138', 'cuentas radicadas'],
+  ['184', 'históricos migrados'],
+  ['2.966', 'evidencias cargadas'],
+  ['1.066', 'movimientos trazados'],
+]
+
 // ── Piezas ──────────────────────────────────────────────────────────────────
 
 function Seccion({
   children,
   oscura = false,
-  id,
 }: {
   children: React.ReactNode
   oscura?: boolean
-  id?: string
 }) {
   return (
     <section
-      id={id}
       className={`px-6 py-20 sm:py-28 ${oscura ? 'text-white' : 'bg-white text-gray-900'}`}
       style={oscura ? { backgroundColor: MARCA } : undefined}
     >
@@ -94,6 +108,23 @@ function Titulo({ children, oscura = false }: { children: React.ReactNode; oscur
   )
 }
 
+function Rol({ emoji, titulo, puntos }: { emoji: string; titulo: string; puntos: string[] }) {
+  return (
+    <div className="rounded-2xl border border-gray-100 p-6 h-full">
+      <p className="text-2xl" aria-hidden="true">{emoji}</p>
+      <h3 className="mt-3 font-semibold text-gray-900">{titulo}</h3>
+      <ul className="mt-3 space-y-2.5">
+        {puntos.map(p => (
+          <li key={p} className="flex gap-2.5 text-sm text-gray-600 leading-relaxed">
+            <span className="mt-2 w-1 h-1 rounded-full bg-gray-400 shrink-0" />
+            <span>{p}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // ── Página ──────────────────────────────────────────────────────────────────
 
 export default async function PropuestaElBagre() {
@@ -115,9 +146,7 @@ export default async function PropuestaElBagre() {
         style={{ backgroundColor: MARCA }}
       >
         <div className="max-w-3xl mx-auto w-full">
-          <Revelar>
-            <LogoCD size={64} color="#FFFFFF" />
-          </Revelar>
+          <Revelar><LogoCD size={64} color="#FFFFFF" /></Revelar>
 
           <Revelar retraso={120}>
             <h1 className="mt-10 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.08]">
@@ -127,22 +156,12 @@ export default async function PropuestaElBagre() {
 
           <Revelar retraso={240}>
             <p className="mt-8 text-lg sm:text-xl text-white/70 leading-relaxed max-w-xl">
-              Contratista Digital automatiza el ciclo completo de los contratos de
-              prestación de servicios: los documentos, la supervisión, el archivo
-              y la verificación.
+              Gestión digital de los contratos de prestación de servicios:
+              los documentos, la supervisión, el archivo y la verificación.
             </p>
           </Revelar>
 
-          <Revelar retraso={360}>
-            <div className="mt-12 inline-flex items-center gap-3 rounded-full border border-white/20 px-5 py-2.5">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: VERDE }} />
-              <span className="text-sm text-white/80">
-                Funcionando hoy en el municipio de Fredonia, Antioquia
-              </span>
-            </div>
-          </Revelar>
-
-          <Revelar retraso={480}>
+          <Revelar retraso={400}>
             <p className="mt-16 text-xs text-white/30">
               Propuesta preparada para la Alcaldía Municipal de El Bagre
             </p>
@@ -150,87 +169,80 @@ export default async function PropuestaElBagre() {
         </div>
       </section>
 
-      {/* ── La pregunta ───────────────────────────────────────────── */}
+      {/* ── Diagnóstico ───────────────────────────────────────────── */}
       <Seccion>
         <Revelar>
-          <Etiqueta>La pregunta</Etiqueta>
-          <p className="text-2xl sm:text-4xl font-bold tracking-tight leading-[1.2] text-gray-900">
-            ¿Cuánto tardaría hoy su despacho en entregar el expediente completo
-            de un contrato de hace ocho meses?
-          </p>
-          <p className="mt-8 text-gray-500 leading-relaxed">
-            Y cuando lo arme: ¿estarán todos los informes, todas las actas de
-            supervisión, todas las planillas?
-          </p>
-        </Revelar>
-      </Seccion>
-
-      {/* ── El problema ───────────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>El problema</Etiqueta>
-          <Titulo>Dos escenas que usted ya conoce</Titulo>
+          <Etiqueta>Diagnóstico</Etiqueta>
+          <Titulo>Seis señales</Titulo>
         </Revelar>
 
-        <div className="mt-12 space-y-8">
-          <Revelar retraso={100}>
-            <div className="border-l-2 border-gray-200 pl-6">
-              <h3 className="font-semibold text-gray-900">La cuenta de cobro que vuelve</h3>
-              <p className="mt-2 text-gray-600 leading-relaxed">
-                Llega en Word. El valor en letras dice «un millón doscientos mil»
-                pero la cifra dice un millón doscientos cincuenta. Se devuelve. Son
-                dos minutos de error y varios días de retraso en el pago de alguien
-                que vive de ese ingreso. Multiplíquelo por todos sus contratistas y
-                por doce meses.
-              </p>
-            </div>
-          </Revelar>
-
-          <Revelar retraso={200}>
-            <div className="border-l-2 border-gray-200 pl-6">
-              <h3 className="font-semibold text-gray-900">El expediente que se arma a mano</h3>
-              <p className="mt-2 text-gray-600 leading-relaxed">
-                El informe estaba en un correo, las evidencias en un WhatsApp, la
-                planilla impresa en una carpeta, y el acta la firmó alguien que ya
-                no trabaja aquí.
-              </p>
-            </div>
-          </Revelar>
-
-          <Revelar retraso={300}>
-            <p className="text-lg font-semibold text-gray-900 pt-4">
-              Ninguno de los dos problemas es de las personas. Son del método.
-            </p>
-          </Revelar>
-        </div>
-      </Seccion>
-
-      {/* ── Los cinco documentos ──────────────────────────────────── */}
-      <Seccion oscura>
-        <Revelar>
-          <Etiqueta oscura>Lo que hace</Etiqueta>
-          <Titulo oscura>Cinco documentos, generados solos</Titulo>
-          <p className="mt-6 text-white/70 leading-relaxed">
-            El contratista solo registra sus actividades y sube sus evidencias
-            desde el celular. El sistema escribe todo lo demás.
-          </p>
-        </Revelar>
-
-        <div className="mt-12 space-y-px rounded-2xl overflow-hidden">
-          {DOCUMENTOS.map((d, i) => (
-            <Revelar key={d.d} retraso={i * 90}>
-              <div className="flex items-center justify-between gap-4 bg-white/[0.06] px-6 py-5">
-                <span className="font-medium">{d.d}</span>
-                <span className="text-sm text-white/50 text-right shrink-0">{d.q}</span>
+        <div className="mt-12 space-y-px rounded-2xl overflow-hidden border border-gray-100">
+          {DIAGNOSTICO.map((t, i) => (
+            <Revelar key={t} retraso={i * 80}>
+              <div className="flex gap-5 bg-gray-50/60 px-6 py-6">
+                <span className="text-2xl font-bold tabular-nums text-gray-300 shrink-0 leading-none pt-0.5">
+                  {i + 1}
+                </span>
+                <p className="text-gray-800 leading-relaxed">{t}</p>
               </div>
             </Revelar>
           ))}
         </div>
 
-        <Revelar retraso={500}>
-          <p className="mt-10 text-xl font-semibold leading-snug">
-            Cero Word. Cero transcripción. Cero devoluciones por un valor en
-            letras mal escrito.
+        <Revelar retraso={560}>
+          <p className="mt-10 text-lg font-semibold text-gray-900">
+            Ninguno de estos problemas es de las personas. Todos son del método.
+          </p>
+        </Revelar>
+      </Seccion>
+
+      {/* ── Qué es ────────────────────────────────────────────────── */}
+      <Seccion oscura>
+        <Revelar>
+          <Etiqueta oscura>La solución</Etiqueta>
+        </Revelar>
+        <Revelar retraso={120}>
+          <p className="text-xl sm:text-2xl leading-relaxed text-white/90">
+            <span className="font-semibold text-white">Contratista Digital automatiza</span> el
+            ciclo completo de los contratos de prestación de servicios de un municipio.
+            El contratista carga sus evidencias desde el celular y el sistema genera
+            automáticamente su informe de actividades, su cuenta de cobro y las actas
+            de supervisión y de pago —sin Word, sin errores de transcripción, sin
+            devoluciones—. El supervisor revisa y aprueba desde donde esté; la
+            secretaría radica y descarga el paquete completo del mes en un clic.
+            Cada documento sale con código QR y huella digital verificable, de modo
+            que cualquier ente de control puede comprobar su autenticidad sin pedirle
+            nada a la alcaldía. Todo queda en un solo lugar, trazable y listo para
+            cargar a SECOP II.
+          </p>
+        </Revelar>
+      </Seccion>
+
+      {/* ── Cinco documentos ──────────────────────────────────────── */}
+      <Seccion>
+        <Revelar>
+          <Etiqueta>Automatización</Etiqueta>
+          <Titulo>Cinco documentos, generados solos</Titulo>
+          <p className="mt-6 text-gray-600 leading-relaxed">
+            El contratista solo registra sus actividades y sube sus evidencias.
+            El sistema escribe todo lo demás.
+          </p>
+        </Revelar>
+
+        <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-gray-100">
+          {DOCUMENTOS.map(([d, q], i) => (
+            <Revelar key={d} retraso={i * 80}>
+              <div className="flex items-center justify-between gap-4 bg-gray-50/60 px-6 py-5">
+                <span className="font-medium text-gray-900">{d}</span>
+                <span className="text-sm text-gray-500 text-right shrink-0">{q}</span>
+              </div>
+            </Revelar>
+          ))}
+        </div>
+
+        <Revelar retraso={480}>
+          <p className="mt-8 text-lg font-semibold text-gray-900">
+            Cero Word. Cero transcripción. Cero devoluciones por un valor en letras mal escrito.
           </p>
         </Revelar>
       </Seccion>
@@ -259,10 +271,7 @@ export default async function PropuestaElBagre() {
         </div>
 
         <Revelar retraso={400}>
-          <p className="mt-8 text-lg font-semibold text-gray-900">
-            La categoría de error más común simplemente deja de existir.
-          </p>
-          <p className="mt-4 text-gray-600 leading-relaxed">
+          <p className="mt-8 text-gray-600 leading-relaxed">
             Y para quien está obligado a facturar electrónicamente, la factura
             sustituye automáticamente a la cuenta de cobro — sin que nadie tenga
             que acordarse de la excepción.
@@ -270,7 +279,7 @@ export default async function PropuestaElBagre() {
         </Revelar>
       </Seccion>
 
-      {/* ── Expediente y otrosíes ─────────────────────────────────── */}
+      {/* ── El contrato completo ──────────────────────────────────── */}
       <Seccion>
         <Revelar>
           <Etiqueta>El contrato completo</Etiqueta>
@@ -280,28 +289,17 @@ export default async function PropuestaElBagre() {
         <Revelar retraso={120}>
           <div className="mt-10 flex flex-wrap gap-2">
             {['Contrato firmado', 'CDP', 'RP', 'RUT', 'Certificación bancaria', 'Póliza', 'Otros'].map(d => (
-              <span key={d} className="rounded-full border border-gray-200 px-4 py-2 text-sm text-gray-700">
-                {d}
-              </span>
+              <span key={d} className="rounded-full border border-gray-200 px-4 py-2 text-sm text-gray-700">{d}</span>
             ))}
           </div>
         </Revelar>
 
-        <Revelar retraso={220}>
-          <p className="mt-8 text-gray-600 leading-relaxed">
-            Y las obligaciones contractuales cargadas una sola vez, contra las que
-            se registra cada actividad del contratista.
-          </p>
-        </Revelar>
-
-        <Revelar retraso={320}>
+        <Revelar retraso={240}>
           <div className="mt-10 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
             <h3 className="font-semibold text-gray-900">El contrato cambia y el sistema lo sabe</h3>
             <div className="mt-4 flex flex-wrap gap-2">
               {['Adición', 'Prórroga', 'Modificatorio', 'Aclaratorio'].map(t => (
-                <span key={t} className="rounded-lg bg-white border border-gray-200 px-3 py-1.5 text-sm text-gray-700">
-                  {t}
-                </span>
+                <span key={t} className="rounded-lg bg-white border border-gray-200 px-3 py-1.5 text-sm text-gray-700">{t}</span>
               ))}
             </div>
             <p className="mt-4 text-sm text-gray-600 leading-relaxed">
@@ -312,35 +310,60 @@ export default async function PropuestaElBagre() {
         </Revelar>
       </Seccion>
 
-      {/* ── Control antifraude ────────────────────────────────────── */}
+      {/* ── La alcaldía en la palma de la mano ────────────────────── */}
       <Seccion oscura>
         <Revelar>
-          <Etiqueta oscura>Control</Etiqueta>
-          <Titulo oscura>El sistema detecta evidencias repetidas</Titulo>
+          <Etiqueta oscura>Visibilidad</Etiqueta>
+          <Titulo oscura>La alcaldía en la palma de la mano</Titulo>
           <p className="mt-6 text-white/70 leading-relaxed">
-            Si una fotografía ya se usó en otro periodo del mismo contrato, el
-            supervisor lo sabe antes de aprobar.
+            Cuántos contratistas tiene, qué está haciendo cada uno y en qué punto
+            va su pago. Desde el celular, en cualquier lugar, a cualquier hora.
           </p>
         </Revelar>
 
-        <Revelar retraso={150}>
+        <Revelar retraso={160}>
           <div className="mt-10 rounded-2xl bg-white/[0.06] p-6 sm:p-8">
-            <p className="text-lg font-semibold leading-snug">
-              No solo el archivo idéntico.
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">
+              Estado de todos los periodos, en vivo
             </p>
-            <p className="mt-3 text-white/70 leading-relaxed">
-              Detecta la misma imagen aunque la hayan recortado, comprimido o
-              vuelto a fotografiar de la pantalla.
+            <div className="mt-5 flex flex-wrap gap-2">
+              {['Borrador', 'Enviado', 'En revisión', 'Aprobado', 'Radicado'].map((e, i) => (
+                <div key={e} className="flex items-center gap-2">
+                  <span className="rounded-lg bg-white/10 px-3.5 py-2 text-sm">{e}</span>
+                  {i < 4 && <span className="text-white/25">→</span>}
+                </div>
+              ))}
+            </div>
+            <p className="mt-6 text-sm text-white/60 leading-relaxed">
+              Más el valor total bajo gestión, el porcentaje de cumplimiento y qué
+              está esperando su revisión en este momento.
+            </p>
+          </div>
+        </Revelar>
+      </Seccion>
+
+      {/* ── Control antifraude ────────────────────────────────────── */}
+      <Seccion>
+        <Revelar>
+          <Etiqueta>Control</Etiqueta>
+          <Titulo>El sistema detecta evidencias repetidas</Titulo>
+        </Revelar>
+
+        <Revelar retraso={140}>
+          <div className="mt-10 rounded-2xl border border-gray-100 p-6 sm:p-8">
+            <p className="text-lg font-semibold text-gray-900">No solo el archivo idéntico.</p>
+            <p className="mt-3 text-gray-600 leading-relaxed">
+              Detecta la misma imagen aunque la hayan recortado, comprimido o vuelto
+              a fotografiar de la pantalla. Si una evidencia ya se usó en otro periodo
+              del mismo contrato, el supervisor lo sabe antes de aprobar.
             </p>
           </div>
         </Revelar>
 
-        <Revelar retraso={280}>
-          <div className="mt-6 rounded-2xl bg-white/[0.06] p-6 sm:p-8">
-            <p className="text-lg font-semibold leading-snug">
-              Y la seguridad social es bloqueante.
-            </p>
-            <p className="mt-3 text-white/70 leading-relaxed">
+        <Revelar retraso={260}>
+          <div className="mt-4 rounded-2xl border border-gray-100 p-6 sm:p-8">
+            <p className="text-lg font-semibold text-gray-900">La seguridad social es bloqueante.</p>
+            <p className="mt-3 text-gray-600 leading-relaxed">
               No deja enviar el informe sin planilla válida, y avisa si la misma
               planilla se está reutilizando en más periodos de los que cubre.
             </p>
@@ -348,11 +371,103 @@ export default async function PropuestaElBagre() {
         </Revelar>
       </Seccion>
 
-      {/* ── Verificación QR ───────────────────────────────────────── */}
+      {/* ── Una sola plataforma + roles ───────────────────────────── */}
       <Seccion>
         <Revelar>
-          <Etiqueta>Verificación</Etiqueta>
-          <Titulo>Cualquiera comprueba la autenticidad. Sin pedirle nada a la alcaldía.</Titulo>
+          <Etiqueta>El día a día</Etiqueta>
+          <Titulo>Una sola plataforma. Se acabaron las entradas paralelas.</Titulo>
+          <p className="mt-6 text-gray-600 leading-relaxed">
+            Hoy un informe puede llegar por correo, por WhatsApp, impreso, en Drive o
+            en una memoria USB. Cinco puertas de entrada para el mismo documento
+            significan cinco lugares donde buscarlo después.{' '}
+            <span className="font-semibold text-gray-900">
+              Contratista Digital cierra las cinco y deja una.
+            </span>
+          </p>
+        </Revelar>
+
+        <div className="mt-12 grid md:grid-cols-3 gap-4">
+          <Revelar retraso={100}>
+            <Rol
+              emoji="👷"
+              titulo="El contratista"
+              puntos={[
+                'Carga sus evidencias desde el celular, donde esté',
+                'El sistema genera su informe y su cuenta de cobro — se acabó el Word y sus malentendidos',
+                'Recibe avisos automáticos de cada cambio: enviado, aprobado, devuelto',
+              ]}
+            />
+          </Revelar>
+          <Revelar retraso={200}>
+            <Rol
+              emoji="👔"
+              titulo="El supervisor"
+              puntos={[
+                'Revisa evidencias y aprueba pagos desde el móvil, sin abrir un computador',
+                'Sigue la trazabilidad de cientos de contratos desde el teléfono',
+                'El sistema le avisa si una evidencia ya fue usada antes',
+              ]}
+            />
+          </Revelar>
+          <Revelar retraso={300}>
+            <Rol
+              emoji="🏛️"
+              titulo="La secretaría"
+              puntos={[
+                'Radica en lote todas las cuentas aprobadas del mes, con numeración consecutiva automática',
+                'Descarga el paquete completo del mes en un clic',
+                'Cada periodo queda listo para cargar a SECOP II',
+              ]}
+            />
+          </Revelar>
+        </div>
+
+        <Revelar retraso={440}>
+          <div className="mt-10 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
+            <h3 className="font-semibold text-gray-900">Automatización de punta a punta</h3>
+            <p className="mt-2 text-gray-600 leading-relaxed">
+              El contratista sube evidencias. Todo lo demás —documentos,
+              notificaciones, verificación, expediente— lo hace el sistema.
+            </p>
+          </div>
+        </Revelar>
+      </Seccion>
+
+      {/* ── Recordatorios ─────────────────────────────────────────── */}
+      <Seccion>
+        <Revelar>
+          <Etiqueta>Seguimiento</Etiqueta>
+          <Titulo>El sistema persigue, no ustedes</Titulo>
+        </Revelar>
+
+        <div className="mt-10 space-y-3">
+          {[
+            ['Día 25', 'Aviso a quien tiene el informe en borrador'],
+            ['Día 28', 'Recordatorio urgente'],
+            ['Día 2', 'Aviso de plazo vencido'],
+            ['Cada 5 días', 'Cuentas aprobadas sin radicar → aviso a secretaría'],
+            ['60 y 30 días antes', 'Contratos por vencer → aviso a supervisión y administración'],
+          ].map(([c, t], i) => (
+            <Revelar key={c} retraso={i * 90}>
+              <div className="flex gap-5 items-start">
+                <span
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-white w-36 text-center"
+                  style={{ backgroundColor: MARCA }}
+                >
+                  {c}
+                </span>
+                <span className="text-gray-700 pt-1.5 text-sm">{t}</span>
+              </div>
+            </Revelar>
+          ))}
+        </div>
+      </Seccion>
+
+      {/* ── Verificación QR ───────────────────────────────────────── */}
+      <Seccion oscura>
+        <Revelar>
+          <Etiqueta oscura>Verificación</Etiqueta>
+          <Titulo oscura>Cualquiera comprueba la autenticidad. Sin pedirle nada a la alcaldía.</Titulo>
         </Revelar>
 
         <div className="mt-12 flex flex-col sm:flex-row items-center gap-10">
@@ -361,124 +476,17 @@ export default async function PropuestaElBagre() {
             <img
               src={qr}
               alt="Código QR de verificación de documentos"
-              className="w-44 h-44 rounded-2xl border border-gray-200 shrink-0"
+              className="w-44 h-44 rounded-2xl bg-white p-2 shrink-0"
             />
           </Revelar>
-
           <Revelar retraso={280} className="flex-1">
-            <p className="text-gray-600 leading-relaxed">
-              Cada documento sale con un código único y una huella digital
-              SHA-256. Escanee este código con la cámara de su celular: así
-              verifica un documento un auditor, un banco o un ente de control.
+            <p className="text-white/70 leading-relaxed">
+              Cada documento sale con un código único y una huella digital SHA-256.
+              Escanee este código con la cámara de su celular: así verifica un
+              documento un auditor, un banco o un ente de control.
             </p>
-            <p className="mt-6 text-3xl font-bold text-gray-900">251</p>
-            <p className="text-sm text-gray-500">documentos ya emitidos con verificación</p>
           </Revelar>
         </div>
-      </Seccion>
-
-      {/* ── Fredonia ──────────────────────────────────────────────── */}
-      <Seccion oscura>
-        <Revelar>
-          <Etiqueta oscura>Caso de éxito</Etiqueta>
-          <Titulo oscura>Municipio de Fredonia, Antioquia</Titulo>
-        </Revelar>
-
-        <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 gap-px rounded-2xl overflow-hidden">
-          {CIFRAS_FREDONIA.map((c, i) => (
-            <Revelar key={c.t} retraso={i * 80}>
-              <div className="bg-white/[0.06] p-6 h-full">
-                <p className="text-3xl sm:text-4xl font-bold tracking-tight">{c.n}</p>
-                <p className="mt-1 text-sm text-white/50 leading-snug">{c.t}</p>
-              </div>
-            </Revelar>
-          ))}
-        </div>
-
-        <Revelar retraso={500}>
-          <p className="mt-10 text-xl font-semibold">
-            No es un piloto. Es la operación diaria de un municipio antioqueño.
-          </p>
-        </Revelar>
-
-        <Revelar retraso={600}>
-          <div className="mt-8 rounded-2xl bg-white/[0.06] p-6">
-            <p className="text-white/70 leading-relaxed">
-              <span className="font-semibold text-white">Su historial no se queda afuera.</span>{' '}
-              En Fredonia se migraron 184 periodos históricos. Lo que ya tienen
-              entra al sistema: no empiezan de cero.
-            </p>
-          </div>
-        </Revelar>
-      </Seccion>
-
-      {/* ── Por rol ───────────────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>El día a día</Etiqueta>
-          <Titulo>Cada quien ve lo suyo</Titulo>
-        </Revelar>
-
-        <div className="mt-12 space-y-4">
-          {[
-            ['Contratista', 'Carga sus evidencias desde el celular. Sus cinco documentos se generan solos. Un asistente de redacción le corrige ortografía y tildes antes de enviar.'],
-            ['Supervisor', 'Revisa y aprueba desde el móvil, sin abrir un computador. Ve la evidencia al lado de cada obligación, y el sistema le avisa de imágenes repetidas.'],
-            ['Asesor jurídico', 'Revisión previa por dependencia, antes de que el informe llegue a secretaría.'],
-            ['Secretaría', 'Radica en lote todas las cuentas del mes con numeración consecutiva automática, y descarga el paquete completo en un clic.'],
-            ['Contratación', 'Crea el contrato y la cuenta del contratista en un solo paso.'],
-          ].map(([rol, texto], i) => (
-            <Revelar key={rol} retraso={i * 90}>
-              <div className="rounded-2xl border border-gray-100 p-6">
-                <h3 className="font-semibold text-gray-900">{rol}</h3>
-                <p className="mt-2 text-gray-600 leading-relaxed">{texto}</p>
-              </div>
-            </Revelar>
-          ))}
-        </div>
-      </Seccion>
-
-      {/* ── Una sola plataforma + recordatorios ───────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>Orden</Etiqueta>
-          <Titulo>Una sola puerta de entrada</Titulo>
-          <p className="mt-6 text-gray-600 leading-relaxed">
-            Hoy un informe puede llegar por correo, por WhatsApp, impreso, en
-            Drive o en una memoria USB. Cinco puertas de entrada significan cinco
-            lugares donde buscarlo después.
-          </p>
-        </Revelar>
-
-        <Revelar retraso={180}>
-          <div className="mt-10 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
-            <h3 className="font-semibold text-gray-900">Y el sistema persigue, no ustedes</h3>
-            <ul className="mt-4 space-y-2.5 text-sm text-gray-600">
-              {[
-                'Día 25 — aviso a quien tiene el informe en borrador',
-                'Día 28 — recordatorio urgente',
-                'Día 2 — aviso de plazo vencido',
-                'Cuentas aprobadas sin radicar hace más de 5 días → aviso a secretaría',
-                'Contratos que vencen en 60 y 30 días → aviso a supervisor y administración',
-              ].map(t => (
-                <li key={t} className="flex gap-3">
-                  <span className="mt-2 w-1 h-1 rounded-full bg-gray-400 shrink-0" />
-                  <span>{t}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Revelar>
-
-        <Revelar retraso={300}>
-          <div className="mt-6 rounded-2xl border border-gray-100 p-6 sm:p-8">
-            <h3 className="font-semibold text-gray-900">Listo para SECOP II</h3>
-            <p className="mt-2 text-gray-600 leading-relaxed">
-              Cada periodo genera su paquete descargable —informe, cuenta de cobro
-              y planilla, con los nombres correctos— listo para cargar. Y la
-              descarga masiva del mes completo para el archivo.
-            </p>
-          </div>
-        </Revelar>
       </Seccion>
 
       {/* ── Cumplimiento ──────────────────────────────────────────── */}
@@ -503,32 +511,6 @@ export default async function PropuestaElBagre() {
         </div>
       </Seccion>
 
-      {/* ── El riesgo ─────────────────────────────────────────────── */}
-      <Seccion oscura>
-        <Revelar>
-          <Etiqueta oscura>Lo que de verdad está en juego</Etiqueta>
-          <Titulo oscura>Un expediente incompleto es un hallazgo</Titulo>
-        </Revelar>
-
-        <Revelar retraso={150}>
-          <p className="mt-8 text-lg text-white/80 leading-relaxed">
-            Un proceso de responsabilidad fiscal puede terminar en que el
-            funcionario reponga el valor del contrato{' '}
-            <span className="text-white font-semibold">con su propio patrimonio</span>,
-            más sanción disciplinaria e inhabilidad.
-          </p>
-        </Revelar>
-
-        <Revelar retraso={300}>
-          <div className="mt-10 border-l-2 pl-6" style={{ borderColor: VERDE }}>
-            <p className="text-xl sm:text-2xl font-semibold leading-snug">
-              Un solo contrato de treinta millones sin soporte completo expone al
-              supervisor a más de lo que cuesta la plataforma en un año.
-            </p>
-          </div>
-        </Revelar>
-      </Seccion>
-
       {/* ── Inversión ─────────────────────────────────────────────── */}
       <Seccion>
         <Revelar>
@@ -537,32 +519,25 @@ export default async function PropuestaElBagre() {
 
         <Revelar retraso={100}>
           <div className="mt-4 text-center py-10">
-            <p className="text-6xl sm:text-7xl font-bold tracking-tight text-gray-900">
-              $23.800
+            <p className="text-5xl sm:text-6xl font-bold tracking-tight text-gray-900">
+              $4.990.000
             </p>
-            <p className="mt-3 text-lg text-gray-500">por contratista, al mes</p>
+            <p className="mt-3 text-lg text-gray-500">mensuales</p>
+            <p className="mt-1 text-sm text-gray-400">Implementación a convenir</p>
           </div>
         </Revelar>
 
-        <Revelar retraso={220}>
-          <p className="text-center text-lg text-gray-700 leading-relaxed max-w-xl mx-auto">
-            Menos de lo que cuesta <span className="font-semibold">una hora</span> de
-            un profesional. Con sus cinco documentos generados, verificables y
-            archivados.
-          </p>
-        </Revelar>
-
-        <Revelar retraso={340}>
-          <div className="mt-12 rounded-2xl border border-gray-100 p-6">
-            <p className="text-sm font-semibold text-gray-900">Incluye</p>
+        <Revelar retraso={240}>
+          <div className="rounded-2xl border border-gray-100 p-6">
+            <p className="text-sm font-semibold text-gray-900">La mensualidad incluye</p>
             <div className="mt-3 grid sm:grid-cols-2 gap-2 text-sm text-gray-600">
               {[
-                'Implementación y puesta en marcha',
-                'Migración de su historial',
-                'Capacitación a todos los roles',
+                'La plataforma completa, sin límite de usuarios',
+                'Todas las secretarías y dependencias',
                 'Soporte durante toda la vigencia',
-                'Actualizaciones sin costo',
-                'Alojamiento y respaldo',
+                'Actualizaciones sin costo adicional',
+                'Alojamiento y respaldo de la información',
+                'Verificación pública de documentos',
               ].map(t => (
                 <div key={t} className="flex gap-2.5">
                   <span className="mt-1.5 w-1 h-1 rounded-full bg-gray-400 shrink-0" />
@@ -572,9 +547,17 @@ export default async function PropuestaElBagre() {
             </div>
           </div>
         </Revelar>
+
+        {/* La cuenta la ata quien tenga que atarla. Sin cifras y sin comparar. */}
+        <Revelar retraso={360}>
+          <p className="mt-8 text-xs text-gray-400 leading-relaxed">
+            Para dimensionar: un proceso de responsabilidad fiscal se resuelve con
+            el patrimonio del funcionario, no con el presupuesto del municipio.
+          </p>
+        </Revelar>
       </Seccion>
 
-      {/* ── Cómo empezamos ────────────────────────────────────────── */}
+      {/* ── Puesta en marcha ──────────────────────────────────────── */}
       <Seccion>
         <Revelar>
           <Etiqueta>Puesta en marcha</Etiqueta>
@@ -606,8 +589,43 @@ export default async function PropuestaElBagre() {
           <div className="mt-12 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
             <p className="font-semibold text-gray-900">Podemos empezar con una sola secretaría</p>
             <p className="mt-2 text-gray-600 leading-relaxed">
-              Sin comprometer todo el municipio desde el primer día. Cuando el
-              primer ciclo cierre bien, se extiende al resto.
+              Sin comprometer todo el municipio desde el primer día. Cuando el primer
+              ciclo cierre bien, se extiende al resto.
+            </p>
+          </div>
+        </Revelar>
+      </Seccion>
+
+      {/* ── Las cifras, al final ──────────────────────────────────── */}
+      <Seccion oscura>
+        <Revelar>
+          <Etiqueta oscura>Esto ya opera</Etiqueta>
+          <Titulo oscura>No es una promesa. Son cifras.</Titulo>
+        </Revelar>
+
+        <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 gap-px rounded-2xl overflow-hidden">
+          {CIFRAS.map(([n, t], i) => (
+            <Revelar key={t} retraso={i * 80}>
+              <div className="bg-white/[0.06] p-6 h-full">
+                <p className="text-3xl sm:text-4xl font-bold tracking-tight">{n}</p>
+                <p className="mt-1 text-sm text-white/50 leading-snug">{t}</p>
+              </div>
+            </Revelar>
+          ))}
+        </div>
+
+        <Revelar retraso={520}>
+          <p className="mt-6 text-xs text-white/30">
+            Operación real del municipio de Fredonia, Antioquia.
+          </p>
+        </Revelar>
+
+        <Revelar retraso={620}>
+          <div className="mt-10 rounded-2xl bg-white/[0.06] p-6">
+            <p className="text-white/70 leading-relaxed">
+              <span className="font-semibold text-white">Su historial no se queda afuera.</span>{' '}
+              Esos 184 periodos históricos son información anterior que entró al
+              sistema. No se empieza de cero.
             </p>
           </div>
         </Revelar>
@@ -631,6 +649,7 @@ export default async function PropuestaElBagre() {
               className="mt-10 inline-flex items-center gap-3 rounded-xl bg-white px-7 py-4 font-semibold transition-transform hover:scale-[1.02]"
               style={{ color: MARCA }}
             >
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: VERDE }} />
               Escribir por WhatsApp
             </a>
           </Revelar>
