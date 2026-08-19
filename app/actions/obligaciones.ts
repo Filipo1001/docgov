@@ -16,6 +16,7 @@ import { invalidarCachePDF } from '@/lib/pdf/cache'
 import { ESTADOS_EDITABLES } from '@/lib/constants'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
+import { normalizarObligacion } from '@/lib/obligaciones-texto'
 
 /**
  * Invalida solo los PDF de periodos que todavía no se han presentado.
@@ -86,7 +87,10 @@ export async function crearObligacion(params: {
     const adminId = await requireAdminId()
     if (!adminId) return { error: 'No autorizado' }
 
-    const descripcion = params.descripcion.trim()
+    // Se normaliza al guardar, no solo se recorta: el texto llega pegado del
+    // pliego y arrastra su numeración, sus tabuladores y sus saltos de línea.
+    // Ver lib/obligaciones-texto.ts.
+    const descripcion = normalizarObligacion(params.descripcion)
     if (!descripcion) return { error: 'La descripción no puede estar vacía' }
     if (descripcion.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
 
@@ -174,7 +178,10 @@ export async function actualizarObligacion(params: {
     const adminId = await requireAdminId()
     if (!adminId) return { error: 'No autorizado' }
 
-    const descripcion = params.descripcion.trim()
+    // Se normaliza al guardar, no solo se recorta: el texto llega pegado del
+    // pliego y arrastra su numeración, sus tabuladores y sus saltos de línea.
+    // Ver lib/obligaciones-texto.ts.
+    const descripcion = normalizarObligacion(params.descripcion)
     if (!descripcion) return { error: 'La descripción no puede estar vacía' }
     if (descripcion.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
 
