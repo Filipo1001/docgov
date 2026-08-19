@@ -1,9 +1,9 @@
 /**
- * lib/obligaciones-texto.ts — Limpieza del texto de una obligación específica.
+ * lib/texto-contractual.ts — Limpieza del texto que se pega desde el pliego.
  *
- * Las obligaciones se cargan copiando y pegando desde el pliego, que casi
- * siempre es un Word o un PDF. Con el texto se arrastra el formato del
- * original, y eso produjo tres defectos reales en producción:
+ * Obligaciones y actividades se cargan copiando y pegando desde un Word o un
+ * PDF. Con el texto se arrastra el formato del original, y eso produjo defectos
+ * reales en producción:
  *
  * ── La numeración duplicada ──────────────────────────────────────────────
  *
@@ -21,6 +21,17 @@
  * Un PDF con el texto justificado se pega con saltos duros al final de cada
  * renglón visual. Al reflujarse en otro ancho, la frase queda partida por
  * donde no toca.
+ *
+ * ── Por qué son dos funciones y no una ───────────────────────────────────
+ *
+ * Se diferencian en una sola cosa, y es deliberada: qué hacen con los saltos
+ * de línea.
+ *
+ * Una obligación es una cláusula, una sola frase; un salto ahí siempre sobra y
+ * `normalizarObligacion` los aplana. Una actividad es el relato del mes, y 246
+ * de las que hay en producción tienen varios párrafos puestos a propósito, así
+ * que `normalizarActividad` los conserva. Aplanarlos destruiría formato que el
+ * contratista escribió queriendo, y ese texto va impreso en el informe.
  *
  * ── La guarda del número ─────────────────────────────────────────────────
  *
@@ -46,5 +57,37 @@ export function normalizarObligacion(texto: string): string {
     .replace(/[\t\r\n]+/g, ' ')   // tabuladores y saltos duros → un espacio
     .replace(NUMERACION_INICIAL, '')
     .replace(/\s{2,}/g, ' ')      // espacios dobles del texto justificado
+    .trim()
+}
+
+
+/** Viñeta de lista al principio: `-`, `•`, `*`… */
+const VINETA_INICIAL = /^[^\S\n]*[-•*–—·][^\S\n]+/
+
+/** Cuenta las viñetas del texto, para distinguir una suelta de una lista. */
+function vinetas(texto: string): number {
+  return (texto.match(/[•·]/g) ?? []).length
+}
+
+/**
+ * Deja una actividad como debe guardarse, CONSERVANDO sus saltos de línea.
+ *
+ * El informe de actividades imprime `actIndex + 1` justo antes de la
+ * descripción, así que una actividad que ya traía su propio «4.» salía
+ * numerada dos veces en el documento que se radica.
+ *
+ * La viñeta inicial solo se quita si es la única del texto. Cuando hay más, la
+ * actividad es una lista con viñeta en cada renglón y retirarle únicamente la
+ * primera la dejaría descuadrada.
+ *
+ * Los espacios se colapsan con una clase que excluye el salto de línea: `\s`
+ * lo incluiría y aplanaría los párrafos, que es justo lo que aquí no se quiere.
+ */
+export function normalizarActividad(texto: string): string {
+  const sinTabs = texto.replace(/\r/g, '').replace(/\t/g, ' ')
+  const sinVineta = vinetas(sinTabs) <= 1 ? sinTabs.replace(VINETA_INICIAL, '') : sinTabs
+  return sinVineta
+    .replace(NUMERACION_INICIAL, '')
+    .replace(/[^\S\n]{2,}/g, ' ')
     .trim()
 }

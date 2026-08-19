@@ -15,6 +15,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { ESTADOS_EDITABLES } from '@/lib/constants'
 import type { ActionResult } from '@/lib/types'
+import { normalizarActividad } from '@/lib/texto-contractual'
 
 // ─── actualizarActividad ────────────────────────────────────────────────────
 // Old: getUser → usuarios → periodos → contratos → actividades.verify → update (6 sequential)
@@ -27,7 +28,10 @@ export async function actualizarActividad(
   cantidad: number,
 ): Promise<ActionResult> {
   try {
-    const trimmed = descripcion.trim()
+    // Se normaliza, no solo se recorta: el texto llega pegado del pliego con
+    // su numeración y sus tabuladores, y el informe añade la suya encima.
+    // Los saltos de línea SÍ se conservan. Ver lib/texto-contractual.ts.
+    const trimmed = normalizarActividad(descripcion)
     if (!trimmed) return { error: 'La descripción no puede estar vacía' }
     if (trimmed.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
     if (cantidad < 1 || !Number.isInteger(cantidad)) {
@@ -98,7 +102,10 @@ export async function crearActividad(params: {
   orden: number
 }): Promise<ActionResult> {
   try {
-    const trimmed = params.descripcion.trim()
+    // Se normaliza, no solo se recorta: el texto llega pegado del pliego con
+    // su numeración y sus tabuladores, y el informe añade la suya encima.
+    // Los saltos de línea SÍ se conservan. Ver lib/texto-contractual.ts.
+    const trimmed = normalizarActividad(params.descripcion)
     if (!trimmed) return { error: 'La descripción no puede estar vacía' }
     if (trimmed.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
     if (params.cantidad < 1 || !Number.isInteger(params.cantidad)) {

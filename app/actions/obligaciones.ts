@@ -16,7 +16,7 @@ import { invalidarCachePDF } from '@/lib/pdf/cache'
 import { ESTADOS_EDITABLES } from '@/lib/constants'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
-import { normalizarObligacion } from '@/lib/obligaciones-texto'
+import { normalizarObligacion } from '@/lib/texto-contractual'
 
 /**
  * Invalida solo los PDF de periodos que todavía no se han presentado.
