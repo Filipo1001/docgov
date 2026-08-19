@@ -8,6 +8,17 @@ import { listarDocumentosContrato } from '@/app/actions/documentos-contrato'
  * Server component — fetches all contract data with server-side auth
  * so ContratoDetalleClient starts with real data on browser refresh.
  */
+
+/**
+ * Las Server Actions de esta ruta heredan este tope, y una de ellas lo
+ * necesita: `registrarDocumento` descarga el PDF recién subido y lo abre con
+ * pdf-lib para comprobar que es legítimo. Con los «Documentos adicionales»
+ * admitiendo 45 MB y 180 páginas, eso es descargar y parsear bastante más que
+ * antes, y el tope por defecto se quedaba corto. El archivo sube directo a
+ * Storage con URL prefirmada, así que esto no afecta al tiempo de la subida:
+ * solo al de la verificación posterior.
+ */
+export const maxDuration = 60
 export default async function ContratoDetallePage({
   params,
 }: {
