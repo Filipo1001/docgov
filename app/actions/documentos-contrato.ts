@@ -17,7 +17,11 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { firmarUrl } from '@/lib/storage-firmado'
 import { esGestorContratos } from '@/lib/constants'
-import { validarPDF, ADJUNTO_MAX_BYTES } from '@/lib/pdf-validacion'
+import {
+  validarPDF, type LimitesPDF,
+  ADJUNTO_MAX_BYTES, ADJUNTO_MAX_PAGINAS,
+  ADICIONAL_MAX_BYTES, ADICIONAL_MAX_PAGINAS,
+} from '@/lib/pdf-validacion'
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult, Rol } from '@/lib/types'
@@ -27,6 +31,18 @@ import {
 } from '@/lib/documentos-contrato'
 
 const BUCKET = 'adjuntos'
+
+/**
+ * Topes según el tipo. Los «Documentos adicionales» —el tipo `otro`— admiten
+ * el triple, porque ahí van los otrosíes y los conceptos jurídicos, que son
+ * los documentos largos del expediente. Los demás tipos son piezas cortas y
+ * conocidas: un RUT o una certificación bancaria no llegan a 15 MB.
+ */
+function limitesPara(tipo: TipoDocumento): LimitesPDF {
+  return tipo === 'otro'
+    ? { maxBytes: ADICIONAL_MAX_BYTES, maxPaginas: ADICIONAL_MAX_PAGINAS }
+    : { maxBytes: ADJUNTO_MAX_BYTES, maxPaginas: ADJUNTO_MAX_PAGINAS }
+}
 
 /** Gestiona el expediente quien gestiona el contrato. */
 async function requireGestor(): Promise<{ userId: string; municipioId: string } | null> {
@@ -50,8 +66,9 @@ export async function prepararUploadDocumento(
   try {
     if (!TIPOS_DOCUMENTO_IDS.has(tipo)) return { error: 'Tipo de documento no válido.' }
     if (!fileName.toLowerCase().endsWith('.pdf')) return { error: 'Solo se permiten archivos PDF.' }
-    if (fileSize > ADJUNTO_MAX_BYTES) {
-      return { error: `El archivo supera el máximo de ${Math.round(ADJUNTO_MAX_BYTES / 1024 / 1024)} MB.` }
+    const limites = limitesPara(tipo)
+    if (fileSize > limites.maxBytes) {
+      return { error: `El archivo supera el máximo de ${Math.round(limites.maxBytes / 1024 / 1024)} MB.` }
     }
 
     const gestor = await requireGestor()
@@ -99,7 +116,7 @@ export async function registrarDocumento(
     if (dlError || !blob) return { error: 'No se encontró el archivo subido. Intenta de nuevo.' }
 
     const buf = Buffer.from(await blob.arrayBuffer())
-    const validacion = await validarPDF(buf)
+    const validacion = await validarPDF(buf, limitesPara(tipo))
     if (!validacion.ok) {
       await admin.storage.from(BUCKET).remove([storagePath]).catch(() => {})
       return { error: validacion.error ?? 'PDF inválido.' }
