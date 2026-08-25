@@ -13,6 +13,7 @@ import {
 import { enviarCorreoMasivoAsesor, type FiltroCorreo } from '@/app/actions/correos'
 import { MESES, getMesActual } from '@/lib/constants'
 import PageHeader from '@/components/ui/PageHeader'
+import ErrorState from '@/components/ui/ErrorState'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -385,7 +386,7 @@ export default function ReviewerHome({
   const { mes, anio } = getMesActual()
 
   // staleTime: 5 min — navigating back shows cached data instantly.
-  const { data: dashData, isLoading } = useQuery({
+  const { data: dashData, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-reviewer', dependenciaId, mes, anio],
     queryFn:  async () => {
       const [stats, pendientes] = await Promise.all([
@@ -402,6 +403,17 @@ export default function ReviewerHome({
   const stats      = dashData?.stats      ?? null
   const pendientes = dashData?.pendientes ?? []
 
+  // Mismo arreglo que en el panel de supervisión: sin esta compuerta, un fallo
+  // de red quedaba indistinguible de «todavía cargando».
+  if (isError && !dashData) {
+    return (
+      <ErrorState
+        mensaje="No pudimos cargar el panel. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
   if (isLoading) return <Skeleton />
 
   const fechaHoy = new Date().toLocaleDateString('es-CO', {

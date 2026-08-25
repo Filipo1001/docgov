@@ -15,6 +15,7 @@ import { getMesActual, MESES } from '@/lib/constants'
 import { capitalizarNombre } from '@/lib/format'
 import Icono from '@/components/ui/Icono'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
+import ErrorState from '@/components/ui/ErrorState'
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -328,7 +329,7 @@ export default function SupervisorHome({
   const weekday = now.toLocaleDateString('es-CO', { weekday: 'long' })
 
   // staleTime: 5 min — navigating back shows cached data instantly.
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dashboard-supervisor', userId],
     queryFn:  () => getSupervisorDashboard(userId),
     staleTime: 5 * 60_000,
@@ -380,8 +381,20 @@ export default function SupervisorHome({
     }
   }
 
-  if (isLoading) return <Skeleton />
-  if (!data) return null
+  // Un fallo se dibujaba como esqueleto y, si la consulta terminaba sin datos,
+  // como pantalla en blanco: `return null` no le dice nada a quien está
+  // mirando. El error ya venía detectado por la consulta; solo faltaba
+  // mostrarlo y ofrecer el reintento.
+  if (isError && !data) {
+    return (
+      <ErrorState
+        mensaje="No pudimos cargar tu panel de supervisión. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
+  if (isLoading || !data) return <Skeleton />
 
   const pendientesVisibles = verTodos ? data.pendientes : data.pendientes.slice(0, 3)
   const consistentes = data.desempeno.filter(d => d.consistente)

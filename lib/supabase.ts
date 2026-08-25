@@ -32,15 +32,41 @@ let browserClient: ReturnType<typeof createBrowserClient> | undefined
  */
 const AUTH_TIMEOUT_MS = 15_000
 
+/**
+ * Las LECTURAS de datos también necesitan un tope, por el mismo congelamiento.
+ *
+ * El dashboard pide sus datos con este cliente. Cuando uno de esos fetch queda
+ * suspendido —pestaña que volvió de segundo plano, red que se cayó a mitad—
+ * la promesa no resuelve ni rechaza nunca, TanStack Query se queda en
+ * `isLoading` para siempre y la pantalla muestra el esqueleto de forma
+ * indefinida. Sin error, sin reintento, sin nada que el usuario pueda hacer
+ * salvo recargar: es el «se demora una eternidad» que se reportó.
+ *
+ * 20 s es holgado para cualquier consulta legítima —las del dashboard tardan
+ * decenas de milisegundos— y convierte el cuelgue infinito en un error normal,
+ * que el reintento de TanStack y la pantalla de error sí saben tratar.
+ *
+ * SOLO lecturas. Las escrituras no se abortan: un POST cortado a mitad deja al
+ * usuario sin saber si su informe se envió, que es peor que esperar. Y Storage
+ * queda fuera por completo — una subida lenta en red rural es legítima.
+ */
+const LECTURA_TIMEOUT_MS = 20_000
+
 function fetchConTimeoutAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url =
     typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-  if (!url.includes('/auth/v1/')) return fetch(input, init)
+
+  const esAuth = url.includes('/auth/v1/')
+  const metodo = (init?.method ?? 'GET').toUpperCase()
+  const esLecturaDeDatos = url.includes('/rest/v1/') && (metodo === 'GET' || metodo === 'HEAD')
+
+  if (!esAuth && !esLecturaDeDatos) return fetch(input, init)
 
   const controller = new AbortController()
   const timer = setTimeout(
-    () => controller.abort(new DOMException('auth fetch timeout', 'TimeoutError')),
-    AUTH_TIMEOUT_MS,
+    () => controller.abort(new DOMException(
+      esAuth ? 'auth fetch timeout' : 'lectura de datos sin respuesta', 'TimeoutError')),
+    esAuth ? AUTH_TIMEOUT_MS : LECTURA_TIMEOUT_MS,
   )
   // Encadenar una señal externa si venía en el init original
   if (init?.signal) {

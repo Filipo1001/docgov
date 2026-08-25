@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { ORIGEN_APP, HOSTS_REDIRIGIDOS, HOSTS_COMERCIALES, esRutaComercial } from '@/lib/dominio'
 import { SITIO } from '@/lib/seo'
+import { necesitaRenovacion } from '@/lib/jwt-cookie'
 
 /**
  * Rutas que nunca deben aparecer en un buscador.
@@ -116,15 +117,33 @@ export async function middleware(request: NextRequest) {
     return conDirectivas(NextResponse.next({ request }))
   }
 
+  // ── Atajo: no renovar lo que todavía no vence ────────────────
+  //
+  // Aquí vivía una creencia equivocada, y salía cara: el comentario anterior
+  // decía que «para un token válido el JWT se valida localmente (sin llamada
+  // de red); solo los tokens vencidos llegan al servidor de auth». No es así.
+  // `getUser()` SIEMPRE va a la red — es justo lo que lo distingue de
+  // `getSession()`—, de modo que este middleware disparaba una petición a
+  // /auth/v1/user en cada navegación, cada Server Action y cada latido.
+  //
+  // Medido en producción: 28.956 llamadas a /auth/v1/user en 24 horas para
+  // ~130 usuarios, MÁS que consultas de datos (ratio 1,3 a 1). A 350-540 ms
+  // cada una, /dashboard acumulaba varios viajes en serie antes de pintar nada.
+  //
+  // El trabajo real de este bloque es renovar la cookie antes de que venza, no
+  // validar: de validar se encargan `requireRole` y `getAuthContext`, que
+  // verifican la firma de verdad. Si al token le quedan más de diez minutos no
+  // hay nada que renovar, así que se sigue de largo. Si queda poco —o si no se
+  // pudo leer el `exp`— se hace la llamada como siempre.
+  if (!necesitaRenovacion(request.cookies.getAll())) {
+    return conDirectivas(NextResponse.next({ request }))
+  }
+
   // ── Supabase session refresh ──────────────────────────────────
   // The server-side Supabase client (in Server Components and Server Actions)
   // cannot refresh expired access tokens on its own because Server Components
   // cannot set cookies on the response.  Without this middleware step, tokens
   // expire after 1 h and the browser client loses its session.
-  //
-  // For a valid non-expired token the JWT is validated locally (no network
-  // call); only expired tokens hit the auth server.  We already confirmed a
-  // session cookie exists above, so this call is always meaningful.
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
