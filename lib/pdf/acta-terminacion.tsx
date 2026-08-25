@@ -98,6 +98,19 @@ function listaNumeros(nums: number[]): string {
   return `${etiquetas.slice(0, -1).join(', ')} y ${etiquetas[etiquetas.length - 1]}`
 }
 
+/**
+ * Quita el punto final del objeto contractual.
+ *
+ * El objeto se transcribe del contrato y casi siempre viene con punto. Las
+ * frases que lo insertan le añaden su propia puntuación, así que salía
+ * «... DEL MUNICIPIO DE FREDONIA.. DIECISIETE MILLONES ...» y «... DE
+ * FREDONIA., por cuanto el contratista ...». En un acta que se radica, ese
+ * doble signo se lee como un error de transcripción.
+ */
+function sinPuntoFinal(texto: string): string {
+  return texto.replace(/[.\s]+$/, '')
+}
+
 const COP = new Intl.NumberFormat('es-CO', {
   style: 'currency', currency: 'COP', maximumFractionDigits: 0,
 })
@@ -109,16 +122,18 @@ const s = StyleSheet.create({
   // en absoluto — deja de pintar su texto y estira el bloque a media página.
   // El interlineado se aplica en los estilos que lo necesitan.
   //
-  // Espaciado alineado con acta-pago.tsx (paddingTop 36, lineHeight de
-  // prosa 1.5-1.7): esta acta usaba valores más apretados que sus hermanas
-  // —paddingTop 30, lineHeight 1.3, padding de celda 5— y se notaba.
+  // Espaciado alineado con acta-pago.tsx, pero un punto más denso que él:
+  // aquel es un documento de una página y aquí el aire se acumulaba hasta
+  // producir cuatro, dos de ellas casi vacías. El pie ocupa ~44 pt reales
+  // (bottom 14 + tres líneas de 7 pt), así que 56 de paddingBottom le dejan
+  // holgura sin regalar media página.
   page: {
-    paddingTop: 36, paddingBottom: 64, paddingHorizontal: 46,
+    paddingTop: 30, paddingBottom: 56, paddingHorizontal: 46,
     fontSize: 9, fontFamily: 'Helvetica', color: '#111827',
   },
 
   // ── Cuadros ──
-  caja: { borderWidth: 0.8, borderColor: BORDE, marginBottom: 14 },
+  caja: { borderWidth: 0.8, borderColor: BORDE, marginBottom: 8 },
   fila: { flexDirection: 'row', borderBottomWidth: 0.8, borderBottomColor: BORDE },
   filaUlt: { flexDirection: 'row' },
   barra: {
@@ -130,8 +145,8 @@ const s = StyleSheet.create({
     borderRightWidth: 0.8, borderRightColor: BORDE, backgroundColor: '#F3F4F6',
   },
   valor: { flex: 1, padding: 6 },
-  celdaAncha: { padding: 6, lineHeight: 1.4 },
-  cuerpoCaja: { padding: 12 },
+  celdaAncha: { padding: 6, lineHeight: 1.3 },
+  cuerpoCaja: { padding: 9 },
 
   // Casillas del tipo de vínculo
   tipos: { flexDirection: 'row', padding: 6, gap: 24 },
@@ -141,13 +156,19 @@ const s = StyleSheet.create({
     fontSize: 8, fontFamily: 'Helvetica-Bold', textAlign: 'center', lineHeight: 1.25,
   },
 
-  p: { textAlign: 'justify', marginBottom: 10, lineHeight: 1.5 },
+  // 1.35 y no 1.5: en párrafos justificados y largos —el objeto contractual
+  // ocupa seis renglones él solo— cada décima de interlineado se multiplica
+  // por todo el documento. A 1.5 el acta se leía despegada y sumaba páginas.
+  p: { textAlign: 'justify', marginBottom: 6, lineHeight: 1.3 },
   b: { fontFamily: 'Helvetica-Bold' },
 
   // ── Firmas ──
-  firmas: { marginTop: 24 },
-  firmaBloque: { width: 300, marginBottom: 20 },
-  firmaEspacio: { height: 46, justifyContent: 'flex-end' },
+  // El bloque va con `wrap={false}` —una firma partida en dos páginas no es
+  // una firma—, así que su alto decide si cabe tras la constancia o se va
+  // solo a la última página. Con 24/20/46 medía ~250 pt y nunca cabía.
+  firmas: { marginTop: 14 },
+  firmaBloque: { width: 300, marginBottom: 12 },
+  firmaEspacio: { height: 38, justifyContent: 'flex-end' },
   firmaLinea: { borderTopWidth: 0.8, borderTopColor: BORDE, marginBottom: 3 },
   firmaNombre: { fontFamily: 'Helvetica-Bold', fontSize: 8.5 },
   firmaCargo: { fontSize: 8, color: '#374151' },
@@ -189,20 +210,29 @@ function Fila({ etiqueta, children, ultima }: { etiqueta: string; children: Reac
  * dos encabezados del documento (GRADO DE RESPONSABILIDAD, INFORMACIÓN
  * GENERAL DEL CONTRATO), que sí usan el centrado normal.
  *
- * `nuevaPagina` (usado en ACUERDAN): dos intentos previos de evitar que el
- * título quedara huérfano no sirvieron. `wrap={false}` en todo el cuadro sí
- * evitaba el huérfano, pero empujaba el cuadro entero —y en cascada, las
- * firmas que le siguen— dejando páginas casi vacías. `minPresenceAhead` en
- * el título tampoco: ese prop mide contenido dentro del propio nodo de
- * texto, no en el cuerpo del cuadro, que es un `View` hermano. Un salto de
- * página explícito antes de ACUERDAN es además fiel al formato en papel:
- * con el espaciado ya ajustado, el cuadro 1 + CONSIDERANDO llenan la
- * primera página por sí solos en la práctica, así que el salto no roba
- * espacio real — solo lo hace predecible en vez de accidental.
+ * ── Cómo se evita que el título quede huérfano ───────────────────────────
+ *
+ * Hubo tres intentos antes de este. `wrap={false}` en todo el cuadro evitaba
+ * el huérfano pero empujaba el cuadro entero —y en cascada las firmas—
+ * dejando páginas casi vacías. `minPresenceAhead` en el título tampoco: ese
+ * prop mide dentro del propio nodo de texto, y el cuerpo es un `View`
+ * hermano. El tercero fue un salto de página explícito antes de ACUERDAN,
+ * justificado en que el cuadro 1 y CONSIDERANDO llenarían la primera página
+ * por sí solos.
+ *
+ * Esa premisa resultó falsa. En el contrato 136 CONSIDERANDO se pasa a la
+ * segunda página por tres renglones, y el salto forzado dejaba el 70 % de
+ * esa página en blanco: el acta salía en cuatro páginas, dos casi vacías.
+ *
+ * Ahora `minPresenceAhead` va en el `View` contenedor, que es donde sí mide
+ * el espacio disponible por delante. La diferencia con `wrap={false}` es
+ * importante: aquel prohíbe partir el cuadro nunca; este solo exige que
+ * quepan el encabezado y un par de renglones antes de empezarlo, y deja que
+ * el cuerpo siga fluyendo a la página siguiente si hace falta.
  */
-function CajaTitulada({ titulo, children, nuevaPagina }: { titulo: string; children: React.ReactNode; nuevaPagina?: boolean }) {
+function CajaTitulada({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <View style={s.caja} break={nuevaPagina}>
+    <View style={s.caja} minPresenceAhead={64}>
       <Text style={s.barra}>{titulo}</Text>
       <View style={s.cuerpoCaja}>{children}</View>
     </View>
@@ -214,7 +244,7 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
 
   const nombreContratista = contratista.nombre_completo.toUpperCase()
   const cedula = formatCedula(contratista.cedula)
-  const objeto = contrato.objeto.toUpperCase()
+  const objeto = sinPuntoFinal(contrato.objeto.toUpperCase())
   const numeroContrato = `${contrato.numero}-${contrato.anio}`
   const valorTexto = contrato.valor_letras_total
     ? `${contrato.valor_letras_total.toUpperCase()} (${COP.format(contrato.valor_total)})`
@@ -239,7 +269,7 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
       <Page size="A4" style={s.page}>
 
         {/* Membrete institucional: lleva el bloque FORMATO / código / versión. */}
-        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 14 }} fixed />
+        <Image src={HEADER_PATH} style={{ width: '100%', marginBottom: 10 }} fixed />
 
         {/* ── Cuadro 1: responsabilidad + información general ──────
             En el original es una sola tabla, no dos. */}
@@ -266,7 +296,7 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
 
           <View style={s.fila}>
             <Text style={[s.celdaAncha, { textAlign: 'justify' }]}>
-              <Text style={s.b}>OBJETO DEL CONTRATO: </Text>{objeto}
+              <Text style={s.b}>OBJETO DEL CONTRATO: </Text>{objeto}.
             </Text>
           </View>
 
@@ -309,7 +339,7 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
         </CajaTitulada>
 
         {/* ── Cuadro 3: ACUERDAN ──────────────────────────────────── */}
-        <CajaTitulada titulo="ACUERDAN:" nuevaPagina>
+        <CajaTitulada titulo="ACUERDAN:">
           <Text style={s.p}>
             <Text style={s.b}>PRIMERO:</Text> Fijar el {fechaLarga(fechaTerminacion)} como fecha de Terminación
             del contrato No {numeroContrato} cuyo objeto: {objeto}, por cuanto el contratista acreditó el
