@@ -212,29 +212,47 @@ function Fila({ etiqueta, children, ultima }: { etiqueta: string; children: Reac
  *
  * ── Cómo se evita que el título quede huérfano ───────────────────────────
  *
- * Hubo tres intentos antes de este. `wrap={false}` en todo el cuadro evitaba
- * el huérfano pero empujaba el cuadro entero —y en cascada las firmas—
- * dejando páginas casi vacías. `minPresenceAhead` en el título tampoco: ese
- * prop mide dentro del propio nodo de texto, y el cuerpo es un `View`
- * hermano. El tercero fue un salto de página explícito antes de ACUERDAN,
- * justificado en que el cuadro 1 y CONSIDERANDO llenarían la primera página
- * por sí solos.
+ * Hubo cuatro intentos antes de este, y conviene dejarlos escritos porque
+ * todos parecen razonables:
  *
- * Esa premisa resultó falsa. En el contrato 136 CONSIDERANDO se pasa a la
- * segunda página por tres renglones, y el salto forzado dejaba el 70 % de
- * esa página en blanco: el acta salía en cuatro páginas, dos casi vacías.
+ *   1. `wrap={false}` en todo el cuadro. Evita el huérfano, pero prohíbe
+ *      partirlo nunca: empuja el cuadro entero —y en cascada las firmas—
+ *      dejando páginas casi vacías.
+ *   2. `minPresenceAhead` en el `Text` del título. No hace nada; se volvió a
+ *      medir para comprobarlo y el huérfano seguía apareciendo.
+ *   3. Un salto de página explícito antes de ACUERDAN, justificado en que el
+ *      cuadro 1 y CONSIDERANDO llenarían la primera página por sí solos. La
+ *      premisa era falsa: en el contrato 136 CONSIDERANDO se pasa por tres
+ *      renglones, y el salto dejaba el 70 % de esa página en blanco.
+ *   4. `minPresenceAhead` en el `View` del cuadro. Ese prop exige el espacio
+ *      DESPUÉS del elemento, así que en un cuadro alto equivale al caso 1: el
+ *      contrato 023 pasaba a tres páginas con la primera al 57 %.
  *
- * Ahora `minPresenceAhead` va en el `View` contenedor, que es donde sí mide
- * el espacio disponible por delante. La diferencia con `wrap={false}` es
- * importante: aquel prohíbe partir el cuadro nunca; este solo exige que
- * quepan el encabezado y un par de renglones antes de empezarlo, y deja que
- * el cuerpo siga fluyendo a la página siguiente si hace falta.
+ * Lo que sí funciona es más simple: el título viaja junto a su PRIMER párrafo
+ * dentro de un bloque indivisible, y el resto del cuerpo fluye libremente. Un
+ * encabezado seguido de un párrafo ya no es un huérfano, y como lo indivisible
+ * mide dos o tres renglones en vez del cuadro completo, nunca empuja lo
+ * suficiente como para vaciar una página.
  */
 function CajaTitulada({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  const partes = React.Children.toArray(children)
+  const primero = partes[0]
+  const resto = partes.slice(1)
+
+  // El relleno del cuerpo se reparte entre los dos bloques para que el corte
+  // sea invisible: arriba lleva el superior, abajo el inferior, y el hueco
+  // entre párrafos lo pone el `marginBottom` de cada uno.
+  const arriba = { paddingHorizontal: 9, paddingTop: 9, ...(resto.length ? {} : { paddingBottom: 9 }) }
+
   return (
-    <View style={s.caja} minPresenceAhead={64}>
-      <Text style={s.barra}>{titulo}</Text>
-      <View style={s.cuerpoCaja}>{children}</View>
+    <View style={s.caja}>
+      <View wrap={false}>
+        <Text style={s.barra}>{titulo}</Text>
+        <View style={arriba}>{primero}</View>
+      </View>
+      {resto.length > 0 && (
+        <View style={{ paddingHorizontal: 9, paddingBottom: 9 }}>{resto}</View>
+      )}
     </View>
   )
 }
