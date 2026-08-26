@@ -110,3 +110,36 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
   .revelar-izq, .revelar-zoom { opacity: 1; transform: none; transition: none; }
   .latido { animation: none; }
 }
+
+/* ── El mismo revelado, en teléfono ───────────────────────────────────────
+   Más recorrido y menos duración. Parece contradictorio pero no lo es: en un
+   móvil el dedo mueve la página a 1.000-1.500 px/s, así que una transición de
+   700 ms no alcanza a terminar antes de que el bloque salga por arriba —el ojo
+   solo capta un parpadeo—. A 460 ms sí termina a la vista, y el desplazamiento
+   mayor la hace más evidente en ese tiempo más corto.
+
+   El corte es 767 px para coincidir con `md:` de Tailwind, que es donde el
+   propio contenido pasa de columna a rejilla; Revelar.tsx usa el mismo número
+   para ajustar el observador y el escalonado. */
+@media (max-width: 767px) {
+  .revelar,
+  .revelar-izq,
+  .revelar-zoom {
+    transition-duration: 460ms;
+  }
+  .revelar      { transform: translateY(34px); }
+  .revelar-izq  { transform: translateX(-34px); }
+  .revelar-zoom { transform: scale(0.90); }
+
+  .revelar.visible,
+  .revelar-izq.visible,
+  .revelar-zoom.visible { transform: none; }
+}
+
+/* La preferencia del sistema manda también aquí: si alguien pidió menos
+   movimiento, no se le devuelve por la puerta de atrás del media query. */
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .revelar,
+  .revelar-izq,
+  .revelar-zoom { opacity: 1; transform: none; transition: none; }
+}
