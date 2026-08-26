@@ -1960,7 +1960,10 @@ export async function habilitarEnvioTardio(
     if (contrato.contratista_id) {
       await enviarNotificacion({
         destinatarioId: contrato.contratista_id,
-        tipo: habilitar ? 'enviado' : 'rechazado',
+        // Tipos propios. Antes reusaba 'enviado' y 'rechazado', que son las
+        // plantillas del flujo de revisión: al contratista le llegaba un correo
+        // diciendo que alguien «envió su informe para tu revisión».
+        tipo: habilitar ? 'envio_tardio_habilitado' : 'envio_tardio_cancelado',
         titulo: habilitar
           ? `Informe de ${periodoRaw.mes} ${periodoRaw.anio} habilitado para envío tardío`
           : `Habilitación tardía de ${periodoRaw.mes} ${periodoRaw.anio} cancelada`,

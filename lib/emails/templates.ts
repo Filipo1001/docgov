@@ -293,6 +293,63 @@ export function emailContratoVencimiento(data: TemplateData) {
   }
 }
 
+/**
+ * Habilitación de envío tardío.
+ *
+ * Antes esto viajaba con la plantilla `enviado`, que está escrita para avisar
+ * al SUPERVISOR de que un contratista le mandó algo: «{remitente} envió su
+ * informe de {mes} para tu revisión». El destinatario aquí es el contratista y
+ * el hecho es el contrario —se le abre un plazo, no se le entrega nada—, así
+ * que recibía un correo que decía justo lo que no era. El aviso dentro de la
+ * aplicación siempre estuvo bien redactado; el que salía por correo, no.
+ *
+ * Ámbar y no verde: no es un logro ni una aprobación, es un permiso con una
+ * fecha detrás. El mismo tono que usan los recordatorios.
+ */
+export function emailEnvioTardioHabilitado(data: TemplateData) {
+  return {
+    subject: `Habilitado el envío de ${data.mes} ${data.anio} — Contrato ${data.contrato}`,
+    html: baseHtml(
+      'Envio tardio habilitado',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Se habilito el envio de tu informe de <strong>${data.mes} ${data.anio}</strong>
+         del contrato <strong>${data.contrato}</strong>, cuyo plazo ya habia vencido.
+       </p>
+       <div style="background:#fffbeb;border-left:4px solid #d97706;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;">
+         <p style="color:#92400e;font-size:13px;margin:0;">
+           Ya puedes completarlo y enviarlo: registra tus actividades, adjunta las
+           evidencias y la planilla de seguridad social, y envialo a revision.
+         </p>
+       </div>
+       ${data.nombreRemitente ? `<p style="color:#666;font-size:13px;line-height:1.6;">
+         Habilitado por ${data.nombreRemitente}.
+       </p>` : ''}`,
+      '#d97706'
+    ),
+  }
+}
+
+/** La contraparte: el plazo se vuelve a cerrar. */
+export function emailEnvioTardioCancelado(data: TemplateData) {
+  return {
+    subject: `Se cerro el envio de ${data.mes} ${data.anio} — Contrato ${data.contrato}`,
+    html: baseHtml(
+      'Habilitacion cancelada',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         La habilitacion para enviar el informe de <strong>${data.mes} ${data.anio}</strong>
+         del contrato <strong>${data.contrato}</strong> fue cancelada. El periodo vuelve a
+         estar fuera de plazo.
+       </p>
+       <p style="color:#666;font-size:13px;line-height:1.6;">
+         Si necesitas enviarlo, comunicate con tu supervisor.
+       </p>`,
+      '#6b7280'
+    ),
+  }
+}
+
 export type EmailTemplate = (data: TemplateData) => { subject: string; html: string }
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
@@ -308,4 +365,6 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   radicacion_pendiente: emailRadicacionPendiente,
   contrato_vencimiento: emailContratoVencimiento,
   bienvenida: emailBienvenida,
+  envio_tardio_habilitado: emailEnvioTardioHabilitado,
+  envio_tardio_cancelado: emailEnvioTardioCancelado,
 }
