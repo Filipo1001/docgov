@@ -217,11 +217,16 @@ export default async function PropuestaDabeiba() {
           <Revelar retraso={400}>
             <div className="mt-12 sm:mt-16 flex items-center gap-3">
               {escudo && (
+                /* El de El Bagre va a 36 px porque su original mide 48×48 y
+                   ampliarlo se pixela. Este llega a 200×200 desde el sitio
+                   oficial del municipio, así que aguanta 48 px y a ese tamaño
+                   sí se distinguen los cuarteles. Sigue siendo un sello
+                   discreto, que es el uso que le corresponde. */
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={ESCUDO}
                   alt="Escudo del municipio de Dabeiba"
-                  className="w-9 h-9 object-contain"
+                  className="w-12 h-12 object-contain"
                 />
               )}
               <p className="text-xs text-white/40 leading-snug">
