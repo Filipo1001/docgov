@@ -68,7 +68,7 @@ const DIAGNOSTICO = [
   'Si no sabe cuántos contratistas tiene ni si están trabajando, lo está haciendo mal.',
   'Si a fin de mes sus contratistas están armando papeles en vez de trabajando, lo está haciendo mal.',
   'Si no tiene la alcaldía en la palma de la mano —en cualquier lugar, a cualquier hora—, lo está haciendo mal.',
-  'Si errores de redacción y transcripción entorpecen el pago de su gente, lo está haciendo mal.',
+  'Si le devuelven cuentas de cobro por errores de redacción o de transcripción, lo está haciendo mal.',
   'Si un contratista tiene que llamar a preguntar por qué se retrasó su pago, lo está haciendo mal.',
 ]
 
@@ -277,7 +277,8 @@ export default async function PropuestaDabeiba() {
             automáticamente su informe de actividades, su cuenta de cobro y las actas
             de supervisión y de pago —sin Word, sin errores de transcripción, sin
             devoluciones—. El supervisor revisa y aprueba desde donde esté; la
-            secretaría radica y descarga el paquete completo del mes en un clic.
+            secretaría descarga el paquete completo del mes en un clic, con cada
+            cuenta lista para pago.
             Cada documento sale con código QR y huella digital verificable, de modo
             que cualquier ente de control puede comprobar su autenticidad sin pedirle
             nada a la alcaldía. Todo queda en un solo lugar, trazable y listo para
@@ -310,7 +311,7 @@ export default async function PropuestaDabeiba() {
 
         <Revelar retraso={480}>
           <p className="mt-8 text-lg font-semibold text-gray-900">
-            Cero Word. Cero transcripción. Cero devoluciones por un valor en letras mal escrito.
+            Cero Word. Cero transcripción. Cero cuentas de cobro devueltas por un valor en letras mal escrito.
           </p>
         </Revelar>
       </Seccion>
@@ -419,7 +420,7 @@ export default async function PropuestaDabeiba() {
               glifo={Iconos.navegacion.municipio}
               titulo="La secretaría"
               puntos={[
-                'Radica en lote todas las cuentas aprobadas del mes, con numeración consecutiva automática',
+                'Cierra en lote todas las cuentas aprobadas del mes; si el municipio numera, la numeración consecutiva es automática',
                 'Descarga el paquete completo del mes en un clic',
                 'Cada periodo queda listo para cargar a SECOP II',
               ]}
@@ -450,7 +451,7 @@ export default async function PropuestaDabeiba() {
             ['Día 25', 'Aviso a quien tiene el informe en borrador'],
             ['Día 28', 'Recordatorio urgente'],
             ['Día 2', 'Aviso de plazo vencido'],
-            ['Cada 5 días', 'Cuentas aprobadas sin radicar → aviso a secretaría'],
+            ['Cada 5 días', 'Cuentas aprobadas sin cerrar → aviso a secretaría'],
             ['60 y 30 días antes', 'Contratos por vencer → aviso a supervisión y administración'],
           ].map(([c, t], i) => (
             <Revelar key={c} retraso={i * 90}>
@@ -525,34 +526,78 @@ export default async function PropuestaDabeiba() {
           <Etiqueta>Inversión</Etiqueta>
         </Revelar>
 
+        {/* Dos pagos separados y con alcance propio. Antes la implementación
+            figuraba como «a convenir» y a la vez como incluida en la
+            mensualidad: dos afirmaciones que no podían ser ciertas a la vez. */}
         <Revelar retraso={100} desde="zoom">
-          <div className="mt-4 text-center py-10">
-            <p className="text-5xl sm:text-6xl font-bold tracking-tight text-gray-900">
-              $3.900.000
-            </p>
-            <p className="mt-3 text-lg text-gray-500">mensuales</p>
-            <p className="mt-1 text-sm text-gray-400">Implementación a convenir</p>
+          <div className="mt-4 grid sm:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-gray-100 p-6 sm:p-7 text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+                Pago único
+              </p>
+              <p className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                $5.000.000
+              </p>
+              <p className="mt-2 text-sm text-gray-500">Implementación</p>
+            </div>
+            <div className="rounded-2xl p-6 sm:p-7 text-center text-white" style={{ backgroundColor: MARCA }}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Cada mes
+              </p>
+              <p className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight">
+                $3.900.000
+              </p>
+              <p className="mt-2 text-sm text-white/60">Operación de la plataforma</p>
+            </div>
           </div>
         </Revelar>
 
         <Revelar retraso={240}>
-          <div className="rounded-2xl border border-gray-100 p-6">
-            <p className="text-sm font-semibold text-gray-900">La mensualidad incluye</p>
-            <div className="mt-3 grid sm:grid-cols-2 gap-2 text-sm text-gray-600">
-              {[
-                'La plataforma completa, sin límite de usuarios',
-                'Todas las secretarías y dependencias',
-                'Soporte durante toda la vigencia',
-                'Actualizaciones sin costo adicional',
-                'Alojamiento y respaldo de la información',
-                'Verificación pública de documentos',
-              ].map(t => (
-                <div key={t} className="flex gap-2.5">
-                  <span className="mt-1.5 w-1 h-1 rounded-full bg-gray-400 shrink-0" />
-                  <span>{t}</span>
-                </div>
-              ))}
+          <div className="mt-4 grid sm:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-gray-100 p-6">
+              <p className="text-sm font-semibold text-gray-900">La implementación incluye</p>
+              <div className="mt-3 space-y-2 text-sm text-gray-600">
+                {[
+                  'Creación de los usuarios de todas las secretarías',
+                  'Cargue inicial de los contratos vigentes y su historial',
+                  'Desarrollos a la medida para el entorno de Dabeiba',
+                ].map(t => (
+                  <div key={t} className="flex gap-2.5">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-gray-400 shrink-0" />
+                    <span>{t}</span>
+                  </div>
+                ))}
+              </div>
             </div>
+            <div className="rounded-2xl border border-gray-100 p-6">
+              <p className="text-sm font-semibold text-gray-900">La mensualidad incluye</p>
+              <div className="mt-3 space-y-2 text-sm text-gray-600">
+                {[
+                  'Capacitaciones periódicas por rol',
+                  'Base de datos y alojamiento',
+                  'Copias de seguridad diarias',
+                  'Soporte técnico durante toda la vigencia',
+                  'Actualizaciones y verificación pública de documentos',
+                  'Sin límite de usuarios, secretarías ni almacenamiento',
+                ].map(t => (
+                  <div key={t} className="flex gap-2.5">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-gray-400 shrink-0" />
+                    <span>{t}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Revelar>
+
+        {/* Vigencia. Se enuncia igual que en las actas que la propia plataforma
+            genera, para que el contrato y el sistema digan lo mismo. */}
+        <Revelar retraso={320}>
+          <div className="mt-4 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Vigencia</p>
+            <p className="mt-3 text-lg font-semibold text-gray-900">
+              Desde la suscripción del acta de inicio y hasta el 31 de diciembre de 2026.
+            </p>
           </div>
         </Revelar>
 
@@ -599,6 +644,56 @@ export default async function PropuestaDabeiba() {
             <p className="mt-2 text-gray-600 leading-relaxed">
               Sin comprometer todo el municipio desde el primer día. Cuando el primer
               ciclo cierre bien, se extiende al resto.
+            </p>
+          </div>
+        </Revelar>
+      </Seccion>
+
+      {/* ── Al terminar el contrato ───────────────────────────────
+          Va antes de las cifras y no al final escondido: quien firma quiere
+          saber qué pasa con su información ANTES de que le impresionen los
+          números, no después. Decirlo de frente es un argumento, no un riesgo. */}
+      <Seccion>
+        <Revelar>
+          <Etiqueta>Al terminar el contrato</Etiqueta>
+          <Titulo>La información es del municipio</Titulo>
+          <p className="mt-6 text-gray-600 leading-relaxed">
+            Lo que pasa el 31 de diciembre queda escrito desde ahora, no se
+            resuelve después.
+          </p>
+        </Revelar>
+
+        <div className="mt-10 space-y-3">
+          {[
+            ['Consulta por 3 meses',
+             'La plataforma sigue disponible en modo consulta durante los tres meses siguientes a la terminación, sin permitir la creación de nuevos contratos ni periodos.'],
+            ['Entrega en 30 días hábiles',
+             'La totalidad de la información se entrega en dos formatos: los documentos en PDF, organizados por contrato y periodo, y los datos en formato abierto (XLSX y CSV).'],
+            ['Con acta de entrega',
+             'Se entrega al supervisor del contrato o a quien la Alcaldía designe por escrito, mediante acta firmada.'],
+            ['Verificación indefinida',
+             'Los códigos QR de los documentos ya emitidos siguen resolviendo de forma indefinida y sin costo. Un acta firmada en 2026 se podrá verificar años después.'],
+            ['Conservar o eliminar, lo decide la Alcaldía',
+             'Vencido el plazo de consulta, la información se conserva o se elimina según instrucción escrita de la Alcaldía y sus tablas de retención documental, conforme a la Ley 1581 de 2012.'],
+          ].map(([t, d], i) => (
+            <Revelar key={t} retraso={i * 80} desde="izquierda">
+              <div className="rounded-2xl border border-gray-100 p-6">
+                <p className="font-semibold text-gray-900">{t}</p>
+                <p className="mt-2 text-sm text-gray-600 leading-relaxed">{d}</p>
+              </div>
+            </Revelar>
+          ))}
+        </div>
+
+        <Revelar retraso={440}>
+          <div className="mt-8 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
+            <p className="text-gray-700 leading-relaxed">
+              <span className="font-semibold text-gray-900">Sobre la verificación, una precisión técnica.</span>{' '}
+              El código QR va impreso dentro de cada PDF: la dirección queda
+              grabada en la imagen y no se puede reescribir después. Por eso el
+              compromiso de mantenerla activa es indefinido y no depende de que
+              el contrato siga vigente — de lo contrario, el día que un ente de
+              control escanee un documento de 2026 no cargaría nada.
             </p>
           </div>
         </Revelar>
