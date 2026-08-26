@@ -391,21 +391,6 @@ const Brochure = ({ qr }) => h(Document, {
       h(Capacidad, { t: 'Cinco roles', d: 'Administrador, supervisor, contratista, asesor y contratación, cada uno con su vista y sus permisos.' }),
       h(Capacidad, { t: 'Web, sin instalar nada', d: 'Funciona desde celular, tableta o computador. No hay que instalar ni actualizar nada.' })),
 
-    h(View, { style: { height: 14 } }),
-    h(Text, { style: e.seccion }, 'Alcance'),
-    h(Text, { style: { ...e.titulo, fontSize: 15, marginBottom: 6 } }, 'Qué no hace'),
-    h(Text, { style: { ...e.parrafo, marginBottom: 12 } },
-      'Se declara por escrito para que nadie lo descubra después de firmar.'),
-
-    h(Caja, { fondo: '#FFFFFF', style: { border: `0.5pt solid ${LINEA}`, paddingBottom: 10 } },
-      h(View, { style: { ...e.fila, flexWrap: 'wrap' } },
-        h(Item, { ancho: '50%' }, 'No se integra con SECOP II. Prepara el paquete; alguien lo carga.'),
-        h(Item, { ancho: '50%' }, 'No se integra con el sistema contable ni de tesorería del municipio.'),
-        h(Item, { ancho: '50%' }, 'No emite factura electrónica ante la DIAN. El contratista la adjunta.'),
-        h(Item, { ancho: '50%' }, 'No es firma electrónica certificada.'),
-        h(Item, { ancho: '50%' }, 'No hay aplicación nativa en App Store ni Play Store. Es web.'),
-        h(Item, { ancho: '50%' }, 'Solo prestación de servicios: no cubre obra, suministro ni licitación.'))),
-
     h(Pie)),
 
   // ─── Control y verificación ──────────────────────────────────────────────
