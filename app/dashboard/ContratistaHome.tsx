@@ -7,7 +7,7 @@ import {
   getDashboardContratista,
   type DashboardContratista,
 } from '@/services/contratista'
-import { ESTADO_LABEL, ESTADO_COLOR, MESES } from '@/lib/constants'
+import { ESTADO_LABEL, ESTADO_COLOR, HISTORICO_COLOR, HISTORICO_LABEL, MESES } from '@/lib/constants'
 import type { EstadoPeriodo } from '@/lib/types'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
@@ -423,8 +423,8 @@ export default function ContratistaHome({
                       <span className="text-xs font-medium text-gray-700">
                         {p.mes.charAt(0).toUpperCase() + p.mes.slice(1, 3).toLowerCase()}
                       </span>
-                      <span className={`mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${p.es_historico ? 'bg-amber-100 text-amber-700' : estadoBadgeColor(p.estado)}`}>
-                        {p.es_historico ? 'Histórico' : (ESTADO_LABEL[p.estado as EstadoPeriodo] ?? p.estado)}
+                      <span className={`mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${p.es_historico ? HISTORICO_COLOR : estadoBadgeColor(p.estado)}`}>
+                        {p.es_historico ? HISTORICO_LABEL : (ESTADO_LABEL[p.estado as EstadoPeriodo] ?? p.estado)}
                       </span>
                     </Link>
                   )

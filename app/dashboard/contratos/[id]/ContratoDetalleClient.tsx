@@ -10,12 +10,19 @@ import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { crearObligacion, eliminarObligacion as eliminarObligacionAction, actualizarObligacion } from '@/app/actions/obligaciones'
 import { generarPeriodos as generarPeriodosAction } from '@/app/actions/contratos'
 import { getOtrosies, type Otrosi } from '@/app/actions/otrosies'
-import { esGestorContratos } from '@/lib/constants'
+import {
+  esGestorContratos,
+  ESTADO_COLOR,
+  ESTADO_LABEL,
+  HISTORICO_COLOR,
+  HISTORICO_LABEL,
+} from '@/lib/constants'
 import { totalConAdiciones, valorPorPeriodo, pesos } from '@/lib/valor-contrato'
 import { etiquetaEstado } from '@/lib/estado-contrato'
 import ExpedienteContrato from './ExpedienteContrato'
 import CopiarObligaciones from './CopiarObligaciones'
 import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
+import type { EstadoPeriodo } from '@/lib/types'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 
@@ -202,29 +209,14 @@ export default function ContratoDetallePage({
     }
   }
 
-  const estadoColor: Record<string, string> = {
-    borrador: 'bg-gray-100 text-gray-600',
-    enviado: 'bg-blue-100 text-blue-700',
-    revision_supervisor: 'bg-purple-100 text-purple-700',
-    revision_asesor: 'bg-orange-100 text-orange-700',
-    revision_gobierno: 'bg-cyan-100 text-cyan-700',
-    revision_hacienda: 'bg-amber-100 text-amber-700',
-    aprobado: 'bg-green-100 text-green-700',
-    rechazado: 'bg-red-100 text-red-700',
-    pagado: 'bg-emerald-100 text-emerald-800',
-  }
-
-  const estadoLabel: Record<string, string> = {
-    borrador: 'Borrador',
-    enviado: 'Enviado',
-    revision_supervisor: 'Rev. Supervisor',
-    revision_asesor: 'Rev. Asesor',
-    revision_gobierno: 'Rev. Gobierno',
-    revision_hacienda: 'Rev. Hacienda',
-    aprobado: 'Aprobado',
-    rechazado: 'Rechazado',
-    pagado: 'Pagado',
-  }
+  // Los estados salen de lib/constants.ts. Aquí vivían dos mapas propios,
+  // escritos para un flujo anterior (revision_supervisor, revision_asesor,
+  // revision_gobierno, revision_hacienda, pagado): ninguno de esos estados
+  // existe ya, y en cambio faltaban `radicado` y `revision`. Como el acceso
+  // caía al valor por defecto, los 148 periodos radicados del sistema se
+  // pintaban en gris y con la palabra cruda de la base de datos, en
+  // minúscula. Una copia local de un catálogo compartido envejece sin que
+  // nadie lo note; por eso ya no hay copia.
 
   if (!contrato) return <p className="text-red-500">Contrato no encontrado</p>
 
@@ -239,6 +231,7 @@ export default function ContratoDetallePage({
   // en cuanto un contrato empieza a mitad de mes. Ver lib/valor-contrato.ts.
   const valorContrato = totalConAdiciones(contrato.valor_total, otrosies)
   const porPeriodo = valorPorPeriodo(periodos)
+  const radicados = periodos.filter((p: any) => p.estado === 'radicado').length
   // Los periodos en blanco se nombran: si no, un contrato con diez periodos sin
   // cargar se describiría por los dos que sí tienen valor.
   const pendientes = porPeriodo.clase === 'sin-periodos' ? 0 : porPeriodo.sinValor
@@ -558,11 +551,19 @@ export default function ContratoDetallePage({
         editable={esGestor}
       />
 
-      {/* Periodos de pago */}
+      {/* Ejecución del contrato */}
       <div className="bg-white rounded-2xl border p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            Periodos de pago ({periodos.length})
+            Ejecución del contrato
+            {/* El conteo a secas —«(12)»— no decía nada que la lista de abajo
+                no dijera. Cuántos quedaron radicados sí: es el avance real del
+                contrato y se lee sin bajar la vista. */}
+            {periodos.length > 0 && (
+              <span className="ml-2 normal-case tracking-normal text-gray-400">
+                {radicados} de {periodos.length} radicados
+              </span>
+            )}
           </h3>
           {esGestor && periodos.length === 0 && obligaciones.length > 0 && (
             <button
@@ -620,13 +621,24 @@ export default function ContratoDetallePage({
                     ${periodo.valor_cobro?.toLocaleString('es-CO')}
                   </p>
                   {periodo.es_historico ? (
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
-                      Histórico
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${HISTORICO_COLOR}`}>
+                      {HISTORICO_LABEL}
                     </span>
                   ) : (
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${estadoColor[periodo.estado] || 'bg-gray-100 text-gray-600'}`}>
-                      {estadoLabel[periodo.estado] || periodo.estado}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ESTADO_COLOR[periodo.estado as EstadoPeriodo] ?? ESTADO_COLOR.borrador}`}>
+                      {ESTADO_LABEL[periodo.estado as EstadoPeriodo] ?? periodo.estado}
                     </span>
+                  )}
+
+                  {/* El radicado es el dato que la gente viene a buscar a esta
+                      pantalla, y hasta ahora obligaba a entrar periodo por
+                      periodo. Cifras tabulares para que alineen en columna.
+                      Cuatro de los radicados del sistema no tienen número: ahí
+                      no va nada, en vez de un guion que fingiría un dato. */}
+                  {periodo.estado === 'radicado' && periodo.numero_radicado && (
+                    <p className="text-[11px] font-mono tabular-nums text-gray-500">
+                      Rad. {periodo.numero_radicado}
+                    </p>
                   )}
                 </div>
               </Link>
