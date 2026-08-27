@@ -27,18 +27,52 @@ export const ESTADO_LABEL: Record<EstadoPeriodo, string> = {
   rechazado: 'Rechazado',
 }
 
+/**
+ * Color por estado. La jerarquía la carga el RELLENO, no el matiz:
+ *
+ *   sólido  → radicado, el cierre del trámite
+ *   tintado → aprobado y los estados en curso
+ *   plano   → borrador, que es el fondo de cualquier lista
+ *
+ * Se ordenó así porque `aprobado` (verde) y `radicado` (esmeralda) eran dos
+ * tintes claros casi idénticos: los dos estados que más importan —el que dice
+ * «ya está bien» y el que dice «ya quedó radicado»— no se distinguían de un
+ * vistazo. Separarlos por matiz habría necesitado un color nuevo compitiendo
+ * con los demás; separarlos por peso no.
+ *
+ * El sólido usa la tinta de la marca y no un color semántico: radicado no es
+ * «bueno» ni «malo», es el final del camino, y un chip oscuro macizo se lee
+ * como sello. De paso funciona en escala de grises y sin distinguir color, que
+ * es lo que ningún par de tintes claros consigue.
+ */
 export const ESTADO_COLOR: Record<EstadoPeriodo, string> = {
+  // Casi la mitad de los periodos del sistema son borradores y conviene que se
+  // hundan al fondo, pero el gris se quedó en 600 y no 500: a 500 el texto caía
+  // a 4.39 sobre este relleno, por debajo del mínimo AA. El chip macizo de
+  // `radicado` ya crea la distancia; no hace falta pagarla con legibilidad.
   borrador: 'bg-gray-100 text-gray-600',
   enviado: 'bg-blue-100 text-blue-700',
   revision: 'bg-indigo-100 text-indigo-700',
-  aprobado: 'bg-green-100 text-green-700',
-  radicado: 'bg-emerald-100 text-emerald-800',
+  aprobado: 'bg-green-100 text-green-800',
+  radicado: 'bg-[#192031] text-white',
   rechazado: 'bg-red-100 text-red-700',
 }
 
 // ─── Historical period display ───────────────
 export const HISTORICO_LABEL = 'Histórico'
-export const HISTORICO_COLOR = 'bg-amber-100 text-amber-700'
+/**
+ * Contorno neutro, no ámbar.
+ *
+ * «Histórico» ocupa la misma casilla que el estado del periodo, pero no es un
+ * estado: es una marca de procedencia —el periodo se cargó ya cumplido, de
+ * antes del sistema—. Cuando iba en ámbar competía con los estados reales y
+ * además chocaba con el ámbar de las correcciones de supervisión, que sí pide
+ * acción. Sin relleno queda claro que es una etiqueta, no una fase.
+ *
+ * Los banners y bordes de más abajo sí siguen en ámbar: ahí el color explica un
+ * contexto, no clasifica un estado.
+ */
+export const HISTORICO_COLOR = 'bg-transparent text-gray-500 ring-1 ring-inset ring-gray-300'
 export const HISTORICO_BORDER = 'border-amber-200 bg-amber-50/40'
 export const HISTORICO_BANNER = 'bg-amber-50 border-amber-200 text-amber-800'
 
