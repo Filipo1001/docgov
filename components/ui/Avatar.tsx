@@ -1,6 +1,6 @@
 'use client'
 
-import { avatarThumb, alFallarAvatar } from '@/lib/avatar'
+import { avatarThumb } from '@/lib/avatar'
 import { MARCA } from '@/lib/marca'
 
 interface AvatarProps {
@@ -31,7 +31,6 @@ export default function Avatar({ nombre, foto, size = 'md' }: AvatarProps) {
         alt={nombre}
         loading="lazy"
         decoding="async"
-        onError={alFallarAvatar}
         className={`${sizeClasses[size]} rounded-full object-cover flex-shrink-0`}
       />
     )

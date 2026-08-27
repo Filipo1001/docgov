@@ -135,7 +135,7 @@ export interface UsuarioSelect {
   nombre_completo: string
   cedula: string
   rol: string
-  /** El bucket `avatars` es público: la URL se usa tal cual en el selector. */
+  /** Identifica el objeto en el bucket privado; se pinta vía `avatarThumb()`. */
   foto_url: string | null
   cargo: string | null
   /** Secretaría a la que pertenece — permite deducir la dependencia del contrato. */
