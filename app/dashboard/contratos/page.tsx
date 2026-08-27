@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula } from '@/lib/format'
+import { avatarThumb } from '@/lib/avatar'
 import { esGestorContratos, esRolSupervision, esMesPasado } from '@/lib/constants'
 import { type ContratoListItem } from '@/services/contratos'
 import { getTodosContratosConBanco } from '@/app/actions/contratos-lista'
@@ -105,7 +106,7 @@ function VerUsuarioModal({
         <div className="bg-gray-50 border-b border-gray-100 px-6 py-5 flex items-center gap-4">
           {contratista.foto_url ? (
             <img
-              src={contratista.foto_url}
+              src={avatarThumb(contratista.foto_url, 192) ?? undefined}
               alt={contratista.nombre_completo}
               className="w-16 h-16 rounded-full object-cover ring-2 ring-white shadow-sm shrink-0"
             />

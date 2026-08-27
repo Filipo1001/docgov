@@ -348,6 +348,10 @@ export async function prepararUploadFoto(
     return { error: signedError?.message ?? 'No se pudo generar URL de subida' }
   }
 
+  // `getPublicUrl` solo arma una cadena; no consulta si el bucket es público
+  // —ya no lo es—. Se sigue guardando esa forma porque identifica el objeto y
+  // es lo que hay en los registros existentes. Quien la pinte debe pasarla por
+  // `avatarThumb()`, que la traduce a /api/avatar; abierta directamente da 400.
   const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(path)
 
   return { data: { signedUrl: signedData.signedUrl, path, publicUrl } }

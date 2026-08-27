@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { UserProvider, useUsuario } from '@/lib/user-context'
 import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
-import { avatarThumb, alFallarAvatar } from '@/lib/avatar'
+import { avatarThumb } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
 import AvisoMigracion from '@/components/AvisoMigracion'
 import { LogoCD } from '@/components/Logo'
@@ -30,7 +30,6 @@ function UserAvatar({ nombre, fotoUrl, size = 9 }: { nombre: string; fotoUrl?: s
         alt={nombre}
         loading="lazy"
         decoding="async"
-        onError={alFallarAvatar}
         className={`${dim} rounded-full object-cover flex-shrink-0`}
       />
     )
