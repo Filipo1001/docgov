@@ -2329,43 +2329,6 @@ export default function PeriodoDetallePage({
 
               {abierta && (
               <>
-              {/* ── Nota de la supervisión ──────────────────────────────
-                  Antes solo existía la etiqueta «Con nota»: para leerla, el
-                  contratista tenía que salir a buscarla al acta de supervisión
-                  —el documento donde va redactada— y volver. La corrección
-                  vivía lejos del trabajo que la corrige.
-
-                  Va aquí, encabezando el cuerpo, y no en un modal: la nota es
-                  la instrucción para arreglar las actividades que aparecen
-                  justo debajo. Un modal obliga a leer, memorizar y cerrar antes
-                  de poder actuar; en línea se lee mientras se corrige.
-
-                  No satura la pantalla porque la fila nace colapsada, y en el
-                  caso que importa no cuesta ni un clic: cuando el informe está
-                  rechazado, el contratista ya entra con todo desplegado. */}
-              {tieneNota && (
-                <div
-                  className={`mb-4 ml-0 sm:ml-10 rounded-xl border-l-4 px-4 py-3 ${
-                    estadoRev === 'sin_aprobar'
-                      ? 'bg-amber-50 border-amber-400'
-                      : 'bg-blue-50 border-blue-400'
-                  }`}
-                >
-                  <p className={`text-[11px] font-semibold uppercase tracking-wide ${
-                    estadoRev === 'sin_aprobar' ? 'text-amber-800' : 'text-blue-800'
-                  }`}>
-                    {estadoRev === 'sin_aprobar'
-                      ? 'Qué debes corregir'
-                      : 'Nota de la supervisión'}
-                  </p>
-                  <p className={`mt-1 text-sm leading-relaxed whitespace-pre-line break-words ${
-                    estadoRev === 'sin_aprobar' ? 'text-amber-900' : 'text-blue-900'
-                  }`}>
-                    {rev.nota}
-                  </p>
-                </div>
-              )}
-
               {/* Activity list */}
               {actsDeObl.length > 0 && (
                 <div className="space-y-3 mb-4 ml-0 sm:ml-10">
