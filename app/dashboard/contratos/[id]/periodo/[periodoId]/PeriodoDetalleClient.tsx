@@ -59,6 +59,7 @@ import MejorarRedaccion from '@/components/MejorarRedaccion'
 import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
+import NotaSupervision from '@/components/ui/NotaSupervision'
 
 /** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
 type RevisionLocal = { aprobada: boolean; nota: string | null }
@@ -2264,7 +2265,16 @@ export default function PeriodoDetallePage({
                       {estadoRev === 'sin_revisar' && puedeRevisar && (
                         <Badge variant="gray" size="xs">Sin revisar</Badge>
                       )}
-                      {tieneNota && <Badge variant="blue" size="xs">Con nota</Badge>}
+                      {/* La etiqueta pasa a ser el disparador de la nota: con
+                          ratón se abre al pasar por encima, y al tocar queda
+                          fijada. Antes solo anunciaba que existía una nota y
+                          obligaba a ir a buscarla al acta de supervisión. */}
+                      {tieneNota && (
+                        <NotaSupervision
+                          nota={rev.nota ?? ''}
+                          esCorreccion={estadoRev === 'sin_aprobar'}
+                        />
+                      )}
                       <span className="text-xs text-gray-400">
                         {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''}
                         {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
