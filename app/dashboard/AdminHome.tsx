@@ -297,6 +297,15 @@ export default function AdminHome({
             <p className="text-xs text-gray-500 mt-1">Marcar periodos como históricos</p>
           </Card>
         </Link>
+        <Link href="/dashboard/admin/avisos-pendientes" className="block">
+          <Card className="hover:border-gray-300 transition-colors group h-full">
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 text-gray-500 group-hover:bg-gray-200 transition-colors">
+              <Icono glifo={Iconos.aviso.correo} tamano="md" />
+            </div>
+            <h3 className="font-medium text-gray-900 text-sm">Avisos pendientes</h3>
+            <p className="text-xs text-gray-500 mt-1">Reenviar correos de radicado que no salieron</p>
+          </Card>
+        </Link>
       </div>
     </div>
   )

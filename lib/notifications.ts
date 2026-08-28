@@ -6,7 +6,7 @@
  */
 
 import { createAdminSupabaseClient } from './supabase-admin'
-import { getResendClient, RESEND_FROM } from './resend'
+import { enviarCorreo } from './resend'
 import { EMAIL_TEMPLATES } from './emails/templates'
 import { plantillaPara } from './whatsapp'
 import { enviarPlantillaWhatsApp, whatsappDisponible } from './whatsapp-cloud'
@@ -39,14 +39,38 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   const adminClient = createAdminSupabaseClient()
 
   // 1. Always save to database (in-app notification)
-  await adminClient.from('notificaciones').insert({
-    usuario_id: payload.destinatarioId,
-    tipo: payload.tipo,
-    titulo: payload.titulo,
-    mensaje: payload.mensaje,
-    periodo_id: payload.periodoId ?? null,
-    leida: false,
-  })
+  // Se recupera el id para poder anotar después cómo le fue al correo: sin ese
+  // registro, un correo rechazado es indistinguible de uno entregado, que es
+  // justo lo que dejó pasar semanas el fallo de la radicación rápida.
+  const { data: notif } = await adminClient
+    .from('notificaciones')
+    .insert({
+      usuario_id: payload.destinatarioId,
+      tipo: payload.tipo,
+      titulo: payload.titulo,
+      mensaje: payload.mensaje,
+      periodo_id: payload.periodoId ?? null,
+      leida: false,
+    })
+    .select('id')
+    .single()
+
+  const anotarCorreo = async (
+    estado: 'enviado' | 'omitido' | 'fallido',
+    extra: { id?: string; error?: string } = {},
+  ) => {
+    if (!notif?.id) return
+    await adminClient
+      .from('notificaciones')
+      .update({
+        email_estado: estado,
+        email_id: extra.id ?? null,
+        email_error: extra.error?.slice(0, 500) ?? null,
+        email_at: new Date().toISOString(),
+      })
+      .eq('id', notif.id)
+      .then(undefined, () => {})
+  }
 
   // 2. Get user contact info and preferences
   const { data: usuario } = await adminClient
@@ -105,35 +129,28 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   // contratistas del municipio y no hace falta para diagnosticar nada. El id
   // de usuario permite rastrear el mismo caso sin exponerlo.
   const emailReal = usuario.email && !usuario.email.endsWith('@pendiente.local') ? usuario.email : null
-  if (emailEnabled && emailReal) {
-    try {
-      const resend = getResendClient()
-      if (!resend) {
-        console.error('[Notif] Resend no configurado (falta RESEND_API_KEY)')
+  if (!emailEnabled || !emailReal) {
+    const motivo = !emailEnabled ? 'canal_desactivado' : 'sin_correo_real'
+    console.log(`[Notif] correo omitido tipo=${payload.tipo} usuario=${payload.destinatarioId} motivo=${motivo}`)
+    await anotarCorreo('omitido', { error: motivo })
+  } else {
+    const template = (EMAIL_TEMPLATES as Record<string, typeof EMAIL_TEMPLATES[string] | undefined>)[payload.tipo]
+    if (!template) {
+      console.error(`[Notif] sin plantilla de correo para tipo=${payload.tipo}`)
+      await anotarCorreo('fallido', { error: `sin plantilla para tipo=${payload.tipo}` })
+    } else {
+      const { subject, html } = template(templateData)
+      // enviarCorreo respeta el límite de Resend y reintenta ante un 429; antes
+      // los envíos masivos salían todos a la vez y la mayoría se perdía.
+      const res = await enviarCorreo({ to: emailReal, subject, html })
+      if (res.ok) {
+        console.log(`[Notif] correo enviado tipo=${payload.tipo} usuario=${payload.destinatarioId} id=${res.id ?? '-'}`)
+        await anotarCorreo('enviado', { id: res.id })
       } else {
-        const template = (EMAIL_TEMPLATES as Record<string, typeof EMAIL_TEMPLATES[string] | undefined>)[payload.tipo]
-        if (!template) {
-          console.error(`[Notif] sin plantilla de correo para tipo=${payload.tipo}`)
-        } else {
-          const { subject, html } = template(templateData)
-          const result = await resend.emails.send({
-            from: RESEND_FROM,
-            to: emailReal,
-            subject,
-            html,
-          })
-          if (result.error) {
-            console.error(`[Notif] correo rechazado tipo=${payload.tipo} usuario=${payload.destinatarioId}: ${result.error.message}`)
-          } else {
-            console.log(`[Notif] correo enviado tipo=${payload.tipo} usuario=${payload.destinatarioId} id=${result.data?.id ?? '-'}`)
-          }
-        }
+        console.error(`[Notif] correo fallido tipo=${payload.tipo} usuario=${payload.destinatarioId}: ${res.error}`)
+        await anotarCorreo('fallido', { error: res.error })
       }
-    } catch (err) {
-      console.error(`[Notif] fallo de correo tipo=${payload.tipo} usuario=${payload.destinatarioId}:`, err)
     }
-  } else if (emailEnabled && !emailReal) {
-    console.log(`[Notif] correo omitido tipo=${payload.tipo} usuario=${payload.destinatarioId} motivo=sin_correo_real`)
   }
 
   // 4. WhatsApp — solo plantillas aprobadas por Meta (ver lib/whatsapp.ts)
