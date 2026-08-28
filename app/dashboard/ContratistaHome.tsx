@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import ErrorState from '@/components/ui/ErrorState'
-import DiagnosticoPanel from '@/components/DiagnosticoPanel'
 import { type DashboardContratista } from '@/services/contratista'
 import { getPanelContratista } from '@/app/actions/dashboard'
 import { conLimite } from '@/lib/con-limite'
@@ -244,7 +243,7 @@ function StatusChip({ estado }: { estado: string }) {
 
 // ─── Skeleton ────────────────────────────────────────────────
 
-function Skeleton({ userId }: { userId: string }) {
+function Skeleton() {
   return (
     <div className="space-y-6 animate-pulse">
       <div className="h-8 bg-gray-200 rounded-xl w-72" />
@@ -257,8 +256,6 @@ function Skeleton({ userId }: { userId: string }) {
       <div className="flex gap-2">
         {[...Array(6)].map((_, i) => <div key={i} className="h-12 w-16 bg-gray-200 rounded-xl" />)}
       </div>
-      {/* DIAGNÓSTICO TEMPORAL — retirar cuando el panel congelado quede resuelto */}
-      <DiagnosticoPanel queryKey={['dashboard-contratista', userId]} />
     </div>
   )
 }
@@ -312,7 +309,7 @@ export default function ContratistaHome({
       />
     )
   }
-  if (isLoading || !data) return <Skeleton userId={userId} />
+  if (isLoading || !data) return <Skeleton />
 
   const { contrato, periodos, periodoActual, progreso, stats } = data
   const mes = mesActualNombre()
