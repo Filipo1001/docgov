@@ -384,6 +384,29 @@ export function emailPlanillaRechazada(data: TemplateData) {
   }
 }
 
+export function emailReporteMensual(data: TemplateData) {
+  return {
+    subject: `Consolidado de ${data.mes} ${data.anio} — tus contratos`,
+    html: baseHtml(
+      `Consolidado de ${data.mes} ${data.anio}`,
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Cerró el ciclo de <strong>${data.mes} ${data.anio}</strong> en los contratos que supervisas.
+       </p>
+       <div style="background:#f8fafc;border-left:4px solid #192031;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;">
+         <p style="color:#192031;font-size:14px;margin:0;font-weight:600;">Resultado del mes</p>
+         <p style="color:#334155;font-size:13px;margin:6px 0 0;">${data.motivo ?? ''}</p>
+       </div>
+       ${data.detalle ? `<p style="color:#333;font-size:13px;line-height:1.7;">${data.detalle}</p>` : ''}
+       <p style="color:#666;font-size:12px;line-height:1.6;margin-top:20px;">
+         Este consolidado llega una vez al mes. Las alertas de lo que necesita
+         acción inmediata siguen llegando por separado.
+       </p>`,
+      '#192031'
+    ),
+  }
+}
+
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
   enviado_confirmacion: emailEnvioConfirmacion,
@@ -391,6 +414,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   aprobado: emailPeriodoAprobado,
   rechazado: emailPeriodoRechazado,
   planilla_rechazada: emailPlanillaRechazada,
+  reporte_mensual: emailReporteMensual,
   radicado: emailPeriodoRadicado,
   recordatorio: emailRecordatorioInforme,
   recordatorio_urgente: emailRecordatorioUrgente,
