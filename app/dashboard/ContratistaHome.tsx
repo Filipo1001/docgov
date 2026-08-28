@@ -3,10 +3,9 @@
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import ErrorState from '@/components/ui/ErrorState'
-import {
-  getDashboardContratista,
-  type DashboardContratista,
-} from '@/services/contratista'
+import { type DashboardContratista } from '@/services/contratista'
+import { getPanelContratista } from '@/app/actions/dashboard'
+import { conLimite } from '@/lib/con-limite'
 import { ESTADO_LABEL, ESTADO_COLOR, HISTORICO_COLOR, HISTORICO_LABEL, MESES } from '@/lib/constants'
 import type { EstadoPeriodo } from '@/lib/types'
 import PageHeader from '@/components/ui/PageHeader'
@@ -276,7 +275,12 @@ export default function ContratistaHome({
   // background refetch runs if data is older than 5 minutes.
   const { data, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-contratista', userId],
-    queryFn:  () => getDashboardContratista(userId),
+    // Server action (no el cliente Supabase del navegador): tras reanudar,
+    // la capa de auth de ese cliente podía quedar colgada y este panel era la
+    // única pantalla que dependía de ella — esqueleto eterno sin petición
+    // alguna. La action viaja por el middleware, que además renueva la
+    // cookie. conLimite: un cuelgue se vuelve error visible y reintentable.
+    queryFn:  () => conLimite(getPanelContratista(), 'panel del contratista'),
     staleTime: 5 * 60_000,
   })
 

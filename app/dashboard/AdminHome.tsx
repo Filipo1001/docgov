@@ -4,11 +4,11 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import ErrorState from '@/components/ui/ErrorState'
 import {
-  getAdminPipeline,
-  getActividadReciente,
   type PipelineStats,
   type ActividadReciente,
 } from '@/services/dashboard'
+import { getPanelAdmin } from '@/app/actions/dashboard'
+import { conLimite } from '@/lib/con-limite'
 import { MESES } from '@/lib/constants'
 import { capitalizarNombre } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
@@ -101,13 +101,9 @@ export default function AdminHome({
   // staleTime: 5 min — navigating back shows cached data instantly.
   const { data: dashData, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-admin'],
-    queryFn:  async () => {
-      const [pipeline, actividad] = await Promise.all([
-        getAdminPipeline(),
-        getActividadReciente(),
-      ])
-      return { pipeline, actividad }
-    },
+    // Server action — ver ContratistaHome: el panel no vuelve a depender de
+    // la capa de auth del cliente del navegador.
+    queryFn:  () => conLimite(getPanelAdmin(), 'panel de administración'),
     staleTime: 5 * 60_000,
   })
 

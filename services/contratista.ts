@@ -2,10 +2,19 @@
  * Service: Contratista Dashboard
  *
  * Rich data queries for the contratista home dashboard.
- * Uses browser Supabase client — import only in 'use client' components.
+ * Cliente inyectable: por defecto usa el browser client ('use client');
+ * las server actions del panel (app/actions/dashboard.ts) inyectan el del
+ * servidor para sacar la capa de auth del navegador de la ruta crítica.
  */
 
 import { createClient } from '@/lib/supabase'
+
+/**
+ * Cliente inyectable: por defecto el del navegador (pantallas 'use client');
+ * las server actions del panel inyectan el del servidor, que comparte esta
+ * misma forma estructural.
+ */
+type ClienteSupabase = ReturnType<typeof createClient>
 import { MESES } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
@@ -59,8 +68,14 @@ export interface DashboardContratista {
 
 // ─── Query ────────────────────────────────────────────────────
 
-export async function getDashboardContratista(userId: string): Promise<DashboardContratista> {
-  const supabase = createClient()
+export async function getDashboardContratista(
+  userId: string,
+  // El panel corre server-side (ver app/actions/dashboard.ts): el cliente del
+  // navegador puede quedar con su capa de auth colgada tras reanudar y esta
+  // pantalla era la única que dependía de él. Inyectable para no duplicar la query.
+  cliente?: ClienteSupabase,
+): Promise<DashboardContratista> {
+  const supabase = cliente ?? createClient()
 
   // 1. Get active contract(s) for this user
   //

@@ -4,13 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  getSupervisorDashboard,
   type SupervisorDashboard,
   type PeriodoPendienteSupervisor,
   type DesempenoContratista,
   type TendenciaMes,
   type ActividadSupervisorItem,
 } from '@/services/supervisor'
+import { getPanelSupervisor } from '@/app/actions/dashboard'
+import { conLimite } from '@/lib/con-limite'
 import { getMesActual, MESES } from '@/lib/constants'
 import { capitalizarNombre } from '@/lib/format'
 import Icono from '@/components/ui/Icono'
@@ -331,7 +332,9 @@ export default function SupervisorHome({
   // staleTime: 5 min — navigating back shows cached data instantly.
   const { data, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-supervisor', userId],
-    queryFn:  () => getSupervisorDashboard(userId),
+    // Server action — ver ContratistaHome: el panel no vuelve a depender de
+    // la capa de auth del cliente del navegador.
+    queryFn:  () => conLimite(getPanelSupervisor(), 'panel de supervisión'),
     staleTime: 5 * 60_000,
   })
 

@@ -3,10 +3,19 @@
  *
  * Queries for admin pipeline stats, recent activity,
  * and reviewer pending lists.
- * Uses browser Supabase client — import only in 'use client' components.
+ * Cliente inyectable: por defecto usa el browser client ('use client');
+ * las server actions del panel (app/actions/dashboard.ts) inyectan el del
+ * servidor para sacar la capa de auth del navegador de la ruta crítica.
  */
 
 import { createClient } from '@/lib/supabase'
+
+/**
+ * Cliente inyectable: por defecto el del navegador (pantallas 'use client');
+ * las server actions del panel inyectan el del servidor, que comparte esta
+ * misma forma estructural.
+ */
+type ClienteSupabase = ReturnType<typeof createClient>
 import { getMesActual } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
@@ -50,8 +59,8 @@ export interface PeriodoPendienteRevisor {
 
 // ─── Admin Dashboard ──────────────────────────────────────────
 
-export async function getAdminPipeline(): Promise<PipelineStats> {
-  const supabase = createClient()
+export async function getAdminPipeline(cliente?: ClienteSupabase): Promise<PipelineStats> {
+  const supabase = cliente ?? createClient()
 
   // Errores lanzados, no tragados — ver getDashboardContratista: un conteo
   // fallido devolvía count null y el pipeline entero se pintaba en ceros.
@@ -86,8 +95,8 @@ export async function getAdminPipeline(): Promise<PipelineStats> {
   }
 }
 
-export async function getActividadReciente(): Promise<ActividadReciente[]> {
-  const supabase = createClient()
+export async function getActividadReciente(cliente?: ClienteSupabase): Promise<ActividadReciente[]> {
+  const supabase = cliente ?? createClient()
 
   // Get recent period state changes via historial_periodos
   // Errores lanzados, no tragados — ver getDashboardContratista.
@@ -131,9 +140,10 @@ export async function getActividadReciente(): Promise<ActividadReciente[]> {
 // ─── Reviewer Dashboard (asesor/gobierno/hacienda) ───────────
 
 export async function getPendientesRevisor(
-  estadoFiltro: string
+  estadoFiltro: string,
+  cliente?: ClienteSupabase,
 ): Promise<PeriodoPendienteRevisor[]> {
-  const supabase = createClient()
+  const supabase = cliente ?? createClient()
   const now = Date.now()
   const { mes, anio } = getMesActual()
 
@@ -200,8 +210,9 @@ export async function getAsesorStats(
   dependenciaId: string,
   mes: string,
   anio: number,
+  cliente?: ClienteSupabase,
 ): Promise<AsesorStats> {
-  const supabase = createClient()
+  const supabase = cliente ?? createClient()
   const hoy = new Date().toISOString().split('T')[0]
 
   const empty: AsesorStats = {
