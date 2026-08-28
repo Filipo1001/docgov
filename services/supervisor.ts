@@ -481,13 +481,16 @@ export async function getSupervisorDashboard(
   }
 
   // 1. All contracts for this supervisor
-  const { data: contratosData } = await supabase
+  // Errores lanzados, no tragados — ver getDashboardContratista: un fallo
+  // aquí se disfrazaba del dashboard `empty` de un supervisor sin contratos.
+  const { data: contratosData, error: errContratos } = await supabase
     .from('contratos')
     .select(`
       id, numero, valor_mensual, fecha_inicio, fecha_fin,
       contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)
     `)
     .eq('supervisor_id', supervisorId)
+  if (errContratos) throw errContratos
 
   const contratos = (contratosData ?? []) as any[]
   const contratoIds = contratos.map(c => c.id)
@@ -523,6 +526,8 @@ export async function getSupervisorDashboard(
     getPeriodosPendientesSupervisor(supervisorId),
   ])
 
+  if (periodos5MesesRes.error) throw periodos5MesesRes.error
+  if (historialRes.error) throw historialRes.error
   const periodos5Meses = (periodos5MesesRes.data ?? []) as any[]
   const historialRaw = (historialRes.data ?? []) as any[]
 

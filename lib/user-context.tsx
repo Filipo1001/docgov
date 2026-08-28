@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase'
 import { obtenerPerfilUsuario } from '@/app/actions/usuario'
 import type { Usuario, Municipio } from '@/lib/types'
@@ -20,6 +21,7 @@ const RECONCILIACION_DEBOUNCE_MS = 60_000
 const HEARTBEAT_MS = 10 * 60_000
 
 export function UserProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [municipio, setMunicipio] = useState<Municipio | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -100,7 +102,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // "cura" también al cliente del navegador — sin recargar, sin re-login.
     let reconciliando = false
     let ultimaReconciliacion = 0
-    async function reconciliar(forzar = false) {
+    async function reconciliar(forzar = false, esReanudacion = true) {
       if (reconciliando) return
       if (!forzar && Date.now() - ultimaReconciliacion < RECONCILIACION_DEBOUNCE_MS) return
       reconciliando = true
@@ -118,6 +120,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
             const { data: { session } } = await supabase.auth.getSession()
             if (session?.access_token) supabase.realtime.setAuth(session.access_token)
           } catch { /* mejor esfuerzo — el polling de la campana cubre el resto */ }
+          // La cookie quedó renovada y la red probó estar viva: es EL momento
+          // de refrescar el mundo de datos. Las cachés de TanStack pueden traer
+          // horas de atraso — o un vacío mentiroso cacheado como éxito si una
+          // query corrió en la ventana sin token. Invalidar aquí marca todo
+          // stale y refetchea lo montado, ya con auth garantizada por la
+          // guardia del cliente. Solo al REANUDAR (no en el heartbeat: con la
+          // pestaña activa los datos fluyen por sus propios canales).
+          if (esReanudacion) {
+            queryClient.invalidateQueries().catch(() => {})
+          }
         } else if (tuvoSesion.current) {
           // El servidor confirma que la sesión murió de verdad (refresh token
           // revocado/vencido). Expirar honestamente — el layout redirige a
@@ -146,7 +158,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('pageshow', onPageShow)
     const heartbeat = setInterval(() => {
-      if (document.visibilityState === 'visible') reconciliar()
+      if (document.visibilityState === 'visible') reconciliar(false, false)
     }, HEARTBEAT_MS)
 
     // React to auth state changes (token refresh, sign-out, sign-in from another tab)
@@ -175,7 +187,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pageshow', onPageShow)
       clearInterval(heartbeat)
     }
-  }, [])
+    // queryClient es estable (useState en QueryProvider): el efecto no se re-ejecuta.
+  }, [queryClient])
 
   return <Ctx.Provider value={{ usuario, municipio, cargando, sesionExpirada }}>{children}</Ctx.Provider>
 }

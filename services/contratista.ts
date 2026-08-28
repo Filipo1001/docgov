@@ -63,8 +63,14 @@ export async function getDashboardContratista(userId: string): Promise<Dashboard
   const supabase = createClient()
 
   // 1. Get active contract(s) for this user
+  //
+  // Los errores se LANZAN, no se tragan. Descartarlos convertía cualquier
+  // fallo (token vencido al volver de segundo plano, red caída) en un
+  // dashboard "sin contrato" cacheado como éxito. Con throw, TanStack
+  // conserva los datos anteriores, marca el error y reintenta — la pantalla
+  // degrada a "lo último que se supo" en lugar de mentir con un vacío.
   const now = new Date().toISOString().slice(0, 10)
-  const { data: contratos } = await supabase
+  const { data: contratos, error: errContratos } = await supabase
     .from('contratos')
     .select(`
       id, numero, anio, objeto, valor_total, valor_mensual,
@@ -74,6 +80,7 @@ export async function getDashboardContratista(userId: string): Promise<Dashboard
     `)
     .eq('contratista_id', userId)
     .order('fecha_inicio', { ascending: false })
+  if (errContratos) throw errContratos
 
   // Prefer active contract, else most recent
   const activo = (contratos ?? []).find(
@@ -93,11 +100,12 @@ export async function getDashboardContratista(userId: string): Promise<Dashboard
   const contrato = activo as any as ContratoContratista
 
   // 2. Get all periods for this contract
-  const { data: periodosRaw } = await supabase
+  const { data: periodosRaw, error: errPeriodos } = await supabase
     .from('periodos')
     .select('id, contrato_id, numero_periodo, mes, anio, estado, valor_cobro, motivo_rechazo, fecha_envio, es_historico')
     .eq('contrato_id', contrato.id)
     .order('numero_periodo')
+  if (errPeriodos) throw errPeriodos
 
   const periodos: PeriodoResumen[] = (periodosRaw ?? []) as any[]
 

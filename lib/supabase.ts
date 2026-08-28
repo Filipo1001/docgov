@@ -52,6 +52,44 @@ const AUTH_TIMEOUT_MS = 15_000
  */
 const LECTURA_TIMEOUT_MS = 20_000
 
+/**
+ * ¿Hay una sesión persistida en cookies? (sb-<ref>-auth-token, a veces
+ * partida en .0/.1). Si existe, este navegador pertenece a un usuario
+ * autenticado — aunque el cliente en memoria aún no haya logrado leerla.
+ */
+function hayCookieDeSesion(): boolean {
+  try {
+    return document.cookie
+      .split(';')
+      .some(c => { const n = c.trim(); return n.startsWith('sb-') && n.includes('-auth-token') })
+  } catch { return false }
+}
+
+/**
+ * El agujero que dejaba el dashboard "vacío" al volver de segundo plano:
+ *
+ * supabase-js resuelve el token por petición con getSession(); si esa
+ * resolución falla (fetch de refresh congelado por iOS, radio del celular
+ * aún dormida), NO lanza error — cae en silencio al token ANÓNIMO. Con RLS,
+ * una lectura anónima no es un 401: es un 200 con CERO FILAS. TanStack la
+ * cachea como éxito, y el usuario ve "no tienes contrato" hasta el próximo
+ * refetch que nadie dispara.
+ *
+ * Regla: si hay cookie de sesión, ninguna lectura sale como anónima.
+ * Se reintenta obtener el token una vez (la reconciliación del servidor pudo
+ * haber renovado la cookie hace un instante — el storage la lee en vivo) y,
+ * si aun así no hay token, la lectura FALLA con error visible en lugar de
+ * devolver un vacío mentiroso. Un error se reintenta y se muestra; un vacío
+ * falso se cree.
+ */
+async function tokenDeSesionFresco(): Promise<string | null> {
+  if (!browserClient) return null
+  try {
+    const { data: { session } } = await browserClient.auth.getSession()
+    return session?.access_token ?? null
+  } catch { return null }
+}
+
 function fetchConTimeoutAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url =
     typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -62,19 +100,56 @@ function fetchConTimeoutAuth(input: RequestInfo | URL, init?: RequestInit): Prom
 
   if (!esAuth && !esLecturaDeDatos) return fetch(input, init)
 
-  const controller = new AbortController()
-  const timer = setTimeout(
-    () => controller.abort(new DOMException(
-      esAuth ? 'auth fetch timeout' : 'lectura de datos sin respuesta', 'TimeoutError')),
-    esAuth ? AUTH_TIMEOUT_MS : LECTURA_TIMEOUT_MS,
-  )
-  // Encadenar una señal externa si venía en el init original
-  if (init?.signal) {
-    const externa = init.signal
-    if (externa.aborted) controller.abort(externa.reason)
-    else externa.addEventListener('abort', () => controller.abort(externa.reason), { once: true })
+  // Un intento con timeout: convierte el cuelgue infinito en error normal.
+  const ejecutar = (initFinal?: RequestInit): Promise<Response> => {
+    const controller = new AbortController()
+    const timer = setTimeout(
+      () => controller.abort(new DOMException(
+        esAuth ? 'auth fetch timeout' : 'lectura de datos sin respuesta', 'TimeoutError')),
+      esAuth ? AUTH_TIMEOUT_MS : LECTURA_TIMEOUT_MS,
+    )
+    // Encadenar una señal externa si venía en el init original
+    if (initFinal?.signal) {
+      const externa = initFinal.signal
+      if (externa.aborted) controller.abort(externa.reason)
+      else externa.addEventListener('abort', () => controller.abort(externa.reason), { once: true })
+    }
+    return fetch(input, { ...initFinal, signal: controller.signal }).finally(() => clearTimeout(timer))
   }
-  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer))
+
+  if (esAuth || typeof window === 'undefined') return ejecutar(init)
+
+  // ── Guardia de identidad para lecturas de datos (solo navegador) ──
+  return (async () => {
+    const headers = new Headers(init?.headers)
+    const bearer = headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? null
+    const conToken = (token: string): RequestInit => {
+      headers.set('Authorization', `Bearer ${token}`)
+      return { ...init, headers }
+    }
+
+    let initFinal = init
+    if (bearer === env.supabaseAnonKey && hayCookieDeSesion()) {
+      const token = await tokenDeSesionFresco()
+      if (!token) {
+        throw new DOMException(
+          'sesión aún no disponible al reanudar — lectura bloqueada para no mostrar datos vacíos',
+          'AbortError',
+        )
+      }
+      initFinal = conToken(token)
+    }
+
+    const res = await ejecutar(initFinal)
+
+    // Token vencido adjuntado (p. ej. renovación en curso al despertar):
+    // un solo reintento con el token fresco de la cookie ya renovada.
+    if (res.status === 401 && hayCookieDeSesion()) {
+      const token = await tokenDeSesionFresco()
+      if (token && token !== bearer) return ejecutar(conToken(token))
+    }
+    return res
+  })()
 }
 
 export function createClient() {

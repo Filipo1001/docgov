@@ -128,7 +128,10 @@ export async function getInformesMensuales(
     .eq('anio', anio)
     .order('fecha_envio', { ascending: true })
 
-  const { data } = await query
+  // Errores lanzados, no tragados — ver getDashboardContratista: un tick
+  // fallido del refetchInterval vaciaba la lista completa de informes.
+  const { data, error } = await query
+  if (error) throw error
   let periodos = (data as Periodo[]) ?? []
 
   // Show submitted+ periods OR historical ones (even if borrador)
@@ -171,7 +174,9 @@ export async function getInformesBorrador(
     .eq('es_historico', false)
     .order('contrato_id')
 
-  const { data } = await query
+  // Errores lanzados, no tragados — ver getDashboardContratista.
+  const { data, error } = await query
+  if (error) throw error
   let periodos = (data as Periodo[]) ?? []
 
   if (dependenciaId) {
