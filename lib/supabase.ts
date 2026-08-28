@@ -52,64 +52,6 @@ const AUTH_TIMEOUT_MS = 15_000
  */
 const LECTURA_TIMEOUT_MS = 20_000
 
-/**
- * El agujero que dejaba el dashboard "vacío" al volver de segundo plano:
- *
- * supabase-js resuelve el token por petición con getSession(); si esa
- * resolución falla (fetch de refresh congelado por iOS, radio del celular
- * aún dormida), NO lanza error — cae en silencio al token ANÓNIMO. Con RLS,
- * una lectura anónima no es un 401: es un 200 con CERO FILAS. TanStack la
- * cachea como éxito, y el usuario ve "no tienes contrato" hasta el próximo
- * refetch que nadie dispara.
- *
- * Regla: si hay cookie de sesión, ninguna lectura sale como anónima.
- *
- * El token se lee DIRECTO DE LA COOKIE, nunca con getSession(). Esa es la
- * diferencia que importa: getSession() serializa sobre el Navigator Lock de
- * auth —el mismo que la cabecera de este archivo documenta como causa de
- * páginas en blanco— y el websocket de realtime lo disputa sin tregua cuando
- * reconecta con un JWT vencido. Meter ese lock dentro de CADA lectura de
- * datos convertía una contención de auth en un dashboard congelado. Leer la
- * cookie es síncrono, sin lock y sin red: no puede colgar nada.
- */
-type TokenDeCookie = { token: string | null; vencido: boolean }
-
-function leerSesionDeCookie(): TokenDeCookie {
-  const vacio: TokenDeCookie = { token: null, vencido: false }
-  try {
-    // Las cookies de @supabase/ssr se parten en .0/.1 cuando no caben.
-    const trozos: { nombre: string; valor: string }[] = []
-    for (const crudo of document.cookie.split(';')) {
-      const i = crudo.indexOf('=')
-      if (i < 0) continue
-      const nombre = crudo.slice(0, i).trim()
-      if (!nombre.startsWith('sb-') || !nombre.includes('-auth-token')) continue
-      trozos.push({ nombre, valor: crudo.slice(i + 1).trim() })
-    }
-    if (!trozos.length) return vacio
-
-    trozos.sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }))
-    let json = trozos.map(t => decodeURIComponent(t.valor)).join('')
-    if (json.startsWith('base64-')) {
-      // base64url sin relleno → base64 con relleno: atob del navegador es
-      // más estricto que el de Node con ciertas longitudes.
-      let b64 = json.slice(7).replace(/-/g, '+').replace(/_/g, '/')
-      if (b64.length % 4) b64 += '='.repeat(4 - (b64.length % 4))
-      json = new TextDecoder().decode(Uint8Array.from(atob(b64), ch => ch.charCodeAt(0)))
-    }
-
-    const sesion = JSON.parse(json)
-    const token = sesion?.access_token
-    if (typeof token !== 'string' || !token) return vacio
-    const expira = typeof sesion?.expires_at === 'number' ? sesion.expires_at : null
-    return { token, vencido: expira !== null && expira <= Math.floor(Date.now() / 1000) }
-  } catch {
-    // Cookie ilegible (formato nuevo, cifrada, storage bloqueado): no
-    // inventamos nada — la petición sigue su curso como antes.
-    return vacio
-  }
-}
-
 function fetchConTimeoutAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url =
     typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -120,55 +62,19 @@ function fetchConTimeoutAuth(input: RequestInfo | URL, init?: RequestInit): Prom
 
   if (!esAuth && !esLecturaDeDatos) return fetch(input, init)
 
-  // Un intento con timeout: convierte el cuelgue infinito en error normal.
-  const ejecutar = (initFinal?: RequestInit): Promise<Response> => {
-    const controller = new AbortController()
-    const timer = setTimeout(
-      () => controller.abort(new DOMException(
-        esAuth ? 'auth fetch timeout' : 'lectura de datos sin respuesta', 'TimeoutError')),
-      esAuth ? AUTH_TIMEOUT_MS : LECTURA_TIMEOUT_MS,
-    )
-    // Encadenar una señal externa si venía en el init original
-    if (initFinal?.signal) {
-      const externa = initFinal.signal
-      if (externa.aborted) controller.abort(externa.reason)
-      else externa.addEventListener('abort', () => controller.abort(externa.reason), { once: true })
-    }
-    return fetch(input, { ...initFinal, signal: controller.signal }).finally(() => clearTimeout(timer))
+  const controller = new AbortController()
+  const timer = setTimeout(
+    () => controller.abort(new DOMException(
+      esAuth ? 'auth fetch timeout' : 'lectura de datos sin respuesta', 'TimeoutError')),
+    esAuth ? AUTH_TIMEOUT_MS : LECTURA_TIMEOUT_MS,
+  )
+  // Encadenar una señal externa si venía en el init original
+  if (init?.signal) {
+    const externa = init.signal
+    if (externa.aborted) controller.abort(externa.reason)
+    else externa.addEventListener('abort', () => controller.abort(externa.reason), { once: true })
   }
-
-  if (esAuth || typeof window === 'undefined') return ejecutar(init)
-
-  // ── Guardia de identidad para lecturas de datos (solo navegador) ──
-  // Todo lo de aquí es síncrono salvo el propio fetch: sin getSession, sin
-  // lock de auth, sin red extra. No puede colgar una lectura.
-  const headers = new Headers(init?.headers)
-  const bearer = headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? null
-  const conToken = (token: string): RequestInit => {
-    headers.set('Authorization', `Bearer ${token}`)
-    return { ...init, headers }
-  }
-
-  if (bearer !== env.supabaseAnonKey) return ejecutar(init)
-
-  // Sale con la llave anónima: o el usuario no tiene sesión, o supabase-js no
-  // pudo resolver su token. La cookie desempata.
-  const { token, vencido } = leerSesionDeCookie()
-
-  // Sin cookie legible: usuario anónimo de verdad (o cookie que no sabemos
-  // leer). Comportamiento de siempre.
-  if (!token) return ejecutar(init)
-
-  // Hay sesión y el token sirve: la lectura JAMÁS sale anónima.
-  if (!vencido) return ejecutar(conToken(token))
-
-  // Hay sesión pero el token venció y nadie lo ha renovado todavía. Fallar es
-  // lo honesto: TanStack conserva lo anterior, muestra el error y reintenta;
-  // mientras, la reconciliación del servidor renueva la cookie y el reintento
-  // entra con token bueno. Devolver el vacío anónimo sería mentir.
-  return Promise.reject(new Error(
-    'sesión vencida al reanudar — lectura bloqueada para no mostrar datos vacíos',
-  ))
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer))
 }
 
 export function createClient() {

@@ -9,7 +9,7 @@
  *  - retry: 1 con backoff de 1.5s — útil con redes intermitentes (Android viejo)
  *  - refetchOnWindowFocus: false — evitamos refetch agresivo
  *  - refetchOnReconnect: true — sí queremos refrescar al volver la red
- *  - networkMode: 'always' — ver abajo; es lo que evitaba que el panel cargara
+ *  - networkMode: 'always' — nunca pausar por una lectura falsa de «sin red»
  *
  * Devtools incluidos solo en desarrollo.
  */
@@ -30,30 +30,20 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
             retryDelay: 1500,
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
-            // ── Por qué el panel se quedaba en esqueleto para siempre ──
-            //
-            // Con el valor por defecto ('online'), TanStack no lanza NINGUNA
-            // consulta mientras crea que el navegador está sin red:
+            // Defensa, no la causa. La causa del panel congelado resultó ser
+            // otra (la capa de auth del navegador se cuelga; ver
+            // app/actions/dashboard.ts), pero por el camino se comprobó que
+            // con el valor por defecto TanStack no lanza NINGUNA consulta
+            // mientras crea que no hay red:
             //
             //   canFetch = networkMode === 'online' ? onlineManager.isOnline() : true
             //
-            // La consulta no falla: queda PAUSADA. Y una consulta pausada
-            // reporta status 'pending' con fetchStatus 'paused', o sea
-            // isLoading=false, isError=false y data=undefined. El guarda de
-            // los paneles (`if (isLoading || !data) return <Skeleton/>`) caía
-            // en `!data` y dibujaba el esqueleto eterno: sin spinner, sin
-            // error, sin botón — y sin una sola petición en los registros,
-            // que es justo lo que veíamos.
-            //
-            // onlineManager se queda en «sin red» cuando la pestaña se congela
-            // y el evento 'online' del regreso se pierde: exactamente el caso
-            // de dejar la sesión inactiva. Y no se cura recargando, porque el
-            // navegador restaura la página congelada desde bfcache.
-            //
-            // 'always' hace que la red sea asunto del fetch, no de una
-            // bandera del navegador que en móvil rural miente a menudo. Si de
-            // verdad no hay red, el fetch falla, se reintenta y se ve el
-            // error — que es recuperable. Una pausa invisible no lo es.
+            // La consulta no falla: queda PAUSADA, o sea isLoading=false,
+            // isError=false y data=undefined — indistinguible de «cargando» y
+            // sin nada que el usuario pueda hacer. En red móvil rural esa
+            // bandera del navegador miente a menudo. Con 'always' la red es
+            // asunto del fetch: si de verdad no hay, falla, se reintenta y se
+            // ve el error, que sí es recuperable.
             networkMode: 'always',
           },
           mutations: {
