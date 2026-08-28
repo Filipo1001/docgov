@@ -329,7 +329,7 @@ export default function SupervisorHome({
   const weekday = now.toLocaleDateString('es-CO', { weekday: 'long' })
 
   // staleTime: 5 min — navigating back shows cached data instantly.
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-supervisor', userId],
     queryFn:  () => getSupervisorDashboard(userId),
     staleTime: 5 * 60_000,
@@ -389,6 +389,19 @@ export default function SupervisorHome({
     return (
       <ErrorState
         mensaje="No pudimos cargar tu panel de supervisión. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
+  // Una consulta PAUSADA (TanStack cree que no hay red) no es un error ni una
+  // carga: es isLoading=false, isError=false y data=undefined. Sin esta
+  // compuerta caía en `!data` y se dibujaba el esqueleto para siempre, sin
+  // nada que el usuario pudiera hacer. Aquí se vuelve recuperable.
+  if (isPaused && !data) {
+    return (
+      <ErrorState
+        mensaje="Parece que te quedaste sin conexión. Revísala e inténtalo de nuevo."
         onReintentar={() => { refetch() }}
         reintentando={isFetching}
       />

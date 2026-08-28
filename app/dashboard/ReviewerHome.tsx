@@ -386,7 +386,7 @@ export default function ReviewerHome({
   const { mes, anio } = getMesActual()
 
   // staleTime: 5 min — navigating back shows cached data instantly.
-  const { data: dashData, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data: dashData, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-reviewer', dependenciaId, mes, anio],
     queryFn:  async () => {
       const [stats, pendientes] = await Promise.all([
@@ -414,7 +414,20 @@ export default function ReviewerHome({
       />
     )
   }
-  if (isLoading) return <Skeleton />
+  // Una consulta PAUSADA (TanStack cree que no hay red) no es un error ni una
+  // carga: es isLoading=false, isError=false y data=undefined. Sin esta
+  // compuerta caía en `!data` y se dibujaba el esqueleto para siempre, sin
+  // nada que el usuario pudiera hacer. Aquí se vuelve recuperable.
+  if (isPaused && !dashData) {
+    return (
+      <ErrorState
+        mensaje="Parece que te quedaste sin conexión. Revísala e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
+  if (isLoading || !dashData) return <Skeleton />
 
   const fechaHoy = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',

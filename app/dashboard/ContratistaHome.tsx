@@ -274,7 +274,7 @@ export default function ContratistaHome({
 
   // staleTime: 5 min — navigating back shows cached data instantly;
   // background refetch runs if data is older than 5 minutes.
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-contratista', userId],
     queryFn:  () => getDashboardContratista(userId),
     staleTime: 5 * 60_000,
@@ -287,6 +287,19 @@ export default function ContratistaHome({
     return (
       <ErrorState
         mensaje="No pudimos cargar tu información. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
+  // Una consulta PAUSADA (TanStack cree que no hay red) no es un error ni una
+  // carga: es isLoading=false, isError=false y data=undefined. Sin esta
+  // compuerta caía en `!data` y se dibujaba el esqueleto para siempre, sin
+  // nada que el usuario pudiera hacer. Aquí se vuelve recuperable.
+  if (isPaused && !data) {
+    return (
+      <ErrorState
+        mensaje="Parece que te quedaste sin conexión. Revísala e inténtalo de nuevo."
         onReintentar={() => { refetch() }}
         reintentando={isFetching}
       />

@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, onlineManager, focusManager } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase'
 import { obtenerPerfilUsuario } from '@/app/actions/usuario'
 import type { Usuario, Municipio } from '@/lib/types'
@@ -147,13 +147,33 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Al reanudar hay que despertar también a TanStack, no solo a la sesión.
+    // Mientras la pestaña estuvo congelada pudo perderse el evento 'online'
+    // del regreso, y su onlineManager se queda creyendo que no hay red: con
+    // eso, las consultas ni se lanzan —quedan pausadas, sin error visible— y
+    // el panel se dibuja como esqueleto eterno. Reafirmar el estado real es
+    // barato y desatasca ese caso. (networkMode:'always' ya evita la pausa;
+    // esto además destraba cualquier reintento que quedara detenido.)
+    const despertarConsultas = () => {
+      try {
+        onlineManager.setOnline(navigator.onLine !== false)
+        focusManager.setFocused(document.visibilityState === 'visible')
+      } catch { /* nunca romper el regreso por esto */ }
+    }
+
     const onVisible = () => {
-      if (document.visibilityState === 'visible') reconciliar()
+      if (document.visibilityState === 'visible') {
+        despertarConsultas()
+        reconciliar()
+      }
     }
     // pageshow con persisted=true: Safari restauró la página desde bfcache —
     // el estado de JS puede ser de hace horas; reconciliar sin debounce.
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) reconciliar(true)
+      if (e.persisted) {
+        despertarConsultas()
+        reconciliar(true)
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('pageshow', onPageShow)
