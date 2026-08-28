@@ -9,6 +9,14 @@ const devOrigins = process.env.ALLOWED_DEV_ORIGINS
 const nextConfig: NextConfig = {
   allowedDevOrigins: devOrigins,
 
+  // Marca de versión visible en el cliente. Sirve para responder sin ambigüedad
+  // "¿este navegador está corriendo el código que acabo de desplegar?" — la
+  // pregunta que no se pudo contestar durante la caza del panel congelado,
+  // donde varios arreglos parecían no surtir efecto.
+  env: {
+    NEXT_PUBLIC_COMMIT: (process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7),
+  },
+
   // Keep @react-pdf/renderer and canvas on the Node.js server only.
   // Prevents bundling issues when these packages are imported in API routes.
   serverExternalPackages: ['@react-pdf/renderer', 'canvas'],
