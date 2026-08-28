@@ -2,10 +2,19 @@
  * Service: Supervisor
  *
  * Rich data queries for the supervisor dashboard and approval queue.
- * Uses browser Supabase client — import only in 'use client' components.
+ * Cliente inyectable: por defecto usa el browser client ('use client');
+ * las server actions del panel (app/actions/dashboard.ts) inyectan el del
+ * servidor para sacar la capa de auth del navegador de la ruta crítica.
  */
 
 import { createClient } from '@/lib/supabase'
+
+/**
+ * Cliente inyectable: por defecto el del navegador (pantallas 'use client');
+ * las server actions del panel inyectan el del servidor, que comparte esta
+ * misma forma estructural.
+ */
+type ClienteSupabase = ReturnType<typeof createClient>
 import { getMesActual, MESES } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
@@ -172,9 +181,10 @@ function isContratoActivo(inicio: string, fin: string): boolean {
 
 /** Pending periods (estado = 'enviado') for a supervisor, with rich metadata */
 export async function getPeriodosPendientesSupervisor(
-  supervisorId: string
+  supervisorId: string,
+  cliente?: ClienteSupabase,
 ): Promise<PeriodoPendienteSupervisor[]> {
-  const supabase = createClient()
+  const supabase = cliente ?? createClient()
 
   const { data: contratos } = await supabase
     .from('contratos')
@@ -456,8 +466,9 @@ export interface SupervisorDashboard {
 
 export async function getSupervisorDashboard(
   supervisorId: string,
+  cliente?: ClienteSupabase,
 ): Promise<SupervisorDashboard> {
-  const supabase = createClient()
+  const supabase = cliente ?? createClient()
   const now = new Date()
   const hoy = now.toISOString().slice(0, 10)
   const { mes: mesCurrent, anio: anioCurrent } = getMesActual()
@@ -481,13 +492,16 @@ export async function getSupervisorDashboard(
   }
 
   // 1. All contracts for this supervisor
-  const { data: contratosData } = await supabase
+  // Errores lanzados, no tragados — ver getDashboardContratista: un fallo
+  // aquí se disfrazaba del dashboard `empty` de un supervisor sin contratos.
+  const { data: contratosData, error: errContratos } = await supabase
     .from('contratos')
     .select(`
       id, numero, valor_mensual, fecha_inicio, fecha_fin,
       contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)
     `)
     .eq('supervisor_id', supervisorId)
+  if (errContratos) throw errContratos
 
   const contratos = (contratosData ?? []) as any[]
   const contratoIds = contratos.map(c => c.id)
@@ -520,9 +534,11 @@ export async function getSupervisorDashboard(
       .in('estado_nuevo', ['enviado', 'aprobado', 'rechazado', 'radicado'])
       .order('created_at', { ascending: false })
       .limit(20),
-    getPeriodosPendientesSupervisor(supervisorId),
+    getPeriodosPendientesSupervisor(supervisorId, cliente),
   ])
 
+  if (periodos5MesesRes.error) throw periodos5MesesRes.error
+  if (historialRes.error) throw historialRes.error
   const periodos5Meses = (periodos5MesesRes.data ?? []) as any[]
   const historialRaw = (historialRes.data ?? []) as any[]
 

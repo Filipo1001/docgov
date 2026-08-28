@@ -3,10 +3,9 @@
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import ErrorState from '@/components/ui/ErrorState'
-import {
-  getDashboardContratista,
-  type DashboardContratista,
-} from '@/services/contratista'
+import { type DashboardContratista } from '@/services/contratista'
+import { getPanelContratista } from '@/app/actions/dashboard'
+import { conLimite } from '@/lib/con-limite'
 import { ESTADO_LABEL, ESTADO_COLOR, HISTORICO_COLOR, HISTORICO_LABEL, MESES } from '@/lib/constants'
 import type { EstadoPeriodo } from '@/lib/types'
 import PageHeader from '@/components/ui/PageHeader'
@@ -274,9 +273,14 @@ export default function ContratistaHome({
 
   // staleTime: 5 min — navigating back shows cached data instantly;
   // background refetch runs if data is older than 5 minutes.
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-contratista', userId],
-    queryFn:  () => getDashboardContratista(userId),
+    // Server action (no el cliente Supabase del navegador): tras reanudar,
+    // la capa de auth de ese cliente podía quedar colgada y este panel era la
+    // única pantalla que dependía de ella — esqueleto eterno sin petición
+    // alguna. La action viaja por el middleware, que además renueva la
+    // cookie. conLimite: un cuelgue se vuelve error visible y reintentable.
+    queryFn:  () => conLimite(getPanelContratista(), 'panel del contratista'),
     staleTime: 5 * 60_000,
   })
 
@@ -287,6 +291,19 @@ export default function ContratistaHome({
     return (
       <ErrorState
         mensaje="No pudimos cargar tu información. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
+  // Una consulta PAUSADA (TanStack cree que no hay red) no es un error ni una
+  // carga: es isLoading=false, isError=false y data=undefined. Sin esta
+  // compuerta caía en `!data` y se dibujaba el esqueleto para siempre, sin
+  // nada que el usuario pudiera hacer. Aquí se vuelve recuperable.
+  if (isPaused && !data) {
+    return (
+      <ErrorState
+        mensaje="Parece que te quedaste sin conexión. Revísala e inténtalo de nuevo."
         onReintentar={() => { refetch() }}
         reintentando={isFetching}
       />

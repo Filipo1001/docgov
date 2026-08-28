@@ -5,11 +5,11 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
 import {
-  getAsesorStats,
-  getPendientesRevisor,
   type AsesorStats,
   type PeriodoPendienteRevisor,
 } from '@/services/dashboard'
+import { getPanelReviewer } from '@/app/actions/dashboard'
+import { conLimite } from '@/lib/con-limite'
 import { enviarCorreoMasivoAsesor, type FiltroCorreo } from '@/app/actions/correos'
 import { MESES, getMesActual } from '@/lib/constants'
 import PageHeader from '@/components/ui/PageHeader'
@@ -386,15 +386,12 @@ export default function ReviewerHome({
   const { mes, anio } = getMesActual()
 
   // staleTime: 5 min — navigating back shows cached data instantly.
-  const { data: dashData, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data: dashData, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-reviewer', dependenciaId, mes, anio],
-    queryFn:  async () => {
-      const [stats, pendientes] = await Promise.all([
-        getAsesorStats(dependenciaId!, mes, anio),
-        getPendientesRevisor('enviado'),
-      ])
-      return { stats, pendientes }
-    },
+    // Server action — ver ContratistaHome: el panel no vuelve a depender de
+    // la capa de auth del cliente del navegador. La dependencia se deriva de
+    // la sesión en el servidor, no de esta prop.
+    queryFn:  () => conLimite(getPanelReviewer(mes, anio), 'panel de revisión'),
     // Only fetch when a dependenciaId is available
     enabled: !!dependenciaId,
     staleTime: 5 * 60_000,
@@ -414,7 +411,20 @@ export default function ReviewerHome({
       />
     )
   }
-  if (isLoading) return <Skeleton />
+  // Una consulta PAUSADA (TanStack cree que no hay red) no es un error ni una
+  // carga: es isLoading=false, isError=false y data=undefined. Sin esta
+  // compuerta caía en `!data` y se dibujaba el esqueleto para siempre, sin
+  // nada que el usuario pudiera hacer. Aquí se vuelve recuperable.
+  if (isPaused && !dashData) {
+    return (
+      <ErrorState
+        mensaje="Parece que te quedaste sin conexión. Revísala e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
+  if (isLoading || !dashData) return <Skeleton />
 
   const fechaHoy = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',

@@ -4,11 +4,11 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import ErrorState from '@/components/ui/ErrorState'
 import {
-  getAdminPipeline,
-  getActividadReciente,
   type PipelineStats,
   type ActividadReciente,
 } from '@/services/dashboard'
+import { getPanelAdmin } from '@/app/actions/dashboard'
+import { conLimite } from '@/lib/con-limite'
 import { MESES } from '@/lib/constants'
 import { capitalizarNombre } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
@@ -99,15 +99,11 @@ export default function AdminHome({
 
   // Single combined query so both loads share one loading state.
   // staleTime: 5 min — navigating back shows cached data instantly.
-  const { data: dashData, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data: dashData, isLoading, isError, refetch, isFetching, isPaused } = useQuery({
     queryKey: ['dashboard-admin'],
-    queryFn:  async () => {
-      const [pipeline, actividad] = await Promise.all([
-        getAdminPipeline(),
-        getActividadReciente(),
-      ])
-      return { pipeline, actividad }
-    },
+    // Server action — ver ContratistaHome: el panel no vuelve a depender de
+    // la capa de auth del cliente del navegador.
+    queryFn:  () => conLimite(getPanelAdmin(), 'panel de administración'),
     staleTime: 5 * 60_000,
   })
 
@@ -120,6 +116,19 @@ export default function AdminHome({
     return (
       <ErrorState
         mensaje="No pudimos cargar el panel. Revisa tu conexión e inténtalo de nuevo."
+        onReintentar={() => { refetch() }}
+        reintentando={isFetching}
+      />
+    )
+  }
+  // Una consulta PAUSADA (TanStack cree que no hay red) no es un error ni una
+  // carga: es isLoading=false, isError=false y data=undefined. Sin esta
+  // compuerta caía en `!data` y se dibujaba el esqueleto para siempre, sin
+  // nada que el usuario pudiera hacer. Aquí se vuelve recuperable.
+  if (isPaused && !pipeline) {
+    return (
+      <ErrorState
+        mensaje="Parece que te quedaste sin conexión. Revísala e inténtalo de nuevo."
         onReintentar={() => { refetch() }}
         reintentando={isFetching}
       />

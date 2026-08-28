@@ -3,10 +3,19 @@
  *
  * Queries for admin pipeline stats, recent activity,
  * and reviewer pending lists.
- * Uses browser Supabase client — import only in 'use client' components.
+ * Cliente inyectable: por defecto usa el browser client ('use client');
+ * las server actions del panel (app/actions/dashboard.ts) inyectan el del
+ * servidor para sacar la capa de auth del navegador de la ruta crítica.
  */
 
 import { createClient } from '@/lib/supabase'
+
+/**
+ * Cliente inyectable: por defecto el del navegador (pantallas 'use client');
+ * las server actions del panel inyectan el del servidor, que comparte esta
+ * misma forma estructural.
+ */
+type ClienteSupabase = ReturnType<typeof createClient>
 import { getMesActual } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────
@@ -50,18 +59,12 @@ export interface PeriodoPendienteRevisor {
 
 // ─── Admin Dashboard ──────────────────────────────────────────
 
-export async function getAdminPipeline(): Promise<PipelineStats> {
-  const supabase = createClient()
+export async function getAdminPipeline(cliente?: ClienteSupabase): Promise<PipelineStats> {
+  const supabase = cliente ?? createClient()
 
-  const [
-    { count: borrador },
-    { count: enviado },
-    { count: revision },
-    { count: aprobado },
-    { count: radicado },
-    { count: rechazado },
-    { count: totalContratos },
-  ] = await Promise.all([
+  // Errores lanzados, no tragados — ver getDashboardContratista: un conteo
+  // fallido devolvía count null y el pipeline entero se pintaba en ceros.
+  const resultados = await Promise.all([
     supabase.from('periodos').select('*', { count: 'exact', head: true }).eq('estado', 'borrador').eq('es_historico', false),
     supabase.from('periodos').select('*', { count: 'exact', head: true }).eq('estado', 'enviado'),
     supabase.from('periodos').select('*', { count: 'exact', head: true }).eq('estado', 'revision'),
@@ -70,6 +73,16 @@ export async function getAdminPipeline(): Promise<PipelineStats> {
     supabase.from('periodos').select('*', { count: 'exact', head: true }).eq('estado', 'rechazado'),
     supabase.from('contratos').select('*', { count: 'exact', head: true }),
   ])
+  for (const r of resultados) { if (r.error) throw r.error }
+  const [
+    { count: borrador },
+    { count: enviado },
+    { count: revision },
+    { count: aprobado },
+    { count: radicado },
+    { count: rechazado },
+    { count: totalContratos },
+  ] = resultados
 
   return {
     borrador: borrador ?? 0,
@@ -82,11 +95,12 @@ export async function getAdminPipeline(): Promise<PipelineStats> {
   }
 }
 
-export async function getActividadReciente(): Promise<ActividadReciente[]> {
-  const supabase = createClient()
+export async function getActividadReciente(cliente?: ClienteSupabase): Promise<ActividadReciente[]> {
+  const supabase = cliente ?? createClient()
 
   // Get recent period state changes via historial_periodos
-  const { data: historial } = await supabase
+  // Errores lanzados, no tragados — ver getDashboardContratista.
+  const { data: historial, error } = await supabase
     .from('historial_periodos')
     .select(`
       id, estado_nuevo, created_at,
@@ -101,6 +115,7 @@ export async function getActividadReciente(): Promise<ActividadReciente[]> {
     .in('estado_nuevo', ['enviado', 'aprobado', 'rechazado', 'radicado'])
     .order('created_at', { ascending: false })
     .limit(8)
+  if (error) throw error
 
   return ((historial ?? []) as any[])
     .filter(h => h.periodo?.contrato)
@@ -125,13 +140,15 @@ export async function getActividadReciente(): Promise<ActividadReciente[]> {
 // ─── Reviewer Dashboard (asesor/gobierno/hacienda) ───────────
 
 export async function getPendientesRevisor(
-  estadoFiltro: string
+  estadoFiltro: string,
+  cliente?: ClienteSupabase,
 ): Promise<PeriodoPendienteRevisor[]> {
-  const supabase = createClient()
+  const supabase = cliente ?? createClient()
   const now = Date.now()
   const { mes, anio } = getMesActual()
 
-  const { data } = await supabase
+  // Errores lanzados, no tragados — ver getDashboardContratista.
+  const { data, error } = await supabase
     .from('periodos')
     .select(`
       id, contrato_id, mes, anio, valor_cobro, estado, fecha_envio,
@@ -147,6 +164,7 @@ export async function getPendientesRevisor(
     .eq('es_historico', false)
     .order('fecha_envio', { ascending: true })
     .limit(20)
+  if (error) throw error
 
   return ((data ?? []) as any[]).map(p => ({
     id: p.id,
@@ -192,8 +210,9 @@ export async function getAsesorStats(
   dependenciaId: string,
   mes: string,
   anio: number,
+  cliente?: ClienteSupabase,
 ): Promise<AsesorStats> {
-  const supabase = createClient()
+  const supabase = cliente ?? createClient()
   const hoy = new Date().toISOString().split('T')[0]
 
   const empty: AsesorStats = {
@@ -207,11 +226,13 @@ export async function getAsesorStats(
   }
 
   // 1. Active contracts in this dependencia with contractor email
-  const { data: contratos } = await supabase
+  // Errores lanzados, no tragados — ver getDashboardContratista.
+  const { data: contratos, error: errContratos } = await supabase
     .from('contratos')
     .select('id, contratista:usuarios!contratos_contratista_id_fkey(email)')
     .eq('dependencia_id', dependenciaId)
     .gte('fecha_fin', hoy)
+  if (errContratos) throw errContratos
 
   const contratoList = (contratos ?? []) as unknown as Array<{ id: string; contratista: { email: string } | null }>
   const contratoIds = contratoList.map(c => c.id)
@@ -219,13 +240,14 @@ export async function getAsesorStats(
   if (totalContratos === 0) return empty
 
   // 2. Periods for this month
-  const { data: periodos } = await supabase
+  const { data: periodos, error: errPeriodos } = await supabase
     .from('periodos')
     .select('contrato_id, estado')
     .in('contrato_id', contratoIds)
     .eq('mes', mes)
     .eq('anio', anio)
     .eq('es_historico', false)
+  if (errPeriodos) throw errPeriodos
 
   const periodoList = (periodos ?? []) as Array<{ contrato_id: string; estado: string }>
   const estadoPorContrato = new Map(periodoList.map(p => [p.contrato_id, p.estado]))
