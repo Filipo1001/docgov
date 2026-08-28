@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidarPeriodos } from '@/lib/invalidar-periodos'
 import { useUsuario } from '@/lib/user-context'
 import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_COLA_POR_ROL } from '@/lib/constants'
 import type { Periodo } from '@/lib/types'
@@ -38,22 +40,20 @@ function urgencyConfig(dias: number) {
 type SortKey = 'urgencia' | 'nombre' | 'valor'
 
 function SupervisorAprobaciones({ userId }: { userId: string }) {
-  const [periodos, setPeriodos] = useState<PeriodoPendienteSupervisor[]>([])
-  const [cargando, setCargando] = useState(true)
+  const queryClient = useQueryClient()
   const [procesando, setProcesando] = useState<string | null>(null)
   const [rechazandoId, setRechazandoId] = useState<string | null>(null)
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [sort, setSort] = useState<SortKey>('urgencia')
   const [busqueda, setBusqueda] = useState('')
 
-  const cargar = useCallback(async () => {
-    setCargando(true)
-    const data = await getPeriodosPendientesSupervisor(userId)
-    setPeriodos(data)
-    setCargando(false)
-  }, [userId])
-
-  useEffect(() => { cargar() }, [cargar])
+  // React Query en vez de estado local: así esta lista participa de la
+  // invalidación compartida y se entera de lo que se apruebe en otra
+  // pantalla, en vez de quedarse con su copia hasta un F5.
+  const { data: periodos = [], isLoading: cargando } = useQuery({
+    queryKey: ['aprobaciones', 'supervisor', userId],
+    queryFn: () => getPeriodosPendientesSupervisor(userId),
+  })
 
   async function handleAprobar(periodoId: string) {
     setProcesando(periodoId)
@@ -63,7 +63,7 @@ function SupervisorAprobaciones({ userId }: { userId: string }) {
       toast.error(result.error)
     } else {
       toast.success('Periodo aprobado')
-      setPeriodos(prev => prev.filter(p => p.id !== periodoId))
+      invalidarPeriodos(queryClient)
     }
   }
 
@@ -76,9 +76,9 @@ function SupervisorAprobaciones({ userId }: { userId: string }) {
       toast.error(result.error)
     } else {
       toast.success('Periodo devuelto al contratista')
-      setPeriodos(prev => prev.filter(p => p.id !== rechazandoId))
       setRechazandoId(null)
       setMotivoRechazo('')
+      invalidarPeriodos(queryClient)
     }
   }
 
@@ -294,19 +294,17 @@ const TITULO_POR_ROL: Record<string, string> = {
 }
 
 function GenericAprobaciones({ rol, userId }: { rol: string; userId: string }) {
-  const [periodos, setPeriodos] = useState<Periodo[]>([])
-  const [cargando, setCargando] = useState(true)
+  const queryClient = useQueryClient()
   const [mostrarRechazo, setMostrarRechazo] = useState<Record<string, boolean>>({})
   const [motivoRechazo, setMotivoRechazo] = useState<Record<string, string>>({})
   const [procesando, setProcesando] = useState<string | null>(null)
 
-  const cargar = useCallback(async () => {
-    const data = await getPeriodosPendientesParaRol(rol, userId)
-    setPeriodos(data)
-    setCargando(false)
-  }, [rol, userId])
-
-  useEffect(() => { cargar() }, [cargar])
+  // Ver el componente del supervisor: React Query para participar de la
+  // invalidación compartida.
+  const { data: periodos = [], isLoading: cargando } = useQuery({
+    queryKey: ['aprobaciones', rol, userId],
+    queryFn: () => getPeriodosPendientesParaRol(rol, userId),
+  })
 
   async function handleAprobar(periodoId: string) {
     setProcesando(periodoId)
@@ -314,7 +312,7 @@ function GenericAprobaciones({ rol, userId }: { rol: string; userId: string }) {
     if (result.error) toast.error(result.error)
     else {
       toast.success('Periodo aprobado')
-      cargar()
+      invalidarPeriodos(queryClient)
     }
     setProcesando(null)
   }
@@ -329,7 +327,7 @@ function GenericAprobaciones({ rol, userId }: { rol: string; userId: string }) {
       toast.success('Periodo devuelto al contratista')
       setMostrarRechazo(p => ({ ...p, [periodoId]: false }))
       setMotivoRechazo(p => ({ ...p, [periodoId]: '' }))
-      cargar()
+      invalidarPeriodos(queryClient)
     }
     setProcesando(null)
   }

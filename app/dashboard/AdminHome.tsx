@@ -187,7 +187,7 @@ export default function AdminHome({
         {pipeline.rechazado > 0 && (
           <p className="flex items-center gap-1.5 text-xs text-red-600 mt-3 font-medium">
             <Icono glifo={Iconos.estado.advertencia} tamano="sm" />
-            {pipeline.rechazado} periodo{pipeline.rechazado !== 1 ? 's' : ''} rechazado{pipeline.rechazado !== 1 ? 's' : ''}
+            {pipeline.rechazado} periodo{pipeline.rechazado !== 1 ? 's' : ''} devuelto{pipeline.rechazado !== 1 ? 's' : ''}
           </p>
         )}
       </Card>

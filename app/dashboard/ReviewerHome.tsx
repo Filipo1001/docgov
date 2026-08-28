@@ -68,7 +68,7 @@ function PipelineBar({ stats }: { stats: AsesorStats }) {
       value: rechazados,
       color: 'bg-red-200',
       textColor: 'text-red-600',
-      label: 'Rechazados',
+      label: 'Devueltos',
       border: 'border-red-300',
     },
     {
@@ -209,7 +209,7 @@ function PendienteCard({ p }: { p: PeriodoPendienteRevisor }) {
 const FILTROS: { key: FiltroCorreo; label: string }[] = [
   { key: 'sin_enviar', label: 'Sin enviar' },
   { key: 'enviaron',   label: 'Enviaron'   },
-  { key: 'rechazados', label: 'Rechazados' },
+  { key: 'rechazados', label: 'Devueltos' },
   { key: 'todos',      label: 'Todos'      },
 ]
 

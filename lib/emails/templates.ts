@@ -352,12 +352,45 @@ export function emailEnvioTardioCancelado(data: TemplateData) {
 
 export type EmailTemplate = (data: TemplateData) => { subject: string; html: string }
 
+/**
+ * Planilla de seguridad social devuelta.
+ *
+ * Existe aparte de emailPeriodoRechazado a propósito: antes este aviso
+ * reutilizaba aquella plantilla y le decía al contratista que su INFORME
+ * había sido devuelto para correcciones, cuando lo devuelto era solo un
+ * soporte. La diferencia importa: aquí no hay que rehacer actividades ni
+ * evidencias, basta con subir una planilla nueva.
+ */
+export function emailPlanillaRechazada(data: TemplateData) {
+  return {
+    subject: `Planilla de seguridad social devuelta — ${data.mes} ${data.anio}`,
+    html: baseHtml(
+      'Planilla de seguridad social devuelta',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         La planilla de seguridad social que adjuntaste al informe de
+         <strong>${data.mes} ${data.anio}</strong> del contrato <strong>${data.contrato}</strong>
+         fue devuelta para corrección.
+       </p>
+       ${data.motivo ? `<div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;">
+         <p style="color:#991b1b;font-size:13px;margin:0;"><strong>Motivo:</strong> ${data.motivo}</p>
+       </div>` : ''}
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Tu informe sigue su curso: solo tienes que entrar al periodo y subir una
+         planilla nueva. No hace falta rehacer actividades ni evidencias.
+       </p>`,
+      '#dc2626'
+    ),
+  }
+}
+
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
   enviado_confirmacion: emailEnvioConfirmacion,
   revision: emailPeriodoAprobadoAsesor,
   aprobado: emailPeriodoAprobado,
   rechazado: emailPeriodoRechazado,
+  planilla_rechazada: emailPlanillaRechazada,
   radicado: emailPeriodoRadicado,
   recordatorio: emailRecordatorioInforme,
   recordatorio_urgente: emailRecordatorioUrgente,

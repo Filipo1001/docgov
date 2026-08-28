@@ -16,6 +16,8 @@ import type {
   PeriodoColaborador,
 } from '@/services/supervisor'
 import { aprobarPeriodos, devolverPeriodoAContratista } from '@/app/actions/periodos'
+import { useQueryClient } from '@tanstack/react-query'
+import { invalidarPeriodos } from '@/lib/invalidar-periodos'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ function PeriodoRow({
   canReview: boolean
   onUpdate: () => void
 }) {
+  const queryClient = useQueryClient()
   const [procesando, setProcesando] = useState(false)
   const [rechazando, setRechazando] = useState(false)
   const [motivo, setMotivo] = useState('')
@@ -60,7 +63,7 @@ function PeriodoRow({
     const res = await aprobarPeriodos([periodo.id])
     setProcesando(false)
     if (res.error) toast.error(res.error)
-    else { toast.success('Periodo aprobado'); onUpdate() }
+    else { toast.success('Periodo aprobado'); onUpdate(); invalidarPeriodos(queryClient) }
   }
 
   async function handleRechazar() {
@@ -70,7 +73,7 @@ function PeriodoRow({
     setProcesando(false)
     setRechazando(false)
     if (res.error) toast.error(res.error)
-    else { toast.success('Periodo devuelto al contratista'); onUpdate() }
+    else { toast.success('Periodo devuelto al contratista'); onUpdate(); invalidarPeriodos(queryClient) }
   }
 
   return (

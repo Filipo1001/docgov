@@ -905,6 +905,17 @@ export async function revisarPlanilla(
     if (!['enviado', 'revision', 'aprobado'].includes(periodo.estado)) {
       return { error: 'La planilla solo puede revisarse cuando el periodo ha sido enviado' }
     }
+    // Rechazar exige que el contratista PUEDA reemplazarla. Con el periodo ya
+    // aprobado, subir planilla está bloqueado (ESTADOS_PLANILLA_EDITABLE), así
+    // que el rechazo dejaba un callejón sin salida: se le pedía una planilla
+    // nueva y el sistema se la impedía. Para corregir una planilla de un
+    // periodo aprobado hay que devolver el periodo primero.
+    if (estado === 'rechazada' && !ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+      return {
+        error: 'Este periodo ya está aprobado: el contratista no podría reemplazar la planilla. ' +
+               'Devuelve primero el informe para que pueda corregirla.',
+      }
+    }
 
     // Scope: supervisor → su contrato
     if (usuario.rol === 'supervisor') {
@@ -926,6 +937,16 @@ export async function revisarPlanilla(
     if (error) return { error: `Error al revisar planilla: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo guardar la revisión. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
+    // Rastro en el historial del periodo. Antes la revisión de la planilla no
+    // dejaba ninguna huella: en un expediente contractual, que se devuelva un
+    // soporte y no conste quién ni cuándo es un vacío de trazabilidad.
+    await insertHistorial(
+      supabase, periodoId, periodo.estado, periodo.estado, usuario.id,
+      estado === 'rechazada'
+        ? `Planilla de seguridad social devuelta${comentario?.trim() ? `: ${comentario.trim()}` : ''}`
+        : 'Planilla de seguridad social aprobada',
+    )
+
     // Notify contratista when planilla is rejected (non-blocking)
     if (estado === 'rechazada') {
       try {
@@ -933,12 +954,17 @@ export async function revisarPlanilla(
         if (contrato?.contratista_id) {
           const motivo = comentario?.trim()
           await enviarNotificacion({
+            // Tipo propio: con 'rechazado' se enviaba la plantilla del informe,
+            // que dice «tu informe ha sido devuelto para correcciones». Solo se
+            // devolvió la planilla, y el contratista entendía que debía rehacer
+            // todo el informe.
+            tipo: 'planilla_rechazada',
             destinatarioId: contrato.contratista_id,
-            tipo: 'rechazado',
-            titulo: 'Tu planilla de seguridad social fue rechazada',
+            titulo: 'Tu planilla de seguridad social fue devuelta',
             mensaje: motivo
-              ? `La planilla de ${periodo.mes} ${periodo.anio} fue rechazada. Motivo: ${motivo}`
+              ? `La planilla de ${periodo.mes} ${periodo.anio} fue devuelta. Motivo: ${motivo}`
               : `La planilla de ${periodo.mes} ${periodo.anio} requiere corrección. Sube una nueva planilla.`,
+            motivo,
             periodoId,
             mes: periodo.mes,
             anio: periodo.anio,

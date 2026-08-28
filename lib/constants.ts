@@ -18,13 +18,44 @@ export type ClaveIconoNavegacion =
 
 // ─── Period state display ────────────────────
 
+/**
+ * Etiquetas visibles. El VALOR guardado sigue siendo `rechazado`; solo cambia
+ * cómo se nombra.
+ *
+ * Por qué «Devuelto» y no «Rechazado»: en este trámite nada se rechaza de
+ * forma definitiva. El informe vuelve al contratista —o un paso atrás, al
+ * asesor— para corregirse, y el proceso continúa. «Rechazado» sugiere una
+ * sanción que no existe, y en un contrato público esa palabra pesa. Además,
+ * el sistema ya se contradecía: el badge decía «Rechazado» mientras el aviso
+ * y el correo hablaban de una devolución.
+ *
+ * El estado no dice a dónde volvió (al contratista o al asesor); eso lo dice
+ * cada pantalla en su contexto, con ESTADO_DESTINO más abajo.
+ */
 export const ESTADO_LABEL: Record<EstadoPeriodo, string> = {
   borrador: 'Borrador',
   enviado: 'Enviado',
   revision: 'En revisión',
   aprobado: 'Aprobado',
   radicado: 'Radicado',
-  rechazado: 'Rechazado',
+  rechazado: 'Devuelto',
+}
+
+/**
+ * Quién tiene la pelota cuando un periodo está devuelto. Se guarda un solo
+ * estado (`rechazado`) para dos destinos distintos:
+ *   · el asesor devuelve al contratista            → rechazado
+ *   · la secretaría devuelve al contratista        → rechazado
+ *   · la secretaría devuelve al asesor             → enviado (no es este caso)
+ * Por eso la etiqueta larga se usa donde hay espacio para explicar.
+ */
+export const ESTADO_LABEL_LARGO: Record<EstadoPeriodo, string> = {
+  borrador: 'Sin enviar',
+  enviado: 'Enviado, en espera de revisión',
+  revision: 'En revisión de la secretaría',
+  aprobado: 'Aprobado, pendiente de radicar',
+  radicado: 'Radicado',
+  rechazado: 'Devuelto al contratista para corrección',
 }
 
 /**

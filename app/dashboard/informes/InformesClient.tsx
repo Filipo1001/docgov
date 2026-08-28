@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidarPeriodos } from '@/lib/invalidar-periodos'
 import { useUsuario } from '@/lib/user-context'
 import { MESES, ESTADO_COLOR, ESTADO_LABEL } from '@/lib/constants'
 import { getInformesMensuales, getInformesBorrador } from '@/services/periodos'
@@ -441,6 +442,12 @@ export default function InformesPage({
   const [anio, setAnio] = useState(now.getFullYear())
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [busqueda, setBusqueda] = useState('')
+  // Filtros para quien ve TODO el municipio. El supervisor no los necesita:
+  // la base ya lo acota a sus contratos (periodos_supervisor_read), igual que
+  // al asesor a su dependencia. Solo el admin —y contratación— navegan las
+  // 78 activas de golpe, y ahí una lista sin cortes es inservible.
+  const [depFiltro, setDepFiltro] = useState<string>('todas')
+  const [planillaFiltro, setPlanillaFiltro] = useState<'todas' | 'rechazada' | 'pendiente' | 'sin_planilla'>('todas')
 
   // Secretary action state
   const [menuAbierto, setMenuAbierto] = useState(false)
@@ -518,6 +525,9 @@ export default function InformesPage({
       queryClient.refetchQueries({ queryKey: ['informes'] }),
       queryClient.refetchQueries({ queryKey: ['informes-borrador'] }),
     ])
+    // Y avisar al resto de pantallas que muestran este mismo periodo: sin
+    // esto, aprobar aquí dejaba el panel y el detalle con el estado viejo.
+    invalidarPeriodos(queryClient)
   }
 
   // Reset reminder sent state + filter tab when month changes.
@@ -527,6 +537,11 @@ export default function InformesPage({
   useEffect(() => {
     setRecordatoriosEnviados(false)
     setFiltro('todos')
+    // Los acotamientos también se resetean: una dependencia que existía en
+    // un mes puede no tener nada en otro, y la lista quedaría vacía sin que
+    // se vea por qué.
+    setDepFiltro('todas')
+    setPlanillaFiltro('todas')
     setBusqueda('')
   }, [mesIdx, anio])
 
@@ -577,17 +592,40 @@ export default function InformesPage({
   // masivas siguen refiriéndose al mes completo, para que buscar nunca cambie
   // en silencio el alcance de un "aprobar todos" o una descarga masiva.
   // Es filtrado en cliente sobre datos ya cargados → instantáneo, sin red.
+  // Dependencias presentes en el mes. Se derivan de los datos ya cargados en
+  // vez de consultar la tabla: así el desplegable solo ofrece opciones que
+  // devuelven algo, y no hay una consulta más que pueda fallar.
+  const dependencias = (() => {
+    const m = new Map<string, string>()
+    for (const p of periodos) {
+      const id = p.contrato?.dependencia_id
+      const nombre = p.contrato?.dependencia?.nombre
+      if (id && nombre && !m.has(id)) m.set(id, nombre)
+    }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'es'))
+  })()
+
+  // Dependencia y estado de la planilla se aplican antes de la búsqueda: son
+  // acotamientos del conjunto, no una consulta sobre él.
+  const periodosAcotados = periodosDelFiltro.filter(p => {
+    if (depFiltro !== 'todas' && p.contrato?.dependencia_id !== depFiltro) return false
+    if (planillaFiltro === 'rechazada'  && p.planilla_estado !== 'rechazada') return false
+    if (planillaFiltro === 'pendiente'  && p.planilla_estado !== 'pendiente') return false
+    if (planillaFiltro === 'sin_planilla' && !!p.planilla_ss_url) return false
+    return true
+  })
+
   const q = normalizar(busqueda.trim())
   const buscando = q.length > 0
   const periodosVisibles = buscando
-    ? periodosDelFiltro.filter(p => {
+    ? periodosAcotados.filter(p => {
         const c = p.contrato
         return (
           normalizar(c?.contratista?.nombre_completo ?? '').includes(q) ||
           normalizar(String(c?.numero ?? '')).includes(q)
         )
       })
-    : periodosDelFiltro
+    : periodosAcotados
 
   // Secretary mass actions — revision (asesor reviewed) + enviado (direct)
   const idsAprobadosAsesor = aprobadosAsesor.map(p => p.id)
@@ -739,6 +777,47 @@ export default function InformesPage({
           </div>
         </div>
 
+        {/* Acotamientos extra: solo donde hay varias dependencias a la vista.
+            Para supervisor y asesor sobran — ya llegan acotados de la base. */}
+        {dependencias.length > 1 && (
+          <div className="mt-3 flex flex-col gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center">
+            <label className="flex items-center gap-2 text-xs text-gray-500">
+              Dependencia
+              <select
+                value={depFiltro}
+                onChange={e => setDepFiltro(e.target.value)}
+                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              >
+                <option value="todas">Todas ({dependencias.length})</option>
+                {dependencias.map(([id, nombre]) => (
+                  <option key={id} value={id}>{nombre}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-500">
+              Planilla
+              <select
+                value={planillaFiltro}
+                onChange={e => setPlanillaFiltro(e.target.value as typeof planillaFiltro)}
+                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              >
+                <option value="todas">Cualquiera</option>
+                <option value="rechazada">Devuelta</option>
+                <option value="pendiente">Sin revisar</option>
+                <option value="sin_planilla">Sin adjuntar</option>
+              </select>
+            </label>
+            {(depFiltro !== 'todas' || planillaFiltro !== 'todas') && (
+              <button
+                onClick={() => { setDepFiltro('todas'); setPlanillaFiltro('todas') }}
+                className="text-xs font-medium text-gray-400 underline-offset-2 hover:text-gray-700 hover:underline sm:ml-auto"
+              >
+                Quitar filtros
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Resultado de la búsqueda — aclara que los contadores de las
             pestañas siguen siendo los totales del mes. */}
         {buscando && (
@@ -876,7 +955,7 @@ export default function InformesPage({
                   <button onClick={() => accionMasiva('rechazar_todos')}
                     disabled={idsParaAprobar.length === 0}
                     className="w-full text-left px-4 py-3 text-sm hover:bg-red-50 text-red-600 disabled:opacity-40 disabled:cursor-not-allowed">
-                    <p className="font-medium">Rechazar todos</p>
+                    <p className="font-medium">Devolver todos</p>
                     <p className="text-xs text-red-400">{idsParaAprobar.length} informes -- devuelve a asesores</p>
                   </button>
                 </div>

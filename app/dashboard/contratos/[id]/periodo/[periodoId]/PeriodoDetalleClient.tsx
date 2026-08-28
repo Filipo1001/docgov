@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { invalidarPeriodos } from '@/lib/invalidar-periodos'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
@@ -113,6 +115,10 @@ export default function PeriodoDetallePage({
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
   const router = useRouter()
+  // Tras cualquier acción sobre el periodo hay que avisar a las demás
+  // pantallas que lo muestran (Informes, paneles): antes cada una guardaba
+  // su copia y esta era la única que se enteraba.
+  const queryClient = useQueryClient()
 
   // Data is pre-fetched server-side and passed as props — no blank page on refresh.
   // cargarDatos() is still used for post-mutation refreshes and background polling.
@@ -787,6 +793,7 @@ export default function PeriodoDetallePage({
       setFaseEnvio('actualizando')
       router.refresh()
       void cargarDatos()
+      invalidarPeriodos(queryClient)
     } catch {
       // Caída de red al invocar la acción. Sin este catch el botón se quedaría
       // deshabilitado para siempre y solo un F5 lo recuperaría.
@@ -840,7 +847,7 @@ export default function PeriodoDetallePage({
     setProcesando(true)
     const result = await aprobarComoAsesor(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Informe aprobado como asesor'); router.refresh(); cargarDatos() }
+    else { toast.success('Informe aprobado como asesor'); router.refresh(); cargarDatos(); invalidarPeriodos(queryClient) }
     setProcesando(false)
   }
 
@@ -848,7 +855,7 @@ export default function PeriodoDetallePage({
     setProcesando(true)
     const result = await revocarPreaprobacion(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Aprobación revocada'); router.refresh(); cargarDatos() }
+    else { toast.success('Aprobación revocada'); router.refresh(); cargarDatos(); invalidarPeriodos(queryClient) }
     setProcesando(false)
   }
 
@@ -860,7 +867,7 @@ export default function PeriodoDetallePage({
       toast.success('Informe devuelto al contratista')
       setMostrarRechazo(false)
       setMotivoRechazo('')
-      router.refresh(); cargarDatos()
+      router.refresh(); cargarDatos(); invalidarPeriodos(queryClient)
     }
     setProcesando(false)
   }
@@ -874,7 +881,7 @@ export default function PeriodoDetallePage({
     setProcesando(true)
     const result = await aprobarPeriodos([periodoId])
     if (result.error) toast.error(result.error)
-    else { toast.success('Informe aprobado'); router.refresh(); cargarDatos() }
+    else { toast.success('Informe aprobado'); router.refresh(); cargarDatos(); invalidarPeriodos(queryClient) }
     setProcesando(false)
   }
 
@@ -883,7 +890,7 @@ export default function PeriodoDetallePage({
     setProcesando(true)
     const result = await aprobarPeriodos([periodoId])
     if (result.error) toast.error(result.error)
-    else { toast.success('Informe aprobado'); router.refresh(); cargarDatos() }
+    else { toast.success('Informe aprobado'); router.refresh(); cargarDatos(); invalidarPeriodos(queryClient) }
     setProcesando(false)
   }
 
@@ -905,6 +912,7 @@ export default function PeriodoDetallePage({
       setMotivoDevolucion('')
       router.refresh()
       cargarDatos()
+      invalidarPeriodos(queryClient)
     }
     setProcesandoDevolucion(false)
   }
@@ -917,7 +925,7 @@ export default function PeriodoDetallePage({
       toast.success('Devuelto a los asesores para revisión')
       setMostrarRechazo(false)
       setMotivoRechazo('')
-      router.refresh(); cargarDatos()
+      router.refresh(); cargarDatos(); invalidarPeriodos(queryClient)
     }
     setProcesando(false)
   }
@@ -931,7 +939,7 @@ export default function PeriodoDetallePage({
         ? `Radicado con No. ${numRadicado.trim()}`
         : 'Periodo marcado como radicado'
       toast.success(msg)
-      router.refresh(); cargarDatos()
+      router.refresh(); cargarDatos(); invalidarPeriodos(queryClient)
     }
     setRadicando(false)
   }
@@ -980,7 +988,7 @@ export default function PeriodoDetallePage({
       toast.success(`Periodo devuelto a ${label}`)
       setDestinoDevolver(null)
       setMotivoDevolver('')
-      router.refresh(); cargarDatos()
+      router.refresh(); cargarDatos(); invalidarPeriodos(queryClient)
     }
     setProcesandoDevolver(false)
   }
@@ -3509,7 +3517,7 @@ export default function PeriodoDetallePage({
                         >
                           <Icono glifo={Iconos.estado.rechazado} tamano="sm" />
                           <div>
-                            <p className="text-sm font-medium text-red-600">Rechazar planilla</p>
+                            <p className="text-sm font-medium text-red-600">Devolver planilla</p>
                             {periodo.planilla_comentario
                               ? <p className="text-xs text-gray-400">Motivo anterior: {periodo.planilla_comentario}</p>
                               : <p className="text-xs text-gray-400">Solicitar corrección al contratista</p>}

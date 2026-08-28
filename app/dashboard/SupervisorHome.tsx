@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidarPeriodos } from '@/lib/invalidar-periodos'
 import {
   type SupervisorDashboard,
   type PeriodoPendienteSupervisor,
@@ -46,7 +47,7 @@ function estadoActividad(tipo: string): { icono: LucideIcon; color: string; fond
     case 'radicado':
       return { icono: Iconos.estado.verificado, color: 'text-emerald-600', fondo: 'bg-emerald-50', label: 'Radicado' }
     case 'rechazado':
-      return { icono: Iconos.estado.rechazado, color: 'text-red-600', fondo: 'bg-red-50', label: 'Rechazado' }
+      return { icono: Iconos.estado.rechazado, color: 'text-red-600', fondo: 'bg-red-50', label: 'Devuelto' }
     case 'enviado':
       return { icono: Iconos.accion.enviar, color: 'text-amber-600', fondo: 'bg-amber-50', label: 'Enviado' }
     default:
@@ -122,7 +123,7 @@ function PipelineBar({ pipeline, mes, anio }: {
 
   const allSegments = [
     { key: 'sinEnviar', count: sinEnviar, color: 'bg-gray-300', label: 'Sin enviar',  tc: 'text-gray-500' },
-    { key: 'rechazado', count: rechazado, color: 'bg-red-400',   label: 'Rechazado',  tc: 'text-red-500'  },
+    { key: 'rechazado', count: rechazado, color: 'bg-red-400',   label: 'Devueltos',  tc: 'text-red-500'  },
     { key: 'enviado',   count: enviado,   color: 'bg-amber-400', label: 'En tu mesa', tc: 'text-amber-600' },
     { key: 'revision',  count: revision,  color: 'bg-indigo-400',label: 'Secretaría', tc: 'text-indigo-600'},
     { key: 'aprobado',  count: aprobado,  color: 'bg-emerald-500',label: 'Aprobado',  tc: 'text-emerald-600'},
@@ -185,7 +186,7 @@ function Dot({ estado }: { estado: string }) {
   if (estado === 'enviado' || estado === 'revision')
     return <span className="w-3 h-3 rounded-full bg-amber-400 flex-shrink-0" title="En revisión" />
   if (estado === 'rechazado')
-    return <span className="w-3 h-3 rounded-full bg-red-400 flex-shrink-0" title="Rechazado" />
+    return <span className="w-3 h-3 rounded-full bg-red-400 flex-shrink-0" title="Devuelto al contratista" />
   return <span className="w-3 h-3 rounded-full border-2 border-gray-300 flex-shrink-0" title="Sin enviar" />
 }
 
@@ -275,7 +276,7 @@ function RechazoModal({
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h3 className="text-base font-bold text-gray-900 mb-1">Rechazar periodo</h3>
+        <h3 className="text-base font-bold text-gray-900 mb-1">Devolver al contratista</h3>
         <p className="text-sm text-gray-500 mb-4">
           El contratista recibirá este motivo y podrá corregir y reenviar.
         </p>
@@ -355,6 +356,7 @@ export default function SupervisorHome({
           pipeline: { ...prev.pipeline, enviado: Math.max(0, prev.pipeline.enviado - 1) },
         } : prev
       )
+      invalidarPeriodos(queryClient)
     }
   }
 
@@ -381,6 +383,7 @@ export default function SupervisorHome({
           },
         } : prev
       )
+      invalidarPeriodos(queryClient)
     }
   }
 
@@ -646,7 +649,7 @@ export default function SupervisorHome({
             {[
               { cls: 'bg-emerald-500',              label: 'Aprobado'    },
               { cls: 'bg-amber-400',                label: 'En revisión' },
-              { cls: 'bg-red-400',                  label: 'Rechazado'   },
+              { cls: 'bg-red-400',                  label: 'Devuelto'    },
               { cls: 'border-2 border-gray-300 bg-transparent', label: 'Sin enviar' },
             ].map(item => (
               <div key={item.label} className="flex items-center gap-1.5">

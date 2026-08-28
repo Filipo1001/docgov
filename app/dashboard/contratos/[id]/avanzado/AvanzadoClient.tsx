@@ -31,7 +31,7 @@ const ESTADO_LABEL: Partial<Record<EstadoPeriodo, string>> = {
   revision: 'En revisión',
   aprobado: 'Aprobado',
   radicado: 'Radicado',
-  rechazado: 'Rechazado',
+  rechazado: 'Devuelto',
 }
 
 const PLANILLA_ESTADO_LABEL: Record<string, string> = {
