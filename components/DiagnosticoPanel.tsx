@@ -30,7 +30,8 @@ export default function DiagnosticoPanel({ queryKey, cargando, hayUsuario, sesio
   const queryClient = useQueryClient()
   const [abierto, setAbierto] = useState(true)
   const [consulta, setConsulta] = useState('—')
-  const [auth, setAuth] = useState('—')
+  const [auth, setAuth] = useState('midiendo…')
+  const [segundos, setSegundos] = useState(0)
   const [bitacora, setBitacora] = useState<string[]>([])
   const ultimo = useRef('')
 
@@ -39,6 +40,7 @@ export default function DiagnosticoPanel({ queryKey, cargando, hayUsuario, sesio
     const t = setInterval(() => {
       const q = queryClient.getQueryCache().find({ queryKey })
       const estado = q ? `${q.state.status}/${q.state.fetchStatus}` : 'NO EXISTE'
+      setSegundos(x => x + 1)
       const linea = `${estado} carg:${cargando ? 'sí' : 'no'} usr:${hayUsuario ? 'sí' : 'NO'}${sesionExpirada ? ' EXPIRADA' : ''}`
       setConsulta(estado)
       if (linea !== ultimo.current) {
@@ -53,13 +55,17 @@ export default function DiagnosticoPanel({ queryKey, cargando, hayUsuario, sesio
   // que es justo cuando se sospecha que deja de responder.
   useEffect(() => {
     const medir = () => {
+      setAuth('midiendo…')
       const inicio = Date.now()
       Promise.race([
         createClient().auth.getSession().then(() => 'ok'),
-        new Promise<string>(r => setTimeout(() => r('COLGADO>5s'), 5000)),
+        // 20 s a propósito: el lock de auth rechaza solo a los ~5 s
+        // (lockAcquireTimeout), mientras que un initializePromise que no se
+        // asienta no vuelve nunca. Con tope de 5 s ambos se ven idénticos.
+        new Promise<string>(r => setTimeout(() => r('COLGADO>20s'), 20_000)),
       ])
         .then(r => setAuth(`${r} ${Date.now() - inicio}ms @${hora()}`))
-        .catch(e => setAuth(`error ${String(e).slice(0, 30)}`))
+        .catch(e => setAuth(`RECHAZÓ ${Date.now() - inicio}ms: ${String(e?.message ?? e).slice(0, 40)}`))
     }
     medir()
     const alVolver = () => { if (document.visibilityState === 'visible') medir() }
@@ -90,7 +96,7 @@ export default function DiagnosticoPanel({ queryKey, cargando, hayUsuario, sesio
       </div>
       <div>versión: {process.env.NEXT_PUBLIC_COMMIT ?? '?'}</div>
       <div>consulta: {consulta}</div>
-      <div>auth: {auth}</div>
+      <div>auth: {auth} <span className="opacity-60">(+{segundos}s en pantalla)</span></div>
       <div>
         red: {typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'OFFLINE'}
         {' · '}sesión: {sesionExpirada ? 'EXPIRADA' : hayUsuario ? 'ok' : 'SIN USUARIO'}
