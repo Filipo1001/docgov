@@ -337,6 +337,9 @@ export default function PeriodoDetallePage({
   const [procesandoDevolucion, setProcesandoDevolucion] = useState(false)
   // Secretaria: confirmación de aprobación cuando faltan obligaciones por revisar
   const [mostrarConfirmacionAprobacion, setMostrarConfirmacionAprobacion] = useState(false)
+  // Distingue si la confirmación la abrió el asesor o la secretaría: cada uno
+  // ejecuta una acción distinta al confirmar.
+  const [confirmandoAprobacionAsesor, setConfirmandoAprobacionAsesor] = useState(false)
 
   // ── Accordion: qué obligaciones están expandidas ───────────────
   // Vista colapsada por defecto (lista limpia, sin descargar imágenes hasta
@@ -691,6 +694,25 @@ export default function PeriodoDetallePage({
           : `La planilla N.° ${numPlanillaActual} se repite en dos periodos del contrato, lo que suele indicar un pago por mes vencido. Verifica que sea correcto.`)
       : ''
 
+  // ── Planilla sin revisar al momento de aprobar ────────────────────────────
+  //
+  // El art. 23 de la Ley 1150 de 2007 obliga a verificar los aportes a
+  // seguridad social en CADA pago del contrato, no solo al liquidarlo. Pero
+  // aprobar el informe y revisar la planilla son acciones independientes, así
+  // que un informe podía aprobarse —y radicarse— sin que nadie mirara el
+  // soporte: al implementar esto, 4 de los 5 informes en revisión estaban en
+  // esa situación.
+  //
+  // El aviso NO bloquea: hay casos legítimos (planilla que llega aparte, mes
+  // vencido en trámite) y frenar el flujo por completo dejaría el trabajo
+  // detenido. Solo obliga a que la omisión sea consciente, no accidental.
+  const planillaSinRevisar = !!periodo && (
+    !periodo.planilla_ss_url || periodo.planilla_estado === 'pendiente'
+  )
+  const motivoPlanillaSinRevisar = !periodo?.planilla_ss_url
+    ? 'El contratista no ha adjuntado la planilla de seguridad social.'
+    : 'La planilla está adjunta pero nadie la ha revisado todavía.'
+
   // Planilla: contratista puede gestionar hasta que esté aprobado o radicado
   const esPlanillaGestionable = !esHistorico && !periodoVencido && esContratista && periodo
     ? !['aprobado', 'radicado'].includes(periodo.estado)
@@ -844,6 +866,14 @@ export default function PeriodoDetallePage({
   }
 
   async function handleAprobarAsesor() {
+    // Mismo criterio que la secretaría: el asesor tampoco debería dejar pasar
+    // un informe con la planilla sin verificar sin darse cuenta.
+    if (planillaSinRevisar && !confirmandoAprobacionAsesor) {
+      setConfirmandoAprobacionAsesor(true)
+      setMostrarConfirmacionAprobacion(true)
+      return
+    }
+    setConfirmandoAprobacionAsesor(false)
     setProcesando(true)
     const result = await aprobarComoAsesor(periodoId)
     if (result.error) toast.error(result.error)
@@ -873,8 +903,9 @@ export default function PeriodoDetallePage({
   }
 
   async function handleAprobarSecretaria() {
-    // Si hay obligaciones sin revisar, pedir confirmación antes de aprobar
-    if (!todasRevisadas && obligaciones.length > 0) {
+    // Confirmación previa si queda algo sin revisar: obligaciones sin
+    // seguimiento, o la planilla de seguridad social sin verificar.
+    if ((!todasRevisadas && obligaciones.length > 0) || planillaSinRevisar) {
       setMostrarConfirmacionAprobacion(true)
       return
     }
@@ -887,6 +918,13 @@ export default function PeriodoDetallePage({
 
   async function handleConfirmarAprobacion() {
     setMostrarConfirmacionAprobacion(false)
+    // El asesor y la secretaría comparten esta confirmación pero aprueban con
+    // acciones distintas: el asesor pre-aprueba (→ revision), la secretaría
+    // aprueba en firme.
+    if (confirmandoAprobacionAsesor) {
+      await handleAprobarAsesor()
+      return
+    }
     setProcesando(true)
     const result = await aprobarPeriodos([periodoId])
     if (result.error) toast.error(result.error)
@@ -3596,7 +3634,7 @@ export default function PeriodoDetallePage({
       {mostrarConfirmacionAprobacion && (
         <div
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => !procesando && setMostrarConfirmacionAprobacion(false)}
+          onClick={() => { if (!procesando) { setMostrarConfirmacionAprobacion(false); setConfirmandoAprobacionAsesor(false) } }}
           role="dialog"
           aria-modal="true"
         >
@@ -3606,22 +3644,46 @@ export default function PeriodoDetallePage({
           >
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 flex-shrink-0"><Icono glifo={Iconos.estado.advertencia} tamano="md" /></div>
-              <h3 className="text-sm font-semibold text-gray-900">Obligaciones sin revisar</h3>
+              <h3 className="text-sm font-semibold text-gray-900">
+                {planillaSinRevisar && obligacionesSinRevisar.length > 0
+                  ? 'Quedan puntos sin revisar'
+                  : planillaSinRevisar
+                    ? 'Planilla sin revisar'
+                    : 'Obligaciones sin revisar'}
+              </h3>
             </div>
-            <p className="text-xs text-gray-500 mb-3">
-              Las siguientes obligaciones aún no tienen seguimiento registrado:
-            </p>
-            <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-4 space-y-1 max-h-40 overflow-y-auto">
-              {obligacionesSinRevisar.map((obl, i) => (
-                <p key={obl.id} className="text-xs text-amber-800 leading-relaxed">
-                  {i + 1}. {obl.descripcion}
+
+            {/* Planilla de seguridad social — se muestra primero por su peso
+                legal: el art. 23 de la Ley 1150 de 2007 exige verificar los
+                aportes en cada pago del contrato. */}
+            {planillaSinRevisar && (
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 mb-3">
+                <p className="text-xs font-semibold text-amber-900 mb-0.5">Seguridad social</p>
+                <p className="text-xs text-amber-800 leading-relaxed">{motivoPlanillaSinRevisar}</p>
+                <p className="text-[11px] text-amber-700/80 leading-relaxed mt-1.5">
+                  La Ley 1150 de 2007 exige verificar los aportes en cada pago del contrato.
                 </p>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {obligacionesSinRevisar.length > 0 && (
+              <>
+                <p className="text-xs text-gray-500 mb-2">
+                  Estas obligaciones aún no tienen seguimiento registrado:
+                </p>
+                <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-4 space-y-1 max-h-40 overflow-y-auto">
+                  {obligacionesSinRevisar.map((obl, i) => (
+                    <p key={obl.id} className="text-xs text-amber-800 leading-relaxed">
+                      {i + 1}. {obl.descripcion}
+                    </p>
+                  ))}
+                </div>
+              </>
+            )}
             <p className="text-xs text-gray-500 mb-4">¿Deseas aprobar el informe de todas formas?</p>
             <div className="flex gap-2">
               <button
-                onClick={() => setMostrarConfirmacionAprobacion(false)}
+                onClick={() => { setMostrarConfirmacionAprobacion(false); setConfirmandoAprobacionAsesor(false) }}
                 disabled={procesando}
                 className="flex-1 px-4 py-2.5 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
               >

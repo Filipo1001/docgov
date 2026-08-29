@@ -453,6 +453,8 @@ export default function InformesPage({
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [procesandoMasivo, setProcesandoMasivo] = useState(false)
   const [mostrarRechazoMasivo, setMostrarRechazoMasivo] = useState(false)
+  // Confirmación previa cuando la tanda incluye planillas sin revisar.
+  const [confirmarAprobacionMasiva, setConfirmarAprobacionMasiva] = useState<string | null>(null)
   const [motivoMasivo, setMotivoMasivo] = useState('')
 
   // Reminder state
@@ -632,7 +634,7 @@ export default function InformesPage({
   const idsEnviados = enviados.map(p => p.id)
   const idsParaAprobar = [...idsAprobadosAsesor, ...idsEnviados]
 
-  async function accionMasiva(accion: string) {
+  async function accionMasiva(accion: string, confirmacionMasivaHecha = false) {
     setMenuAbierto(false)
     setProcesandoMasivo(true)
 
@@ -647,6 +649,21 @@ export default function InformesPage({
       toast.error('No hay informes para procesar')
       setProcesandoMasivo(false)
       return
+    }
+
+    // Aviso si la tanda incluye planillas sin verificar. Sin esta compuerta el
+    // botón masivo era la vía para saltarse, sin querer, el mismo aviso que ya
+    // aparece al aprobar uno por uno — y con más informes de golpe.
+    // No bloquea: solo obliga a que la omisión sea consciente.
+    if (!confirmacionMasivaHecha) {
+      const sinRevisar = periodos.filter(
+        p => ids.includes(p.id) && (!p.planilla_ss_url || p.planilla_estado === 'pendiente'),
+      ).length
+      if (sinRevisar > 0) {
+        setConfirmarAprobacionMasiva(accion)
+        setProcesandoMasivo(false)
+        return
+      }
     }
 
     const res = await aprobarPeriodos(ids)
@@ -966,6 +983,52 @@ export default function InformesPage({
       </div>
 
       {/* Mass rejection modal */}
+      {confirmarAprobacionMasiva && (() => {
+        const ids = confirmarAprobacionMasiva.includes('pre_aprobados') ? idsAprobadosAsesor : idsParaAprobar
+        const sinRevisar = periodos.filter(
+          p => ids.includes(p.id) && (!p.planilla_ss_url || p.planilla_estado === 'pendiente'),
+        )
+        return (
+          <Card className="!bg-amber-50 !border-amber-200 mb-6">
+            <h3 className="text-sm font-semibold text-amber-900 mb-1">
+              {sinRevisar.length} de {ids.length} informes tienen la planilla sin revisar
+            </h3>
+            <p className="text-xs text-amber-800 leading-relaxed mb-1">
+              La Ley 1150 de 2007 exige verificar los aportes a seguridad social en cada
+              pago del contrato. Puedes aprobar de todas formas, pero la verificación
+              quedará pendiente en estos informes.
+            </p>
+            <div className="bg-white border border-amber-100 rounded-xl px-3 py-2 my-3 space-y-1 max-h-40 overflow-y-auto">
+              {sinRevisar.slice(0, 12).map(p => (
+                <p key={p.id} className="text-xs text-amber-900 leading-relaxed">
+                  {p.contrato?.contratista?.nombre_completo ?? 'Sin nombre'} — contrato {p.contrato?.numero ?? '?'}
+                  {!p.planilla_ss_url ? ' · sin planilla adjunta' : ' · adjunta, sin revisar'}
+                </p>
+              ))}
+              {sinRevisar.length > 12 && (
+                <p className="text-xs text-amber-700/80">y {sinRevisar.length - 12} más…</p>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { const a = confirmarAprobacionMasiva; setConfirmarAprobacionMasiva(null); void accionMasiva(a, true) }}
+                disabled={procesandoMasivo}
+                className="bg-amber-600 text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+              >
+                {procesandoMasivo ? 'Procesando...' : 'Aprobar de todas formas'}
+              </button>
+              <button
+                onClick={() => setConfirmarAprobacionMasiva(null)}
+                disabled={procesandoMasivo}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-white disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </Card>
+        )
+      })()}
+
       {mostrarRechazoMasivo && (
         <Card className="!bg-red-50 !border-red-200 mb-6">
           <h3 className="text-sm font-semibold text-red-700 mb-2">
