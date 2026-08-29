@@ -1450,7 +1450,38 @@ export default function PeriodoDetallePage({
     setGuardandoPlanilla(true)
     const result = await guardarNumeroPlanilla(periodoId, numPlanilla)
     if (result.error) toast.error(result.error)
-    else toast.success('Número de planilla guardado')
+    else {
+      toast.success('Número de planilla guardado')
+
+      // Aviso de mes vencido / posible cotización faltante — al CONTRATISTA,
+      // en el momento de guardar. Antes esta detección solo se mostraba al
+      // revisor, después: quien sube la planilla nunca se enteraba de que
+      // estaba reutilizando un número.
+      //
+      // Mismo criterio y mismos umbrales que la franja de alerta del revisor
+      // (más abajo, nivelAlertaPlanilla): 2 repeticiones es un pago por mes
+      // vencido (válido); 3 o más sugiere que un mes quedó sin cotizar.
+      // periodosHermanos es la foto de la última carga de la página, así que
+      // TODAVÍA no incluye el número que se acaba de guardar — se excluye la
+      // fila de este mismo periodo por id (para no contarla con el valor
+      // viejo) y se suma 1 por el guardado que sí acaba de ocurrir.
+      const numGuardado = numPlanilla.trim()
+      const repeticiones = numGuardado
+        ? periodosHermanos.filter(p => p.id !== periodoId && (p.numero_planilla ?? '').trim() === numGuardado).length + 1
+        : 0
+
+      if (repeticiones >= 3) {
+        toast.warning('Esta planilla ya se usó en varios periodos', {
+          description: 'Puede que falte un mes por cotizar. Verifica que estés al día con tu seguridad social: es un requisito para poder cobrar el último periodo de tu contrato.',
+          duration: 10000,
+        })
+      } else if (repeticiones === 2) {
+        toast.warning('Recuerda estar al día con tu seguridad social', {
+          description: 'Este número de planilla coincide con el de otro periodo — es válido si corresponde a un pago por mes vencido. Para poder cobrar el último periodo del contrato debes estar al día en tus aportes.',
+          duration: 8000,
+        })
+      }
+    }
     setGuardandoPlanilla(false)
   }
 
