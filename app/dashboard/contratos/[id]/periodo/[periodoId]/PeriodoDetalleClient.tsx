@@ -1470,14 +1470,20 @@ export default function PeriodoDetallePage({
         ? periodosHermanos.filter(p => p.id !== periodoId && (p.numero_planilla ?? '').trim() === numGuardado).length + 1
         : 0
 
+      // Base legal: Ley 789 de 2002, art. 50 — al liquidar el contrato, la
+      // entidad debe verificar que los aportes se cotizaron durante TODA la
+      // vigencia; un mes vencido pagado tarde es válido, uno que nunca se
+      // cotizó no. Ley 1150 de 2007, art. 23 extiende esa verificación a
+      // cada pago del contrato, no solo al final — el ciclo mensual que ya
+      // sigue esta app.
       if (repeticiones >= 3) {
         toast.warning('Esta planilla ya se usó en varios periodos', {
-          description: 'Puede que falte un mes por cotizar. Verifica que estés al día con tu seguridad social: es un requisito para poder cobrar el último periodo de tu contrato.',
+          description: 'Puede que falte un mes por cotizar. Debes quedar al día antes de terminar tu contrato — así lo exige la Ley 789 de 2002.',
           duration: 10000,
         })
       } else if (repeticiones === 2) {
         toast.warning('Recuerda estar al día con tu seguridad social', {
-          description: 'Este número de planilla coincide con el de otro periodo — es válido si corresponde a un pago por mes vencido. Para poder cobrar el último periodo del contrato debes estar al día en tus aportes.',
+          description: 'Es válido pagar por mes vencido, pero debes quedar al día antes de terminar tu contrato — así lo exige la Ley 789 de 2002.',
           duration: 8000,
         })
       }
