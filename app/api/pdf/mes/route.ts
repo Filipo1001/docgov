@@ -13,7 +13,24 @@
  * `docs` permite elegir qué incluir (el supervisor suele necesitar solo las
  * actas; la secretaría el paquete completo).
  *
- * Acceso: admin y supervisor (todos los contratos); asesor (su dependencia).
+ * Acceso: cada quien descarga lo que le corresponde, con el MISMO criterio
+ * que verificarAccesoPeriodo aplica a las descargas individuales:
+ *
+ *   admin       → todo el municipio
+ *   supervisor  → solo los contratos que supervisa
+ *   asesor      → solo los de su dependencia
+ *
+ * Antes el supervisor recibía todo el municipio. Era una fuga real: en
+ * pantalla veía solo sus contratos —ahí sí aplican las políticas de la base—
+ * pero el ZIP se armaba con el cliente admin, que las omite, así que el botón
+ * «Descargar mes (N)» entregaba muchas más cuentas de las que N anunciaba,
+ * con cuentas de cobro y planillas de seguridad social de contratistas de
+ * otras secretarías.
+ *
+ * El cliente admin sigue usándose —hace falta para leer los periodos sin
+ * depender de la sesión del navegador—, pero justo por eso el acotamiento
+ * tiene que ser explícito aquí: al saltarse las políticas, nada más lo hace.
+ *
  * Periodos históricos se excluyen: no tienen actividades digitalizadas y los
  * PDFs generados saldrían vacíos.
  *
@@ -94,21 +111,36 @@ export async function GET(req: NextRequest) {
   const admin = createAdminSupabaseClient()
   const { data: periodosRaw } = await admin
     .from('periodos')
-    .select('id, estado, mes, anio, planilla_ss_url, contrato:contratos(numero, dependencia_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
+    .select('id, estado, mes, anio, planilla_ss_url, contrato:contratos(numero, dependencia_id, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
     .eq('mes', mes)
     .eq('anio', anio)
     .in('estado', ['aprobado', 'radicado'])
     .eq('es_historico', false)
   type Row = {
     id: string; estado: string; mes: string; anio: number; planilla_ss_url: string | null
-    contrato: { numero: string; dependencia_id: string | null; contratista: { nombre_completo: string } | null } | null
+    contrato: { numero: string; dependencia_id: string | null; supervisor_id: string | null; contratista: { nombre_completo: string } | null } | null
   }
   let periodos = ((periodosRaw ?? []) as unknown as Row[])
-  if (yo.rol === 'asesor' && yo.dependencia_id) {
-    periodos = periodos.filter(p => p.contrato?.dependencia_id === yo.dependencia_id)
+
+  // Acotamiento por rol. Se aplica SIEMPRE que el rol no sea admin: si un rol
+  // llegara aquí sin regla propia, se queda sin nada en vez de recibirlo todo
+  // —fallar cerrado, no abierto.
+  if (yo.rol === 'supervisor') {
+    periodos = periodos.filter(p => p.contrato?.supervisor_id === user.id)
+  } else if (yo.rol === 'asesor') {
+    // Un asesor sin dependencia asignada no puede acotar: no descarga nada.
+    periodos = yo.dependencia_id
+      ? periodos.filter(p => p.contrato?.dependencia_id === yo.dependencia_id)
+      : []
+  } else if (yo.rol !== 'admin') {
+    periodos = []
   }
+
   if (!periodos.length) {
-    return NextResponse.json({ error: `No hay cuentas aprobadas o radicadas en ${mes} ${anio}` }, { status: 404 })
+    return NextResponse.json(
+      { error: `No hay cuentas aprobadas o radicadas en ${mes} ${anio} dentro de tu alcance` },
+      { status: 404 },
+    )
   }
 
   // Orden estable por contratista para carpetas predecibles
