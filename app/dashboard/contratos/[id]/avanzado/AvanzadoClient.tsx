@@ -194,6 +194,37 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
+  /**
+   * ¿Este otrosí ya se aplicó al contrato?
+   *
+   * Es la pregunta que la pantalla no respondía: se veía el botón «Aplicar»
+   * sin saber si ya se había usado, y quien llegaba después no tenía forma de
+   * distinguir un otrosí pendiente de uno ya reflejado.
+   *
+   * Se responde con los periodos, no con la fecha del contrato: la fecha dice
+   * que hubo una extensión, pero solo los periodos dicen si el contratista
+   * puede efectivamente reportar esos meses, que es lo que importa.
+   */
+  function estadoOtrosi(o: Otrosi): 'sin_plazo' | 'pendiente' | 'parcial' | 'aplicado' {
+    if (!o.plazo_dias_adicion || o.plazo_dias_adicion <= 0) return 'sin_plazo'
+    const inicio = new Date(o.fecha_inicio + 'T00:00:00')
+    const fin = new Date(inicio)
+    fin.setDate(fin.getDate() + o.plazo_dias_adicion - 1)
+
+    const meses = new Set<string>()
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1)
+    while (cursor <= fin) {
+      meses.add(`${MESES[cursor.getMonth()].toLowerCase()}-${cursor.getFullYear()}`)
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+    const existentes = new Set(periodos.map(pe => `${pe.mes.toLowerCase()}-${pe.anio}`))
+    const cubiertos = [...meses].filter(m => existentes.has(m)).length
+    if (cubiertos === 0) return 'pendiente'
+    return cubiertos === meses.size ? 'aplicado' : 'parcial'
+  }
+
+
+
   // ── Otrosíes handlers ───────────────────────────────────────
 
   async function guardarOtrosi() {
@@ -928,12 +959,39 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
           {/* Lista de otrosíes */}
           {otrosies.length > 0 && (
             <div className="space-y-2">
-              {otrosies.map((o) => (
-                <div key={o.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-start justify-between gap-4">
+              {otrosies.map((o) => {
+                const estado = estadoOtrosi(o)
+                const editandoEste = editandoOtrosiId === o.id
+                const aplicandoEste = otrosiAplicandoId === o.id
+                return (
+                <div
+                  key={o.id}
+                  className={`bg-white border rounded-xl overflow-hidden ${
+                    editandoEste || aplicandoEste ? 'border-gray-900' : 'border-gray-200'
+                  }`}
+                >
+                <div className="p-4 flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="text-sm font-semibold text-gray-900">Otrosí N.° {o.numero}</span>
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize">{o.tipo}</span>
+                      {/* El estado responde de un vistazo la pregunta que la
+                          pantalla dejaba abierta: ¿esto ya surtió efecto? */}
+                      {estado === 'aplicado' && (
+                        <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                          Aplicado
+                        </span>
+                      )}
+                      {estado === 'pendiente' && (
+                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                          Sin aplicar
+                        </span>
+                      )}
+                      {estado === 'parcial' && (
+                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                          Aplicado a medias
+                        </span>
+                      )}
                       <span className="text-xs text-gray-400">Inicia: {o.fecha_inicio}</span>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
@@ -945,13 +1003,27 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                     {o.nota && <p className="text-xs text-gray-500 italic mt-1.5 break-words">{o.nota}</p>}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    {/* Un otrosí ya aplicado no ofrece «Aplicar»: sería
+                        invitar a repetir algo hecho. Se ofrece revisar, que
+                        no escribe nada y sirve para comprobar que quedó bien.
+                        El de «a medias» sí invita a completar lo que falta. */}
                     {o.plazo_dias_adicion > 0 && (
                       <button
                         onClick={() => abrirPrevisualizacion(o.id)}
-                        disabled={otrosiAplicandoId === o.id}
-                        className="text-xs font-medium text-emerald-700 hover:text-emerald-900 disabled:opacity-50"
+                        disabled={aplicandoEste}
+                        className={`text-xs font-medium disabled:opacity-50 ${
+                          estado === 'aplicado'
+                            ? 'text-gray-500 hover:text-gray-700'
+                            : 'text-emerald-700 hover:text-emerald-900'
+                        }`}
                       >
-                        {otrosiAplicandoId === o.id && !previsualizacion ? 'Calculando…' : 'Aplicar al contrato'}
+                        {aplicandoEste && !previsualizacion
+                          ? 'Calculando…'
+                          : estado === 'aplicado'
+                            ? 'Revisar'
+                            : estado === 'parcial'
+                              ? 'Completar aplicación'
+                              : 'Aplicar al contrato'}
                       </button>
                     )}
                     <button
@@ -969,105 +1041,124 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
 
-          {/* Previsualización antes de aplicar. Es el momento en que el software
-              propone y contratación decide: las cifras llegan calculadas pero
-              todas son editables antes de confirmar. */}
-          {previsualizacion && otrosiAplicandoId && (
-            <div className="bg-white border-2 border-emerald-200 rounded-2xl p-5 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Así quedaría el contrato</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Revisa y ajusta lo que necesites. Nada se guarda hasta que confirmes.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Termina actualmente
-                  </label>
-                  <p className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500">
-                    {previsualizacion.fechaFinActual}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Nueva fecha de terminación
-                  </label>
-                  <input
-                    type="date"
-                    value={fechaFinPropuesta}
-                    onChange={(e) => setFechaFinPropuesta(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none"
-                  />
-                </div>
-              </div>
-
-              {previsualizacion.periodosPropuestos.length > 0 ? (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 mb-2">
-                    Periodos que se crearán ({previsualizacion.periodosPropuestos.length})
-                  </p>
-                  <div className="space-y-2">
-                    {previsualizacion.periodosPropuestos.map((pp) => (
-                      <div key={pp.numero_periodo} className="flex items-center gap-3 text-sm">
-                        <span className="w-32 shrink-0 text-gray-700">
-                          {pp.mes} {pp.anio}
-                        </span>
-                        <span className="w-40 shrink-0 text-xs text-gray-400">
-                          {pp.fecha_inicio} → {pp.fecha_fin}
-                        </span>
-                        <input
-                          type="text" inputMode="numeric"
-                          value={valoresPropuestos[pp.numero_periodo] ?? ''}
-                          onChange={(e) => setValoresPropuestos(v => ({ ...v, [pp.numero_periodo]: e.target.value }))}
-                          className="flex-1 max-w-[180px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-emerald-400 outline-none"
-                        />
-                      </div>
-                    ))}
+              {/* Previsualización antes de aplicar. Es el momento en que el software
+                  propone y contratación decide: las cifras llegan calculadas pero
+                  todas son editables antes de confirmar. */}
+              {previsualizacion && aplicandoEste && (
+                <div className="bg-white border-2 border-emerald-200 rounded-2xl p-5 space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Así quedaría el contrato</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Revisa y ajusta lo que necesites. Nada se guarda hasta que confirmes.
+                    </p>
                   </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Suma propuesta:{' '}
-                    <strong className="text-gray-800">
-                      $ {Object.values(valoresPropuestos)
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Termina actualmente
+                      </label>
+                      <p className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500">
+                        {previsualizacion.fechaFinActual}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Nueva fecha de terminación
+                      </label>
+                      <input
+                        type="date"
+                        value={fechaFinPropuesta}
+                        onChange={(e) => setFechaFinPropuesta(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {previsualizacion.periodosPropuestos.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-2">
+                        Periodos que se crearán ({previsualizacion.periodosPropuestos.length})
+                      </p>
+                      <div className="space-y-2">
+                        {previsualizacion.periodosPropuestos.map((pp) => (
+                          <div key={pp.numero_periodo} className="flex items-center gap-3 text-sm">
+                            <span className="w-32 shrink-0 text-gray-700">
+                              {pp.mes} {pp.anio}
+                            </span>
+                            <span className="w-40 shrink-0 text-xs text-gray-400">
+                              {pp.fecha_inicio} → {pp.fecha_fin}
+                            </span>
+                            <input
+                              type="text" inputMode="numeric"
+                              value={valoresPropuestos[pp.numero_periodo] ?? ''}
+                              onChange={(e) => setValoresPropuestos(v => ({ ...v, [pp.numero_periodo]: e.target.value }))}
+                              className="flex-1 max-w-[180px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-emerald-400 outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {/* La suma se contrasta contra la adición del otrosí, con el
+                          mismo criterio que la pestaña de pagos usa para el total
+                          del contrato: si no cuadra hay que verlo, no deducirlo. */}
+                      {(() => {
+                        const suma = Object.values(valoresPropuestos)
                           .reduce((a, v) => a + (parseInt(v.replace(/\D/g, ''), 10) || 0), 0)
-                          .toLocaleString('es-CO')}
-                    </strong>
-                    {' · '}Adición del otrosí: $ {previsualizacion.valorAdicion.toLocaleString('es-CO')}
-                  </p>
+                        const diferencia = suma - previsualizacion.valorAdicion
+                        const cuadraOtrosi = diferencia === 0
+                        return (
+                          <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
+                            cuadraOtrosi
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                              : 'bg-amber-50 border-amber-200 text-amber-900'
+                          }`}>
+                            <span className="font-medium">
+                              {cuadraOtrosi
+                                ? '✓ La suma coincide con la adición del otrosí'
+                                : `✕ Difiere en $ ${Math.abs(diferencia).toLocaleString('es-CO')} ${diferencia > 0 ? 'por encima' : 'por debajo'}`}
+                            </span>
+                            <span className="opacity-80">
+                              Suma $ {suma.toLocaleString('es-CO')} · Adición $ {previsualizacion.valorAdicion.toLocaleString('es-CO')}
+                            </span>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      No hay periodos nuevos por crear: los meses del otrosí ya existen.
+                    </p>
+                  )}
+
+                  {previsualizacion.mesesOmitidos.length > 0 && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      Ya existen y no se tocan: {previsualizacion.mesesOmitidos.join(' · ')}
+                    </p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={confirmarAplicacion}
+                      disabled={aplicando || !fechaFinPropuesta}
+                      className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    >
+                      {aplicando ? 'Aplicando…' : 'Confirmar y aplicar'}
+                    </button>
+                    <button
+                      onClick={() => { setOtrosiAplicandoId(null); setPrevisualizacion(null) }}
+                      disabled={aplicando}
+                      className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-sm text-gray-500">
-                  No hay periodos nuevos por crear: los meses del otrosí ya existen.
-                </p>
               )}
 
-              {previsualizacion.mesesOmitidos.length > 0 && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  Ya existen y no se tocan: {previsualizacion.mesesOmitidos.join(' · ')}
-                </p>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={confirmarAplicacion}
-                  disabled={aplicando || !fechaFinPropuesta}
-                  className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                >
-                  {aplicando ? 'Aplicando…' : 'Confirmar y aplicar'}
-                </button>
-                <button
-                  onClick={() => { setOtrosiAplicandoId(null); setPrevisualizacion(null) }}
-                  disabled={aplicando}
-                  className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-              </div>
+                </div>
+                )
+              })}
             </div>
           )}
 
