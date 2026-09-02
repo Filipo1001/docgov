@@ -61,7 +61,16 @@ const SUAVE   = '#6B7280'
 const FONDO   = '#F5F6F8'
 const LINEA   = '#E4E7EC'
 
-const VERIFICADO = '26 de agosto de 2026'
+const VERIFICADO = '1 de septiembre de 2026'
+
+/* El pie llevaba «Agosto de 2026» escrito a mano y sobrevivió a la emisión de
+   septiembre: una propuesta fechada el mes pasado envejece sola. Se deriva de
+   la fecha de generación para que no vuelva a pasar. */
+const MES_EMISION = (() => {
+  const f = new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric', timeZone: 'America/Bogota' })
+    .format(new Date())
+  return f.charAt(0).toUpperCase() + f.slice(1).replace(' de ', ' de ')
+})()
 
 /**
  * A qué municipio va dirigido este ejemplar.
@@ -88,6 +97,31 @@ const MUNICIPIOS = {
     articulo: 'la Alcaldía Municipal de El Bagre',
     escudo: path.join(process.cwd(), 'public', 'marca', 'escudo-el-bagre.png'),
     precio: '$4.990.000',
+  },
+  /**
+   * Venecia es el primero con DOS caminos de implementación, así que trae
+   * `implementaciones` (plural) en vez de `implementacion`. El renderizado
+   * acepta ambas formas: los municipios anteriores no se tocan.
+   *
+   * La opción A va primero y marcada, y no por margen: la B deja el cargue en
+   * el equipo de contratación, que es el cuello de botella real de una
+   * alcaldía pequeña. Si el cargue se aplaza, la plataforma queda vacía justo
+   * cuando hay que demostrar que sirve. Por eso lo que se enuncia como
+   * diferencia no es «quién digita» sino el tiempo hasta el primer ciclo:
+   * es lo único que la B no puede prometer, porque no depende de nosotros.
+   */
+  venecia: {
+    nombre: 'Venecia',
+    articulo: 'la Alcaldía Municipal de Venecia',
+    escudo: path.join(process.cwd(), 'public', 'marca', 'escudo-venecia.png'),
+    precio: '$2.400.000',
+    implementaciones: [
+      { etiqueta: 'Implementación A · $4.990.000 · recomendada',
+        texto: 'Pago único. Nosotros creamos los usuarios de todas las secretarías y cargamos los contratos vigentes. Incluye la adaptación de los documentos al formato de Venecia, capacitación por rol y acompañamiento durante el primer ciclo mensual completo. Su primer cierre de mes sale en la plataforma.' },
+      { etiqueta: 'Implementación B · $3.990.000',
+        texto: 'Pago único. Creación de los usuarios de todas las secretarías y adaptación de los documentos al formato de Venecia. El cargue de los contratos lo realiza el municipio: capacitamos al equipo de contratación y damos soporte durante el proceso.' },
+    ],
+    vigencia: 'Desde la suscripción del acta de inicio y hasta el 31 de diciembre de 2026.',
   },
 }
 
@@ -295,7 +329,7 @@ const Brochure = ({ qr }) => h(Document, {
                                marginTop: 3 } }, M.articulo))),
 
         h(View, { style: { flexDirection: 'row', marginBottom: 26 } },
-          ...[['125', 'contratos'], ['625', 'periodos'], ['5 meses', 'en producción']].map(([n, r], i) =>
+          ...[['126', 'contratos'], ['629', 'periodos'], ['6 meses', 'en producción']].map(([n, r], i) =>
             h(View, { key: r, style: { marginRight: 46 } },
               h(Text, { style: { color: '#FFFFFF', fontSize: 15, fontFamily: 'Helvetica-Bold',
                                  lineHeight: 1.2 } }, n),
@@ -303,8 +337,8 @@ const Brochure = ({ qr }) => h(Document, {
         h(View, { style: { height: 0.5, backgroundColor: '#3A445C', marginBottom: 12 } }),
         h(View, { style: { flexDirection: 'row', justifyContent: 'space-between' } },
           h(Text, { style: { color: '#8B93A5', fontSize: 8.5 } },
-            M ? `Propuesta institucional · ${M.nombre} · Agosto de 2026`
-              : 'Documento institucional · Agosto de 2026'),
+            M ? `Propuesta institucional · ${M.nombre} · ${MES_EMISION}`
+              : `Documento institucional · ${MES_EMISION}`),
           h(Text, { style: { color: '#FFFFFF', fontSize: 8.5, fontFamily: 'Helvetica-Bold' } },
             'contratistadigital.com'))))),
 
@@ -452,7 +486,7 @@ const Brochure = ({ qr }) => h(Document, {
         h(Text, { style: { fontSize: 9.5, lineHeight: 1.5 } },
           'Escanee este código con la cámara de su teléfono. Es el verificador real, en producción: el mismo al que llega un auditor, un banco o un ente de control cuando quiere comprobar un documento que le presentaron.'),
         h(Text, { style: { fontSize: 8.5, color: SUAVE, lineHeight: 1.45, marginTop: 10 } },
-          'Los 269 documentos ya emitidos son verificables por este medio, sin intervención de la alcaldía y sin que el sistema tenga que estar disponible para el trámite.'))),
+          'Los 503 documentos ya emitidos son verificables por este medio, sin intervención de la alcaldía y sin que el sistema tenga que estar disponible para el trámite.'))),
 
     h(View, { style: { height: 22 } }),
     h(Text, { style: e.seccion }, 'Qué ve quien escanea'),
@@ -487,15 +521,15 @@ const Brochure = ({ qr }) => h(Document, {
     }),
 
     h(View, { style: { ...e.fila, flexWrap: 'wrap', marginTop: 4 } },
-      h(Cifra, { n: '125', rotulo: 'contratos administrados' }),
+      h(Cifra, { n: '126', rotulo: 'contratos administrados' }),
       h(Cifra, { n: '124', rotulo: 'usuarios activos' }),
       h(Cifra, { n: '5',   rotulo: 'secretarías' }),
-      h(Cifra, { n: '625', rotulo: 'periodos gestionados' }),
-      h(Cifra, { n: '264', rotulo: 'envíos a revisión procesados' }),
-      h(Cifra, { n: '269', rotulo: 'documentos verificables emitidos' }),
-      h(Cifra, { n: '3.855', rotulo: 'evidencias archivadas' }),
-      h(Cifra, { n: '2.745', rotulo: 'actividades registradas' }),
-      h(Cifra, { n: '1.233', rotulo: 'movimientos trazados' })),
+      h(Cifra, { n: '629', rotulo: 'periodos gestionados' }),
+      h(Cifra, { n: '206', rotulo: 'envíos a revisión procesados' }),
+      h(Cifra, { n: '503', rotulo: 'documentos verificables emitidos' }),
+      h(Cifra, { n: '4.081', rotulo: 'evidencias archivadas' }),
+      h(Cifra, { n: '2.976', rotulo: 'actividades registradas' }),
+      h(Cifra, { n: '1.449', rotulo: 'movimientos trazados' })),
 
     h(View, { style: { height: 4 } }),
     h(Caja, null,
@@ -623,10 +657,14 @@ const Brochure = ({ qr }) => h(Document, {
   h(Page, { size: 'A4', style: e.pagina },
     h(Encabezado, {
       etiqueta: M ? 'La inversión' : 'La licencia',
-      titulo: M ? 'Dos pagos, cada uno\ncon su alcance' : 'Qué cuesta y qué incluye',
-      entrada: M
-        ? `Un pago único por dejar la plataforma montada con los datos de ${M.nombre}, y una mensualidad por mantenerla operando.`
-        : 'Sin costo por usuario, por documento ni por almacenamiento.',
+      titulo: M?.implementaciones
+        ? 'Elija cómo se monta.\nLa operación es la misma'
+        : M ? 'Dos pagos, cada uno\ncon su alcance' : 'Qué cuesta y qué incluye',
+      entrada: M?.implementaciones
+        ? `El municipio elige quién realiza el cargue inicial. La mensualidad y todo lo que incluye son idénticos en ambas opciones.`
+        : M
+          ? `Un pago único por dejar la plataforma montada con los datos de ${M.nombre}, y una mensualidad por mantenerla operando.`
+          : 'Sin costo por usuario, por documento ni por almacenamiento.',
     }),
 
     // La tabla anterior se contradecía dentro de sí misma: la fila «Incluye»
@@ -634,7 +672,20 @@ const Brochure = ({ qr }) => h(Document, {
     // se convenía aparte. Ahora son dos pagos con alcances distintos y cada uno
     // dice qué cubre.
     h(View, { style: { marginTop: 2, marginBottom: 16 } },
-      ...(M
+      ...(M?.implementaciones
+        ? [
+            // Municipios con dos caminos de implementación (ver MUNICIPIOS).
+            ...M.implementaciones.map(i => h(Renglon, { k: i.etiqueta, v: i.texto })),
+            // La etiqueta se queda corta a propósito: la columna izquierda es
+            // estrecha y «· en ambas opciones» la partía en dos líneas hasta
+            // chocar con la descripción. Va dentro del texto, que respira.
+            h(Renglon, { k: `Mensualidad · ${M.precio}`,
+              v: 'Igual en ambas opciones. Capacitaciones periódicas, base de datos, alojamiento, copias de seguridad diarias, soporte técnico y los demás servicios asociados a la operación de la plataforma.' }),
+            h(Renglon, { k: 'No se cobra por',
+              v: 'Usuario, documento ni almacenamiento. El municipio no paga más por crecer.' }),
+            h(Renglon, { k: 'Vigencia', v: M.vigencia, ultimo: true }),
+          ]
+        : M
         ? [
             h(Renglon, { k: `Implementación · ${M.implementacion}`,
               v: 'Pago único. Creación de los usuarios de todas las secretarías, cargue inicial de los contratos vigentes con su historial, y los desarrollos a la medida del entorno del municipio.' }),
