@@ -28,7 +28,7 @@ export default function ProgresoScroll({ color }: { color: string }) {
   }, [])
 
   return (
-    <div className="fixed top-0 left-0 right-0 h-0.5 z-50 bg-transparent" aria-hidden="true">
+    <div className="progreso-scroll fixed top-0 left-0 right-0 h-0.5 z-50 bg-transparent" aria-hidden="true">
       <div
         className="h-full transition-[width] duration-150 ease-out"
         style={{ width: `${pct}%`, backgroundColor: color }}
