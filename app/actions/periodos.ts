@@ -1292,8 +1292,12 @@ export async function actualizarValorCobroPeriodo(
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'admin') {
-      return { error: 'Solo administradores pueden editar el valor mensual de un periodo' }
+    // Contratación entra junto al admin: es la oficina que define cuánto se
+    // paga en cada periodo. El software propone un valor —el reparto del
+    // contrato entre sus meses— pero la cifra la fija contratación, y hasta
+    // ahora tenía que pedirle el cambio a un administrador.
+    if (usuario.rol !== 'admin' && usuario.rol !== 'contratacion') {
+      return { error: 'Solo administración o contratación pueden editar el valor de un periodo' }
     }
 
     if (!Number.isFinite(nuevoValor) || nuevoValor < 0) {
@@ -1303,7 +1307,22 @@ export async function actualizarValorCobroPeriodo(
     const cargado = await getPeriodo(supabase, periodoId)
     if (!cargado.ok) return { error: cargado.error }
     const periodo = cargado.periodo
-    // Admin puede modificar cualquier periodo, incluyendo históricos y radicados.
+
+    // Lo ya radicado solo lo toca el admin. Un periodo radicado tiene
+    // documentos emitidos y número de radicado en SECOP II: cambiarle el
+    // valor deja el expediente en desacuerdo con lo ya presentado. Que la
+    // excepción exista —y sea del admin— es deliberado: hay errores que se
+    // descubren tarde y alguien tiene que poder corregirlos.
+    if (usuario.rol === 'contratacion' && periodo.estado === 'radicado') {
+      return {
+        error: 'Este periodo ya está radicado. Solo un administrador puede modificar su valor.',
+      }
+    }
+    if (usuario.rol === 'contratacion' && periodo.es_historico) {
+      return {
+        error: 'Este periodo es histórico. Solo un administrador puede modificar su valor.',
+      }
+    }
 
     // Obtener valor anterior para auditoría
     const { data: prev } = await supabase
