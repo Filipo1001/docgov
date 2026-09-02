@@ -8,6 +8,7 @@
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { getContratacionStats } from '@/app/actions/contratacion'
+import { getDatosFaltantes, type FilaFaltantes } from '@/app/actions/datos-faltantes'
 import { capitalizarNombre } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
@@ -41,6 +42,16 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
     staleTime: 60_000,
   })
   const stats = data?.data
+
+  // Se consulta aparte de las cifras: recorre contratos, periodos, otrosíes,
+  // actividades y evidencias, así que tarda más. Separarla deja que el resto
+  // del panel pinte de inmediato en vez de esperar por ella.
+  const { data: faltantesRes, isLoading: cargandoFaltantes } = useQuery({
+    queryKey: ['datos-faltantes'],
+    queryFn: () => getDatosFaltantes(),
+    staleTime: 60_000,
+  })
+  const faltantes = faltantesRes?.data
 
   return (
     <div className="max-w-5xl">
@@ -78,6 +89,103 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
           </Link>
         ))}
       </div>
+
+      {/* ── Datos que faltan para producir los documentos ──────────────────
+          Colografía deliberada, siguiendo ESTADO_COLOR: el bloqueante lleva
+          rojo tintado —impide producir el documento— y el incompleto ámbar,
+          que sale pero flojo. Sin iconografía decorativa: la severidad la
+          carga el color y la palabra, no un adorno. */}
+      {!cargandoFaltantes && faltantes && faltantes.filas.length > 0 && (
+        <Card className="mb-6">
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Datos faltantes para generar documentos
+            </h3>
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              {faltantes.filas.length} de {faltantes.contratosRevisados} contratos
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            {faltantes.totalBloqueantes > 0 && (
+              <span className="text-red-700 font-medium">
+                {faltantes.totalBloqueantes} impiden emitir el documento
+              </span>
+            )}
+            {faltantes.totalBloqueantes > 0 && faltantes.totalIncompletos > 0 && ' · '}
+            {faltantes.totalIncompletos > 0 && (
+              <span className="text-amber-700 font-medium">
+                {faltantes.totalIncompletos} lo dejan incompleto
+              </span>
+            )}
+          </p>
+
+          <div className="divide-y divide-gray-100">
+            {faltantes.filas.map((f: FilaFaltantes) => {
+              const bloqueantes = f.faltantes.filter(x => x.severidad === 'bloqueante')
+              return (
+                <Link
+                  key={f.contratoId}
+                  href={`/dashboard/contratos/${f.contratoId}`}
+                  className="block py-3 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{f.contratista}</p>
+                      <p className="text-xs text-gray-400">
+                        Contrato N.° {f.contratoNumero}
+                        {f.dependencia && ` — ${f.dependencia}`}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
+                        bloqueantes.length > 0
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {bloqueantes.length > 0 ? 'Bloqueante' : 'Incompleto'}
+                    </span>
+                  </div>
+
+                  <ul className="mt-2 space-y-1.5">
+                    {f.faltantes.map((x, i) => (
+                      <li key={i} className="flex gap-2.5">
+                        {/* El punto de color es el único elemento gráfico:
+                            marca severidad sin robarle peso al texto. */}
+                        <span
+                          className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                            x.severidad === 'bloqueante' ? 'bg-red-500' : 'bg-amber-500'
+                          }`}
+                        />
+                        <span className="min-w-0">
+                          <span className="text-xs text-gray-700">{x.detalle}</span>
+                          <span className="block text-[11px] text-gray-400">
+                            Afecta: {x.afecta.join(' · ')}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Link>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* El "todo en orden" solo aparece cuando de verdad se revisó: sin este
+          guard, un fallo de la consulta se leería como ausencia de problemas. */}
+      {!cargandoFaltantes && faltantes && faltantes.filas.length === 0 && (
+        <Card className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Datos faltantes para generar documentos
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Los {faltantes.contratosRevisados} contratos vigentes tienen lo necesario
+            para emitir sus documentos.
+          </p>
+        </Card>
+      )}
 
       {/* Contratos próximos a vencer */}
       {(stats?.proximosVencer?.length ?? 0) > 0 && (
