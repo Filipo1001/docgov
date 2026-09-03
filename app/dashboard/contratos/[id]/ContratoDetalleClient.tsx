@@ -292,13 +292,12 @@ export default function ContratoDetallePage({
                   href={`/dashboard/contratos/${id}/avanzado`}
                   className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors bg-white"
                 >
-                  {/* Contratación solo encuentra otrosíes al otro lado del
-                      enlace; nombrarlo "Opciones avanzadas" prometería de más. */}
-                  <Icono
-                    glifo={usuario?.rol === 'contratacion' ? Iconos.documentos.paquete : Iconos.navegacion.configuracion}
-                    tamano="sm"
-                  />
-                  {usuario?.rol === 'contratacion' ? 'Otrosíes' : 'Opciones avanzadas'}
+                  {/* Un solo nombre para todos. Antes decía «Otrosíes» a
+                      contratación porque era lo único que encontraba al otro
+                      lado; ahora también gestiona el plan de pagos, así que
+                      ese nombre se quedó corto. */}
+                  <Icono glifo={Iconos.navegacion.configuracion} tamano="sm" />
+                  Opciones avanzadas
                 </Link>
               </div>
             )}

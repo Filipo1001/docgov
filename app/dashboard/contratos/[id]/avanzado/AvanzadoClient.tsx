@@ -7,7 +7,10 @@ import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion, guardarMesCotizacion } from '@/app/actions/periodos'
-import { crearOtrosi, eliminarOtrosi, type Otrosi, type TipoOtrosi } from '@/app/actions/otrosies'
+import {
+  crearOtrosi, eliminarOtrosi, actualizarOtrosi, previsualizarOtrosi, aplicarOtrosi,
+  type Otrosi, type TipoOtrosi, type PrevisualizacionOtrosi, type PeriodoPropuesto,
+} from '@/app/actions/otrosies'
 import { getAvanzadoData, type PeriodoAvanzado, type ContratoAvanzado } from '@/app/actions/avanzado'
 import EliminarContrato from './EliminarContrato'
 import type { EstadoPeriodo } from '@/lib/types'
@@ -89,6 +92,17 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [mostrarFormOtrosi, setMostrarFormOtrosi] = useState(false)
   const [guardandoOtrosi, setGuardandoOtrosi] = useState(false)
   const [eliminandoOtrosiId, setEliminandoOtrosiId] = useState<string | null>(null)
+  // Edición de un otrosí ya registrado. Se digita a partir de un documento
+  // firmado, así que los errores de transcripción aparecen después.
+  const [editandoOtrosiId, setEditandoOtrosiId] = useState<string | null>(null)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
+  // Aplicación al contrato: primero se previsualiza, después se confirma.
+  // El software propone las cifras; contratación las ajusta antes de guardar.
+  const [previsualizacion, setPrevisualizacion] = useState<PrevisualizacionOtrosi | null>(null)
+  const [otrosiAplicandoId, setOtrosiAplicandoId] = useState<string | null>(null)
+  const [valoresPropuestos, setValoresPropuestos] = useState<Record<number, string>>({})
+  const [fechaFinPropuesta, setFechaFinPropuesta] = useState('')
+  const [aplicando, setAplicando] = useState(false)
   const [formOtrosi, setFormOtrosi] = useState({
     tipo: 'adicion' as TipoOtrosi,
     fecha_inicio: '',
@@ -135,11 +149,17 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
       const { contrato: ctr, periodos: rows, otrosies: ots, rol } = res.data
 
-      // Contratación: solo otrosíes. Eliminar es exclusivo del administrador y
-      // ni siquiera aparece como pestaña para los demás.
+      // Contratación gestiona pagos y otrosíes: es la oficina que define
+      // cuánto se paga en cada periodo y que registra las modificaciones del
+      // contrato. Antes solo veía otrosíes y tenía que pedirle a un
+      // administrador cualquier corrección de un valor.
+      //
+      // Eliminar el contrato sigue siendo exclusivo del administrador, y las
+      // pestañas de planillas y base de cotización quedan fuera porque
+      // pertenecen a la revisión del soporte, no a la gestión contractual.
       if (rol === 'contratacion') {
-        setTabsVisibles(['otrosies'])
-        setTab('otrosies')
+        setTabsVisibles(['pagos', 'otrosies'])
+        setTab('pagos')
       }
 
       setContrato(ctr)
@@ -174,6 +194,37 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
+  /**
+   * ¿Este otrosí ya se aplicó al contrato?
+   *
+   * Es la pregunta que la pantalla no respondía: se veía el botón «Aplicar»
+   * sin saber si ya se había usado, y quien llegaba después no tenía forma de
+   * distinguir un otrosí pendiente de uno ya reflejado.
+   *
+   * Se responde con los periodos, no con la fecha del contrato: la fecha dice
+   * que hubo una extensión, pero solo los periodos dicen si el contratista
+   * puede efectivamente reportar esos meses, que es lo que importa.
+   */
+  function estadoOtrosi(o: Otrosi): 'sin_plazo' | 'pendiente' | 'parcial' | 'aplicado' {
+    if (!o.plazo_dias_adicion || o.plazo_dias_adicion <= 0) return 'sin_plazo'
+    const inicio = new Date(o.fecha_inicio + 'T00:00:00')
+    const fin = new Date(inicio)
+    fin.setDate(fin.getDate() + o.plazo_dias_adicion - 1)
+
+    const meses = new Set<string>()
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1)
+    while (cursor <= fin) {
+      meses.add(`${MESES[cursor.getMonth()].toLowerCase()}-${cursor.getFullYear()}`)
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+    const existentes = new Set(periodos.map(pe => `${pe.mes.toLowerCase()}-${pe.anio}`))
+    const cubiertos = [...meses].filter(m => existentes.has(m)).length
+    if (cubiertos === 0) return 'pendiente'
+    return cubiertos === meses.size ? 'aplicado' : 'parcial'
+  }
+
+
+
   // ── Otrosíes handlers ───────────────────────────────────────
 
   async function guardarOtrosi() {
@@ -194,6 +245,78 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
     toast.success('Otrosí registrado')
     setMostrarFormOtrosi(false)
     setFormOtrosi({ tipo: 'adicion', fecha_inicio: '', valor_adicion: '', plazo_dias_adicion: '', cdp: '', crp: '', nota: '' })
+    await cargarDatos()
+  }
+
+  function abrirEdicionOtrosi(o: Otrosi) {
+    setEditandoOtrosiId(o.id)
+    setMostrarFormOtrosi(false)
+    setFormOtrosi({
+      tipo: o.tipo,
+      fecha_inicio: o.fecha_inicio,
+      valor_adicion: String(o.valor_adicion ?? 0),
+      plazo_dias_adicion: String(o.plazo_dias_adicion ?? 0),
+      cdp: o.cdp ?? '',
+      crp: o.crp ?? '',
+      nota: o.nota ?? '',
+    })
+  }
+
+  async function guardarEdicionOtrosi() {
+    if (!editandoOtrosiId) return
+    if (!formOtrosi.fecha_inicio) { toast.error('La fecha de inicio del otrosí es obligatoria'); return }
+    setGuardandoEdicion(true)
+    const res = await actualizarOtrosi({
+      otrosiId: editandoOtrosiId,
+      contratoId,
+      tipo: formOtrosi.tipo,
+      fecha_inicio: formOtrosi.fecha_inicio,
+      valor_adicion: parseInt(formOtrosi.valor_adicion.replace(/\D/g, ''), 10) || 0,
+      plazo_dias_adicion: parseInt(formOtrosi.plazo_dias_adicion, 10) || 0,
+      cdp: formOtrosi.cdp || null,
+      crp: formOtrosi.crp || null,
+      nota: formOtrosi.nota || null,
+    })
+    setGuardandoEdicion(false)
+    if (res.error) { toast.error(res.error); return }
+    toast.success('Otrosí actualizado')
+    setEditandoOtrosiId(null)
+    await cargarDatos()
+  }
+
+  async function abrirPrevisualizacion(otrosiId: string) {
+    setOtrosiAplicandoId(otrosiId)
+    setPrevisualizacion(null)
+    const res = await previsualizarOtrosi(otrosiId)
+    if (res.error || !res.data) {
+      toast.error(res.error ?? 'No se pudo calcular la propuesta')
+      setOtrosiAplicandoId(null)
+      return
+    }
+    setPrevisualizacion(res.data)
+    setFechaFinPropuesta(res.data.fechaFinPropuesta)
+    const vals: Record<number, string> = {}
+    res.data.periodosPropuestos.forEach(p => { vals[p.numero_periodo] = String(p.valor_cobro) })
+    setValoresPropuestos(vals)
+  }
+
+  async function confirmarAplicacion() {
+    if (!otrosiAplicandoId || !previsualizacion) return
+    const periodos: PeriodoPropuesto[] = previsualizacion.periodosPropuestos.map(p => ({
+      ...p,
+      valor_cobro: parseInt((valoresPropuestos[p.numero_periodo] ?? '').replace(/\D/g, ''), 10) || 0,
+    }))
+    setAplicando(true)
+    const res = await aplicarOtrosi(otrosiAplicandoId, fechaFinPropuesta, periodos)
+    setAplicando(false)
+    if (res.error) { toast.error(res.error); return }
+    toast.success(
+      res.data?.creados
+        ? `Otrosí aplicado — ${res.data.creados} periodo(s) creado(s)`
+        : 'Otrosí aplicado — el contrato quedó extendido',
+    )
+    setOtrosiAplicandoId(null)
+    setPrevisualizacion(null)
     await cargarDatos()
   }
 
@@ -826,21 +949,49 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
               Un otrosí modifica el contrato (valor, plazo) sin crear uno nuevo. Al registrarlo, los
               documentos (cuenta de cobro y actas) reflejarán el valor adicionado.
             </p>
-            <p className="text-amber-700">
-              ⚠️ Recuerda ajustar manualmente el <strong>valor mensual</strong> de los periodos afectados
-              en la pestaña <strong>Plan de Pagos</strong> (desde la fecha del otrosí en adelante).
+            <p>
+              Si el otrosí adiciona <strong>plazo</strong>, usa <strong>Aplicar al contrato</strong>:
+              extiende la fecha de terminación y crea los periodos que faltan. El sistema propone
+              las cifras y tú las ajustas antes de confirmar.
             </p>
           </div>
 
           {/* Lista de otrosíes */}
           {otrosies.length > 0 && (
             <div className="space-y-2">
-              {otrosies.map((o) => (
-                <div key={o.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-start justify-between gap-4">
+              {otrosies.map((o) => {
+                const estado = estadoOtrosi(o)
+                const editandoEste = editandoOtrosiId === o.id
+                const aplicandoEste = otrosiAplicandoId === o.id
+                return (
+                <div
+                  key={o.id}
+                  className={`bg-white border rounded-xl overflow-hidden ${
+                    editandoEste || aplicandoEste ? 'border-gray-900' : 'border-gray-200'
+                  }`}
+                >
+                <div className="p-4 flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="text-sm font-semibold text-gray-900">Otrosí N.° {o.numero}</span>
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize">{o.tipo}</span>
+                      {/* El estado responde de un vistazo la pregunta que la
+                          pantalla dejaba abierta: ¿esto ya surtió efecto? */}
+                      {estado === 'aplicado' && (
+                        <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                          Aplicado
+                        </span>
+                      )}
+                      {estado === 'pendiente' && (
+                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                          Sin aplicar
+                        </span>
+                      )}
+                      {estado === 'parcial' && (
+                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                          Aplicado a medias
+                        </span>
+                      )}
                       <span className="text-xs text-gray-400">Inicia: {o.fecha_inicio}</span>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
@@ -851,20 +1002,170 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                     </div>
                     {o.nota && <p className="text-xs text-gray-500 italic mt-1.5 break-words">{o.nota}</p>}
                   </div>
-                  <button
-                    onClick={() => borrarOtrosi(o.id)}
-                    disabled={eliminandoOtrosiId === o.id}
-                    className="text-xs text-red-500 hover:text-red-700 font-medium shrink-0 disabled:opacity-50"
-                  >
-                    {eliminandoOtrosiId === o.id ? '…' : 'Eliminar'}
-                  </button>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Un otrosí ya aplicado no ofrece «Aplicar»: sería
+                        invitar a repetir algo hecho. Se ofrece revisar, que
+                        no escribe nada y sirve para comprobar que quedó bien.
+                        El de «a medias» sí invita a completar lo que falta. */}
+                    {o.plazo_dias_adicion > 0 && (
+                      <button
+                        onClick={() => abrirPrevisualizacion(o.id)}
+                        disabled={aplicandoEste}
+                        className={`text-xs font-medium disabled:opacity-50 ${
+                          estado === 'aplicado'
+                            ? 'text-gray-500 hover:text-gray-700'
+                            : 'text-emerald-700 hover:text-emerald-900'
+                        }`}
+                      >
+                        {aplicandoEste && !previsualizacion
+                          ? 'Calculando…'
+                          : estado === 'aplicado'
+                            ? 'Revisar'
+                            : estado === 'parcial'
+                              ? 'Completar aplicación'
+                              : 'Aplicar al contrato'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => abrirEdicionOtrosi(o)}
+                      className="text-xs font-medium text-gray-600 hover:text-gray-900"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => borrarOtrosi(o.id)}
+                      disabled={eliminandoOtrosiId === o.id}
+                      className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
+                    >
+                      {eliminandoOtrosiId === o.id ? '…' : 'Eliminar'}
+                    </button>
+                  </div>
                 </div>
-              ))}
+
+              {/* Previsualización antes de aplicar. Es el momento en que el software
+                  propone y contratación decide: las cifras llegan calculadas pero
+                  todas son editables antes de confirmar. */}
+              {previsualizacion && aplicandoEste && (
+                <div className="bg-white border-2 border-emerald-200 rounded-2xl p-5 space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Así quedaría el contrato</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Revisa y ajusta lo que necesites. Nada se guarda hasta que confirmes.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Termina actualmente
+                      </label>
+                      <p className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500">
+                        {previsualizacion.fechaFinActual}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Nueva fecha de terminación
+                      </label>
+                      <input
+                        type="date"
+                        value={fechaFinPropuesta}
+                        onChange={(e) => setFechaFinPropuesta(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {previsualizacion.periodosPropuestos.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-2">
+                        Periodos que se crearán ({previsualizacion.periodosPropuestos.length})
+                      </p>
+                      <div className="space-y-2">
+                        {previsualizacion.periodosPropuestos.map((pp) => (
+                          <div key={pp.numero_periodo} className="flex items-center gap-3 text-sm">
+                            <span className="w-32 shrink-0 text-gray-700">
+                              {pp.mes} {pp.anio}
+                            </span>
+                            <span className="w-40 shrink-0 text-xs text-gray-400">
+                              {pp.fecha_inicio} → {pp.fecha_fin}
+                            </span>
+                            <input
+                              type="text" inputMode="numeric"
+                              value={valoresPropuestos[pp.numero_periodo] ?? ''}
+                              onChange={(e) => setValoresPropuestos(v => ({ ...v, [pp.numero_periodo]: e.target.value }))}
+                              className="flex-1 max-w-[180px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-emerald-400 outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {/* La suma se contrasta contra la adición del otrosí, con el
+                          mismo criterio que la pestaña de pagos usa para el total
+                          del contrato: si no cuadra hay que verlo, no deducirlo. */}
+                      {(() => {
+                        const suma = Object.values(valoresPropuestos)
+                          .reduce((a, v) => a + (parseInt(v.replace(/\D/g, ''), 10) || 0), 0)
+                        const diferencia = suma - previsualizacion.valorAdicion
+                        const cuadraOtrosi = diferencia === 0
+                        return (
+                          <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
+                            cuadraOtrosi
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                              : 'bg-amber-50 border-amber-200 text-amber-900'
+                          }`}>
+                            <span className="font-medium">
+                              {cuadraOtrosi
+                                ? '✓ La suma coincide con la adición del otrosí'
+                                : `✕ Difiere en $ ${Math.abs(diferencia).toLocaleString('es-CO')} ${diferencia > 0 ? 'por encima' : 'por debajo'}`}
+                            </span>
+                            <span className="opacity-80">
+                              Suma $ {suma.toLocaleString('es-CO')} · Adición $ {previsualizacion.valorAdicion.toLocaleString('es-CO')}
+                            </span>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      No hay periodos nuevos por crear: los meses del otrosí ya existen.
+                    </p>
+                  )}
+
+                  {previsualizacion.mesesOmitidos.length > 0 && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      Ya existen y no se tocan: {previsualizacion.mesesOmitidos.join(' · ')}
+                    </p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={confirmarAplicacion}
+                      disabled={aplicando || !fechaFinPropuesta}
+                      className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    >
+                      {aplicando ? 'Aplicando…' : 'Confirmar y aplicar'}
+                    </button>
+                    <button
+                      onClick={() => { setOtrosiAplicandoId(null); setPrevisualizacion(null) }}
+                      disabled={aplicando}
+                      className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+                </div>
+                )
+              })}
             </div>
           )}
 
-          {/* Formulario / botón */}
-          {!mostrarFormOtrosi ? (
+          {/* Formulario / botón. El mismo formulario sirve para registrar y
+              para corregir: los campos son idénticos y duplicarlo solo daría
+              dos sitios donde arreglar el mismo error. */}
+          {!mostrarFormOtrosi && !editandoOtrosiId ? (
             <button
               onClick={() => setMostrarFormOtrosi(true)}
               className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
@@ -873,7 +1174,9 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             </button>
           ) : (
             <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
-              <p className="text-sm font-semibold text-gray-900">Nuevo otrosí</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {editandoOtrosiId ? 'Corregir otrosí' : 'Nuevo otrosí'}
+              </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -949,14 +1252,16 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
               <div className="flex gap-2">
                 <button
-                  onClick={guardarOtrosi}
-                  disabled={guardandoOtrosi || !formOtrosi.fecha_inicio}
+                  onClick={editandoOtrosiId ? guardarEdicionOtrosi : guardarOtrosi}
+                  disabled={guardandoOtrosi || guardandoEdicion || !formOtrosi.fecha_inicio}
                   className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
                 >
-                  {guardandoOtrosi ? 'Guardando…' : 'Guardar otrosí'}
+                  {guardandoOtrosi || guardandoEdicion
+                    ? 'Guardando…'
+                    : editandoOtrosiId ? 'Guardar cambios' : 'Guardar otrosí'}
                 </button>
                 <button
-                  onClick={() => setMostrarFormOtrosi(false)}
+                  onClick={() => { setMostrarFormOtrosi(false); setEditandoOtrosiId(null) }}
                   className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancelar

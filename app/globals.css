@@ -143,3 +143,48 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
   .revelar-izq,
   .revelar-zoom { opacity: 1; transform: none; transition: none; }
 }
+
+/* ── Impresión: la propuesta como PDF ─────────────────────────────────────
+   Una propuesta comercial también viaja por correo como adjunto, y a un
+   secretario de despacho le sirve tanto el enlace como el archivo. Se exporta
+   con ⌘P → «Guardar como PDF»; estos estilos son lo que hace que salga bien.
+
+   LO PRIMERO Y MÁS IMPORTANTE: revelar todo. El contenido arranca en
+   `opacity: 0` y lo despierta un IntersectionObserver al hacer scroll. Al
+   imprimir no hay scroll, así que todo lo que quedó bajo el pliegue saldría
+   en blanco: un PDF de doce páginas vacías. Esta regla lo hace visible sin
+   depender de que el observador haya pasado por ahí.
+
+   Los fondos oscuros se conservan (`print-color-adjust`) porque la portada y
+   el bloque de precio son parte de la identidad: sin ellos el PDF parece un
+   borrador. Quien prefiera ahorrar tinta lo decide en el diálogo del sistema,
+   no lo decidimos nosotros por él. */
+@media print {
+  .revelar,
+  .revelar-izq,
+  .revelar-zoom {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .latido { animation: none !important; }
+
+  /* Los degradados y fondos de marca deben imprimirse, no descartarse. */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* La barra de progreso del scroll no tiene sentido en papel. */
+  .progreso-scroll { display: none !important; }
+
+  /* Que una sección no se parta a la mitad si cabe entera en la página. */
+  section { break-inside: avoid-page; }
+
+  /* Un título huérfano al final de la página lee mal en un documento
+     que va a leer un secretario de despacho. */
+  h1, h2, h3 { break-after: avoid-page; }
+
+  @page { margin: 12mm; }
+}
