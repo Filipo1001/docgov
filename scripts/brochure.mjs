@@ -110,6 +110,27 @@ const MUNICIPIOS = {
    * diferencia no es «quién digita» sino el tiempo hasta el primer ciclo:
    * es lo único que la B no puede prometer, porque no depende de nosotros.
    */
+  /**
+   * Angelópolis no aportó escudo. El generador ya lo contempla —ESCUDO queda
+   * en null si el archivo no existe y la portada no lo dibuja— así que no
+   * hace falta nada más: el nombre del municipio en el pie de portada cumple
+   * la función de anclaje. Si más adelante llega el escudo oficial, basta con
+   * dejarlo en public/marca/escudo-angelopolis.png.
+   *
+   * Una sola implementación, como Dabeiba: `implementacion` en singular. La
+   * forma plural la estrenó Venecia y sigue disponible para quien la use.
+   */
+  angelopolis: {
+    nombre: 'Angelópolis',
+    articulo: 'la Alcaldía Municipal de Angelópolis',
+    escudo: path.join(process.cwd(), 'public', 'marca', 'escudo-angelopolis.png'),
+    precio: '$1.990.000',
+    implementacion: '$2.990.000',
+    // Sin «con su historial»: cargar periodos pasados es un alcance mucho
+    // mayor y no conviene prometerlo. Mismo criterio que en Venecia.
+    implementacionTexto: 'Pago único. Creación de los usuarios de todas las secretarías, cargue de los contratos vigentes, adaptación de los documentos al formato de Angelópolis, capacitación por rol y acompañamiento durante el primer ciclo mensual completo.',
+    vigencia: 'Desde la suscripción del acta de inicio y hasta el 31 de diciembre de 2026.',
+  },
   venecia: {
     nombre: 'Venecia',
     articulo: 'la Alcaldía Municipal de Venecia',
@@ -687,8 +708,12 @@ const Brochure = ({ qr }) => h(Document, {
           ]
         : M
         ? [
+            // El texto por defecto es el que ya recibieron Dabeiba y El Bagre;
+            // no se toca para no desalinear una propuesta ya enviada. Un
+            // municipio puede traer el suyo con `implementacionTexto`.
             h(Renglon, { k: `Implementación · ${M.implementacion}`,
-              v: 'Pago único. Creación de los usuarios de todas las secretarías, cargue inicial de los contratos vigentes con su historial, y los desarrollos a la medida del entorno del municipio.' }),
+              v: M.implementacionTexto
+                 ?? 'Pago único. Creación de los usuarios de todas las secretarías, cargue inicial de los contratos vigentes con su historial, y los desarrollos a la medida del entorno del municipio.' }),
             h(Renglon, { k: `Mensualidad · ${M.precio}`,
               v: 'Capacitaciones periódicas, base de datos, alojamiento, copias de seguridad diarias, soporte técnico y los demás servicios asociados a la operación de la plataforma.' }),
             h(Renglon, { k: 'No se cobra por',
