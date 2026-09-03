@@ -42,3 +42,7 @@ next-env.d.ts
 *.swp
 *.py
 __pycache__/
+
+# Brochures: artefactos generados con scripts/brochure.mjs, no fuente.
+# Se regeneran con cifras frescas; versionarlos solo garantiza que envejezcan.
+Brochure-*.pdf
