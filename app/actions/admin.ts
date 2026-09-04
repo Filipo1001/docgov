@@ -370,17 +370,24 @@ export async function confirmarFotoUsuario(
     return { error: ERROR_SOLO_CONTRATISTAS }
   }
 
+  // La foto reemplazada conserva la ruta del objeto —{id}/foto.ext—, así que la
+  // URL que pinta el navegador sería idéntica a la anterior y la caché de una
+  // hora seguiría sirviendo la vieja: la subida funcionaba y en pantalla no
+  // pasaba nada. La versión se guarda en foto_url, no solo se devuelve a quien
+  // subió, para que el cambio se vea también en las demás pantallas y sesiones.
+  const urlVersionada = `${publicUrl.split('?')[0]}?v=${Date.now()}`
+
   const adminClient = createAdminSupabaseClient()
   const { error } = await adminClient
     .from('usuarios')
-    .update({ foto_url: publicUrl })
+    .update({ foto_url: urlVersionada })
     .eq('id', userId)
 
   if (error) return { error: error.message }
 
   revalidatePath(`/dashboard/admin/usuarios/${userId}`)
-  // Cache-buster so the browser reloads the new image
-  return { data: { url: `${publicUrl}?t=${Date.now()}` } }
+  revalidatePath('/dashboard/admin/usuarios')
+  return { data: { url: urlVersionada } }
 }
 
 // ─── Change user password (admin only) ───────────────────────

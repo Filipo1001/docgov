@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { activarContratista, eliminarUsuario } from '@/app/actions/admin'
+import { avatarThumb } from '@/lib/avatar'
 import { formatCedula } from '@/lib/format'
 import type { UsuarioAdmin, ContratistaPendiente, Dependencia } from '@/services/admin'
 
@@ -25,7 +26,9 @@ function Avatar({ foto, nombre }: { foto?: string; nombre: string }) {
   const initials = nombre.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
   if (foto) {
     return (
-      <img src={foto} alt={nombre} className="w-9 h-9 rounded-full object-cover ring-2 ring-white" />
+      // Sin avatarThumb la imagen no carga: el bucket es privado y lo guardado
+      // en foto_url es la URL pública de cuando no lo era.
+      <img src={avatarThumb(foto) ?? foto} alt={nombre} className="w-9 h-9 rounded-full object-cover ring-2 ring-white" />
     )
   }
   return (
