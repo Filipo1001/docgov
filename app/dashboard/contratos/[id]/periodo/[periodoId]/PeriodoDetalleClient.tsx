@@ -641,15 +641,19 @@ export default function PeriodoDetallePage({
   const puedeAdjuntarFactura =
     usuario?.rol === 'admin' || (esEditable && esContratista)
 
-  // ── Mes de cotización: meses disponibles (rango del contrato) ──────────────
-  // El selector ofrece cualquier mes dentro del rango del contrato.
+  // ── Mes de cotización: meses disponibles (rango del contrato ±1) ───────────
+  // El selector ofrece el rango del contrato más un mes de holgura a cada
+  // lado: un pago por mes vencido puede cotizar el mes justo antes del inicio
+  // (cierre de un ciclo de SS que ya venía corriendo) o el que sigue al fin
+  // (SS pagada después de terminar el contrato). Un contrato corto —dos meses,
+  // como el caso que expuso esto— se queda sin esas opciones sin el margen.
   const mesesContrato = (() => {
     if (!contrato?.fecha_inicio || !contrato?.fecha_fin) return [...MESES]
     const ini = new Date(contrato.fecha_inicio + 'T00:00:00')
     const fin = new Date(contrato.fecha_fin + 'T00:00:00')
     const out: string[] = []
-    const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1)
-    const tope = new Date(fin.getFullYear(), fin.getMonth(), 1)
+    const cursor = new Date(ini.getFullYear(), ini.getMonth() - 1, 1)
+    const tope = new Date(fin.getFullYear(), fin.getMonth() + 1, 1)
     while (cursor <= tope && out.length < 24) {
       out.push(MESES[cursor.getMonth()])
       cursor.setMonth(cursor.getMonth() + 1)
