@@ -45,13 +45,20 @@ export function avatarThumb(url: string | null | undefined, px = 160): string | 
   if (!url) return null
   // Ya convertida: aplicarla dos veces anidaría la ruta sobre sí misma.
   if (url.startsWith(RUTA_API)) return url
+  const [sinQuery, query] = url.split('?')
   // Una ruta cruda ya es lo que la API espera; no toda foto viene de Storage
   // (una URL externa se devuelve intacta).
-  const objeto = url.includes('://')
-    ? (url.includes(MARCADOR_PUBLICO)
-        ? url.slice(url.indexOf(MARCADOR_PUBLICO) + MARCADOR_PUBLICO.length).split('?')[0]
+  const objeto = sinQuery.includes('://')
+    ? (sinQuery.includes(MARCADOR_PUBLICO)
+        ? sinQuery.slice(sinQuery.indexOf(MARCADOR_PUBLICO) + MARCADOR_PUBLICO.length)
         : null)
-    : url.replace(/^\/+/, '')
+    : sinQuery.replace(/^\/+/, '')
   if (!objeto) return url
-  return `${RUTA_API}${objeto}?px=${px}`
+  // Al reemplazar una foto el objeto conserva su ruta —siempre {id}/foto.ext—,
+  // así que la URL no cambiaría y el navegador seguiría mostrando la anterior
+  // durante la hora de caché. `v` la escribe confirmarFotoUsuario al guardar,
+  // y viaja en foto_url para que la foto nueva se vea en todas las pantallas,
+  // no solo en la que hizo la subida.
+  const version = new URLSearchParams(query ?? '').get('v')
+  return `${RUTA_API}${objeto}?px=${px}${version ? `&v=${encodeURIComponent(version)}` : ''}`
 }
