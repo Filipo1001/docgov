@@ -30,7 +30,7 @@ function Avatar({ foto, nombre, size = 'xl' }: { foto?: string; nombre: string; 
     ? 'w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-500 ring-4 ring-white shadow-md'
     : 'w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-lg font-bold text-gray-500 ring-2 ring-white shadow'
   // 192 px: avatar grande (96 px de display) nítido en pantallas retina
-  if (foto) return <img src={avatarThumb(foto, 192) ?? foto} alt={nombre} loading="lazy" decoding="async" className={cls} />
+  if (foto) return <img src={avatarThumb(foto) ?? foto} alt={nombre} loading="lazy" decoding="async" className={cls} />
   return <div className={fallback}>{initials}</div>
 }
 

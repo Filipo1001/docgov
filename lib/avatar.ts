@@ -15,8 +15,21 @@
  * los sitios que los leen. Esta función es el único lugar que traduce: si un
  * componente pinta `foto_url` directamente, la imagen no cargará.
  *
- * El redimensionado se dejó del lado del servidor. Antes se pedía por el
- * endpoint `render/image/public/`, que ya no aplica a un bucket privado.
+ * ── Por qué ya no se pide un tamaño ──────────────────────────────────────
+ *
+ * Esta función emitía `?px=160` y la ruta le pedía a Supabase la miniatura.
+ * Las transformaciones se facturan POR IMAGEN DISTINTA transformada en el
+ * periodo —no por petición—, así que la caché del navegador no bajaba el
+ * contador: bastaba con que alguien abriera cada foto una vez al mes para
+ * gastar las 93. Con 100 incluidas en el plan Pro, los avatares solos se
+ * comían el cupo y dejaban fuera a las evidencias, que ya habían pasado por
+ * esto mismo (ver UMBRAL_MINIATURA_BYTES en `lib/storage-firmado.ts`).
+ *
+ * No hacía falta: `comprimirFoto` deja la foto en 400×400 WebP —unos 12 KB
+ * medidos sobre las 75 que entraron por ese camino— antes de subirla. Pedir
+ * una miniatura de eso es comprimir lo ya comprimido. Se sirve el objeto tal
+ * cual y el navegador lo escala; a 400 px de lado alcanza de sobra para los
+ * 192 px del avatar más grande de la aplicación, incluso en pantallas retina.
  *
  * ── Por qué no se firma, como el resto de buckets privados ───────────────
  *
@@ -34,14 +47,10 @@ const RUTA_API = '/api/avatar/'
 const MARCADOR_PUBLICO = '/storage/v1/object/public/avatars/'
 
 /**
- * Devuelve la ruta interna que sirve el avatar a `px`×`px` (cover).
+ * Devuelve la ruta interna que sirve el avatar.
  * Si la URL no es de un avatar de Storage (o es null), la devuelve sin tocar.
- * 160 px por defecto: nítido hasta 80 px de display en pantallas retina.
- *
- * `px` debe ser uno de los tamaños que acepta la ruta (80, 160, 192, 320, 640);
- * cualquier otro cae en 160 allí.
  */
-export function avatarThumb(url: string | null | undefined, px = 160): string | null {
+export function avatarThumb(url: string | null | undefined): string | null {
   if (!url) return null
   // Ya convertida: aplicarla dos veces anidaría la ruta sobre sí misma.
   if (url.startsWith(RUTA_API)) return url
@@ -60,5 +69,5 @@ export function avatarThumb(url: string | null | undefined, px = 160): string | 
   // y viaja en foto_url para que la foto nueva se vea en todas las pantallas,
   // no solo en la que hizo la subida.
   const version = new URLSearchParams(query ?? '').get('v')
-  return `${RUTA_API}${objeto}?px=${px}${version ? `&v=${encodeURIComponent(version)}` : ''}`
+  return `${RUTA_API}${objeto}${version ? `?v=${encodeURIComponent(version)}` : ''}`
 }

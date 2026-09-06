@@ -106,7 +106,7 @@ function VerUsuarioModal({
         <div className="bg-gray-50 border-b border-gray-100 px-6 py-5 flex items-center gap-4">
           {contratista.foto_url ? (
             <img
-              src={avatarThumb(contratista.foto_url, 192) ?? undefined}
+              src={avatarThumb(contratista.foto_url) ?? undefined}
               alt={contratista.nombre_completo}
               className="w-16 h-16 rounded-full object-cover ring-2 ring-white shadow-sm shrink-0"
             />

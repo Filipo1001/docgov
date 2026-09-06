@@ -45,13 +45,8 @@ const TIPOS: Record<string, string> = {
   heic: 'image/heic',
 }
 
-/** Tamaños que pide la aplicación. Acotado para no convertir la ruta en un
- *  redimensionador abierto: cada combinación nueva es una transformación que
- *  Supabase cobra y cachea aparte. */
-const ANCHOS_PERMITIDOS = [80, 160, 192, 320, 640]
-
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ ruta: string[] }> },
 ) {
   // Basta con haber iniciado sesión: dentro de la aplicación los listados ya
@@ -68,22 +63,19 @@ export async function GET(
   }
 
   const ext = path.split('.').pop()!.toLowerCase()
-  const pedido = Number(req.nextUrl.searchParams.get('px'))
-  const px = ANCHOS_PERMITIDOS.includes(pedido) ? pedido : 160
 
   const admin = createAdminSupabaseClient()
   const bucket = admin.storage.from('avatars')
 
-  // Las transformaciones son un servicio aparte del almacenamiento: agotado el
-  // cupo del plan, Supabase deja de responderlas aunque el archivo esté
-  // intacto. Sin este segundo intento, ese día todos los avatares aparecerían
-  // rotos. Se paga tamaño completo, que es mejor que no mostrar nada.
-  let { data, error } = await bucket.download(path, {
-    transform: { width: px, height: px, resize: 'cover', quality: 75 },
-  })
-  if (error || !data) {
-    ({ data, error } = await bucket.download(path))
-  }
+  // Se sirve el objeto tal cual, sin pedirle una miniatura a Supabase.
+  //
+  // Las transformaciones se facturan por imagen distinta transformada al mes
+  // —no por petición—, y los 93 avatares por sí solos superaban las 100 que
+  // trae el plan Pro. No aportaban nada: `comprimirFoto` ya sube la foto en
+  // 400×400 WebP, unos 12 KB, y el navegador la escala al tamaño que toque.
+  // Es la misma conclusión a la que se llegó con las evidencias; ver
+  // UMBRAL_MINIATURA_BYTES en `lib/storage-firmado.ts`.
+  const { data, error } = await bucket.download(path)
 
   if (error || !data) {
     return NextResponse.json({ error: 'Foto no encontrada' }, { status: 404 })
