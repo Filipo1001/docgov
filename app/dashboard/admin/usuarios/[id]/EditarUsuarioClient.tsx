@@ -11,7 +11,7 @@ import { useUsuario } from '@/lib/user-context'
 import { avatarThumb } from '@/lib/avatar'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 
-const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'gobierno', 'hacienda']
+const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'alcalde', 'gobierno', 'hacienda']
 const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
 const TIPOS_CUENTA = ['Ahorros', 'Corriente']
 const BANCOS = [

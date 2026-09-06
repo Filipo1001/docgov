@@ -286,6 +286,16 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
       { href: '/dashboard/admin/usuarios', label: 'Usuarios', icono: 'usuarios' },
       { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
+    // Alcalde: una sola pantalla, a propósito.
+    //
+    // No hay «Contratos» ni el mes en curso porque esas vistas listan personas
+    // con su cédula y su cuenta bancaria, y para decidir no le hacen falta:
+    // lo que necesita es el agregado por secretaría. Un menú con puertas que
+    // no debe cruzar solo invita a cruzarlas.
+    alcalde: [
+      { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
+    ],
   }
 
   return menus[rol] ?? menus.contratista

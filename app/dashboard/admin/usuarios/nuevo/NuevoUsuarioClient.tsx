@@ -13,6 +13,7 @@ const ROLES = [
   { value: 'supervisor',   label: 'Supervisor' },
   { value: 'asesor',       label: 'Asesor jurídico' },
   { value: 'contratacion', label: 'Contratación' },
+  { value: 'alcalde',      label: 'Alcalde' },
   { value: 'gobierno',     label: 'Gobierno' },
   { value: 'hacienda',     label: 'Hacienda' },
   { value: 'admin',        label: 'Administrador' },
