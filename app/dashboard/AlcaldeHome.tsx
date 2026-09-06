@@ -165,20 +165,31 @@ export default function AlcaldeHome({ nombre }: { nombre: string }) {
               Último mes cerrado. {d.mesActual} sigue en curso.
             </p>
           </div>
+          {/* Sin periodos no hay nota. Un 0% ahí diría «incumplieron» cuando lo
+              que pasa es que no había nada que cumplir — el caso de un
+              municipio en su primer mes. */}
           <div className="text-right">
-            <p className={`text-3xl font-bold ${t.texto}`}>{d.pctCerrado}%</p>
-            <p className="text-xs text-gray-500">
-              {d.cerradosCerrado} de {d.totalCerrado} completaron el ciclo
-            </p>
+            {d.totalCerrado === 0 ? (
+              <p className="text-sm text-gray-400">Sin periodos en {d.mesCerrado}</p>
+            ) : (
+              <>
+                <p className={`text-3xl font-bold ${t.texto}`}>{d.pctCerrado}%</p>
+                <p className="text-xs text-gray-500">
+                  {d.cerradosCerrado} de {d.totalCerrado} completaron el ciclo
+                </p>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="mt-4 h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div className={`h-full ${t.barra} rounded-full transition-all`} style={{ width: `${d.pctCerrado}%` }} />
-        </div>
+        {d.totalCerrado > 0 && (
+          <div className="mt-4 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className={`h-full ${t.barra} rounded-full transition-all`} style={{ width: `${d.pctCerrado}%` }} />
+          </div>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-          {delta !== null && (
+          {delta !== null && d.totalCerrado > 0 && (
             <span className={delta < 0 ? 'text-red-600' : delta > 0 ? 'text-emerald-600' : 'text-gray-500'}>
               {delta === 0
                 ? `Igual que en ${d.mesPrevio}`
