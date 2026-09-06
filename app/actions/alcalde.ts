@@ -1,88 +1,74 @@
 'use server'
 
 /**
- * app/actions/alcalde.ts — el resumen que ve el alcalde.
+ * app/actions/alcalde.ts — las tarjetas que recibe el alcalde.
  *
- * ── Qué responde esta pantalla ───────────────────────────────────────────
+ * Una tarjeta por secretaría con operación. Responde, sin párrafos: cuánto
+ * pesa, si va al día y si hay algo que se le vence encima.
  *
- * «¿Cómo vamos y a quién llamo?». No «¿qué hago ahora?»: el alcalde no
- * aprueba informes, no radica y no corrige documentos. Cada dato que entra
- * aquí tiene que servir para una decisión suya —renovar, exigir, responder
- * ante un ente de control—; si sirve para una decisión de otro, sobra.
+ * ── Por qué la plata SÍ incluye los periodos históricos ──────────────────
  *
- * ── Dos trampas que este cálculo evita a propósito ───────────────────────
+ * El resto de la aplicación filtra `es_historico = false`, y para el ciclo
+ * mensual está bien: un periodo histórico se cargó ya cerrado y no dice nada
+ * sobre si el supervisor está aprobando a tiempo.
  *
- * 1. EL DENOMINADOR. Medido el 6 de septiembre de 2026, Bienestar Social
- *    tenía 33 contratos vigentes y solo 4 cerraron agosto. Parece un
- *    desastre; no lo es: 19 de esos contratos empezaron DESPUÉS del 31 de
- *    agosto —el último, el 4 de septiembre— y no podían reportar. Sobre los
- *    que sí tenían periodo de agosto son 4 de 14. Sigue siendo el peor dato
- *    del municipio, pero es el dato verdadero. Por eso el denominador es
- *    «contratos con periodo de ese mes», nunca «contratos vigentes»: si no,
- *    la secretaría que más contrata es siempre la que peor se ve.
+ * Para la plata ese filtro miente. El sistema entró en julio de 2026 y los
+ * contratos empezaron en enero: los pagos anteriores están cargados como
+ * históricos —215 periodos, 875 millones—. Excluyéndolos, Hacienda aparecía
+ * con 14% ejecutado y 66% del plazo consumido, y el alcalde habría llamado a
+ * pedir explicaciones por un problema inexistente. Con ellos da 61% contra
+ * 66%: normal. Misma corrección en las cuatro secretarías.
  *
- * 2. EL MES EN CURSO. El día 6, septiembre iba en 1%. Mostrarlo como
- *    porcentaje junto a los meses cerrados es sembrar una alarma falsa todos
- *    los días 1 a 15. La cifra grande es la del último mes CERRADO; el mes
- *    en curso va aparte, contado en informes y no en nota.
+ * Se suman sin solaparse: (radicado Y NO histórico) O histórico.
  *
- * ── Por qué agrega en el servidor y no consulta el alcalde ───────────────
+ * ── Por qué el porcentaje va contra el plazo transcurrido ────────────────
  *
- * El rol no tiene políticas RLS propias. Se agrega aquí con el cliente de
- * administración y salen totales, no filas: así su pantalla nunca transporta
- * cédulas, cuentas bancarias ni teléfonos, que es información que no necesita
- * para ninguna de sus decisiones.
+ * «24% ejecutado» no dice nada solo. Bienestar Social está en 24% y es la que
+ * mejor va, porque solo ha corrido el 16% de su plazo; Hacienda está en 61%
+ * con el 66% corrido. La referencia convierte «cuánto llevan» en «van al día
+ * o no», que es lo único que el alcalde puede accionar.
+ *
+ * El plazo se pondera por valor —no es el promedio simple de los contratos—
+ * porque lo que se compara es contra pesos: un contrato de 60 millones pesa
+ * más en la barra que uno de 12.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { MESES } from '@/lib/constants'
 
-export type FilaSecretaria = {
+export type TarjetaSecretaria = {
+  id: string
   nombre: string
-  conPeriodo: number
-  cerrados: number
-  esperando: number
-  sinEnviar: number
-  pct: number
-  contratosVigentes: number
-  valorVigente: number
-}
-
-export type Vencimiento = {
-  fecha: string
-  dias: number
+  /** Cargo real del supervisor: «SECRETARÍA GENERAL Y DE GOBIERNO» y demás. */
+  cargo: string | null
+  secretario: string | null
+  foto: string | null
+  contratistas: number
   contratos: number
-  valor: number
-  secretarias: string[]
+  contratado: number
+  ejecutado: number
+  pctEjecutado: number
+  /** Cuánto del plazo contratado ya corrió, ponderado por valor. La referencia. */
+  pctPlazo: number
+  /** Último mes cerrado: 'bien' | 'atencion' | 'mal' | null si no hubo periodos. */
+  estadoMes: 'bien' | 'atencion' | 'mal' | null
+  cerradosMes: number
+  totalMes: number
+  /** Vencimientos dentro de 30 días, si los hay. */
+  vencenPronto: number
+  fechaVencimiento: string | null
 }
 
 export type ResumenAlcalde = {
-  // Cartera
-  contratosVigentes: number
-  personas: number
-  valorVigente: number
-  pagadoAnio: number
-  pagosRadicados: number
-  documentosEmitidos: number
-  // Ciclo
   mesCerrado: string
   anioCerrado: number
-  pctCerrado: number
-  cerradosCerrado: number
-  totalCerrado: number
-  pctPrevio: number | null
-  mesPrevio: string
-  // Mes en curso (sin nota: va contado, no calificado)
-  mesActual: string
-  enviadosActual: number
-  totalActual: number
-  // Detalle
-  secretarias: FilaSecretaria[]
-  vencimientos: Vencimiento[]
+  contratadoTotal: number
+  ejecutadoTotal: number
+  contratistasTotal: number
+  secretarias: TarjetaSecretaria[]
 }
 
-/** Fecha de hoy en Bogotá; el servidor corre en UTC. */
 function hoyBogota(): { anio: number; mesIdx: number; iso: string } {
   const iso = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -92,7 +78,30 @@ function hoyBogota(): { anio: number; mesIdx: number; iso: string } {
 }
 
 const CERRADO = ['aprobado', 'radicado']
-const ESPERANDO = ['enviado', 'revision']
+const dias = (a: string, b: string) =>
+  (new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86_400_000
+
+/**
+ * Trae TODAS las filas de una consulta, por páginas.
+ *
+ * PostgREST corta en 1.000 y no avisa. Los periodos que cuentan como plata
+ * van en 435 y suben unos 200 al año: en un par de años la suma empezaría a
+ * quedarse corta sin que nada fallara, y el número que ve el alcalde es
+ * justo el que no puede mentir. Paginar cuesta cuatro líneas.
+ */
+async function todas<T>(
+  consulta: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const PAGINA = 1000
+  const salida: T[] = []
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await consulta(desde, desde + PAGINA - 1)
+    if (error || !data) break
+    salida.push(...data)
+    if (data.length < PAGINA) break
+  }
+  return salida
+}
 
 export async function getResumenAlcalde(): Promise<{ data?: ResumenAlcalde; error?: string }> {
   try {
@@ -106,138 +115,124 @@ export async function getResumenAlcalde(): Promise<{ data?: ResumenAlcalde; erro
     const admin = createAdminSupabaseClient()
     const hoy = hoyBogota()
 
-    // Mes cerrado = el anterior al actual. Mismo criterio que el consolidado
-    // mensual por correo, para que las dos cifras nunca se contradigan.
     const idxCerrado = (hoy.mesIdx + 11) % 12
     const anioCerrado = hoy.mesIdx === 0 ? hoy.anio - 1 : hoy.anio
     const mesCerrado = MESES[idxCerrado]
-    const idxPrevio = (idxCerrado + 11) % 12
-    const anioPrevio = idxCerrado === 0 ? anioCerrado - 1 : anioCerrado
-    const mesPrevio = MESES[idxPrevio]
-    const mesActual = MESES[hoy.mesIdx]
 
-    const [{ data: contratos, error: eC }, { data: deps }, { count: docsCount }] = await Promise.all([
+    const [{ data: contratos, error: eC }, { data: deps }, { data: supers }] = await Promise.all([
       admin.from('contratos')
-        .select('id, dependencia_id, contratista_id, valor_total, fecha_fin, activo')
+        .select('id, dependencia_id, contratista_id, valor_total, fecha_inicio, fecha_fin')
         .eq('activo', true),
       admin.from('dependencias').select('id, nombre'),
-      // Cuenta, no filas: PostgREST corta en 1.000 y este contador solo crece
-      // —van 518—, así que traer las filas daría un número mudo y erróneo el
-      // día que se pase de mil.
-      admin.from('documentos_emitidos').select('*', { count: 'exact', head: true }),
+      admin.from('usuarios')
+        .select('id, nombre_completo, cargo, foto_url, dependencia_id')
+        .eq('rol', 'supervisor'),
     ])
     if (eC) return { error: eC.message }
 
-    const nombreDep = new Map((deps ?? []).map(d => [d.id as string, d.nombre as string]))
     const vigentes = (contratos ?? []).filter(c => (c.fecha_fin as string) >= hoy.iso)
-    const porContrato = new Map((contratos ?? []).map(c => [c.id as string, c]))
+    const idsActivos = (contratos ?? []).map(c => c.id as string)
 
-    // Periodos de los tres meses en juego, en una consulta.
-    const { data: periodos, error: eP } = await admin
-      .from('periodos')
-      .select('contrato_id, estado, mes, anio, valor_cobro, es_historico')
-      .eq('es_historico', false)
-      .in('mes', [...new Set([mesCerrado, mesPrevio, mesActual])])
-      .in('anio', [...new Set([anioCerrado, anioPrevio, hoy.anio])])
-    if (eP) return { error: eP.message }
+    // Periodos: los del mes cerrado para el semáforo, y todo lo que cuenta
+    // como plata ejecutada. Se piden por separado porque el filtro difiere.
+    type FilaMes = { contrato_id: string; estado: string }
+    type FilaPlata = { contrato_id: string; valor_cobro: number | null; estado: string; es_historico: boolean }
 
-    const delMes = (mes: string, anio: number) =>
-      (periodos ?? []).filter(p => p.mes === mes && p.anio === anio && porContrato.has(p.contrato_id as string))
+    const [pMes, pPlata] = await Promise.all([
+      todas<FilaMes>((desde, hasta) => admin.from('periodos')
+        .select('contrato_id, estado')
+        .in('contrato_id', idsActivos)
+        .eq('es_historico', false)
+        .eq('mes', mesCerrado)
+        .eq('anio', anioCerrado)
+        .range(desde, hasta)),
+      todas<FilaPlata>((desde, hasta) => admin.from('periodos')
+        .select('contrato_id, valor_cobro, estado, es_historico')
+        .in('contrato_id', idsActivos)
+        .or('estado.eq.radicado,es_historico.eq.true')
+        .range(desde, hasta)),
+    ])
 
-    const pCerrado = delMes(mesCerrado, anioCerrado)
-    const pPrevio = delMes(mesPrevio, anioPrevio)
-    const pActual = delMes(mesActual, hoy.anio)
+    const ejecutadoPorContrato = new Map<string, number>()
+    for (const p of pPlata) {
+      // (radicado Y NO histórico) O histórico — sin solaparse.
+      const cuenta = p.es_historico === true || p.estado === 'radicado'
+      if (!cuenta) continue
+      const k = p.contrato_id as string
+      ejecutadoPorContrato.set(k, (ejecutadoPorContrato.get(k) ?? 0) + Number(p.valor_cobro ?? 0))
+    }
 
-    const pct = (lista: typeof pCerrado) =>
-      lista.length ? Math.round(100 * lista.filter(p => CERRADO.includes(p.estado as string)).length / lista.length) : 0
+    const mesPorContrato = new Map<string, string[]>()
+    for (const p of pMes) {
+      const k = p.contrato_id as string
+      mesPorContrato.set(k, [...(mesPorContrato.get(k) ?? []), p.estado as string])
+    }
 
-    // Pagado en el año: solo lo radicado, que es lo que de verdad salió.
-    const { data: radicados } = await admin
-      .from('periodos')
-      .select('valor_cobro')
-      .eq('estado', 'radicado')
-      .eq('anio', hoy.anio)
-      .eq('es_historico', false)
-    const pagadoAnio = (radicados ?? []).reduce((s, p) => s + Number(p.valor_cobro ?? 0), 0)
+    const supPorDep = new Map((supers ?? []).map(s => [s.dependencia_id as string, s]))
 
-    // ── Por secretaría, sobre el mes cerrado ──────────────────────────────
-    const acc = new Map<string, FilaSecretaria>()
-    const fila = (depId: string | null) => {
-      const nombre = nombreDep.get(depId ?? '') ?? 'Sin dependencia'
-      if (!acc.has(nombre)) {
-        acc.set(nombre, {
-          nombre, conPeriodo: 0, cerrados: 0, esperando: 0, sinEnviar: 0,
-          pct: 0, contratosVigentes: 0, valorVigente: 0,
-        })
+    const tarjetas: TarjetaSecretaria[] = []
+    for (const dep of deps ?? []) {
+      const depId = dep.id as string
+      const suyos = vigentes.filter(c => c.dependencia_id === depId)
+      // Sin contratos vigentes no hay tarjeta. Deja fuera a Comisaría de
+      // Familia, que existe en la base pero no tiene operación ni supervisor.
+      if (suyos.length === 0) continue
+
+      const contratado = suyos.reduce((s, c) => s + Number(c.valor_total ?? 0), 0)
+      const ejecutado = suyos.reduce((s, c) => s + (ejecutadoPorContrato.get(c.id as string) ?? 0), 0)
+
+      // Plazo corrido, ponderado por valor.
+      let plazoPonderado = 0
+      for (const c of suyos) {
+        const total = dias(c.fecha_inicio as string, c.fecha_fin as string)
+        const corrido = dias(c.fecha_inicio as string, hoy.iso)
+        const frac = total > 0 ? Math.min(1, Math.max(0, corrido / total)) : 0
+        plazoPonderado += frac * Number(c.valor_total ?? 0)
       }
-      return acc.get(nombre)!
+
+      const estados = suyos.flatMap(c => mesPorContrato.get(c.id as string) ?? [])
+      const cerradosMes = estados.filter(e => CERRADO.includes(e)).length
+      const totalMes = estados.length
+      const pctMes = totalMes ? Math.round(100 * cerradosMes / totalMes) : null
+
+      const proximos = suyos.filter(c => {
+        const d = dias(hoy.iso, c.fecha_fin as string)
+        return d >= 0 && d <= 30
+      })
+      const fechas = [...new Set(proximos.map(c => c.fecha_fin as string))].sort()
+
+      const sup = supPorDep.get(depId)
+      tarjetas.push({
+        id: depId,
+        nombre: dep.nombre as string,
+        cargo: (sup?.cargo as string) ?? null,
+        secretario: (sup?.nombre_completo as string) ?? null,
+        foto: (sup?.foto_url as string) ?? null,
+        contratistas: new Set(suyos.map(c => c.contratista_id)).size,
+        contratos: suyos.length,
+        contratado,
+        ejecutado,
+        pctEjecutado: contratado ? Math.round(100 * ejecutado / contratado) : 0,
+        pctPlazo: contratado ? Math.round(100 * plazoPonderado / contratado) : 0,
+        estadoMes: pctMes === null ? null : pctMes >= 90 ? 'bien' : pctMes >= 70 ? 'atencion' : 'mal',
+        cerradosMes,
+        totalMes,
+        vencenPronto: proximos.length,
+        fechaVencimiento: fechas[0] ?? null,
+      })
     }
 
-    for (const c of vigentes) {
-      const f = fila(c.dependencia_id as string | null)
-      f.contratosVigentes++
-      f.valorVigente += Number(c.valor_total ?? 0)
-    }
-
-    for (const p of pCerrado) {
-      const c = porContrato.get(p.contrato_id as string)!
-      const f = fila(c.dependencia_id as string | null)
-      f.conPeriodo++
-      if (CERRADO.includes(p.estado as string)) f.cerrados++
-      else if (ESPERANDO.includes(p.estado as string)) f.esperando++
-      else f.sinEnviar++
-    }
-
-    const secretarias = [...acc.values()]
-      .map(f => ({ ...f, pct: f.conPeriodo ? Math.round(100 * f.cerrados / f.conPeriodo) : 0 }))
-      // Lo peor arriba: es la única ordenación que sirve para decidir a quién
-      // llamar. Las que no tuvieron periodo ese mes van al final, no primero:
-      // 0 de 0 no es un incumplimiento.
-      .sort((a, b) =>
-        (b.conPeriodo === 0 ? -1 : 0) - (a.conPeriodo === 0 ? -1 : 0) || a.pct - b.pct)
-
-    // ── Vencimientos: 60 días, agrupados por fecha ────────────────────────
-    const tope = new Date(hoy.iso + 'T00:00:00')
-    tope.setDate(tope.getDate() + 60)
-    const topeISO = tope.toISOString().slice(0, 10)
-
-    const porFecha = new Map<string, Vencimiento>()
-    for (const c of vigentes) {
-      const f = c.fecha_fin as string
-      if (f > topeISO) continue
-      if (!porFecha.has(f)) {
-        const dias = Math.round(
-          (new Date(f + 'T00:00:00').getTime() - new Date(hoy.iso + 'T00:00:00').getTime()) / 86_400_000,
-        )
-        porFecha.set(f, { fecha: f, dias, contratos: 0, valor: 0, secretarias: [] })
-      }
-      const v = porFecha.get(f)!
-      v.contratos++
-      v.valor += Number(c.valor_total ?? 0)
-      const n = nombreDep.get((c.dependencia_id as string) ?? '')
-      if (n && !v.secretarias.includes(n)) v.secretarias.push(n)
-    }
+    // De mayor a menor valor contratado: el orden en que pesan.
+    tarjetas.sort((a, b) => b.contratado - a.contratado)
 
     return {
       data: {
-        contratosVigentes: vigentes.length,
-        personas: new Set(vigentes.map(c => c.contratista_id)).size,
-        valorVigente: vigentes.reduce((s, c) => s + Number(c.valor_total ?? 0), 0),
-        pagadoAnio,
-        pagosRadicados: (radicados ?? []).length,
-        documentosEmitidos: docsCount ?? 0,
         mesCerrado,
         anioCerrado,
-        pctCerrado: pct(pCerrado),
-        cerradosCerrado: pCerrado.filter(p => CERRADO.includes(p.estado as string)).length,
-        totalCerrado: pCerrado.length,
-        pctPrevio: pPrevio.length ? pct(pPrevio) : null,
-        mesPrevio,
-        mesActual,
-        enviadosActual: pActual.filter(p => !['borrador', 'rechazado'].includes(p.estado as string)).length,
-        totalActual: pActual.length,
-        secretarias,
-        vencimientos: [...porFecha.values()].sort((a, b) => a.fecha.localeCompare(b.fecha)),
+        contratadoTotal: tarjetas.reduce((s, t) => s + t.contratado, 0),
+        ejecutadoTotal: tarjetas.reduce((s, t) => s + t.ejecutado, 0),
+        contratistasTotal: new Set(vigentes.map(c => c.contratista_id)).size,
+        secretarias: tarjetas,
       },
     }
   } catch (e: unknown) {
