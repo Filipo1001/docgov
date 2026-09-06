@@ -46,3 +46,7 @@ __pycache__/
 # Brochures: artefactos generados con scripts/brochure.mjs, no fuente.
 # Se regeneran con cifras frescas; versionarlos solo garantiza que envejezcan.
 Brochure-*.pdf
+
+# Respaldo de los avatares originales antes de normalizarlos
+# (scripts/normalizar-avatares.mjs). Son datos personales: no se versionan.
+.respaldo-avatares/
