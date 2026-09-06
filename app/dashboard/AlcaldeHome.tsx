@@ -230,31 +230,38 @@ function Tarjeta({ s }: { s: TarjetaSecretaria }) {
                  hover:border-gray-300 hover:shadow-md transition-all cursor-pointer
                  focus:outline-none focus:ring-2 focus:ring-gray-300"
     >
-      <div className="flex items-center gap-4">
-        <Avatar nombre={s.secretario ?? s.nombre} foto={s.foto} size="lg" />
-
-        <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold text-gray-900 leading-tight">{s.nombre}</p>
-          <p className="text-xs text-gray-500 mt-0.5 truncate">
-            {s.secretario
-              ? s.secretario.split(' ').map(w => w[0] + w.slice(1).toLowerCase()).join(' ')
-              : 'Sin secretario asignado'}
-          </p>
-        </div>
-
-        <div className="hidden sm:block text-center px-4 flex-shrink-0">
-          <p className="text-2xl font-bold" style={{ color: MARCA }}>{s.contratistas}</p>
-          <p className="text-[11px] text-gray-400">contratistas</p>
-        </div>
-
+      {/* Retrato arriba y todo centrado: en una columna angosta es lo que
+          cabe, y las cuatro juntas se leen como el gabinete. El galón va en
+          la esquina para no robarle ancho al nombre. */}
+      <div className="relative flex flex-col items-center text-center">
         <Icono
           glifo={Iconos.accion.avanzar}
           tamano="sm"
-          className="text-gray-300 group-hover:text-gray-500 transition-colors flex-shrink-0"
+          className="absolute right-0 top-0 text-gray-300 group-hover:text-gray-500 transition-colors"
         />
+
+        <Avatar nombre={s.secretario ?? s.nombre} foto={s.foto} size="lg" />
+
+        {/* Alto fijo para que las cuatro tarjetas alineen sus cifras aunque
+            los nombres oficiales ocupen una, dos o tres líneas. Cabe el más
+            largo —«Secretaría de Desarrollo Territorial»— en tres renglones. */}
+        <div className="mt-3 min-h-[4rem] flex items-center">
+          <p className="text-sm font-semibold text-gray-900 leading-snug">{s.nombre}</p>
+        </div>
+
+        <p className="text-xs text-gray-500 truncate max-w-full">
+          {s.secretario
+            ? s.secretario.split(' ').map(w => w[0] + w.slice(1).toLowerCase()).join(' ')
+            : 'Sin secretario asignado'}
+        </p>
+
+        <div className="mt-3 flex items-baseline gap-1.5">
+          <span className="text-2xl font-bold" style={{ color: MARCA }}>{s.contratistas}</span>
+          <span className="text-[11px] text-gray-400">contratistas</span>
+        </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 pt-4 border-t border-gray-100">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-xl font-bold" style={{ color: MARCA }}>{millones(s.ejecutado)}</p>
           <p className="text-sm text-gray-400">de {millones(s.contratado)}</p>
@@ -273,19 +280,20 @@ function Tarjeta({ s }: { s: TarjetaSecretaria }) {
           />
         </div>
 
-        <div className="flex items-center justify-between mt-1.5">
+        <div className="flex items-center justify-between mt-1.5 gap-2">
           <span className={`text-xs font-medium ${alDia ? 'text-emerald-700' : 'text-amber-700'}`}>
             {s.pctEjecutado}% ejecutado
           </span>
-          <div className="flex items-center gap-3">
-            {s.vencenPronto > 0 && s.fechaVencimiento && (
-              <span className="text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 whitespace-nowrap">
-                {s.vencenPronto} vencen {fechaCorta(s.fechaVencimiento)}
-              </span>
-            )}
-            <span className="text-[11px] text-gray-400">{s.pctPlazo}% del plazo</span>
-          </div>
+          <span className="text-[11px] text-gray-400 whitespace-nowrap">{s.pctPlazo}% del plazo</span>
         </div>
+
+        {/* El distintivo de vencimiento va en su propia línea: en una columna
+            angosta, junto a los porcentajes, los empujaba fuera de la tarjeta. */}
+        {s.vencenPronto > 0 && s.fechaVencimiento && (
+          <p className="mt-2.5 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1 text-center">
+            {s.vencenPronto} vencen el {fechaCorta(s.fechaVencimiento)}
+          </p>
+        )}
       </div>
     </button>
   )
@@ -334,8 +342,10 @@ export default function AlcaldeHome({ nombre }: { nombre: string }) {
             <Cifra valor={String(d.contratistasTotal)} etiqueta="Contratistas activos" />
           </div>
 
-          {/* Las secretarías, una por fila */}
-          <div className="space-y-4">
+          {/* Las cuatro secretarías en una franja, una al lado de la otra.
+              Se pliegan a dos columnas en tableta y a una en teléfono: cuatro
+              tarjetas en 375 px de ancho no se leerían. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {d.secretarias.map(s => <Tarjeta key={s.id} s={s} />)}
           </div>
 
