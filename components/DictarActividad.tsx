@@ -63,6 +63,8 @@ export default function DictarActividad({
 }) {
   const [soportado, setSoportado] = useState(false)
   const [escuchando, setEscuchando] = useState(false)
+  // Micrófono realmente abierto, no solo botón pulsado.
+  const [listo, setListo] = useState(false)
   const [provisional, setProvisional] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [normal, setNormal] = useState(false)
@@ -130,6 +132,7 @@ export default function DictarActividad({
     provisionalRef.current = ''
     setTraza([])
     setEscuchando(true)
+    setListo(false)
 
     detenerRef.current = iniciarDictado({
       onTrozo: ({ texto: trozo, definitivo }) => {
@@ -147,9 +150,11 @@ export default function DictarActividad({
       // lo provisional. En WebKit es lo único que hay: sin esto, cada
       // reinicio se llevaría por delante la última frase dictada.
       onCorte: volcarProvisional,
+      onListo: () => setListo(true),
       onFin: (motivo) => {
         volcarProvisional()
         setEscuchando(false)
+        setListo(false)
         setProvisional('')
         detenerRef.current = null
         setError(MENSAJES[motivo])
@@ -166,12 +171,14 @@ export default function DictarActividad({
     <div className="mt-1.5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         {escuchando ? (
-          <span className="inline-flex items-center gap-2 text-xs text-red-600">
+          <span className={`inline-flex items-center gap-2 text-xs ${listo ? 'text-red-600' : 'text-gray-500'}`}>
             <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+              {listo && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+              )}
+              <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${listo ? 'bg-red-500' : 'bg-gray-300'}`} />
             </span>
-            Escuchando… habla con normalidad
+            {listo ? 'Escuchando… habla con normalidad' : 'Preparando el micrófono…'}
           </span>
         ) : (
           <span className="text-[11px] text-gray-400">
