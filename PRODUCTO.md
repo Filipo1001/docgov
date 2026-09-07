@@ -34,7 +34,7 @@ los documentos.
   confirma autenticidad sin necesidad de cuenta.
 - **Notificaciones en tiempo real** por correo y WhatsApp.
 - **Trazabilidad**: cada acción con su responsable y su hora, en historial no alterable.
-- **Roles**: administrador, supervisor (secretaría), contratista, asesor y contratación.
+- **Roles**: administrador, supervisor (secretaría), contratista, asesor, contratación y alcalde.
 - **Expediente del contrato**: obligaciones específicas, periodos de pago, CDP, CRP,
   RUT y certificación bancaria en una sola ficha.
 - **Paquete para SECOP II**: se descarga armado y ordenado.
@@ -44,6 +44,10 @@ los documentos.
 - **Facturación electrónica**: para contratistas obligados, sustituye la cuenta de cobro.
 - **Detección de evidencias repetidas** entre periodos.
 - **Redacción asistida con IA**: mejora ortografía y claridad de las actividades.
+- **Panel de control para el alcalde**: una tarjeta por secretaría con su
+  secretario, contratistas y ejecución; ejecución mensual del año,
+  presupuesto por secretaría y calendario de vencimientos. Solo lectura
+  agregada: no expone cédulas ni datos bancarios.
 - **Web**: sin instalar nada, desde celular, tableta o computador.
 
 ## Qué NO hace — no prometerlo
@@ -57,8 +61,6 @@ los documentos.
   Solo prestación de servicios.
 - **No es multi-municipio todavía.** La instancia está configurada para una alcaldía;
   hay textos con el municipio fijos en el código.
-- **No tiene panel de indicadores para el alcalde.** Hay tableros por rol, no
-  reportes ejecutivos.
 
 ## Afirmaciones delicadas — cómo se formulan
 
