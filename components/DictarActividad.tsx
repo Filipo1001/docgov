@@ -30,13 +30,25 @@ import { limpiarDictado, unirDictado } from '@/lib/dictado-limpieza'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 
+/**
+ * Ni «usuario» ni «silencio» ni «limite» son errores: son cierres normales.
+ * Avisar en rojo de que el dictado terminó porque la persona lo detuvo sería
+ * ruido; de que se cerró solo, en cambio, hay que avisar — si no, vuelve del
+ * bolsillo y no entiende por qué dejó de escuchar.
+ */
 const MENSAJES: Record<MotivoFin, string | null> = {
   usuario: null,
+  silencio: 'Se detuvo el dictado: no se escuchó nada durante un rato.',
+  limite: 'Se detuvo el dictado tras varios minutos. Puedes continuar cuando quieras.',
   'sin-permiso': 'No diste permiso al micrófono. Habilítalo en los ajustes del navegador.',
   'sin-microfono': 'No se encontró micrófono en este dispositivo.',
   'sin-red': 'El dictado necesita conexión a internet.',
+  'sin-resultados': 'El micrófono se abrió pero no se transcribió nada. Prueba de nuevo.',
   error: 'El dictado se interrumpió. Intenta de nuevo.',
 }
+
+/** Cierres que no son fallo: se informan en gris, no en rojo. */
+const CIERRES_NORMALES: MotivoFin[] = ['usuario', 'silencio', 'limite']
 
 export default function DictarActividad({
   texto,
@@ -53,6 +65,7 @@ export default function DictarActividad({
   const [escuchando, setEscuchando] = useState(false)
   const [provisional, setProvisional] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [normal, setNormal] = useState(false)
   // Diagnóstico temporal: esta API se comporta distinto en cada navegador y
   // sin ver los eventos crudos cualquier arreglo sería adivinanza. Se quita
   // cuando el dictado esté validado en los dispositivos reales.
@@ -76,6 +89,14 @@ export default function DictarActividad({
    * definitivo correspondiente, para no escribir lo mismo dos veces.
    */
   const provisionalRef = useRef('')
+
+  /** Vuelca lo provisional pendiente al campo, si queda algo sin confirmar. */
+  function volcarProvisional() {
+    if (!provisionalRef.current) return
+    incorporar(provisionalRef.current)
+    provisionalRef.current = ''
+    setProvisional('')
+  }
 
   /** Escribe un tramo en el campo, ya limpio y unido a lo que hubiera. */
   function incorporar(trozo: string) {
@@ -104,6 +125,7 @@ export default function DictarActividad({
     }
 
     setError(null)
+    setNormal(false)
     setProvisional('')
     provisionalRef.current = ''
     setTraza([])
@@ -121,18 +143,17 @@ export default function DictarActividad({
         incorporar(trozo)
         setProvisional('')
       },
+      // Cada corte de sesión —la API se cierra sola con cada silencio— vuelca
+      // lo provisional. En WebKit es lo único que hay: sin esto, cada
+      // reinicio se llevaría por delante la última frase dictada.
+      onCorte: volcarProvisional,
       onFin: (motivo) => {
-        // Rescate: si la sesión cierra con texto provisional sin confirmar,
-        // se escribe igual. Es lo que la persona dijo y vio en pantalla.
-        if (provisionalRef.current) {
-          incorporar(provisionalRef.current)
-          provisionalRef.current = ''
-        }
+        volcarProvisional()
         setEscuchando(false)
         setProvisional('')
         detenerRef.current = null
         setError(MENSAJES[motivo])
-        setTraza(t => [...t, `FIN: ${motivo}`])
+        setNormal(CIERRES_NORMALES.includes(motivo))
       },
       onEvento: (linea) => {
         const hora = new Date().toLocaleTimeString('es-CO', { hour12: false })
@@ -181,7 +202,9 @@ export default function DictarActividad({
         <p className="mt-2 text-sm text-gray-400 italic leading-snug break-words">{provisional}</p>
       )}
 
-      {error && <p className="mt-2 text-[11px] text-red-600">{error}</p>}
+      {error && (
+        <p className={`mt-2 text-[11px] ${normal ? 'text-gray-500' : 'text-red-600'}`}>{error}</p>
+      )}
 
       {/* Diagnóstico temporal */}
       {traza.length > 0 && (
