@@ -1,0 +1,177 @@
+/**
+ * lib/dictado.ts — Motor de dictado por voz.
+ *
+ * ── Qué usa y por qué ────────────────────────────────────────────────────
+ *
+ * La API de reconocimiento de voz del propio navegador (`SpeechRecognition`,
+ * prefijada `webkit` en casi todas partes). Es la única opción que cumple las
+ * tres condiciones a la vez: gratuita, en tiempo real y sin instalar nada.
+ *
+ * Las descartadas, para que no se vuelvan a proponer:
+ *  · Whisper en el navegador (WASM) — 40-75 MB de descarga y no alcanza
+ *    tiempo real en un teléfono de gama media, que es el aparato real.
+ *  · Whisper en nuestro servidor, o Deepgram / AssemblyAI / Google STT —
+ *    todas cuestan por uso.
+ *
+ * A CAMBIO, EL AUDIO NO ES LOCAL. En Chrome el navegador lo envía a los
+ * servidores de Google para transcribirlo; en Safari, a los de Apple. Es
+ * gratis, pero no es privado, y por eso la interfaz lo dice en vez de
+ * dejarlo implícito.
+ *
+ * ── El reinicio automático ───────────────────────────────────────────────
+ *
+ * La API no está pensada para dictado largo: se detiene sola en cuanto
+ * detecta un silencio de unos segundos. Sin reiniciarla, el contratista que
+ * se queda pensando a mitad de frase descubre que dejó de grabar. El bucle
+ * de `onend` es lo que convierte una API de comandos cortos en un dictado
+ * continuo, y es la pieza que de verdad hace funcionar esto.
+ *
+ * Se reinicia solo mientras `activo` siga en true; cuando el usuario para,
+ * la bandera se apaga primero y el `onend` ya no vuelve a arrancar.
+ */
+
+/** Resultado parcial (gris, aún puede cambiar) o definitivo (ya confirmado). */
+export type TrozoDictado = { texto: string; definitivo: boolean }
+
+export type MotivoFin =
+  | 'usuario'        // lo detuvo la persona
+  | 'sin-permiso'    // negó el micrófono
+  | 'sin-microfono'  // no hay dispositivo de entrada
+  | 'sin-red'        // la API necesita conexión
+  | 'error'
+
+type Opciones = {
+  onTrozo: (t: TrozoDictado) => void
+  onFin: (motivo: MotivoFin, detalle?: string) => void
+  /** Se dispara con cada resultado, para saber que sigue oyendo. */
+  onActividad?: () => void
+}
+
+/**
+ * Tipos mínimos de la API. No están en el TypeScript estándar del DOM porque
+ * la especificación nunca salió de borrador — de ahí el prefijo webkit.
+ */
+type ResultadoReconocimiento = {
+  isFinal: boolean
+  0: { transcript: string }
+}
+type EventoReconocimiento = {
+  resultIndex: number
+  results: { length: number; [i: number]: ResultadoReconocimiento }
+}
+type Reconocedor = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  start: () => void
+  stop: () => void
+  abort: () => void
+  onresult: ((e: EventoReconocimiento) => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  onend: (() => void) | null
+}
+
+function constructor(): (new () => Reconocedor) | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: new () => Reconocedor
+    webkitSpeechRecognition?: new () => Reconocedor
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+/**
+ * ¿Este navegador puede dictar?
+ *
+ * Firefox no implementa la API, así que el botón no debe aparecer en vez de
+ * aparecer y fallar. Se comprueba en el cliente: en el servidor no hay
+ * `window` y devolver false ahí evitaría que el botón se pintara nunca.
+ */
+export function hayDictado(): boolean {
+  return constructor() !== null
+}
+
+/**
+ * Arranca el dictado. Devuelve la función para detenerlo.
+ *
+ * El contrato es deliberadamente pequeño —trozos de texto y un motivo de
+ * fin— para que la limpieza y la interfaz no dependan de los detalles de la
+ * API del navegador.
+ */
+export function iniciarDictado({ onTrozo, onFin, onActividad }: Opciones): () => void {
+  const Ctor = constructor()
+  if (!Ctor) {
+    onFin('error', 'Este navegador no permite dictar')
+    return () => {}
+  }
+
+  const rec = new Ctor()
+  rec.lang = 'es-CO'
+  rec.continuous = true
+  rec.interimResults = true
+  rec.maxAlternatives = 1
+
+  let activo = true
+  let reinicios = 0
+
+  rec.onresult = (e) => {
+    onActividad?.()
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i]
+      const texto = r[0]?.transcript ?? ''
+      if (texto) onTrozo({ texto, definitivo: r.isFinal })
+    }
+    // Un resultado es señal de que el micrófono va bien: se perdona el
+    // historial de reinicios para no agotar el tope en una sesión larga.
+    reinicios = 0
+  }
+
+  rec.onerror = (e) => {
+    // 'no-speech' y 'aborted' son ruido normal del ciclo de reinicio: la API
+    // los lanza cada vez que un tramo termina en silencio. Cortar el dictado
+    // ahí sería cortarlo cada vez que la persona piensa.
+    if (e.error === 'no-speech' || e.error === 'aborted') return
+
+    activo = false
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') onFin('sin-permiso')
+    else if (e.error === 'audio-capture') onFin('sin-microfono')
+    else if (e.error === 'network') onFin('sin-red')
+    else onFin('error', e.error)
+  }
+
+  rec.onend = () => {
+    if (!activo) return
+    // Tope de seguridad: si el navegador cierra la sesión una y otra vez sin
+    // producir un solo resultado, reintentar en bucle sería quemar batería y
+    // dejar al usuario mirando un micrófono encendido que no oye nada.
+    if (reinicios >= 12) {
+      activo = false
+      onFin('error', 'El dictado se interrumpió repetidamente')
+      return
+    }
+    reinicios++
+    try {
+      rec.start()
+    } catch {
+      // start() lanza si la sesión anterior aún no cerró del todo; el
+      // siguiente onend vuelve a intentarlo.
+    }
+  }
+
+  try {
+    rec.start()
+  } catch {
+    activo = false
+    onFin('error', 'No se pudo iniciar el micrófono')
+    return () => {}
+  }
+
+  return () => {
+    // El orden importa: primero se apaga la bandera, para que el onend que
+    // dispara abort() no vuelva a arrancar el reconocedor.
+    activo = false
+    try { rec.abort() } catch { /* ya estaba cerrado */ }
+    onFin('usuario')
+  }
+}

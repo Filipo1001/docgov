@@ -58,6 +58,7 @@ import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/ac
 import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
 import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 import MejorarRedaccion from '@/components/MejorarRedaccion'
+import DictarActividad from '@/components/DictarActividad'
 import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
@@ -2443,6 +2444,7 @@ export default function PeriodoDetallePage({
                             className="w-full px-3 py-2.5 bg-white border border-blue-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                           />
                           {/* Redacción asistida (LanguageTool) */}
+                          <DictarActividad texto={editDesc} onTexto={setEditDesc} />
                           <MejorarRedaccion texto={editDesc} onAceptar={setEditDesc} />
                           <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
                             <div className="flex items-center gap-2">
@@ -2678,6 +2680,9 @@ export default function PeriodoDetallePage({
                         maxLength={1500}
                         className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                       />
+
+                      {/* ── Dictado por voz ── */}
+                      <DictarActividad texto={nuevaActividad} onTexto={setNuevaActividad} />
 
                       {/* ── Redacción asistida (LanguageTool) ── */}
                       <MejorarRedaccion texto={nuevaActividad} onAceptar={setNuevaActividad} />

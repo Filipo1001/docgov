@@ -51,6 +51,7 @@ import {
   // Dominio
   CalendarDays, Coins, Stethoscope, Sparkles, QrCode, Hash, MapPin, Phone,
   Briefcase, TrendingUp, History, Camera, ListChecks, CreditCard,
+  Mic, MicOff,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -143,6 +144,8 @@ export const Iconos = {
     tendencia: TrendingUp,
     actividad: History,
     evidencia: Camera,
+    dictado: Mic,
+    dictadoInactivo: MicOff,
     actividades: ListChecks,
     // Landmark es también el icono del municipio: en ambos casos representa la
     // institución con la que se trata, y no compiten en la misma pantalla.
