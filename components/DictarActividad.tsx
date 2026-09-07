@@ -4,24 +4,32 @@
  * DictarActividad — dictado por voz para la descripción de una actividad.
  *
  * Pensado para quien está en campo, con el teléfono en una mano y sin ganas
- * de escribir un párrafo con el pulgar. De ahí las decisiones de la interfaz:
+ * de escribir un párrafo con el pulgar.
  *
- *  · UN SOLO BOTÓN grande que alterna entre dictar y detener. Dos botones
- *    —uno de iniciar y otro de parar— obligan a pensar cuál toca ahora.
- *  · LO QUE AÚN NO ESTÁ CONFIRMADO SE VE, en gris y aparte del texto real.
- *    Sin eso, la persona habla contra una pantalla quieta y no sabe si la
- *    está oyendo; es lo que hace que un dictado se sienta roto aunque
- *    funcione.
- *  · EL TEXTO SE VA GUARDANDO EN EL CAMPO a medida que se confirma, no al
- *    final. Si el navegador corta la sesión —pasa—, lo dicho hasta ahí ya
- *    está escrito.
- *  · ERRORES EN CASTELLANO LLANO. «No diste permiso al micrófono» dice qué
- *    hacer; «not-allowed» no.
+ * ── Cómo convive con lo que ya había ─────────────────────────────────────
  *
- * El texto se limpia mientras se dicta (`lib/dictado-limpieza.ts`): eso es
- * tipográfico y no toca el significado, así que se aplica solo. La corrección
- * gramatical sigue siendo el botón «Mejorar redacción» de al lado, que
- * propone y deja decidir — la regla de la casa para un documento que se firma.
+ * Va justo encima de «Mejorar redacción» y los dos tienen que leerse como
+ * una familia, no como dos añadidos sueltos. De ahí que comparta con él la
+ * forma —`text-xs`, `px-3 py-1.5`, `rounded-lg`, alineado a la derecha— y no
+ * el color: aquel usa el morado de la corrección asistida y este va neutro
+ * en reposo y rojo grabando, que es lo que todo el mundo entiende.
+ *
+ * EL COLOR NEUTRO NO ES ESTÉTICA, ES NECESIDAD. El formulario de actividad
+ * nueva vive dentro de un contenedor `bg-blue-50` y el de edición dentro de
+ * uno `bg-gray-50`. Un botón azul claro desaparecía sobre el primero. Blanco
+ * con borde gris se lee sobre los dos.
+ *
+ * ── Decisiones de interacción ────────────────────────────────────────────
+ *
+ *  · UN SOLO BOTÓN que alterna. Dos —iniciar y parar— obligan a pensar cuál
+ *    toca ahora.
+ *  · «Preparando el micrófono…» antes de «Escuchando». Entre pulsar y que el
+ *    navegador entregue el micrófono pasan hasta dos segundos; decir que ya
+ *    se escucha hace que la persona hable contra un micrófono cerrado.
+ *  · LO PROVISIONAL SE VE, en su propia burbuja. Sin eso se habla contra una
+ *    pantalla quieta sin saber si está oyendo.
+ *  · En el móvil el botón ocupa el ancho completo y crece a 44 px de alto —el
+ *    mínimo táctil—; a partir de `sm` se recoge al tamaño de su hermano.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -32,18 +40,18 @@ import { Iconos } from '@/lib/iconos'
 
 /**
  * Ni «usuario» ni «silencio» ni «limite» son errores: son cierres normales.
- * Avisar en rojo de que el dictado terminó porque la persona lo detuvo sería
+ * Avisar en rojo de que el dictado acabó porque la persona lo detuvo sería
  * ruido; de que se cerró solo, en cambio, hay que avisar — si no, vuelve del
  * bolsillo y no entiende por qué dejó de escuchar.
  */
 const MENSAJES: Record<MotivoFin, string | null> = {
   usuario: null,
-  silencio: 'Se detuvo el dictado: no se escuchó nada durante un rato.',
-  limite: 'Se detuvo el dictado tras varios minutos. Puedes continuar cuando quieras.',
+  silencio: 'Se detuvo: no se escuchó nada durante un rato.',
+  limite: 'Se detuvo tras varios minutos. Puedes continuar cuando quieras.',
   'sin-permiso': 'No diste permiso al micrófono. Habilítalo en los ajustes del navegador.',
   'sin-microfono': 'No se encontró micrófono en este dispositivo.',
   'sin-red': 'El dictado necesita conexión a internet.',
-  'sin-resultados': 'El micrófono se abrió pero no se transcribió nada. Prueba de nuevo.',
+  'sin-resultados': 'El micrófono se abrió pero no se transcribió nada. Intenta de nuevo.',
   error: 'El dictado se interrumpió. Intenta de nuevo.',
 }
 
@@ -63,14 +71,11 @@ export default function DictarActividad({
 }) {
   const [soportado, setSoportado] = useState(false)
   const [escuchando, setEscuchando] = useState(false)
-  // Micrófono realmente abierto, no solo botón pulsado.
+  /** Micrófono realmente abierto, no solo botón pulsado. */
   const [listo, setListo] = useState(false)
   const [provisional, setProvisional] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [normal, setNormal] = useState(false)
-  // Diagnóstico temporal: esta API se comporta distinto en cada navegador y
-  // sin ver los eventos crudos cualquier arreglo sería adivinanza. Se quita
-  // cuando el dictado esté validado en los dispositivos reales.
   const [traza, setTraza] = useState<string[]>([])
   const [verTraza, setVerTraza] = useState(false)
 
@@ -86,9 +91,7 @@ export default function DictarActividad({
    *
    * En WebKit —todos los navegadores de iOS— los resultados llegan como
    * provisionales y solo se confirman al cerrar la sesión. Si el motor cierra
-   * sin confirmar, esto es lo único que queda de lo que la persona dijo, y
-   * perderlo es perder el dictado entero. Se vacía en cuanto llega el
-   * definitivo correspondiente, para no escribir lo mismo dos veces.
+   * sin confirmar, esto es lo único que queda de lo que la persona dijo.
    */
   const provisionalRef = useRef('')
 
@@ -131,6 +134,7 @@ export default function DictarActividad({
     setProvisional('')
     provisionalRef.current = ''
     setTraza([])
+    setVerTraza(false)
     setEscuchando(true)
     setListo(false)
 
@@ -167,22 +171,35 @@ export default function DictarActividad({
     })
   }
 
+  const etiquetaEstado = !escuchando
+    ? null
+    : listo ? 'Escuchando…' : 'Preparando el micrófono…'
+
   return (
-    <div className="mt-1.5">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        {escuchando ? (
-          <span className={`inline-flex items-center gap-2 text-xs ${listo ? 'text-red-600' : 'text-gray-500'}`}>
-            <span className="relative flex h-2.5 w-2.5">
+    <div className="mt-1.5 space-y-1.5">
+      {/* Fila de acción. En móvil el estado va arriba y el botón ocupa todo
+          el ancho; desde sm comparten línea, con el botón a la derecha para
+          alinearse con «Mejorar redacción». */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-1.5 sm:gap-2">
+        {etiquetaEstado ? (
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs sm:mr-auto ${
+              listo ? 'text-red-600' : 'text-gray-500'
+            }`}
+          >
+            <span className="relative flex h-2 w-2 shrink-0">
               {listo && (
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
               )}
-              <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${listo ? 'bg-red-500' : 'bg-gray-300'}`} />
+              <span className={`relative inline-flex h-2 w-2 rounded-full ${listo ? 'bg-red-500' : 'bg-gray-300'}`} />
             </span>
-            {listo ? 'Escuchando… habla con normalidad' : 'Preparando el micrófono…'}
+            {etiquetaEstado}
           </span>
         ) : (
-          <span className="text-[11px] text-gray-400">
-            Di «punto» o «punto y aparte» para puntuar
+          // La pista solo tiene sentido antes de empezar, y en pantallas
+          // estrechas compite con el botón: ahí se calla.
+          <span className="hidden sm:inline text-[11px] text-gray-400 sm:mr-auto">
+            Puedes decir «punto» o «punto y aparte» para puntuar
           </span>
         )}
 
@@ -190,41 +207,49 @@ export default function DictarActividad({
           type="button"
           onClick={alternar}
           disabled={disabled}
-          // 44 px de alto: el mínimo táctil que ya usa el resto del formulario.
-          className={`inline-flex items-center gap-2 text-sm font-medium min-h-[44px] px-4 rounded-xl
+          aria-pressed={escuchando}
+          title={escuchando ? 'Detener el dictado' : 'Dictar la actividad en voz alta'}
+          className={`inline-flex items-center justify-center gap-1.5 text-xs font-medium
+                      rounded-lg px-3 min-h-[44px] sm:min-h-0 sm:py-1.5 w-full sm:w-auto shrink-0
                       transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             escuchando
-              ? 'text-white bg-red-600 hover:bg-red-700 active:bg-red-800'
-              : 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+              ? 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100'
           }`}
         >
           <Icono glifo={escuchando ? Iconos.dominio.dictadoInactivo : Iconos.dominio.dictado} tamano="sm" />
-          {escuchando ? 'Detener' : 'Dictar'}
+          {escuchando ? 'Detener dictado' : 'Dictar'}
         </button>
       </div>
 
-      {/* Lo provisional se muestra aparte y en gris: todavía puede cambiar, y
-          mezclarlo con el texto confirmado haría que la pantalla parpadeara. */}
+      {/* Lo provisional, en su propia burbuja: todavía puede cambiar, y
+          mezclarlo con el texto confirmado haría parpadear la pantalla. */}
       {escuchando && provisional && (
-        <p className="mt-2 text-sm text-gray-400 italic leading-snug break-words">{provisional}</p>
+        <p className="bg-white/70 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-400 italic leading-snug break-words max-h-24 overflow-y-auto">
+          {provisional}
+        </p>
       )}
 
       {error && (
-        <p className={`mt-2 text-[11px] ${normal ? 'text-gray-500' : 'text-red-600'}`}>{error}</p>
+        <p className={`text-[11px] leading-snug ${normal ? 'text-gray-500' : 'text-red-600'}`}>
+          {error}
+        </p>
       )}
 
-      {/* Diagnóstico temporal */}
-      {traza.length > 0 && (
-        <div className="mt-2">
+      {/* Diagnóstico: solo si el dictado terminó mal. En uso normal no
+          aparece, y cuando algo falla evita tener que pedirle a un
+          contratista que abra la consola del navegador. */}
+      {error && !normal && traza.length > 0 && (
+        <div>
           <button
             type="button"
             onClick={() => setVerTraza(v => !v)}
             className="text-[11px] text-gray-400 underline underline-offset-2"
           >
-            {verTraza ? 'Ocultar diagnóstico' : `Ver diagnóstico (${traza.length})`}
+            {verTraza ? 'Ocultar detalle técnico' : 'Ver detalle técnico'}
           </button>
           {verTraza && (
-            <pre className="mt-1.5 max-h-48 overflow-auto bg-gray-900 text-gray-100 text-[10px] leading-relaxed rounded-lg p-2.5 whitespace-pre-wrap break-words">
+            <pre className="mt-1.5 max-h-40 overflow-auto bg-gray-900 text-gray-100 text-[10px] leading-relaxed rounded-lg p-2.5 whitespace-pre-wrap break-words">
 {traza.join('\n')}
             </pre>
           )}

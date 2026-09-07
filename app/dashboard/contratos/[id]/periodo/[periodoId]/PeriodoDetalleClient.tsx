@@ -2443,7 +2443,7 @@ export default function PeriodoDetallePage({
                             maxLength={1500}
                             className="w-full px-3 py-2.5 bg-white border border-blue-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                           />
-                          {/* Redacción asistida (LanguageTool) */}
+                          {/* Dictado por voz y redacción asistida */}
                           <DictarActividad texto={editDesc} onTexto={setEditDesc} />
                           <MejorarRedaccion texto={editDesc} onAceptar={setEditDesc} />
                           <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
