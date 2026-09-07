@@ -66,6 +66,26 @@ export default function DictarActividad({
   const textoRef = useRef(texto)
   useEffect(() => { textoRef.current = texto }, [texto])
 
+  /**
+   * Último tramo provisional aún sin confirmar.
+   *
+   * En WebKit —todos los navegadores de iOS— los resultados llegan como
+   * provisionales y solo se confirman al cerrar la sesión. Si el motor cierra
+   * sin confirmar, esto es lo único que queda de lo que la persona dijo, y
+   * perderlo es perder el dictado entero. Se vacía en cuanto llega el
+   * definitivo correspondiente, para no escribir lo mismo dos veces.
+   */
+  const provisionalRef = useRef('')
+
+  /** Escribe un tramo en el campo, ya limpio y unido a lo que hubiera. */
+  function incorporar(trozo: string) {
+    const limpio = limpiarDictado(trozo)
+    if (!limpio) return
+    const nuevo = unirDictado(textoRef.current, limpio)
+    textoRef.current = nuevo
+    onTexto(nuevo)
+  }
+
   // La detección va en un efecto: en el servidor no existe `window`, y
   // decidirlo durante el render dejaría el botón oculto tras la hidratación.
   useEffect(() => { setSoportado(hayDictado()) }, [])
@@ -85,24 +105,29 @@ export default function DictarActividad({
 
     setError(null)
     setProvisional('')
+    provisionalRef.current = ''
     setTraza([])
     setEscuchando(true)
 
     detenerRef.current = iniciarDictado({
       onTrozo: ({ texto: trozo, definitivo }) => {
         if (!definitivo) {
+          provisionalRef.current = trozo
           setProvisional(trozo)
           return
         }
-        const limpio = limpiarDictado(trozo)
-        if (limpio) {
-          const nuevo = unirDictado(textoRef.current, limpio)
-          textoRef.current = nuevo
-          onTexto(nuevo)
-        }
+        // Llegó el definitivo: lo provisional ya está representado en él.
+        provisionalRef.current = ''
+        incorporar(trozo)
         setProvisional('')
       },
       onFin: (motivo) => {
+        // Rescate: si la sesión cierra con texto provisional sin confirmar,
+        // se escribe igual. Es lo que la persona dijo y vio en pantalla.
+        if (provisionalRef.current) {
+          incorporar(provisionalRef.current)
+          provisionalRef.current = ''
+        }
         setEscuchando(false)
         setProvisional('')
         detenerRef.current = null

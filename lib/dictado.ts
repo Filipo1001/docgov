@@ -130,6 +130,14 @@ export function iniciarDictado({ onTrozo, onFin, onActividad, onEvento }: Opcion
 
   let activo = true
   let reinicios = 0
+  let finalizado = false
+
+  /** onFin se llama una sola vez, venga de donde venga el cierre. */
+  const terminar = (motivo: MotivoFin, detalle?: string) => {
+    if (finalizado) return
+    finalizado = true
+    onFin(motivo, detalle)
+  }
 
   // Estos cuatro distinguen dónde se rompe la cadena: el navegador abrió la
   // sesión (start), tomó el micrófono (audiostart), oyó sonido (soundstart)
@@ -161,21 +169,23 @@ export function iniciarDictado({ onTrozo, onFin, onActividad, onEvento }: Opcion
     if (e.error === 'no-speech' || e.error === 'aborted') return
 
     activo = false
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') onFin('sin-permiso')
-    else if (e.error === 'audio-capture') onFin('sin-microfono')
-    else if (e.error === 'network') onFin('sin-red')
-    else onFin('error', e.error)
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') terminar('sin-permiso')
+    else if (e.error === 'audio-capture') terminar('sin-microfono')
+    else if (e.error === 'network') terminar('sin-red')
+    else terminar('error', e.error)
   }
 
   rec.onend = () => {
     traza(`onend (activo=${activo}, reinicios=${reinicios})`)
-    if (!activo) return
+    // Cierre pedido por el usuario: aquí ya llegó el último onresult, que en
+    // WebKit es donde se confirma lo dictado.
+    if (!activo) { terminar('usuario'); return }
     // Tope de seguridad: si el navegador cierra la sesión una y otra vez sin
     // producir un solo resultado, reintentar en bucle sería quemar batería y
     // dejar al usuario mirando un micrófono encendido que no oye nada.
     if (reinicios >= 12) {
       activo = false
-      onFin('error', 'El dictado se interrumpió repetidamente')
+      terminar('error', 'El dictado se interrumpió repetidamente')
       return
     }
     reinicios++
@@ -193,15 +203,27 @@ export function iniciarDictado({ onTrozo, onFin, onActividad, onEvento }: Opcion
   } catch {
     activo = false
     traza('start() lanzó excepción')
-    onFin('error', 'No se pudo iniciar el micrófono')
+    terminar('error', 'No se pudo iniciar el micrófono')
     return () => {}
   }
 
   return () => {
     // El orden importa: primero se apaga la bandera, para que el onend que
-    // dispara abort() no vuelva a arrancar el reconocedor.
+    // dispara el cierre no vuelva a arrancar el reconocedor.
     activo = false
-    try { rec.abort() } catch { /* ya estaba cerrado */ }
-    onFin('usuario')
+
+    // stop() y NO abort(). Es la diferencia entre recuperar lo dictado y
+    // perderlo: abort() descarta el audio que el motor aún no ha transcrito,
+    // y en WebKit —todos los navegadores de iOS, Chrome incluido— los
+    // resultados llegan como provisionales y solo se confirman al cerrar la
+    // sesión. Con abort() se tiraba a la basura justo el texto que el usuario
+    // acababa de ver en pantalla.
+    try { rec.stop() } catch { traza('stop() lanzó excepción') }
+
+    // Red de seguridad: si el navegador no dispara onend, se cierra igual
+    // para que el botón no se quede en «Detener» para siempre.
+    setTimeout(() => {
+      if (!finalizado) { traza('cierre por tiempo (sin onend)'); terminar('usuario') }
+    }, 1500)
   }
 }
