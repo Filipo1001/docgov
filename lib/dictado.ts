@@ -45,6 +45,14 @@ type Opciones = {
   onFin: (motivo: MotivoFin, detalle?: string) => void
   /** Se dispara con cada resultado, para saber que sigue oyendo. */
   onActividad?: () => void
+  /**
+   * Traza de los eventos crudos de la API.
+   *
+   * Existe porque el comportamiento de esta API varía por navegador y por
+   * versión, y sin ver los eventos reales cualquier arreglo es adivinanza.
+   * La interfaz la muestra solo cuando el usuario abre el diagnóstico.
+   */
+  onEvento?: (linea: string) => void
 }
 
 /**
@@ -70,6 +78,10 @@ type Reconocedor = {
   onresult: ((e: EventoReconocimiento) => void) | null
   onerror: ((e: { error: string }) => void) | null
   onend: (() => void) | null
+  onstart: (() => void) | null
+  onaudiostart: (() => void) | null
+  onsoundstart: (() => void) | null
+  onspeechstart: (() => void) | null
 }
 
 function constructor(): (new () => Reconocedor) | null {
@@ -99,12 +111,16 @@ export function hayDictado(): boolean {
  * fin— para que la limpieza y la interfaz no dependan de los detalles de la
  * API del navegador.
  */
-export function iniciarDictado({ onTrozo, onFin, onActividad }: Opciones): () => void {
+export function iniciarDictado({ onTrozo, onFin, onActividad, onEvento }: Opciones): () => void {
+  const traza = (l: string) => onEvento?.(l)
   const Ctor = constructor()
   if (!Ctor) {
     onFin('error', 'Este navegador no permite dictar')
     return () => {}
   }
+
+  const w = window as unknown as { SpeechRecognition?: unknown }
+  traza(`motor: ${w.SpeechRecognition ? 'SpeechRecognition' : 'webkitSpeechRecognition'}`)
 
   const rec = new Ctor()
   rec.lang = 'es-CO'
@@ -115,8 +131,18 @@ export function iniciarDictado({ onTrozo, onFin, onActividad }: Opciones): () =>
   let activo = true
   let reinicios = 0
 
+  // Estos cuatro distinguen dónde se rompe la cadena: el navegador abrió la
+  // sesión (start), tomó el micrófono (audiostart), oyó sonido (soundstart)
+  // y lo reconoció como voz (speechstart). Si llega hasta speechstart y no
+  // hay onresult, el problema es la transcripción, no el micrófono.
+  rec.onstart = () => traza('· sesión abierta')
+  rec.onaudiostart = () => traza('· micrófono tomado')
+  rec.onsoundstart = () => traza('· sonido detectado')
+  rec.onspeechstart = () => traza('· voz detectada')
+
   rec.onresult = (e) => {
     onActividad?.()
+    traza(`onresult: ${e.results.length - e.resultIndex} tramo(s)`)
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i]
       const texto = r[0]?.transcript ?? ''
@@ -131,6 +157,7 @@ export function iniciarDictado({ onTrozo, onFin, onActividad }: Opciones): () =>
     // 'no-speech' y 'aborted' son ruido normal del ciclo de reinicio: la API
     // los lanza cada vez que un tramo termina en silencio. Cortar el dictado
     // ahí sería cortarlo cada vez que la persona piensa.
+    traza(`onerror: ${e.error}`)
     if (e.error === 'no-speech' || e.error === 'aborted') return
 
     activo = false
@@ -141,6 +168,7 @@ export function iniciarDictado({ onTrozo, onFin, onActividad }: Opciones): () =>
   }
 
   rec.onend = () => {
+    traza(`onend (activo=${activo}, reinicios=${reinicios})`)
     if (!activo) return
     // Tope de seguridad: si el navegador cierra la sesión una y otra vez sin
     // producir un solo resultado, reintentar en bucle sería quemar batería y
@@ -161,8 +189,10 @@ export function iniciarDictado({ onTrozo, onFin, onActividad }: Opciones): () =>
 
   try {
     rec.start()
+    traza('start() aceptado')
   } catch {
     activo = false
+    traza('start() lanzó excepción')
     onFin('error', 'No se pudo iniciar el micrófono')
     return () => {}
   }

@@ -53,6 +53,11 @@ export default function DictarActividad({
   const [escuchando, setEscuchando] = useState(false)
   const [provisional, setProvisional] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // Diagnóstico temporal: esta API se comporta distinto en cada navegador y
+  // sin ver los eventos crudos cualquier arreglo sería adivinanza. Se quita
+  // cuando el dictado esté validado en los dispositivos reales.
+  const [traza, setTraza] = useState<string[]>([])
+  const [verTraza, setVerTraza] = useState(false)
 
   const detenerRef = useRef<(() => void) | null>(null)
   // El motor vive fuera de React y sus callbacks se crean una sola vez, así
@@ -80,6 +85,7 @@ export default function DictarActividad({
 
     setError(null)
     setProvisional('')
+    setTraza([])
     setEscuchando(true)
 
     detenerRef.current = iniciarDictado({
@@ -101,6 +107,11 @@ export default function DictarActividad({
         setProvisional('')
         detenerRef.current = null
         setError(MENSAJES[motivo])
+        setTraza(t => [...t, `FIN: ${motivo}`])
+      },
+      onEvento: (linea) => {
+        const hora = new Date().toLocaleTimeString('es-CO', { hour12: false })
+        setTraza(t => [...t.slice(-40), `${hora}  ${linea}`])
       },
     })
   }
@@ -146,6 +157,24 @@ export default function DictarActividad({
       )}
 
       {error && <p className="mt-2 text-[11px] text-red-600">{error}</p>}
+
+      {/* Diagnóstico temporal */}
+      {traza.length > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setVerTraza(v => !v)}
+            className="text-[11px] text-gray-400 underline underline-offset-2"
+          >
+            {verTraza ? 'Ocultar diagnóstico' : `Ver diagnóstico (${traza.length})`}
+          </button>
+          {verTraza && (
+            <pre className="mt-1.5 max-h-48 overflow-auto bg-gray-900 text-gray-100 text-[10px] leading-relaxed rounded-lg p-2.5 whitespace-pre-wrap break-words">
+{traza.join('\n')}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   )
 }
