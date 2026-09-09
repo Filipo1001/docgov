@@ -188,3 +188,71 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 
   @page { margin: 12mm; }
 }
+
+/* ── Animación extra de la propuesta de Caramanta ─────────────────────────
+   Prefijo `prop-` porque solo la usa esa página; el resto del sitio no debe
+   heredar nada de aquí. Se pidió «muy rica en animaciones para teléfono»
+   sabiendo que el alcalde la abre en un iPhone, así que hay más movimiento
+   que en las otras propuestas — pero solo en el titular, las cifras y el
+   precio, que son los tres sitios donde interesa que el ojo se detenga.   */
+
+/* Barrido de luz sobre una cifra. El pseudo-elemento se mueve solo cuando la
+   cifra entra en pantalla, y una vez. */
+.prop-destello { position: relative; display: inline-block; }
+.prop-destello::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg,
+    transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-120%);
+  opacity: 0;
+}
+.prop-destello.activo::after {
+  animation: prop-barrido 1100ms cubic-bezier(0.16, 1, 0.3, 1) 220ms forwards;
+}
+@keyframes prop-barrido {
+  0%   { transform: translateX(-120%); opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+
+/* Escalonado de listas. Mismo gesto y misma curva que `.revelar`, para que la
+   página tenga un solo lenguaje de movimiento y no dos. */
+.prop-cascada {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 560ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 560ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.prop-cascada.dentro { opacity: 1; transform: none; }
+
+@media (max-width: 767px) {
+  .prop-cascada { transform: translateY(26px); transition-duration: 420ms; }
+  .prop-cascada.dentro { transform: none; }
+}
+
+/* Flotación del escudo con el recorrido de la página. Doce píxeles en todo el
+   trayecto: se siente, no se ve. Va tras @supports porque `scroll()` no existe
+   en todos los navegadores, y sin respaldo en JavaScript a propósito —escuchar
+   el scroll para mover un elemento es lo que hace lento a un teléfono—. */
+@supports (animation-timeline: scroll()) {
+  .prop-flota {
+    display: inline-block;
+    animation: prop-flotar linear both;
+    animation-timeline: scroll();
+  }
+  @keyframes prop-flotar {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-12px); }
+  }
+}
+
+/* La preferencia del sistema manda sobre todo lo anterior. */
+@media (prefers-reduced-motion: reduce) {
+  .prop-destello.activo::after { animation: none; opacity: 0; }
+  .prop-cascada { opacity: 1; transform: none; transition: none; }
+  .prop-flota { animation: none; }
+}
