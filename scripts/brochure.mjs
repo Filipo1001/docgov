@@ -61,7 +61,7 @@ const SUAVE   = '#6B7280'
 const FONDO   = '#F5F6F8'
 const LINEA   = '#E4E7EC'
 
-const VERIFICADO = '1 de septiembre de 2026'
+const VERIFICADO = '9 de septiembre de 2026'
 
 /* El pie llevaba «Agosto de 2026» escrito a mano y sobrevivió a la emisión de
    septiembre: una propuesta fechada el mes pasado envejece sola. Se deriva de
@@ -129,6 +129,25 @@ const MUNICIPIOS = {
     // Sin «con su historial»: cargar periodos pasados es un alcance mucho
     // mayor y no conviene prometerlo. Mismo criterio que en Venecia.
     implementacionTexto: 'Pago único. Creación de los usuarios de todas las secretarías, cargue de los contratos vigentes, adaptación de los documentos al formato de Angelópolis, capacitación por rol y acompañamiento durante el primer ciclo mensual completo.',
+    vigencia: 'Desde la suscripción del acta de inicio y hasta el 31 de diciembre de 2026.',
+  },
+  /**
+   * Caramanta. Escudo tomado del que aportó el municipio: llegaba en JPEG con
+   * fondo blanco, y sobre la portada oscura eso es un cuadro blanco. Se pasó a
+   * PNG de 200x200 —el tamaño de los demás— recortando el blanco por relleno
+   * desde los bordes, que respeta los blancos internos del blasón y de la
+   * cinta con el nombre.
+   *
+   * Único brochure que nombra al mandatario, a petición del cliente.
+   */
+  caramanta: {
+    nombre: 'Caramanta',
+    articulo: 'la Alcaldía Municipal de Caramanta',
+    destinatarioSegunda: 'En cabeza del señor Alcalde Juan Esteban Correa Cárdenas',
+    escudo: path.join(process.cwd(), 'public', 'marca', 'escudo-caramanta.png'),
+    precio: '$2.400.000',
+    implementacion: '$3.500.000',
+    implementacionTexto: 'Pago único. Creación de los usuarios de todas las secretarías, cargue de los contratos vigentes, adaptación de los documentos al formato de Caramanta, capacitación por rol y acompañamiento durante el primer ciclo mensual completo.',
     vigencia: 'Desde la suscripción del acta de inicio y hasta el 31 de diciembre de 2026.',
   },
   venecia: {
@@ -347,10 +366,15 @@ const Brochure = ({ qr }) => h(Document, {
             h(Text, { style: { color: '#8B93A5', fontSize: 7.5, textTransform: 'uppercase',
                                letterSpacing: 1.4 } }, 'Preparado para'),
             h(Text, { style: { color: '#FFFFFF', fontSize: 11, fontFamily: 'Helvetica-Bold',
-                               marginTop: 3 } }, M.articulo))),
+                               marginTop: 3 } }, M.articulo),
+            // Segunda línea opcional: el mandatario. Va aparte y más liviana
+            // porque el destinatario es la entidad; la persona lo encabeza.
+            // En una sola línea de 11 pt en negrita el renglón se hacía ilegible.
+            M.destinatarioSegunda && h(Text, { style: { color: '#C9CEDA', fontSize: 9,
+                               marginTop: 2 } }, M.destinatarioSegunda))),
 
         h(View, { style: { flexDirection: 'row', marginBottom: 26 } },
-          ...[['126', 'contratos'], ['629', 'periodos'], ['6 meses', 'en producción']].map(([n, r], i) =>
+          ...[['151', 'contratos'], ['731', 'periodos'], ['5 meses', 'en producción']].map(([n, r], i) =>
             h(View, { key: r, style: { marginRight: 46 } },
               h(Text, { style: { color: '#FFFFFF', fontSize: 15, fontFamily: 'Helvetica-Bold',
                                  lineHeight: 1.2 } }, n),
@@ -507,7 +531,7 @@ const Brochure = ({ qr }) => h(Document, {
         h(Text, { style: { fontSize: 9.5, lineHeight: 1.5 } },
           'Escanee este código con la cámara de su teléfono. Es el verificador real, en producción: el mismo al que llega un auditor, un banco o un ente de control cuando quiere comprobar un documento que le presentaron.'),
         h(Text, { style: { fontSize: 8.5, color: SUAVE, lineHeight: 1.45, marginTop: 10 } },
-          'Los 503 documentos ya emitidos son verificables por este medio, sin intervención de la alcaldía y sin que el sistema tenga que estar disponible para el trámite.'))),
+          'Los 518 documentos ya emitidos son verificables por este medio, sin intervención de la alcaldía y sin que el sistema tenga que estar disponible para el trámite.'))),
 
     h(View, { style: { height: 22 } }),
     h(Text, { style: e.seccion }, 'Qué ve quien escanea'),
@@ -542,15 +566,15 @@ const Brochure = ({ qr }) => h(Document, {
     }),
 
     h(View, { style: { ...e.fila, flexWrap: 'wrap', marginTop: 4 } },
-      h(Cifra, { n: '126', rotulo: 'contratos administrados' }),
-      h(Cifra, { n: '124', rotulo: 'usuarios activos' }),
+      h(Cifra, { n: '151', rotulo: 'contratos administrados' }),
+      h(Cifra, { n: '128', rotulo: 'usuarios activos' }),
       h(Cifra, { n: '5',   rotulo: 'secretarías' }),
-      h(Cifra, { n: '629', rotulo: 'periodos gestionados' }),
-      h(Cifra, { n: '206', rotulo: 'envíos a revisión procesados' }),
-      h(Cifra, { n: '503', rotulo: 'documentos verificables emitidos' }),
-      h(Cifra, { n: '4.081', rotulo: 'evidencias archivadas' }),
-      h(Cifra, { n: '2.976', rotulo: 'actividades registradas' }),
-      h(Cifra, { n: '1.449', rotulo: 'movimientos trazados' })),
+      h(Cifra, { n: '731', rotulo: 'periodos gestionados' }),
+      h(Cifra, { n: '323', rotulo: 'envíos a revisión procesados' }),
+      h(Cifra, { n: '518', rotulo: 'documentos verificables emitidos' }),
+      h(Cifra, { n: '4.107', rotulo: 'evidencias archivadas' }),
+      h(Cifra, { n: '3.013', rotulo: 'actividades registradas' }),
+      h(Cifra, { n: '1.524', rotulo: 'movimientos trazados' })),
 
     h(View, { style: { height: 4 } }),
     h(Caja, null,
@@ -567,10 +591,10 @@ const Brochure = ({ qr }) => h(Document, {
     h(View, { style: { height: 22 } }),
     h(Text, { style: e.seccion }, 'Volumen gestionado'),
     h(View, { style: { marginTop: 2 } },
-      h(Renglon, { k: 'Archivos almacenados', v: '5.054 objetos · 877 MB de evidencias, anexos y documentos emitidos' }),
-      h(Renglon, { k: 'Obligaciones', v: '848 obligaciones contractuales específicas bajo seguimiento' }),
-      h(Renglon, { k: 'Notificaciones', v: '1.579 avisos enviados por correo y WhatsApp' }),
-      h(Renglon, { k: 'Revisión', v: '170 aprobaciones, 182 radicaciones y 8 actas de terminación', ultimo: true })),
+      h(Renglon, { k: 'Archivos almacenados', v: '5.635 objetos · 1.097 MB de evidencias, anexos y documentos emitidos' }),
+      h(Renglon, { k: 'Obligaciones', v: '1.207 obligaciones contractuales específicas bajo seguimiento' }),
+      h(Renglon, { k: 'Notificaciones', v: '1.924 avisos enviados por correo y WhatsApp' }),
+      h(Renglon, { k: 'Revisión', v: '243 aprobaciones, 253 radicaciones y 11 actas de terminación', ultimo: true })),
 
     h(View, { style: { height: 20 } }),
     h(Text, { style: { fontSize: 8, color: SUAVE, lineHeight: 1.45, fontStyle: 'italic' } },
@@ -614,7 +638,7 @@ const Brochure = ({ qr }) => h(Document, {
     h(Text, { style: e.seccion }, 'Continuidad'),
     h(View, { style: { marginTop: 2 } },
       h(Renglon, { k: 'Respaldos', v: 'Diarios y automáticos, con retención de siete días.' }),
-      h(Renglon, { k: 'Cambios de esquema', v: '59 migraciones versionadas y aplicadas de forma controlada.' }),
+      h(Renglon, { k: 'Cambios de esquema', v: '62 migraciones versionadas y aplicadas de forma controlada.' }),
       h(Renglon, { k: 'Disponibilidad', v: 'Cinco meses de operación continua, sin pérdida de información ni reversiones de datos.' }),
       h(Renglon, { k: 'Portabilidad', v: 'La información es exportable. Los documentos emitidos son PDF estándar y no dependen del sistema para leerse.', ultimo: true })),
 
