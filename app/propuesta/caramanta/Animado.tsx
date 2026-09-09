@@ -40,36 +40,34 @@ function quiereQuieto(): boolean {
  * Es el efecto más caro de la página y por eso está solo en la portada: es el
  * único sitio donde el lector todavía no ha decidido si sigue leyendo.
  *
- * El texto va SIEMPRE en el HTML, con cada palabra en su `<span>`. Si el
- * JavaScript no corre, se ve el titular completo y quieto — nunca a medias.
+ * SIN NADA DE JAVASCRIPT, y no por elegancia. La primera versión llevaba
+ * estado: arrancaba oculta y se mostraba en un efecto. Eso significa que si el
+ * script no corre —pestaña en segundo plano, red que falla a mitad, navegador
+ * raro— el `opacity: 0` se queda puesto y el titular NO APARECE. Un documento
+ * comercial cuyo titular desaparece por un script fallido es peor que uno sin
+ * animación.
+ *
+ * Ahora el efecto es una animación CSS que corre al cargar la página. El
+ * estado natural del texto es visible: si las animaciones no se ejecutan, el
+ * titular simplemente está ahí. Es el mismo razonamiento que gobierna
+ * `Contador.tsx` —el número correcto está desde el primer render— aplicado a
+ * un elemento que, por estar en la portada, ya se ve sin desplazar.
  */
 export function TituloPalabras({ texto, className = '' }: { texto: string; className?: string }) {
-  const [listo, setListo] = useState(false)
-  useEffect(() => {
-    if (quiereQuieto()) { setListo(true); return }
-    const t = setTimeout(() => setListo(true), 60)
-    return () => clearTimeout(t)
-  }, [])
-
   const palabras = texto.split(' ')
   return (
     <span className={className}>
       {palabras.map((palabra, i) => (
         <span key={i} className="inline-block overflow-hidden align-bottom">
           <span
-            className="inline-block will-change-transform"
-            style={{
-              transform: listo ? 'none' : 'translateY(0.9em)',
-              opacity: listo ? 1 : 0,
-              transition: 'transform 620ms cubic-bezier(0.16,1,0.3,1), opacity 620ms cubic-bezier(0.16,1,0.3,1)',
-              // Escalonado corto: con más de 60 ms por palabra un titular de
-              // ocho se siente lento, y el lector ya está desplazando.
-              transitionDelay: `${i * 55}ms`,
-            }}
+            className="prop-palabra inline-block"
+            /* Escalonado corto: con más de 60 ms por palabra un titular de
+               ocho se siente lento, y el lector ya está desplazando. */
+            style={{ animationDelay: `${i * 55}ms` }}
           >
             {palabra}
           </span>
-          {i < palabras.length - 1 && ' '}
+          {i < palabras.length - 1 && ' '}
         </span>
       ))}
     </span>
