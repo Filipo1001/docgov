@@ -68,6 +68,10 @@ const RUTAS_COMERCIALES = [
   // con alcaldías y `contratistadigital.com/propuesta/...` lee como la empresa,
   // mientras que `app.` lee como la herramienta interna de otro cliente.
   '/propuesta',
+  // Amigo secreto de la alcaldía: se reparte por WhatsApp entre 35 empleados
+  // del municipio, y `app.` es su herramienta de trabajo. Un juego de
+  // diciembre no debe abrirse dentro de ella.
+  '/amigosecreto',
   '/robots.txt',
   '/sitemap.xml',
   '/manifest.webmanifest',

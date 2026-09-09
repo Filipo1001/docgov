@@ -29,6 +29,7 @@ export default function robots(): MetadataRoute.Robots {
           '/api/',
           '/auth/',
           '/verificar/',   // datos personales de contratistas y supervisores
+          '/amigosecreto', // nombres de 35 empleados del municipio
           '/maintenance',
         ],
       },
