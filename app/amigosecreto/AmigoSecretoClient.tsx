@@ -29,6 +29,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { LogoCD } from '@/components/Logo'
 
 /** Diciembre en Antioquia: alumbrados sobre cielo de noche. */
 const NOCHE = '#101A2E'
@@ -116,6 +117,23 @@ function Cintillo({ centro = false }: { centro?: boolean }) {
   )
 }
 
+/**
+ * Patrocinio. Discreto a propósito: quien abre esto viene a ver su amigo
+ * secreto, no un anuncio. La marca se gana el sitio por estar el regalo
+ * hecho, no por gritar.
+ */
+function Patrocinio({ className = '' }: { className?: string }) {
+  return (
+    <div className={`flex items-center justify-center gap-2.5 ${className}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8892A8]">
+        Apoya
+      </span>
+      <LogoCD size={20} color={LUZ} />
+      <span className="text-[13px] font-semibold text-[#B9C0D2]">Contratista Digital</span>
+    </div>
+  )
+}
+
 function Paso({ num, titulo, nota, children }: {
   num: string; titulo: string; nota: string; children: React.ReactNode
 }) {
@@ -143,6 +161,97 @@ const claseCampo =
   'border focus:ring-2 placeholder-[#6B7690]'
 const estiloCampo = { backgroundColor: NOCHE, borderColor: '#2C3A5C' } as const
 
+/**
+ * Dibuja la tarjeta que la persona se guarda en la galería.
+ *
+ * Es la única copia que sobrevive a perder el enlace de WhatsApp —el amigo
+ * secreto no está guardado en ningún servidor, se recalcula— así que vale
+ * como respaldo de verdad, no como adorno. Y es donde el patrocinio tiene
+ * sentido: una tarjeta que la gente conserva.
+ */
+async function dibujarTarjeta(yo: string, amigo: string, tope: string, cuando: string): Promise<string> {
+  const A = 1080, L = 1350
+  const c = document.createElement('canvas')
+  c.width = A; c.height = L
+  const g = c.getContext('2d')
+  if (!g) return ''
+
+  const tipo = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+
+  g.fillStyle = NOCHE
+  g.fillRect(0, 0, A, L)
+
+  // Alumbrados: puntos de luz tenues, más densos arriba. Puestos con una
+  // secuencia fija y no al azar, para que la tarjeta salga igual siempre.
+  for (let i = 0; i < 60; i++) {
+    const x = (i * 137.5) % A
+    const y = ((i * 71.3) % (L * 0.55))
+    const r = 1 + (i % 3)
+    g.globalAlpha = 0.05 + (i % 5) * 0.03
+    g.fillStyle = LUZ
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill()
+  }
+  g.globalAlpha = 1
+
+  g.textAlign = 'center'
+
+  g.fillStyle = LUZ
+  g.font = `600 26px ${tipo}`
+  g.fillText('AMIGO SECRETO · ALCALDÍA DE FREDONIA', A / 2, 150)
+
+  g.fillStyle = '#8892A8'
+  g.font = `400 34px ${tipo}`
+  g.fillText(`A ${yo} le tocó`, A / 2, 400)
+
+  // El nombre se encoge si es largo, para no salirse de la tarjeta.
+  let cuerpo = 96
+  g.font = `700 ${cuerpo}px ${tipo}`
+  while (g.measureText(amigo).width > A - 140 && cuerpo > 44) {
+    cuerpo -= 4
+    g.font = `700 ${cuerpo}px ${tipo}`
+  }
+  g.fillStyle = '#F2ECE0'
+  g.fillText(amigo, A / 2, 520)
+
+  g.strokeStyle = '#2C3A5C'
+  g.lineWidth = 2
+  g.beginPath(); g.moveTo(180, 640); g.lineTo(A - 180, 640); g.stroke()
+
+  const campos = [['TOPE DE REGALO', tope], ['INTERCAMBIO', cuando]].filter(([, v]) => v)
+  campos.forEach(([et, v], i) => {
+    const y = 730 + i * 130
+    g.fillStyle = '#8892A8'
+    g.font = `600 22px ${tipo}`
+    g.fillText(et as string, A / 2, y)
+    g.fillStyle = '#F2ECE0'
+    g.font = `600 42px ${tipo}`
+    g.fillText(v as string, A / 2, y + 54)
+  })
+
+  g.fillStyle = '#8892A8'
+  g.font = `400 26px ${tipo}`
+  g.fillText('No se lo cuentes a nadie', A / 2, 1120)
+
+  // Patrocinio al pie.
+  try {
+    const logo = await new Promise<HTMLImageElement>((res, rej) => {
+      const im = new Image()
+      im.onload = () => res(im); im.onerror = rej
+      im.src = '/marca/logo@2x.png'
+    })
+    const alto = 54
+    const ancho = (logo.width / logo.height) * alto
+    g.drawImage(logo, (A - ancho) / 2, 1200, ancho, alto)
+  } catch {
+    // Sin logo la tarjeta sigue sirviendo; es un adorno, no el contenido.
+  }
+  g.fillStyle = '#6B7690'
+  g.font = `600 22px ${tipo}`
+  g.fillText('APOYA CONTRATISTA DIGITAL', A / 2, 1300)
+
+  return c.toDataURL('image/png')
+}
+
 // ── Pantalla ───────────────────────────────────────────────────────────────
 
 export default function AmigoSecretoClient() {
@@ -162,6 +271,7 @@ export default function AmigoSecretoClient() {
   const [yo, setYo] = useState<string | null>(null)
   const [porConfirmar, setPorConfirmar] = useState<string | null>(null)
   const [abierto, setAbierto] = useState(false)
+  const [guardando, setGuardando] = useState(false)
 
   // El fragmento decide el modo. Va en un efecto porque en el servidor no
   // existe `location`, y leerlo durante el render rompería la hidratación.
@@ -233,9 +343,36 @@ export default function AmigoSecretoClient() {
               ))}
           </div>
 
-          <p className="mt-10 text-[12.5px] text-[#8892A8]">
-            Guarda este enlace si quieres volver a mirarlo. No se lo reenvíes a nadie.
+          {abierto && (
+            <button
+              type="button"
+              disabled={guardando}
+              onClick={async () => {
+                setGuardando(true)
+                try {
+                  const datos = await dibujarTarjeta(yo, mapa[yo], cfg.t, cfg.c)
+                  if (datos) {
+                    const a = document.createElement('a')
+                    a.href = datos
+                    a.download = `amigo-secreto-${yo.split(' ')[0].toLowerCase()}.png`
+                    document.body.appendChild(a); a.click(); a.remove()
+                  }
+                } finally { setGuardando(false) }
+              }}
+              className="mt-7 min-h-[48px] px-5 rounded-xl text-sm font-semibold border text-[#F2ECE0] disabled:opacity-50"
+              style={{ backgroundColor: NOCHE_2, borderColor: '#2C3A5C' }}
+            >
+              {guardando ? 'Preparando…' : 'Guardar imagen'}
+            </button>
+          )}
+
+          <p className="mt-8 text-[12.5px] text-[#8892A8]">
+            {abierto
+              ? 'Si pierdes el enlace, la imagen es tu respaldo. No se la muestres a nadie.'
+              : 'Guarda este enlace si quieres volver a mirarlo. No se lo reenvíes a nadie.'}
           </p>
+
+          <Patrocinio className="mt-9" />
         </div>
       )
     }
@@ -297,6 +434,7 @@ export default function AmigoSecretoClient() {
             </button>
           ))}
         </div>
+        <Patrocinio className="mt-9" />
       </div>
     )
   }
@@ -456,6 +594,8 @@ export default function AmigoSecretoClient() {
           </div>
         </Paso>
       )}
+
+      <Patrocinio className="mt-10" />
     </div>
   )
 }
