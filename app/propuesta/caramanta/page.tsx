@@ -299,16 +299,25 @@ export default async function PropuestaAngelopolis() {
 
         {/* Rejilla 3×2 desde `sm`; en el teléfono se apilan de a una, que es
             la única forma legible de seis tarjetas en 375 px. Cada una se
-            voltea al tocarla — ver TarjetaSenal en Animado.tsx. */}
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            voltea — ver TarjetaSenal en Animado.tsx.
+
+            La entrada va en diagonal —(fila + columna) × 90 ms— y no por
+            índice. Escalonar 0,1,2,3,4,5 hace que la segunda fila arranque
+            cuando la primera va por la mitad, y las dos filas se pisan; por
+            diagonal el grupo entra como una onda desde la esquina superior
+            izquierda, que es por donde se lee. En el teléfono cada tarjeta
+            tiene su propio observador y entra a su altura, así que el orden
+            se respeta igual. */}
+        <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
           {DIAGNOSTICO.map((sig, i) => (
-            <Revelar key={sig.frente} retraso={i * 70}>
-              <TarjetaSenal frente={sig.frente} dorso={sig.dorso} />
+            <Revelar key={sig.frente} retraso={(Math.floor(i / 3) + (i % 3)) * 90}>
+              {/* Solo la primera hace el asomo que enseña que la tarjeta gira. */}
+              <TarjetaSenal frente={sig.frente} dorso={sig.dorso} insinua={i === 0} />
             </Revelar>
           ))}
         </div>
 
-        <Revelar retraso={560}>
+        <Revelar retraso={240}>
           <p className="mt-10 text-lg font-semibold text-gray-900">
             Ninguno de estos problemas es de las personas. Todos son del método.
           </p>

@@ -196,37 +196,79 @@ export function Cascada({
 }
 
 /**
- * Tarjeta de "señal" del diagnóstico: se voltea al tocarla.
+ * Tarjeta de "señal" del diagnóstico: se voltea para pasar del titular al
+ * detalle. Frente, el problema en una línea; dorso, la frase completa.
  *
- * FRENTE — el problema en una línea. DORSO — la frase completa.
+ * EL ASOMO. El frente se quedó sin número, sin icono y sin «toca para ver»,
+ * que era lo que anunciaba que la tarjeta se puede tocar. En un computador el
+ * hover lo revela solo; en el iPhone —que es donde se va a leer— no hay hover
+ * que revele nada, y seis tarjetas quietas no se distinguen de seis recuadros
+ * de texto. Por eso la primera del grupo (`insinua`) hace un giro de quince
+ * grados al entrar en pantalla y vuelve. Una vez, y solo la primera: enseña
+ * el gesto sin escribirlo y sin convertir la sección en un carrusel.
  *
  * DEGRADA POR CAPAS. El giro 3D entra por `@supports (transform-style:
  * preserve-3d)`; sin él, o con «reducir movimiento», el toque intercambia la
- * cara sin animación. Las dos caras están SIEMPRE en el DOM: sin JavaScript se
- * ve el frente y el dorso queda accesible, nunca una tarjeta vacía. El estado
- * por defecto —frente visible— es el que sale en el HTML del servidor.
+ * cara sin animación y el asomo no llega a existir. Las dos caras están
+ * SIEMPRE en el DOM: sin JavaScript se ve el frente y el dorso queda
+ * accesible, nunca una tarjeta vacía. El estado por defecto —frente visible—
+ * es el que sale del servidor.
  *
  * EL ROJO. La página es menta pastel; el rojo es su complementario y estas
- * seis son avisos. El frente lleva un velo rojo muy tenue, el número y la
- * pista en rojo; el dorso invierte a rojo pleno con texto blanco, que remata
- * el «esto es un problema». Nada estridente: ladrillo, no bombero.
+ * seis son avisos. El frente lleva un velo rojo muy tenue y un filete corto,
+ * eco del de la portada; el dorso invierte a rojo pleno con texto blanco, que
+ * remata el «esto es un problema». Ladrillo, no bombero.
  */
 const ROJO = '#C84B4B'
 
-export function TarjetaSenal({ frente, dorso }: { frente: string; dorso: string }) {
+export function TarjetaSenal({
+  frente,
+  dorso,
+  insinua = false,
+}: {
+  frente: string
+  dorso: string
+  /** Hace el asomo inicial. Lo lleva UNA tarjeta del grupo, no todas. */
+  insinua?: boolean
+}) {
   const [volteada, setVolteada] = useState(false)
+  const [insinuando, setInsinuando] = useState(false)
+  const ref = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!insinua) return
+    const nodo = ref.current
+    if (!nodo || quiereQuieto()) return
+    if (typeof IntersectionObserver === 'undefined') return
+
+    // Umbral alto y espera corta: el asomo tiene que ocurrir con la tarjeta
+    // ya asentada y a la vista, no mientras entra por el borde inferior.
+    let arranque: ReturnType<typeof setTimeout> | undefined
+    const obs = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      obs.disconnect()
+      arranque = setTimeout(() => setInsinuando(true), 420)
+    }, { threshold: 0.6 })
+    obs.observe(nodo)
+
+    return () => { obs.disconnect(); if (arranque) clearTimeout(arranque) }
+  }, [insinua])
 
   return (
     <button
+      ref={ref}
       type="button"
-      onClick={() => setVolteada(v => !v)}
+      // Si alguien se adelanta al asomo, el asomo sobra: la animación pisa la
+      // transición del giro y dejarla correr frenaría el volteo que se pidió.
+      onClick={() => { setInsinuando(false); setVolteada(v => !v) }}
       aria-pressed={volteada}
       className="senal block w-full text-left"
     >
-      <span className={`senal-giro ${volteada ? 'girado' : ''}`}>
-        {/* Frente: solo el título. Sin número, sin icono, sin instrucción —
-            el título es el protagonista. Un filete rojo corto lo encabeza,
-            eco del de la portada, para que la tarjeta se lea como un aviso. */}
+      <span
+        className={`senal-giro ${volteada ? 'girado' : ''} ${insinuando ? 'insinuando' : ''}`}
+        onAnimationEnd={() => setInsinuando(false)}
+      >
+        {/* Frente: el título y nada más. */}
         <span className="senal-cara senal-cara--frente" aria-hidden={volteada}>
           <span className="block h-[3px] w-8 rounded-full" style={{ backgroundColor: ROJO }} />
           <span className="mt-auto mb-auto block text-xl sm:text-2xl font-bold leading-tight text-gray-900">

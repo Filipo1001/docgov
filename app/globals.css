@@ -279,52 +279,102 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 }
 
 /* ── Tarjetas "señal" del diagnóstico de Caramanta ─────────────────────────
-   Se voltean al tocarlas: frente con el problema en una línea, dorso con la
-   frase completa. El giro 3D entra por @supports; sin él, o con «reducir
-   movimiento», el toque intercambia la cara sin animación. El rojo ladrillo
-   sobre el pastel menta —su complementario— marca que son avisos.          */
-.senal { perspective: 1200px; }
+
+   Se voltean para pasar del titular al detalle. Cuatro decisiones sostienen
+   la sensación; ninguna es decorativa.
+
+   1. INTENCIÓN ANTES QUE REACCIÓN. El hover espera 140 ms antes de girar, y
+      la vuelta al frente sale sin espera. Sin eso, cruzar el cursor por la
+      fila voltea las tres tarjetas de paso: el gesto que debería premiar la
+      atención castigaba el simple hecho de mover el ratón. La espera solo
+      afecta la ida — quien se aparta ve volver la tarjeta de inmediato.
+
+   2. LA CURVA ASIENTA. 700 ms con un rebase corto pasado el medio giro: la
+      carta llega, se pasa un grado y se acomoda. Una curva que solo frena
+      llega muerta; esta llega y se posa.
+
+   3. LA PROFUNDIDAD ES LA MITAD DEL EFECTO. La sombra viaja pegada a cada
+      cara, así que gira con ella y el canto se lee. Sin sombra, un rotateY
+      es un rectángulo que se estrecha; con ella, es una carta que da la
+      vuelta.
+
+   4. EL FRENTE INSINÚA. Al quitar el número, el icono y el «toca para ver»,
+      la tarjeta se quedó sin decir que era tocable — y en el teléfono no hay
+      hover que lo sugiera. La primera del grupo hace un asomo de quince
+      grados al entrar en pantalla, una sola vez: enseña el gesto en vez de
+      escribirlo. Ver TarjetaSenal en Animado.tsx.
+
+   Todo entra por @supports; sin 3D, o con «reducir movimiento», el toque
+   intercambia la cara y ya.                                                */
+
+.senal { perspective: 1400px; }
 .senal:focus-visible { outline: 2px solid #C84B4B; outline-offset: 3px; border-radius: 1rem; }
 
 .senal-giro {
   position: relative;
   display: block;
   width: 100%;
-  min-height: 236px;
+  min-height: 208px;
 }
 .senal-cara {
   display: flex;
   flex-direction: column;
-  min-height: 236px;
-  padding: 1.25rem 1.35rem;
+  min-height: 208px;
+  padding: 1.4rem 1.5rem;
   border-radius: 1rem;                 /* rounded-2xl, igual que el resto */
-  border: 1px solid #E4B4B4;
+  border: 1px solid #E8BEBE;
 }
-.senal-cara--frente { background: #FCEFEF; }
+@media (min-width: 640px) {
+  .senal-giro, .senal-cara { min-height: 264px; }
+}
+.senal-cara--frente { background: #FCF1F1; }
 .senal-cara--dorso  { background: #B23B3B; border-color: #B23B3B; }
-.senal:hover .senal-cara--frente { border-color: #C84B4B; }
 
-/* Con soporte 3D: giro real de media vuelta. */
 @supports (transform-style: preserve-3d) {
   .senal-giro {
     transform-style: preserve-3d;
-    transition: transform 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    /* Rebase corto pasado el medio giro: llega, se pasa y se acomoda. */
+    transition: transform 700ms cubic-bezier(0.32, 1.14, 0.42, 1);
   }
   .senal-giro.girado { transform: rotateY(180deg); }
 
-  /* Con puntero real, el hover muestra el dorso y al salir vuelve al frente.
-     El clic «fija» el estado: una tarjeta fijada se queda en el dorso aunque
-     el cursor se vaya. En el iPhone no hay hover — ahí manda el toque. */
-  @media (hover: hover) {
-    .senal:hover .senal-giro { transform: rotateY(180deg); }
-  }
   .senal-cara {
     position: absolute;
     inset: 0;
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
+    /* La sombra va en la cara y no en el contenedor: así gira con ella. */
+    box-shadow: 0 1px 2px rgba(70, 20, 20, 0.05);
+    transition: box-shadow 700ms cubic-bezier(0.32, 1.14, 0.42, 1),
+                border-color 260ms ease;
   }
   .senal-cara--dorso { transform: rotateY(180deg); }
+
+  /* Con puntero real el hover gira; el clic fija. En el teléfono no hay
+     hover — ahí manda el toque, y por eso el asomo inicial existe. */
+  @media (hover: hover) {
+    .senal:hover .senal-giro {
+      transform: rotateY(180deg);
+      transition-delay: 140ms;         /* solo la ida: la vuelta es inmediata */
+    }
+    .senal:hover .senal-cara { transition-delay: 140ms; }
+    .senal:hover .senal-cara--frente { border-color: #C84B4B; }
+  }
+
+  .senal:hover .senal-cara,
+  .senal-giro.girado .senal-cara {
+    box-shadow: 0 14px 30px -12px rgba(120, 35, 35, 0.34);
+  }
+
+  /* Asomo de quince grados, una sola vez, cuando el grupo entra en pantalla.
+     La animación pisa la transición mientras dura, que es justo lo que se
+     quiere: el asomo no es un estado, es una demostración. */
+  .senal-giro.insinuando { animation: senal-asomo 1500ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+  @keyframes senal-asomo {
+    0%, 14%   { transform: rotateY(0deg); }
+    46%       { transform: rotateY(15deg); }
+    80%, 100% { transform: rotateY(0deg); }
+  }
 }
 
 /* Sin 3D: se intercambia la cara sin animar. */
@@ -334,12 +384,13 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
   .senal-giro.girado .senal-cara--dorso  { display: flex; }
 }
 
-/* «Reducir movimiento» manda: nada de giro, solo el intercambio. */
+/* «Reducir movimiento» manda: ni giro ni asomo, solo el intercambio. */
 @media (prefers-reduced-motion: reduce) {
-  .senal-giro { transition: none; transform: none !important; }
+  .senal-giro { transition: none; transform: none !important; animation: none !important; }
   .senal-cara {
     position: static;
     transform: none;
+    transition: none;
     -webkit-backface-visibility: visible;
     backface-visibility: visible;
   }
