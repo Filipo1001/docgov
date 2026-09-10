@@ -845,22 +845,63 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
       {/* ══ BASE COTIZACIÓN SS ════════════════════════════════ */}
       {tab === 'base_ss' && (() => {
-        const baseAutomatica = calcularBaseCotizacionSS(contrato.valor_mensual)
-        const usandoCuarentaPct = baseAutomatica > DEFAULT_BASE_COTIZACION_SS
+        /* MISMA REGLA QUE EL ACTA DE SUPERVISIÓN. El documento calcula el IBC
+           sobre el valor mensual EFECTIVO del periodo —el mayor entre lo que
+           ese periodo cobra y el valor mensual del contrato— y este panel
+           mostraba otra cosa: leía `contrato.valor_mensual` a secas.
+
+           Fallaba en dos frentes. En los contratos que no tienen ese campo
+           cargado enseñaba «$ 0» y el piso para todos los periodos, mientras
+           el acta ya usaba el valor del periodo y sacaba el número correcto.
+           Y aun con el campo cargado, mostraba una sola base para todo el
+           contrato, cuando un mes proporcional o un otrosí la cambian periodo
+           a periodo. El panel existe para anticipar lo que va a imprimir el
+           acta: si no calcula igual, no sirve.
+
+           Ver lib/pdf/acta-supervision.tsx — el cálculo de `baseValor`. */
+        const mensualEfectivo = (p: { valor_cobro: number | null }) =>
+          Math.max(Number(p.valor_cobro ?? 0), Number(contrato.valor_mensual ?? 0))
+        const baseDe = (p: { valor_cobro: number | null }) =>
+          calcularBaseCotizacionSS(mensualEfectivo(p))
+
+        const sinValorMensual = !(Number(contrato.valor_mensual ?? 0) > 0)
+        const bases = periodos.map(baseDe)
+        const todasIguales = bases.length > 0 && bases.every(b => b === bases[0])
+        const usandoCuarentaPct = bases.some(b => b > DEFAULT_BASE_COTIZACION_SS)
         return (
         <div className="space-y-4">
           <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-xs text-gray-700 space-y-1.5">
             <p className="font-semibold text-violet-900">Cálculo automático para este contrato</p>
             <p>
-              Valor mensual del contrato: <span className="font-mono font-semibold">$ {contrato.valor_mensual.toLocaleString('es-CO')}</span>
+              Valor mensual del contrato:{' '}
+              {sinValorMensual ? (
+                <span className="text-gray-500">
+                  sin cargar — se usa lo que cobra cada periodo, igual que el acta
+                </span>
+              ) : (
+                <span className="font-mono font-semibold">$ {Number(contrato.valor_mensual).toLocaleString('es-CO')}</span>
+              )}
             </p>
             <p>
               Base SS por defecto:{' '}
-              <span className="font-mono font-bold text-violet-700">$ {baseAutomatica.toLocaleString('es-CO')}</span>
-              {usandoCuarentaPct
-                ? ' (40 % del valor mensual, supera el piso)'
-                : ` (piso de $ ${DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')}; el 40 % queda por debajo)`}
+              {bases.length === 0 ? (
+                <span className="text-gray-500">sin periodos que calcular</span>
+              ) : todasIguales ? (
+                <span className="font-mono font-bold text-violet-700">$ {bases[0].toLocaleString('es-CO')}</span>
+              ) : (
+                <span className="font-mono font-bold text-violet-700">
+                  $ {Math.min(...bases).toLocaleString('es-CO')} – $ {Math.max(...bases).toLocaleString('es-CO')}
+                </span>
+              )}
+              {bases.length > 0 && (usandoCuarentaPct
+                ? ' (40 % del valor mensual efectivo, supera el piso)'
+                : ` (piso de $ ${DEFAULT_BASE_COTIZACION_SS.toLocaleString('es-CO')}; el 40 % queda por debajo)`)}
             </p>
+            {!todasIguales && bases.length > 0 && (
+              <p className="text-gray-500">
+                Varía entre periodos: un mes proporcional o un otrosí cambian el valor mensual efectivo.
+              </p>
+            )}
             <p className="text-gray-500 pt-1">
               Deja el campo en blanco para usar este valor. Escribe un número para sobrescribirlo en cualquier periodo (incluidos radicados e históricos).
             </p>
@@ -880,7 +921,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                 {periodos.map((p) => {
                   const guardando = guardandoBaseId === p.id
                   const valorEdit = baseEdit[p.id] ?? ''
-                  const valorActual = p.base_cotizacion_ss ?? baseAutomatica
+                  const valorActual = p.base_cotizacion_ss ?? baseDe(p)
                   const esCambiado = valorEdit.trim() !== (p.base_cotizacion_ss != null ? String(p.base_cotizacion_ss) : '')
 
                   return (
@@ -901,7 +942,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                             onChange={(e) =>
                               setBaseEdit((prev) => ({ ...prev, [p.id]: e.target.value.replace(/\D/g, '') }))
                             }
-                            placeholder={`${baseAutomatica.toLocaleString('es-CO')}`}
+                            placeholder={baseDe(p).toLocaleString('es-CO')}
                             className="w-40 px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:bg-gray-100"
                             disabled={guardando}
                           />
