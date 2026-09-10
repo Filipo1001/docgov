@@ -78,7 +78,11 @@ export const metadata: Metadata = {
  * Es el mismo esmeralda de antes, suavizado: se afina la lógica que ya había,
  * no se tira.
  */
-const ACENTO = '#8FD4C2'
+const ACENTO = '#7FCBB8'          // menta con fuerza: filetes, barras, iconos
+const ACENTO_OSCURO = '#2F7A68'   // texto pequeño y filetes SOBRE el pastel (contraste AA)
+const PASTEL_BASE = '#F4FAF7'     // fondo de toda la página: blanco con velo de menta
+const PASTEL_ALT = '#E7F3EE'      // secciones alternas, separan bloques sin líneas
+const PASTEL_PANEL = '#DCEEE7'    // portada y tarjetas sobre pastel
 
 /** El diagnóstico. Cuatro son de la alcaldía y dos del contratista, a propósito. */
 const DIAGNOSTICO = [
@@ -144,8 +148,11 @@ function Seccion({
     <section
       /* py-14 en móvil: con doce secciones, py-20 obligaba a desplazarse por
          casi 400 px de vacío solo para pasar de una a otra. */
-      className={`px-6 py-14 sm:py-24 lg:py-28 ${oscura ? 'text-white' : 'bg-white text-gray-900'}`}
-      style={oscura ? { backgroundColor: MARCA } : undefined}
+      // La página es toda pastel; `oscura` ya no oscurece, solo pone un punto
+      // más de menta para separar bloques sin líneas. Se conserva el nombre
+      // del prop para no tocar los cuatro sitios que lo pasan.
+      className="px-6 py-14 sm:py-24 lg:py-28 text-gray-900"
+      style={{ backgroundColor: oscura ? PASTEL_ALT : PASTEL_BASE }}
     >
       <div className="max-w-3xl mx-auto">{children}</div>
     </section>
@@ -154,7 +161,7 @@ function Seccion({
 
 function Etiqueta({ children, oscura = false }: { children: React.ReactNode; oscura?: boolean }) {
   return (
-    <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] mb-4 ${oscura ? 'text-white/40' : 'text-gray-400'}`}>
+    <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] mb-4 ${oscura ? 'text-[#2F7A68]' : 'text-gray-400'}`}>
       {children}
     </p>
   )
@@ -162,7 +169,7 @@ function Etiqueta({ children, oscura = false }: { children: React.ReactNode; osc
 
 function Titulo({ children, oscura = false }: { children: React.ReactNode; oscura?: boolean }) {
   return (
-    <h2 className={`text-3xl sm:text-4xl font-bold tracking-tight leading-[1.15] ${oscura ? 'text-white' : 'text-gray-900'}`}>
+    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight leading-[1.15] text-gray-900">
       {children}
     </h2>
   )
@@ -178,10 +185,10 @@ function Titulo({ children, oscura = false }: { children: React.ReactNode; oscur
  */
 function Rol({ glifo, titulo, puntos }: { glifo: LucideIcon; titulo: string; puntos: string[] }) {
   return (
-    <div className="rounded-2xl border border-gray-100 p-6 h-full">
+    <div className="rounded-2xl border border-[#D5E8DF] bg-white/60 p-6 h-full">
       <div
         className="w-11 h-11 rounded-xl flex items-center justify-center"
-        style={{ backgroundColor: '#F1F3F6' }}
+        style={{ backgroundColor: PASTEL_ALT }}
       >
         <Icono glifo={glifo} tamano="lg" className="text-[#192031]" />
       </div>
@@ -213,19 +220,19 @@ export default async function PropuestaAngelopolis() {
   })
 
   return (
-    <main className="bg-white">
+    <main style={{ backgroundColor: PASTEL_BASE }}>
       <ProgresoScroll color={ACENTO} />
 
       {/* ── Portada ───────────────────────────────────────────────── */}
       <section
-        className="min-h-screen flex flex-col justify-center px-6 py-16 sm:py-20 text-white"
-        style={{ backgroundColor: MARCA }}
+        className="min-h-screen flex flex-col justify-center px-6 py-16 sm:py-20 text-gray-900"
+        style={{ backgroundColor: PASTEL_PANEL }}
       >
         <div className="max-w-3xl mx-auto w-full">
-          <Revelar><LogoCD size={64} color="#FFFFFF" /></Revelar>
+          <Revelar><LogoCD size={64} color={MARCA} /></Revelar>
 
           <Revelar retraso={80}>
-            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: ACENTO }}>
+            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: ACENTO_OSCURO }}>
               Bienvenidos a Contratista Digital
             </p>
           </Revelar>
@@ -234,11 +241,11 @@ export default async function PropuestaAngelopolis() {
             <h1 className="mt-4 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.08]">
               <TituloEscribe texto="La innovación en la ejecución de la contratación pública" />
             </h1>
-            <div className="mt-6 h-[3px] w-16 rounded-full" style={{ backgroundColor: ACENTO }} />
+            <div className="mt-6 h-[3px] w-16 rounded-full" style={{ backgroundColor: ACENTO_OSCURO }} />
           </Revelar>
 
           <Revelar retraso={300}>
-            <p className="mt-8 text-lg sm:text-xl text-white/70 leading-relaxed max-w-xl">
+            <p className="mt-8 text-lg sm:text-xl text-gray-600 leading-relaxed max-w-xl">
               El expediente completo de cada contrato, con los documentos
               generados automáticamente, listo y verificable desde el primer mes.
             </p>
@@ -260,15 +267,15 @@ export default async function PropuestaAngelopolis() {
                    portada conserva su composición en vez de descuadrarse. */
                 <span
                   aria-hidden="true"
-                  className="w-12 h-12 rounded-xl border border-white/25 flex items-center justify-center text-lg font-semibold text-white/70 shrink-0"
+                  className="w-12 h-12 rounded-xl border border-gray-900/15 flex items-center justify-center text-lg font-semibold text-gray-500 shrink-0"
                 >
                   C
                 </span>
               )}
-              <p className="text-xs text-white/40 leading-snug">
+              <p className="text-xs text-gray-500 leading-snug">
                 Propuesta preparada para la<br />Alcaldía Municipal de Caramanta
                 <br />
-                <span className="text-white/55">
+                <span className="text-gray-700">
                   En cabeza del señor Alcalde Juan Esteban Correa Cárdenas
                 </span>
               </p>
@@ -284,10 +291,10 @@ export default async function PropuestaAngelopolis() {
           <Titulo>Seis señales</Titulo>
         </Revelar>
 
-        <div className="mt-12 space-y-px rounded-2xl overflow-hidden border border-gray-100">
+        <div className="mt-12 space-y-px rounded-2xl overflow-hidden border border-[#D5E8DF]">
           {DIAGNOSTICO.map((t, i) => (
             <Revelar key={t} retraso={i * 80} desde="izquierda">
-              <div className="flex gap-5 bg-gray-50/60 px-6 py-6">
+              <div className="flex gap-5 bg-white/70 px-6 py-6">
                 <span className="text-2xl font-bold tabular-nums text-gray-300 shrink-0 leading-none pt-0.5">
                   {i + 1}
                 </span>
@@ -310,8 +317,8 @@ export default async function PropuestaAngelopolis() {
           <Etiqueta oscura>La solución</Etiqueta>
         </Revelar>
         <Revelar retraso={120}>
-          <p className="text-xl sm:text-2xl leading-relaxed text-white/90">
-            <span className="font-semibold text-white">Contratista Digital automatiza</span> el
+          <p className="text-xl sm:text-2xl leading-relaxed text-gray-700">
+            <span className="font-semibold text-gray-900">Contratista Digital automatiza</span> el
             ciclo completo de los contratos de prestación de servicios de un municipio.
             El contratista carga sus evidencias desde el celular y el sistema genera
             automáticamente su informe de actividades, su cuenta de cobro y las actas
@@ -338,10 +345,10 @@ export default async function PropuestaAngelopolis() {
           </p>
         </Revelar>
 
-        <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-gray-100">
+        <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-[#D5E8DF]">
           {DOCUMENTOS.map(([d, q], i) => (
             <Revelar key={d} retraso={i * 80} desde="izquierda">
-              <div className="flex items-center justify-between gap-4 bg-gray-50/60 px-6 py-5">
+              <div className="flex items-center justify-between gap-4 bg-white/70 px-6 py-5">
                 <span className="font-medium text-gray-900">{d}</span>
                 <span className="text-sm text-gray-500 text-right shrink-0">{q}</span>
               </div>
@@ -361,26 +368,26 @@ export default async function PropuestaAngelopolis() {
         <Revelar>
           <Etiqueta oscura>Visibilidad</Etiqueta>
           <Titulo oscura>La alcaldía en la palma de la mano</Titulo>
-          <p className="mt-6 text-white/70 leading-relaxed">
+          <p className="mt-6 text-gray-600 leading-relaxed">
             Cuántos contratistas tiene, qué está haciendo cada uno y en qué punto
             va su pago. Desde el celular, en cualquier lugar, a cualquier hora.
           </p>
         </Revelar>
 
         <Revelar retraso={160}>
-          <div className="mt-10 rounded-2xl bg-white/[0.06] p-6 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">
+          <div className="mt-10 rounded-2xl bg-white/70 p-6 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
               Estado de todos los periodos, en vivo
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               {['Borrador', 'Enviado', 'En revisión', 'Aprobado', 'Radicado'].map((e, i) => (
                 <div key={e} className="flex items-center gap-2">
-                  <span className="rounded-lg bg-white/10 px-3.5 py-2 text-sm">{e}</span>
-                  {i < 4 && <span className="text-white/25">→</span>}
+                  <span className="rounded-lg bg-[#E7F3EE] px-3.5 py-2 text-sm">{e}</span>
+                  {i < 4 && <span className="text-gray-300">→</span>}
                 </div>
               ))}
             </div>
-            <p className="mt-6 text-sm text-white/60 leading-relaxed">
+            <p className="mt-6 text-sm text-gray-500 leading-relaxed">
               Más el valor total bajo gestión, el porcentaje de cumplimiento y qué
               está esperando su revisión en este momento.
             </p>
@@ -396,7 +403,7 @@ export default async function PropuestaAngelopolis() {
         </Revelar>
 
         <Revelar retraso={140}>
-          <div className="mt-10 rounded-2xl border border-gray-100 p-6 sm:p-8">
+          <div className="mt-10 rounded-2xl border border-[#D5E8DF] p-6 sm:p-8">
             <p className="text-lg font-semibold text-gray-900">No solo el archivo idéntico.</p>
             <p className="mt-3 text-gray-600 leading-relaxed">
               Detecta la misma imagen aunque la hayan recortado, comprimido o vuelto
@@ -407,7 +414,7 @@ export default async function PropuestaAngelopolis() {
         </Revelar>
 
         <Revelar retraso={260}>
-          <div className="mt-4 rounded-2xl border border-gray-100 p-6 sm:p-8">
+          <div className="mt-4 rounded-2xl border border-[#D5E8DF] p-6 sm:p-8">
             <p className="text-lg font-semibold text-gray-900">La seguridad social es bloqueante.</p>
             <p className="mt-3 text-gray-600 leading-relaxed">
               No deja enviar el informe sin planilla válida, y avisa si la misma
@@ -529,7 +536,7 @@ export default async function PropuestaAngelopolis() {
             />
           </Revelar>
           <Revelar retraso={280} className="flex-1">
-            <p className="text-white/70 leading-relaxed">
+            <p className="text-gray-600 leading-relaxed">
               Cada documento sale con un código único y una huella digital SHA-256.
               Escanee este código con la cámara de su celular: así verifica un
               documento un auditor, un banco o un ente de control.
@@ -548,10 +555,10 @@ export default async function PropuestaAngelopolis() {
           </p>
         </Revelar>
 
-        <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-gray-100">
+        <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-[#D5E8DF]">
           {NORMAS.map(([norma, que], i) => (
             <Revelar key={norma} retraso={i * 80} desde="izquierda">
-              <div className="grid sm:grid-cols-[1fr_1.4fr] gap-1 sm:gap-6 bg-gray-50/60 px-6 py-5">
+              <div className="grid sm:grid-cols-[1fr_1.4fr] gap-1 sm:gap-6 bg-white/70 px-6 py-5">
                 <span className="font-semibold text-gray-900 text-sm">{norma}</span>
                 <span className="text-sm text-gray-600">{que}</span>
               </div>
@@ -571,7 +578,7 @@ export default async function PropuestaAngelopolis() {
             mensualidad por mantenerla operando. */}
         <Revelar retraso={100} desde="zoom">
           <div className="mt-4 grid sm:grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-gray-100 p-6 sm:p-7 text-center">
+            <div className="rounded-2xl border border-[#D5E8DF] bg-white/60 p-6 sm:p-7 text-center">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">
                 Pago único
               </p>
@@ -594,7 +601,7 @@ export default async function PropuestaAngelopolis() {
 
         <Revelar retraso={240}>
           <div className="mt-4 grid sm:grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-gray-100 p-6">
+            <div className="rounded-2xl border border-[#D5E8DF] p-6">
               <p className="text-sm font-semibold text-gray-900">La implementación incluye</p>
               <div className="mt-3 space-y-2 text-sm text-gray-600">
                 {[
@@ -611,7 +618,7 @@ export default async function PropuestaAngelopolis() {
                 ))}
               </div>
             </div>
-            <div className="rounded-2xl border border-gray-100 p-6">
+            <div className="rounded-2xl border border-[#D5E8DF] p-6">
               <p className="text-sm font-semibold text-gray-900">La mensualidad incluye</p>
               <div className="mt-3 space-y-2 text-sm text-gray-600">
                 {[
@@ -670,7 +677,7 @@ export default async function PropuestaAngelopolis() {
             <Revelar key={s} retraso={i * 100}>
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-5 sm:items-start">
                 <span
-                  className="self-start shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+                  className="self-start shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-900"
                   style={{ backgroundColor: MARCA }}
                 >
                   {s}
@@ -720,7 +727,7 @@ export default async function PropuestaAngelopolis() {
              'Vencido el plazo de consulta, la información se conserva o se elimina según instrucción escrita de la Alcaldía y sus tablas de retención documental, conforme a la Ley 1581 de 2012.'],
           ].map(([t, d], i) => (
             <Revelar key={t} retraso={i * 80} desde="izquierda">
-              <div className="rounded-2xl border border-gray-100 p-6">
+              <div className="rounded-2xl border border-[#D5E8DF] p-6">
                 <p className="font-semibold text-gray-900">{t}</p>
                 <p className="mt-2 text-sm text-gray-600 leading-relaxed">{d}</p>
               </div>
@@ -752,9 +759,9 @@ export default async function PropuestaAngelopolis() {
         <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 gap-px rounded-2xl overflow-hidden">
           {CIFRAS.map(([n, t], i) => (
             <Revelar key={t} retraso={i * 80} desde="zoom">
-              <div className="bg-white/[0.06] p-5 sm:p-6 h-full">
+              <div className="bg-white/70 p-5 sm:p-6 h-full">
                 <Contador valor={n} className="block text-3xl sm:text-4xl font-bold tracking-tight" />
-                <p className="mt-1 text-sm text-white/50 leading-snug">{t}</p>
+                <p className="mt-1 text-sm text-gray-500 leading-snug">{t}</p>
               </div>
             </Revelar>
           ))}
@@ -768,16 +775,16 @@ export default async function PropuestaAngelopolis() {
               alt="Escudo del municipio de Fredonia"
               className="w-8 h-8 object-contain opacity-80"
             />
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-gray-400">
               Operación real del municipio de Fredonia, Antioquia.
             </p>
           </div>
         </Revelar>
 
         <Revelar retraso={620}>
-          <div className="mt-10 rounded-2xl bg-white/[0.06] p-6">
-            <p className="text-white/70 leading-relaxed">
-              <span className="font-semibold text-white">Su historial no se queda afuera.</span>{' '}
+          <div className="mt-10 rounded-2xl bg-white/70 p-6">
+            <p className="text-gray-600 leading-relaxed">
+              <span className="font-semibold text-gray-900">Su historial no se queda afuera.</span>{' '}
               Esos 238 periodos históricos son información anterior que entró al
               sistema, repartida en 61 contratos. No se empieza de cero.
             </p>
