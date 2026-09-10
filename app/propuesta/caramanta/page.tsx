@@ -64,7 +64,21 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-const VERDE = '#10b981'
+/**
+ * Acento de la portada de Caramanta: verde menta pastel.
+ *
+ * Elegido por lo que dice antes de que se lea una palabra. El menta-turquesa
+ * es el color de «verificado» —sellos de seguridad, visto bueno, candado de
+ * SSL—, y el producto vende justo eso: expediente verificable por QR. Está
+ * desaturado a propósito: una alcaldía no quiere «disrupción», quiere una
+ * elección competente y de bajo riesgo, y el pastel transmite calma
+ * institucional en vez de gritar. Sobre el azul noche de la marca contrasta
+ * con fuerza y da un brillo sutil que lleva el ojo a la cifra y al botón.
+ *
+ * Es el mismo esmeralda de antes, suavizado: se afina la lógica que ya había,
+ * no se tira.
+ */
+const ACENTO = '#8FD4C2'
 
 /** El diagnóstico. Cuatro son de la alcaldía y dos del contratista, a propósito. */
 const DIAGNOSTICO = [
@@ -200,7 +214,7 @@ export default async function PropuestaAngelopolis() {
 
   return (
     <main className="bg-white">
-      <ProgresoScroll color={VERDE} />
+      <ProgresoScroll color={ACENTO} />
 
       {/* ── Portada ───────────────────────────────────────────────── */}
       <section
@@ -211,7 +225,7 @@ export default async function PropuestaAngelopolis() {
           <Revelar><LogoCD size={64} color="#FFFFFF" /></Revelar>
 
           <Revelar retraso={80}>
-            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: ACENTO }}>
               Bienvenidos a Contratista Digital
             </p>
           </Revelar>
@@ -220,6 +234,7 @@ export default async function PropuestaAngelopolis() {
             <h1 className="mt-4 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.08]">
               <TituloEscribe texto="La innovación en la ejecución de la contratación pública" />
             </h1>
+            <div className="mt-6 h-[3px] w-16 rounded-full" style={{ backgroundColor: ACENTO }} />
           </Revelar>
 
           <Revelar retraso={300}>
@@ -788,7 +803,7 @@ export default async function PropuestaAngelopolis() {
               className="mt-10 inline-flex items-center gap-3 rounded-xl bg-white px-7 py-4 font-semibold transition-transform hover:scale-[1.02]"
               style={{ color: MARCA }}
             >
-              <span className="w-2 h-2 rounded-full latido" style={{ backgroundColor: VERDE }} />
+              <span className="w-2 h-2 rounded-full latido" style={{ backgroundColor: ACENTO }} />
               Escribir por WhatsApp
             </a>
           </Revelar>

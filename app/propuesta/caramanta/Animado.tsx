@@ -87,7 +87,7 @@ export function TituloEscribe({ texto, className = '' }: { texto: string; classN
       <span aria-hidden="true" className="invisible">{texto}</span>
       <span className="absolute inset-0" aria-label={texto}>
         {visible}
-        {tecleando && <span aria-hidden="true" className="prop-cursor" />}
+        {tecleando && <span aria-hidden="true" className="prop-cursor" style={{ color: '#8FD4C2' }} />}
       </span>
     </span>
   )
