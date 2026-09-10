@@ -25,6 +25,8 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 
 /** Coincide con `md:` de Tailwind y con el corte que ya usa Revelar.tsx. */
 const CORTE_MOVIL = 768
@@ -192,5 +194,60 @@ export function Cascada({
           ))
         : children}
     </div>
+  )
+}
+
+/**
+ * Tarjeta de "señal" del diagnóstico: se voltea al tocarla.
+ *
+ * FRENTE — el problema en una línea. DORSO — la frase completa.
+ *
+ * DEGRADA POR CAPAS. El giro 3D entra por `@supports (transform-style:
+ * preserve-3d)`; sin él, o con «reducir movimiento», el toque intercambia la
+ * cara sin animación. Las dos caras están SIEMPRE en el DOM: sin JavaScript se
+ * ve el frente y el dorso queda accesible, nunca una tarjeta vacía. El estado
+ * por defecto —frente visible— es el que sale en el HTML del servidor.
+ *
+ * EL ROJO. La página es menta pastel; el rojo es su complementario y estas
+ * seis son avisos. El frente lleva un velo rojo muy tenue, el número y la
+ * pista en rojo; el dorso invierte a rojo pleno con texto blanco, que remata
+ * el «esto es un problema». Nada estridente: ladrillo, no bombero.
+ */
+const ROJO = '#C84B4B'
+
+export function TarjetaSenal({ n, frente, dorso }: { n: number; frente: string; dorso: string }) {
+  const [volteada, setVolteada] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={() => setVolteada(v => !v)}
+      aria-pressed={volteada}
+      className="senal block w-full text-left"
+    >
+      <span className={`senal-giro ${volteada ? 'girado' : ''}`}>
+        <span className="senal-cara senal-cara--frente" aria-hidden={volteada}>
+          <span className="flex items-start justify-between">
+            <span className="text-2xl font-bold tabular-nums" style={{ color: ROJO }}>{n}</span>
+            <span style={{ color: ROJO }}>
+              <Icono glifo={Iconos.accion.recargar} tamano="sm" className="opacity-60" />
+            </span>
+          </span>
+          <span className="mt-4 block text-lg font-semibold leading-snug text-gray-900">
+            {frente}
+          </span>
+          <span className="mt-auto pt-4 block text-xs font-semibold" style={{ color: ROJO }}>
+            Toca para ver por qué
+          </span>
+        </span>
+
+        <span className="senal-cara senal-cara--dorso" aria-hidden={!volteada}>
+          <span className="block text-[15px] leading-relaxed text-white">{dorso}</span>
+          <span className="mt-auto pt-4 block text-xs font-semibold text-white/70">
+            Toca para volver
+          </span>
+        </span>
+      </span>
+    </button>
   )
 }

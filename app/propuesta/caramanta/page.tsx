@@ -6,7 +6,7 @@ import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp, ORIGEN_APP } from '@/lib/dominio'
 import Revelar from '../Revelar'
-import { TituloEscribe, Destello, Flotante } from './Animado'
+import { TituloEscribe, Destello, Flotante, TarjetaSenal } from './Animado'
 import Contador from '../Contador'
 import ProgresoScroll from '../ProgresoScroll'
 import Icono from '@/components/ui/Icono'
@@ -86,12 +86,18 @@ const PASTEL_PANEL = '#DCEEE7'    // portada y tarjetas sobre pastel
 
 /** El diagnóstico. Cuatro son de la alcaldía y dos del contratista, a propósito. */
 const DIAGNOSTICO = [
-  'Si le piden el expediente de un contrato y toca buscarlo en un arrume de documentos, lo está haciendo mal.',
-  'Si no sabe cuántos contratistas tiene ni si están trabajando, lo está haciendo mal.',
-  'Si a fin de mes sus contratistas están armando papeles en vez de trabajando, lo está haciendo mal.',
-  'Si no tiene la alcaldía en la palma de la mano —en cualquier lugar, a cualquier hora—, lo está haciendo mal.',
-  'Si le devuelven cuentas de cobro por errores de redacción o de transcripción, lo está haciendo mal.',
-  'Si un contratista tiene que llamar a preguntar por qué se retrasó su pago, lo está haciendo mal.',
+  { frente: 'El expediente, en un arrume de papeles',
+    dorso: 'Si le piden el expediente de un contrato y toca buscarlo en un arrume de documentos, lo está haciendo mal.' },
+  { frente: 'Sin saber cuántos contratistas trabajan',
+    dorso: 'Si no sabe cuántos contratistas tiene ni si están trabajando, lo está haciendo mal.' },
+  { frente: 'El fin de mes se va en papeleo',
+    dorso: 'Si a fin de mes sus contratistas están armando papeles en vez de trabajando, lo está haciendo mal.' },
+  { frente: 'La alcaldía no cabe en el bolsillo',
+    dorso: 'Si no tiene la alcaldía en la palma de la mano —en cualquier lugar, a cualquier hora—, lo está haciendo mal.' },
+  { frente: 'Cuentas de cobro devueltas por errores',
+    dorso: 'Si le devuelven cuentas de cobro por errores de redacción o de transcripción, lo está haciendo mal.' },
+  { frente: 'El contratista llama a preguntar por su pago',
+    dorso: 'Si un contratista tiene que llamar a preguntar por qué se retrasó su pago, lo está haciendo mal.' },
 ]
 
 const DOCUMENTOS = [
@@ -291,15 +297,13 @@ export default async function PropuestaAngelopolis() {
           <Titulo>Seis señales</Titulo>
         </Revelar>
 
-        <div className="mt-12 space-y-px rounded-2xl overflow-hidden border border-[#D5E8DF]">
-          {DIAGNOSTICO.map((t, i) => (
-            <Revelar key={t} retraso={i * 80} desde="izquierda">
-              <div className="flex gap-5 bg-white/70 px-6 py-6">
-                <span className="text-2xl font-bold tabular-nums text-gray-300 shrink-0 leading-none pt-0.5">
-                  {i + 1}
-                </span>
-                <p className="text-gray-800 leading-relaxed">{t}</p>
-              </div>
+        {/* Rejilla 3×2 desde `sm`; en el teléfono se apilan de a una, que es
+            la única forma legible de seis tarjetas en 375 px. Cada una se
+            voltea al tocarla — ver TarjetaSenal en Animado.tsx. */}
+        <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {DIAGNOSTICO.map((sig, i) => (
+            <Revelar key={sig.frente} retraso={i * 70}>
+              <TarjetaSenal n={i + 1} frente={sig.frente} dorso={sig.dorso} />
             </Revelar>
           ))}
         </div>
