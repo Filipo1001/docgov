@@ -55,13 +55,15 @@ export interface ContratoListItem {
   num_obligaciones?: number
   num_periodos?: number
   /** Estado de cada periodo — alimenta la señal "requiere atención" de la
-      lista (informes por revisar y periodos atrasados sin enviar). */
+      lista (informes por revisar y periodos atrasados sin enviar), y su valor,
+      del que se deriva lo que se cobra por periodo (ver lib/valor-contrato.ts). */
   periodos?: {
     estado: string
     mes: string
     anio: number
     es_historico: boolean | null
     habilitado_tardio: boolean | null
+    valor_cobro: number | null
   }[]
 }
 

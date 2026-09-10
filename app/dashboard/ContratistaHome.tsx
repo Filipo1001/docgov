@@ -10,6 +10,7 @@ import { ESTADO_LABEL, ESTADO_COLOR, HISTORICO_COLOR, HISTORICO_LABEL, MESES } f
 import type { EstadoPeriodo } from '@/lib/types'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
+import { porPeriodoCorto } from '@/lib/valor-contrato'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -461,8 +462,11 @@ export default function ContratistaHome({
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">{contrato.objeto}</p>
               </div>
               <div className="sm:text-right flex-shrink-0">
-                <p className="text-[11px] text-gray-400">Valor mensual</p>
-                <p className="text-sm font-bold text-gray-900">{fmt(contrato.valor_mensual)}</p>
+                {/* Se deriva de los periodos y no de `contrato.valor_mensual`:
+                    ese campo admite cero y a un contratista le aparecía «$0»
+                    como si su contrato no valiera nada. Ver lib/valor-contrato.ts. */}
+                <p className="text-[11px] text-gray-400">Valor por periodo</p>
+                <p className="text-sm font-bold text-gray-900">{porPeriodoCorto(periodos)}</p>
               </div>
             </div>
             {contrato.supervisor && (

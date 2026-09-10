@@ -499,12 +499,21 @@ export default function NuevoContratoPage({
                 placeholder="24000000" className={excelEncontrado && form.valor_total ? autoClass : inputClass} />
             </div>
             <div>
+              {/* Obligatorio desde que se vio el efecto de dejarlo vacío: entraba
+                  como cero —`parseFloat('') || 0`— y de ahí salía «$0/mes» en la
+                  lista y en el inicio del contratista. Las pantallas ya no lo
+                  leen (ver lib/valor-contrato.ts), pero el campo sigue siendo la
+                  base del cálculo de seguridad social, así que tiene que estar.
+                  No se calcula solo a partir del total: entre los contratos ya
+                  cargados, el mensual va desde total/6 hasta total/12 según lo
+                  pactado. Es una cifra negociada, no derivada. */}
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Valor mensual ($)
                 <span className="text-xs text-gray-400 font-normal ml-1">del Excel o manual</span>
               </label>
-              <input name="valor_mensual" type="number" value={form.valor_mensual} onChange={handleChange}
+              <input name="valor_mensual" type="number" value={form.valor_mensual} onChange={handleChange} required
                 placeholder="3000000" className={excelEncontrado && form.valor_mensual ? autoClass : inputClass} />
+              <p className="text-xs text-gray-400 mt-1">Con este valor se calcula la base de seguridad social.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

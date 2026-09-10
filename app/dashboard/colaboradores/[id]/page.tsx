@@ -8,6 +8,7 @@ import { useUsuario } from '@/lib/user-context'
 import { ESTADO_LABEL, ESTADO_COLOR } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
 import Avatar from '@/components/ui/Avatar'
+import { porPeriodoCorto } from '@/lib/valor-contrato'
 import Icono from '@/components/ui/Icono'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
 import type {
@@ -251,7 +252,7 @@ function ContratoSection({
           <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
             <span>{contrato.fecha_inicio} → {contrato.fecha_fin}</span>
             <span>·</span>
-            <span>{fmt(contrato.valor_mensual)}/mes</span>
+            <span>{porPeriodoCorto(contrato.periodos)} por periodo</span>
             <span>·</span>
             <span>{fmt(contrato.valor_total)} total</span>
           </div>

@@ -27,6 +27,9 @@ export async function getTodosContratosConBanco(): Promise<ContratoListItem[]> {
   if (!yo) return []
 
   const admin = createAdminSupabaseClient()
+  // Los periodos traen `valor_cobro` porque la lista deriva de ahí lo que se
+  // cobra: mostrar `contrato.valor_mensual` sacaba «$0/mes» en los contratos
+  // que no tienen ese campo cargado. Ver lib/valor-contrato.ts.
   let query = admin
     .from('contratos')
     .select(`
@@ -40,7 +43,7 @@ export async function getTodosContratosConBanco(): Promise<ContratoListItem[]> {
       dependencia:dependencias(id, nombre, abreviatura),
       estado, estado_fecha,
       obligaciones(count),
-      periodos(estado, mes, anio, es_historico, habilitado_tardio)
+      periodos(estado, mes, anio, es_historico, habilitado_tardio, valor_cobro)
     `)
     .order('numero', { ascending: true })
 

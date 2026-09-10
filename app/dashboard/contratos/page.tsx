@@ -21,6 +21,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useUsuario } from '@/lib/user-context'
 import { formatCedula } from '@/lib/format'
 import { avatarThumb } from '@/lib/avatar'
+import { porPeriodoCorto, valorDeReferencia } from '@/lib/valor-contrato'
 import { esGestorContratos, esRolSupervision, esMesPasado } from '@/lib/constants'
 import { type ContratoListItem } from '@/services/contratos'
 import { getTodosContratosConBanco } from '@/app/actions/contratos-lista'
@@ -334,8 +335,10 @@ export default function ContratosPage() {
       // Dependencia / supervisor
       if (filtroDep && c.dependencia?.id !== filtroDep) return false
       if (filtroSup && c.supervisor?.id !== filtroSup) return false
-      // Rango de valor mensual
-      const vm = c.valor_mensual ?? 0
+      // Rango por valor de periodo. Antes filtraba por `valor_mensual`, que en
+      // los contratos sin ese campo vale cero: cualquier mínimo los excluía de
+      // la lista, y así el contrato desaparecía en vez de verse mal.
+      const vm = valorDeReferencia(c.periodos ?? [])
       if (r.min > 0 && vm < r.min) return false
       if (Number.isFinite(r.max) && vm > r.max) return false
       // Vigencia
@@ -729,8 +732,8 @@ export default function ContratosPage() {
 
                           <div className="text-right shrink-0">
                             <p className="text-sm font-bold text-gray-900">
-                              {formatCOP(contrato.valor_mensual ?? 0)}
-                              <span className="text-xs text-gray-400 font-normal">/mes</span>
+                              {porPeriodoCorto(contrato.periodos ?? [])}
+                              <span className="text-xs text-gray-400 font-normal"> por periodo</span>
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
                               {formatCOP(contrato.valor_total ?? 0)} total

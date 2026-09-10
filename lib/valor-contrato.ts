@@ -107,3 +107,45 @@ export function pesos(valor: number | null | undefined): string {
   if (typeof valor !== 'number' || !Number.isFinite(valor) || valor === 0) return '—'
   return `$${Math.round(valor).toLocaleString('es-CO')}`
 }
+
+/**
+ * Lo que se cobra por periodo, en una línea corta para listas y tarjetas.
+ *
+ * Existe para que las pantallas compactas —la lista de contratos, el inicio
+ * del contratista, la ficha del colaborador— digan exactamente lo mismo que
+ * la vista de detalle, sin repetir la decisión en tres sitios. La de detalle
+ * puede permitirse una nota debajo («igual en los 5 periodos»); aquí no cabe,
+ * así que el rango se muestra tal cual y el resto lo cuenta esa vista.
+ *
+ * Devuelve raya cuando no hay periodos con valor. Es deliberado: «$0» parece
+ * un dato —un contrato que no cobra nada— y en realidad es la ausencia de uno.
+ * Ese es justo el fallo que se reportó en el contrato 180.
+ */
+export function porPeriodoCorto(
+  periodos: ReadonlyArray<{ valor_cobro?: number | null }>,
+): string {
+  const v = valorPorPeriodo(periodos)
+  if (v.clase === 'sin-periodos') return '—'
+  if (v.clase === 'uniforme') return pesos(v.valor)
+  return `${pesos(v.minimo)} – ${pesos(v.maximo)}`
+}
+
+/**
+ * Un solo número por contrato, para ordenar y filtrar por rango.
+ *
+ * Es el MÁXIMO de los periodos, no el promedio: cuando un contrato arranca a
+ * mitad de mes, su primer periodo es proporcional y arrastraría el promedio
+ * hacia abajo. El máximo es la mensualidad completa, que es lo que alguien
+ * tiene en la cabeza cuando filtra «contratos de más de tres millones».
+ *
+ * Cero cuando no hay periodos con valor: así el filtro lo trata igual que a
+ * cualquier contrato por debajo del mínimo, en vez de esconderlo por un dato
+ * que falta.
+ */
+export function valorDeReferencia(
+  periodos: ReadonlyArray<{ valor_cobro?: number | null }>,
+): number {
+  const v = valorPorPeriodo(periodos)
+  if (v.clase === 'sin-periodos') return 0
+  return v.clase === 'uniforme' ? v.valor : v.maximo
+}
