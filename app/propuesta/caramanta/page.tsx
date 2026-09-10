@@ -6,7 +6,7 @@ import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp, ORIGEN_APP } from '@/lib/dominio'
 import Revelar from '../Revelar'
-import { TituloPalabras, Destello, Flotante } from './Animado'
+import { TituloEscribe, Destello, Flotante } from './Animado'
 import Contador from '../Contador'
 import ProgresoScroll from '../ProgresoScroll'
 import Icono from '@/components/ui/Icono'
@@ -210,20 +210,26 @@ export default async function PropuestaAngelopolis() {
         <div className="max-w-3xl mx-auto w-full">
           <Revelar><LogoCD size={64} color="#FFFFFF" /></Revelar>
 
-          <Revelar retraso={120}>
-            <h1 className="mt-10 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.08]">
-              <TituloPalabras texto="Que ningún contrato de Caramanta vuelva a quedarse sin expediente completo." />
-            </h1>
-          </Revelar>
-
-          <Revelar retraso={240}>
-            <p className="mt-8 text-lg sm:text-xl text-white/70 leading-relaxed max-w-xl">
-              Gestión digital de los contratos de prestación de servicios:
-              los documentos, la supervisión, el archivo y la verificación.
+          <Revelar retraso={80}>
+            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+              Bienvenidos a Contratista Digital
             </p>
           </Revelar>
 
-          <Revelar retraso={400}>
+          <Revelar retraso={160}>
+            <h1 className="mt-4 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.08]">
+              <TituloEscribe texto="La innovación en la ejecución de la contratación pública" />
+            </h1>
+          </Revelar>
+
+          <Revelar retraso={300}>
+            <p className="mt-8 text-lg sm:text-xl text-white/70 leading-relaxed max-w-xl">
+              El expediente completo de cada contrato, con los documentos
+              generados automáticamente, listo y verificable desde el primer mes.
+            </p>
+          </Revelar>
+
+          <Revelar retraso={460}>
             <div className="mt-12 sm:mt-16 flex items-center gap-3">
               {escudo ? (
                 <Flotante>

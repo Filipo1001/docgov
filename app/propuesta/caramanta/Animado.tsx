@@ -35,41 +35,60 @@ function quiereQuieto(): boolean {
 }
 
 /**
- * Titular que entra palabra por palabra.
+ * Titular que se escribe solo, carácter a carácter, como en una máquina de
+ * escribir.
  *
- * Es el efecto más caro de la página y por eso está solo en la portada: es el
- * único sitio donde el lector todavía no ha decidido si sigue leyendo.
+ * SIN RIESGO DE PANTALLA EN BLANCO. El texto completo está SIEMPRE en el DOM:
+ * una capa invisible lo lleva entero —y de paso reserva el alto final, para
+ * que el subtítulo no dé un salto cuando el titular pasa de una a dos líneas—
+ * y la capa visible arranca mostrándolo entero también. Solo cuando el efecto
+ * confirma que puede animar, la capa visible se vacía y lo teclea de nuevo. Si
+ * el script no corre, o el sistema pide menos movimiento, el titular está ahí,
+ * quieto y legible. Es el criterio de `Contador.tsx`: el estado por defecto es
+ * el resultado final, nunca uno intermedio.
  *
- * SIN NADA DE JAVASCRIPT, y no por elegancia. La primera versión llevaba
- * estado: arrancaba oculta y se mostraba en un efecto. Eso significa que si el
- * script no corre —pestaña en segundo plano, red que falla a mitad, navegador
- * raro— el `opacity: 0` se queda puesto y el titular NO APARECE. Un documento
- * comercial cuyo titular desaparece por un script fallido es peor que uno sin
- * animación.
- *
- * Ahora el efecto es una animación CSS que corre al cargar la página. El
- * estado natural del texto es visible: si las animaciones no se ejecutan, el
- * titular simplemente está ahí. Es el mismo razonamiento que gobierna
- * `Contador.tsx` —el número correcto está desde el primer render— aplicado a
- * un elemento que, por estar en la portada, ya se ve sin desplazar.
+ * El renderizado es una sola cadena que crece con `slice`, no un nodo por
+ * letra: barato aunque corra en un teléfono.
  */
-export function TituloPalabras({ texto, className = '' }: { texto: string; className?: string }) {
-  const palabras = texto.split(' ')
+
+/** Ritmo del tecleo. 38 ms da ~2 s en un titular de medio centenar de letras:
+ *  se lee como escritura real sin volverse lento. */
+const MS_POR_LETRA = 38
+/** Espera antes de empezar, para que el tecleo arranque cuando el bloque ya
+ *  terminó de aparecer (Revelar dura ~460 ms en móvil). */
+const ESPERA_INICIAL_MS = 340
+
+export function TituloEscribe({ texto, className = '' }: { texto: string; className?: string }) {
+  // `null` = quieto, con el texto completo. Cualquier número = tecleando.
+  const [n, setN] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (quiereQuieto()) return
+    let id: ReturnType<typeof setInterval> | undefined
+    const arranque = setTimeout(() => {
+      let i = 0
+      setN(0)
+      id = setInterval(() => {
+        i += 1
+        setN(i)
+        if (i >= texto.length && id) clearInterval(id)
+      }, MS_POR_LETRA)
+    }, ESPERA_INICIAL_MS)
+    return () => { clearTimeout(arranque); if (id) clearInterval(id) }
+  }, [texto])
+
+  const tecleando = n !== null && n < texto.length
+  const visible = n === null ? texto : texto.slice(0, n)
+
   return (
-    <span className={className}>
-      {palabras.map((palabra, i) => (
-        <span key={i} className="inline-block overflow-hidden align-bottom">
-          <span
-            className="prop-palabra inline-block"
-            /* Escalonado corto: con más de 60 ms por palabra un titular de
-               ocho se siente lento, y el lector ya está desplazando. */
-            style={{ animationDelay: `${i * 55}ms` }}
-          >
-            {palabra}
-          </span>
-          {i < palabras.length - 1 && ' '}
-        </span>
-      ))}
+    <span className={`relative block ${className}`}>
+      {/* Reserva el alto final. Sin esto, el subtítulo salta al pasar el
+          titular de una línea a dos mientras se escribe. */}
+      <span aria-hidden="true" className="invisible">{texto}</span>
+      <span className="absolute inset-0" aria-label={texto}>
+        {visible}
+        {tecleando && <span aria-hidden="true" className="prop-cursor" />}
+      </span>
     </span>
   )
 }
