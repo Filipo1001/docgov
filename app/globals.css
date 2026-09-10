@@ -311,6 +311,13 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
     transition: transform 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
   }
   .senal-giro.girado { transform: rotateY(180deg); }
+
+  /* Con puntero real, el hover muestra el dorso y al salir vuelve al frente.
+     El clic «fija» el estado: una tarjeta fijada se queda en el dorso aunque
+     el cursor se vaya. En el iPhone no hay hover — ahí manda el toque. */
+  @media (hover: hover) {
+    .senal:hover .senal-giro { transform: rotateY(180deg); }
+  }
   .senal-cara {
     position: absolute;
     inset: 0;

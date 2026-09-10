@@ -303,7 +303,7 @@ export default async function PropuestaAngelopolis() {
         <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
           {DIAGNOSTICO.map((sig, i) => (
             <Revelar key={sig.frente} retraso={i * 70}>
-              <TarjetaSenal n={i + 1} frente={sig.frente} dorso={sig.dorso} />
+              <TarjetaSenal frente={sig.frente} dorso={sig.dorso} />
             </Revelar>
           ))}
         </div>

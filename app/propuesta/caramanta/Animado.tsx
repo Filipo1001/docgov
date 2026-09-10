@@ -25,8 +25,6 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import Icono from '@/components/ui/Icono'
-import { Iconos } from '@/lib/iconos'
 
 /** Coincide con `md:` de Tailwind y con el corte que ya usa Revelar.tsx. */
 const CORTE_MOVIL = 768
@@ -215,7 +213,7 @@ export function Cascada({
  */
 const ROJO = '#C84B4B'
 
-export function TarjetaSenal({ n, frente, dorso }: { n: number; frente: string; dorso: string }) {
+export function TarjetaSenal({ frente, dorso }: { frente: string; dorso: string }) {
   const [volteada, setVolteada] = useState(false)
 
   return (
@@ -226,25 +224,20 @@ export function TarjetaSenal({ n, frente, dorso }: { n: number; frente: string; 
       className="senal block w-full text-left"
     >
       <span className={`senal-giro ${volteada ? 'girado' : ''}`}>
+        {/* Frente: solo el título. Sin número, sin icono, sin instrucción —
+            el título es el protagonista. Un filete rojo corto lo encabeza,
+            eco del de la portada, para que la tarjeta se lea como un aviso. */}
         <span className="senal-cara senal-cara--frente" aria-hidden={volteada}>
-          <span className="flex items-start justify-between">
-            <span className="text-2xl font-bold tabular-nums" style={{ color: ROJO }}>{n}</span>
-            <span style={{ color: ROJO }}>
-              <Icono glifo={Iconos.accion.recargar} tamano="sm" className="opacity-60" />
-            </span>
-          </span>
-          <span className="mt-4 block text-lg font-semibold leading-snug text-gray-900">
+          <span className="block h-[3px] w-8 rounded-full" style={{ backgroundColor: ROJO }} />
+          <span className="mt-auto mb-auto block text-xl sm:text-2xl font-bold leading-tight text-gray-900">
             {frente}
-          </span>
-          <span className="mt-auto pt-4 block text-xs font-semibold" style={{ color: ROJO }}>
-            Toca para ver por qué
           </span>
         </span>
 
+        {/* Dorso: la frase completa, rojo pleno. */}
         <span className="senal-cara senal-cara--dorso" aria-hidden={!volteada}>
-          <span className="block text-[15px] leading-relaxed text-white">{dorso}</span>
-          <span className="mt-auto pt-4 block text-xs font-semibold text-white/70">
-            Toca para volver
+          <span className="mt-auto mb-auto block text-[15px] sm:text-base leading-relaxed text-white">
+            {dorso}
           </span>
         </span>
       </span>
