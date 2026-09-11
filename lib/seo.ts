@@ -79,13 +79,26 @@ export function datosEstructurados(preguntas: { p: string; r: string }[]) {
         description: DESCRIPCION,
         inLanguage: 'es-CO',
         publisher: { '@id': `${SITIO}/#organizacion` },
+        // SIN CIFRA, a propósito y por dos razones que apuntan al mismo sitio.
+        //
+        // La comercial: el alcance se decide con datos del municipio —cuántos
+        // contratos, cuántas secretarías—, así que publicar un número sería
+        // inventar, y la portada ya no lo publica.
+        //
+        // Y la técnica, que obliga igual: Google exige que los datos
+        // estructurados reflejen lo que el visitante VE en la página. Declarar
+        // aquí un precio que la página no dice es exactamente lo que su
+        // documentación llama marcado engañoso, y se sanciona quitando los
+        // resultados enriquecidos — es decir, costaría más de lo que da.
+        //
+        // El Offer se queda porque una aplicación de software sin oferta pierde
+        // categoría ante el buscador; lo que se va es la cifra.
         offers: {
           '@type': 'Offer',
-          price: '2900000',
           priceCurrency: 'COP',
-          // Sin fecha de caducidad: es una licencia mensual vigente.
           category: 'Licencia mensual',
           url: SITIO,
+          availability: 'https://schema.org/InStock',
         },
         featureList: [
           'Informes de actividades generados automáticamente',

@@ -32,7 +32,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
-import css from './brochure.module.css'
+import css from './folleto.module.css'
 
 const VERDE = '#10b981'
 const AMBAR = '#D98324'
@@ -313,8 +313,8 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
   const t = claro ? TINTA_CLARA : TINTA_OSCURA
 
   return (
-    <div ref={ref} className={`${clase} relative mx-auto`}
-      style={{ width: 340, height: 300, maxWidth: '100%' }}>
+    <div ref={ref} className={`${clase} ${css.escenario} relative mx-auto`}
+      style={{ width: 340, height: 300 }}>
 
       {/* ── Atmósfera: late siempre, también en reposo ──────────────── */}
       <span className={`${css.aliento} absolute rounded-full pointer-events-none`}

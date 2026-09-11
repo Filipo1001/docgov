@@ -28,6 +28,15 @@
 .entra { opacity: 1; transform: none; transition: opacity 520ms ease, transform 520ms cubic-bezier(.2,.7,.3,1); }
 .dormido .entra { opacity: 0; transform: translateY(14px); }
 
+/* La escena mide 340px y NO puede encogerse: sus piezas van colocadas en
+   píxeles contados desde el centro, así que estrecharla las descoloca. En
+   pantallas por debajo de 390px se reduce entera con `zoom`, que a diferencia
+   de `transform: scale` sí encoge también el hueco que ocupa — que era justo
+   el que empujaba la página a 364px de ancho en un teléfono de 320. */
+@media (max-width: 389px) {
+  .escenario { zoom: .78; }
+}
+
 /* ═════════════════════════════════════════════════════════════════════════
    ACTO 1 · EL EXPEDIENTE SE LLENA SOLO
 
