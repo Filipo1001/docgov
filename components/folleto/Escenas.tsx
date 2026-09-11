@@ -117,7 +117,18 @@ function useEscena() {
       if (reloj) clearTimeout(reloj)
       const r = nodo.getBoundingClientRect()
       const reparto = Math.round((r.left / Math.max(window.innerWidth, 1)) * ESCALON_MAX)
-      reloj = setTimeout(() => setFase('corriendo'), reparto)
+      reloj = setTimeout(() => {
+        // DOS CUADROS DE RESPIRO, y no son un capricho. Una transición de CSS
+        // necesita que el navegador haya PINTADO el estado de partida para
+        // tener desde dónde salir; si el rebobinado y el arranque caen en el
+        // mismo cuadro, no hay transición y la escena aparece ya terminada.
+        //
+        // Pasaba solo a veces, y por eso costó verlo: el reparto sale de la
+        // posición horizontal, así que en dos columnas la escena está a la
+        // derecha y hereda ~140 ms —de sobra—, pero en una sola columna
+        // empieza pegada al margen y baja a unos 16 ms, menos de un fotograma.
+        requestAnimationFrame(() => requestAnimationFrame(() => setFase('corriendo')))
+      }, reparto)
     }, { threshold: 0, rootMargin: FRANJA_FOCO })
 
     const salida = new IntersectionObserver(([e]) => {
@@ -365,12 +376,12 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
           style={{
             left: '50%', top: 58, marginLeft: -f.w / 2,
             ['--x' as string]: `${f.x}px`,
-            transitionDelay: `${800 + i * 85}ms`,
+            transitionDelay: `${400 + i * 65}ms`,
           }}>
           <span className={`${css.arcoY} block`}
             style={{
               ['--y' as string]: `${f.y}px`,
-              transitionDelay: `${800 + i * 85}ms, ${2350 + i * 55}ms`,
+              transitionDelay: `${400 + i * 65}ms, ${1600 + i * 50}ms`,
             }}>
             {/* Flotan mientras esperan su turno de viajar. */}
             <span className={`${css.flota} block`}
@@ -397,7 +408,7 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
             // apilaba a los cinco en el mismo punto: uno solo bajo el logo.
             ['--px' as string]: `${d.x}px`,
             ['--rot' as string]: `${d.giro}deg`,
-            transitionDelay: `${1980 + i * 85}ms`,
+            transitionDelay: `${2200 + i * 70}ms`,
             // SIN `backdrop-filter`. Estaba en los cinco documentos a la vez y
             // es lo más caro que se puede pedir por fotograma en la GPU de un
             // teléfono: obliga a re-muestrear y desenfocar el fondo en cada
@@ -412,7 +423,7 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
             ))}
           </span>
           <span className={`${css.selloDoc} absolute`}
-            style={{ right: 4, bottom: 4, animationDelay: `${4400 + i * 115}ms`, color: VERDE }}>
+            style={{ right: 4, bottom: 4, animationDelay: `${2900 + i * 70}ms`, color: VERDE }}>
             <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
               <rect x="1" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
               <rect x="14" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
