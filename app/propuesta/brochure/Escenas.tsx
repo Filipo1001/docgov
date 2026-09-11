@@ -720,37 +720,58 @@ export function TeselaPaquete({ indice }: { indice: number }) {
    ACTO 4 · El código que se arma
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Retícula determinista: misma figura en servidor y cliente, sin Math.random
- *  —que daría un desajuste de hidratación— y con aire de código real. */
-function tramaQR(lado: number): boolean[] {
-  const celdas: boolean[] = []
-  for (let y = 0; y < lado; y++) {
-    for (let x = 0; x < lado; x++) {
-      const esquina = (cx: number, cy: number) =>
-        x >= cx && x < cx + 7 && y >= cy && y < cy + 7 &&
-        !(x > cx && x < cx + 6 && y > cy && y < cy + 6 &&
-          !(x > cx + 1 && x < cx + 5 && y > cy + 1 && y < cy + 5))
-      if (esquina(0, 0) || esquina(lado - 7, 0) || esquina(0, lado - 7)) { celdas.push(true); continue }
-      const zonaOjo = (x < 8 && y < 8) || (x > lado - 9 && y < 8) || (x < 8 && y > lado - 9)
-      celdas.push(zonaOjo ? false : ((x * 7 + y * 13 + ((x * y) % 5)) % 3 === 0))
-    }
-  }
-  return celdas
-}
+/**
+ * El código QR. REAL Y ESCANEABLE, no un dibujo.
+ *
+ * La retícula la calcula el servidor con la misma librería que imprime los QR
+ * dentro de los PDF, y llega aquí ya resuelta. Dos consecuencias que mandan
+ * sobre el diseño de este componente:
+ *
+ * SIN SEPARACIÓN ENTRE MÓDULOS. El `gap` que llevaba la versión decorativa
+ * rompe el patrón y ningún lector lo descifra. Los módulos se tocan, y el
+ * margen blanco de alrededor —la zona de silencio— son cuatro módulos, que es
+ * el mínimo de la norma.
+ *
+ * SE ARMA UNA VEZ Y SE QUEDA. Las teselas de la rejilla viven en bucle porque
+ * su trabajo es contar algo; el de este código es que le apunten un teléfono.
+ * Uno que se desarmara cada pocos segundos sería imposible de leer, así que
+ * aquí el bucle no es un extra: es un defecto.
+ */
+const LADO_MODULO = 6
+const SILENCIO = LADO_MODULO * 4
 
-export function CodigoQR() {
-  const LADO = 21
-  const { ref, clase } = useCiclo<HTMLDivElement>(6000, 0.3)
-  const celdas = tramaQR(LADO)
+export function CodigoQR({ modulos, lado }: { modulos: boolean[]; lado: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
+
+  useEffect(() => {
+    const nodo = ref.current
+    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    setFase('dormido')
+    const obs = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      obs.disconnect()
+      requestAnimationFrame(() => requestAnimationFrame(() => setFase('armado')))
+    }, { threshold: 0.3 })
+    obs.observe(nodo)
+    // Si el observador no dispara, el código aparece igual: es lo que hay que
+    // escanear, y quedarse invisible sería peor que no animarlo nunca.
+    const respaldo = setTimeout(() => setFase('armado'), 2500)
+    return () => { obs.disconnect(); clearTimeout(respaldo) }
+  }, [])
+
+  const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
+
   return (
-    <div ref={ref} className={`${clase} inline-block p-4 rounded-2xl bg-white`}>
-      <div className="grid gap-[2px]" style={{ gridTemplateColumns: `repeat(${LADO}, 7px)` }} aria-hidden="true">
-        {celdas.map((llena, i) => (
+    <div ref={ref} className={`${clase} inline-block rounded-2xl bg-white`} style={{ padding: SILENCIO }}>
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${lado}, ${LADO_MODULO}px)`, lineHeight: 0 }}
+        aria-label="Código QR a la página de documentos emitidos">
+        {modulos.map((oscuro, i) => (
           <span key={i} className={css.modulo}
             style={{
-              width: 7, height: 7, borderRadius: 1,
-              backgroundColor: llena ? MARCA : 'transparent',
-              transitionDelay: `${((i % LADO) + Math.floor(i / LADO)) * 13}ms`,
+              width: LADO_MODULO, height: LADO_MODULO,
+              backgroundColor: oscuro ? '#000000' : 'transparent',
+              transitionDelay: `${((i % lado) + Math.floor(i / lado)) * 11}ms`,
             }} />
         ))}
       </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import QRCode from 'qrcode'
 import { MARCA } from '@/lib/marca'
-import { enlaceWhatsApp } from '@/lib/dominio'
+import { enlaceWhatsApp, HOSTS_COMERCIALES } from '@/lib/dominio'
 import {
   ExpedienteCrece, ElMomento, CodigoQR, Cifra, Tesela, Secuencia,
   TeselaDuplicados, TeselaHuella, TeselaInfraestructura, TeselaTrazabilidad,
@@ -38,6 +39,19 @@ import {
  * El verde aparece solo cuando algo queda confirmado — que es lo que el verde
  * ya significa dentro del producto.
  */
+
+/**
+ * A dónde apunta el código QR del folleto.
+ *
+ * Tiene que ser absoluto: se lee desde el teléfono de otra persona, que no
+ * tiene contexto de origen. En preview apunta al propio deployment y no a
+ * producción, para que lo que se escanea sea lo que se está revisando.
+ */
+function destinoQR(): string {
+  if (process.env.VERCEL_ENV === 'production') return `https://${HOSTS_COMERCIALES[0]}/propuesta/emitidos`
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}/propuesta/emitidos`
+  return 'http://localhost:3000/propuesta/emitidos'
+}
 
 const TINTA_CLARA = '#F7F9FA'
 const VERDE = '#10b981'
@@ -80,6 +94,12 @@ function Titulo({ oscura = false, children }: { oscura?: boolean; children: Reac
 }
 
 export default function FolletoPage() {
+  // La retícula se calcula aquí, en el servidor, con la misma librería que
+  // imprime los QR dentro de los PDF. Corrección de errores media: aguanta un
+  // reflejo o un dedo encima sin dejar de leerse.
+  const qr = QRCode.create(destinoQR(), { errorCorrectionLevel: 'M' })
+  const modulos = Array.from(qr.modules.data).map(Boolean)
+
   return (
     <main>
       {/* ── ACTO 1 · La promesa ─────────────────────────────────────────
@@ -179,18 +199,21 @@ export default function FolletoPage() {
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div>
             <Etiqueta oscura>Verificación</Etiqueta>
-            <Titulo oscura>Cualquiera puede comprobar un documento. Sin pedirnos permiso.</Titulo>
+            <Titulo oscura>No nos crea. Escanee el código.</Titulo>
             <p className="mt-6 leading-relaxed" style={{ color: 'rgba(255,255,255,.62)' }}>
-              Cada documento sale con un código único impreso dentro del PDF. Quien
-              lo reciba —un ente de control, otra secretaría, un juzgado— confirma
-              en la página pública que es auténtico y que nadie lo cambió después.
+              Lleva a una página que dice, en este momento, cuántos documentos
+              verificables ha emitido la plataforma. La cifra se actualiza sola:
+              déjela abierta y la verá subir.
             </p>
             <p className="mt-4 leading-relaxed" style={{ color: 'rgba(255,255,255,.62)' }}>
-              Sin cuenta, sin instalar nada y sin llamar a nadie.
+              Cada uno de esos documentos salió con su propio código impreso dentro
+              del PDF. Quien lo reciba —un ente de control, otra secretaría, un
+              juzgado— confirma que es auténtico y que nadie lo cambió después, sin
+              cuenta y sin pedirle permiso a nadie.
             </p>
           </div>
           <div className="flex justify-center">
-            <CodigoQR />
+            <CodigoQR modulos={modulos} lado={qr.modules.size} />
           </div>
         </div>
       </Acto>
