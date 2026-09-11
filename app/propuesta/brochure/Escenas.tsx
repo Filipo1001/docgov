@@ -59,7 +59,27 @@ function quieto(): boolean {
 }
 
 /**
- * Ciclo perpetuo mientras la tesela está a la vista.
+ * LA FRANJA DEL FOCO.
+ *
+ * «Estar en pantalla» y «tener la atención» no son lo mismo, y confundirlos
+ * era el defecto de fondo del folleto: una tesela asomando por el borde
+ * inferior contaba ya su historia entera mientras el lector miraba otra cosa,
+ * y cuando por fin llegaba a ella se la encontraba terminada.
+ *
+ * Así que el disparador deja de ser la pantalla y pasa a ser su TERCIO
+ * CENTRAL. Se consigue encogiendo el área de observación con márgenes
+ * negativos: un 28% arriba y otro abajo dejan una franja del 44% en mitad de
+ * la pantalla, que es donde de verdad se está mirando.
+ *
+ * Va con IntersectionObserver y no escuchando el scroll a propósito. El
+ * observador lo resuelve el navegador fuera del hilo principal; escuchar el
+ * scroll para recalcular posiciones en cada cuadro es justo lo que hace que
+ * una página se sienta pegajosa en un teléfono.
+ */
+const FRANJA_FOCO = '-28% 0px -28% 0px'
+
+/**
+ * Ciclo perpetuo mientras la escena tiene el foco.
  *
  * `duracion` es lo que dura la vuelta COMPLETA: la coreografía más el reposo
  * en que el resultado se queda quieto para poder leerse. El rebobinado son
@@ -81,7 +101,7 @@ function useCiclo<T extends HTMLElement>(duracion: number, umbral = 0.4) {
     const obs = new IntersectionObserver(([e]) => {
       respondio = true
       setVisible(e.isIntersecting)
-    }, { threshold: umbral })
+    }, { threshold: umbral, rootMargin: FRANJA_FOCO })
     obs.observe(nodo)
     // RED DE SEGURIDAD. Si el observador no ha dicho nada en dos segundos y
     // medio, se arranca igual. Hay navegadores y situaciones —una pestaña que
@@ -229,7 +249,7 @@ function useTurno(indice: number) {
     const obs = new IntersectionObserver(([e]) => {
       respondio = true
       registrar(indice, e.isIntersecting)
-    }, { threshold: 0.3 })
+    }, { threshold: 0, rootMargin: FRANJA_FOCO })
     obs.observe(nodo)
     // Misma red: sin respuesta del observador, la tesela entra al reparto de
     // turnos por su cuenta. Prefiero que anime una que no se ve a que no anime
@@ -555,7 +575,8 @@ export function ElMomento() {
     const nodo = ref.current
     if (!nodo) return
     if (typeof IntersectionObserver === 'undefined') return
-    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.3 })
+    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting),
+      { threshold: 0, rootMargin: FRANJA_FOCO })
     obs.observe(nodo)
     return () => obs.disconnect()
   }, [])
@@ -1046,7 +1067,7 @@ export function AlEntrar({ children, className = '' }: { children: ReactNode; cl
       if (!e.isIntersecting) return
       obs.disconnect()
       requestAnimationFrame(() => requestAnimationFrame(() => setFase('armado')))
-    }, { threshold: 0.15 })
+    }, { threshold: 0, rootMargin: FRANJA_FOCO })
     obs.observe(nodo)
     const respaldo = setTimeout(() => setFase('armado'), 2500)
     return () => { obs.disconnect(); clearTimeout(respaldo) }
@@ -1087,7 +1108,7 @@ export function CadenaCustodia() {
       if (!e.isIntersecting) return
       obs.disconnect()
       requestAnimationFrame(() => requestAnimationFrame(() => setFase('armado')))
-    }, { threshold: 0.4 })
+    }, { threshold: 0, rootMargin: FRANJA_FOCO })
     obs.observe(nodo)
     const respaldo = setTimeout(() => setFase('armado'), 2500)
     return () => { obs.disconnect(); clearTimeout(respaldo) }
@@ -1155,7 +1176,7 @@ export function CodigoQR({ modulos, lado }: { modulos: boolean[]; lado: number }
       if (!e.isIntersecting) return
       obs.disconnect()
       requestAnimationFrame(() => requestAnimationFrame(() => setFase('armado')))
-    }, { threshold: 0.3 })
+    }, { threshold: 0, rootMargin: FRANJA_FOCO })
     obs.observe(nodo)
     // Si el observador no dispara, el código aparece igual: es lo que hay que
     // escanear, y quedarse invisible sería peor que no animarlo nunca.
