@@ -25,9 +25,78 @@
 .entra { opacity: 1; transform: none; transition: opacity 520ms ease, transform 520ms cubic-bezier(.2,.7,.3,1); }
 .dormido .entra { opacity: 0; transform: translateY(14px); }
 
-/* ── ACTO 1 · El expediente que crece ────────────────────────────────────── */
-.hoja { transform-origin: 50% 100%; opacity: 1; transition: opacity 620ms ease, transform 680ms cubic-bezier(.2,.8,.25,1); }
-.dormido .hoja { opacity: 0; transform: translateY(26px) scale(.94); }
+/* ═════════════════════════════════════════════════════════════════════════
+   ACTO 1 · EL EXPEDIENTE SE LLENA SOLO
+
+   La animación estrella, y la que más barato salió: el logotipo YA ERA una
+   carpeta con la pestaña arriba —«el objeto que este producto sustituye»,
+   dice el comentario de components/Logo.tsx—, así que la marca y la promesa
+   son el mismo objeto. Aquí el logo no decora la escena: la protagoniza.
+
+   Cinco tiempos: la carpeta vacía → entra el desorden desde los bordes → la
+   carpeta lo recibe y se enciende → sale el expediente sellado → reposo.
+
+   Es la primera animación que carga en la página, así que va entera en
+   `transform` y `opacity`, sin tocar la maquetación. Si un teléfono viejo no
+   la aguanta, lo que queda es la carpeta quieta con los cinco documentos ya
+   hechos: la imagen correcta, sin movimiento.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* Los fragmentos entran desde los bordes, convergen sobre la carpeta y se
+   apagan al llegar. Dos tiempos en una sola transición: el viaje (0,9–2,3 s)
+   y la absorción (2,3–2,7 s). */
+.fragmento {
+  /* Armado = absorbido: encogido en la boca de la carpeta y apagado. */
+  opacity: 0;
+  transform: translate(-50%, 22px) scale(.34);
+  transition: transform 1400ms cubic-bezier(.4,.1,.3,1) 900ms, opacity 400ms ease 2300ms;
+}
+/* Reposo = el borde. Cada fragmento trae el suyo en variables, porque el
+   destino es común pero el origen no. El CSS interpola entre los dos, y esa
+   interpolación es el viaje. */
+.dormido .fragmento {
+  opacity: 1;
+  transform: translate(calc(-50% + var(--x)), var(--y)) rotate(var(--giro)) scale(1);
+  transition-delay: 0ms, 0ms;
+  transition-duration: 160ms, 160ms;
+}
+
+/* El resplandor. Va DETRÁS del logo y desenfocado, así que sale por las
+   iniciales —que están caladas— y de paso orla el contorno. Es lo único que
+   esta marca puede hacer y otra no. */
+.brillo { opacity: 0; }
+.armado .brillo { animation: br-brillo 1200ms ease-out 2200ms; }
+@keyframes br-brillo {
+  0%   { opacity: 0; transform: scale(.6); }
+  35%  { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+/* La carpeta acusa el golpe: se encoge un punto cuando recibe y vuelve. */
+.carpeta { transform: none; }
+.armado .carpeta { animation: br-recibe 620ms cubic-bezier(.3,1.2,.4,1) 2350ms; }
+@keyframes br-recibe {
+  40%  { transform: scale(.93); }
+  100% { transform: none; }
+}
+
+/* Los documentos salen de la carpeta y se abren en abanico. */
+.emerge { opacity: 1; transform: none; transition: opacity 420ms ease, transform 620ms cubic-bezier(.2,.85,.3,1); }
+.dormido .emerge {
+  opacity: 0;
+  transform: translate(0, -46px) scale(.3);
+  transition-duration: 160ms;
+  transition-delay: 0ms !important;
+}
+
+.selloDoc { opacity: 1; transform: none; }
+.dormido .selloDoc { opacity: 0; transform: scale(2) rotate(-12deg); transition: all 160ms; }
+.armado .selloDoc { animation: br-estampa 380ms cubic-bezier(.2,1.35,.4,1) backwards; }
+
+/* El visto en la pestaña: el remate. */
+.vistoPestana { opacity: 1; transform: none; }
+.dormido .vistoPestana { opacity: 0; transform: scale(.3); transition: all 160ms; }
+.armado .vistoPestana { animation: br-sello 360ms cubic-bezier(.2,1.4,.4,1) 4300ms backwards; }
 
 /* ── El anillo del envío ─────────────────────────────────────────────────
    Valores calcados de components/EnvioInforme.tsx. */
@@ -173,7 +242,7 @@
 
 /* ── Quien pidió menos movimiento no lo recibe por la puerta de atrás ───── */
 @media (prefers-reduced-motion: reduce) {
-  .entra, .hoja, .renglon, .gemela, .eslabon, .modulo, .marco, .vuela, .punto,
+  .entra, .fragmento, .emerge, .selloDoc, .vistoPestana, .renglon, .gemela, .eslabon, .modulo, .marco, .vuela, .punto,
   .cadena, .banda, .barraFlex, .botonMuda, .marcaEstado, .letraMala, .cifra,
   .escudo, .visto, .selloNorma, .lazo, .alerta, .barrido, .sobre {
     transition: none !important;

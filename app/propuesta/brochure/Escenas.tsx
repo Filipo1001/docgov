@@ -188,36 +188,129 @@ function usePasos(activo: boolean, tiempos: readonly number[]): number {
    ACTO 1 · El expediente que crece
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export function ExpedienteCrece() {
-  const { ref, clase } = useCiclo<HTMLDivElement>(5800, 0.2)
+/**
+ * El desorden que llega: cinco soportes, cada uno reconocible de un vistazo.
+ *
+ * Tienen que verse DESORDENADOS —girados, de distinto tamaño, con el borde
+ * punteado— porque el contraste con los cinco documentos idénticos que salen
+ * después es el argumento entero. Si entran ordenados, no hay transformación
+ * que mostrar.
+ *
+ * Las posiciones van escritas a mano y no al azar: `Math.random` daría un
+ * desajuste entre lo que pinta el servidor y lo que pinta el navegador.
+ */
+const SOPORTES = [
+  { x: -132, y: -58, giro: -16, w: 30, h: 30, tipo: 'foto' },
+  { x: 128, y: -64, giro: 13, w: 26, h: 32, tipo: 'planilla' },
+  { x: -146, y: 34, giro: 9, w: 32, h: 24, tipo: 'recibo' },
+  { x: 140, y: 26, giro: -11, w: 28, h: 30, tipo: 'nota' },
+  { x: -8, y: -96, giro: 6, w: 26, h: 30, tipo: 'cuenta' },
+] as const
+
+function Soporte({ tipo, w, h }: { tipo: string; w: number; h: number }) {
+  const base = 'block rounded-[3px] border border-dashed'
+  if (tipo === 'foto') {
+    return (
+      <span className={base} style={{ width: w, height: h, borderColor: 'rgba(255,255,255,.35)',
+        background: 'linear-gradient(135deg,#8FB4C9,#3E6880)' }}>
+        <span className="block rounded-full" style={{ width: 6, height: 6, margin: '4px 0 0 4px',
+          backgroundColor: 'rgba(255,255,255,.8)' }} />
+      </span>
+    )
+  }
   return (
-    <div ref={ref} className={`${clase} relative mx-auto`} style={{ width: 210, height: 150 }}>
-      {[0, 1, 2, 3, 4].map(i => (
-        <div key={i} className={`${css.hoja} absolute rounded-lg border`}
+    <span className={`${base} p-1`} style={{ width: w, height: h,
+      borderColor: 'rgba(255,255,255,.35)', backgroundColor: 'rgba(255,255,255,.1)' }}>
+      {[86, 60, 72, 44].map((ancho, i) => (
+        <span key={i} className="block rounded-full mb-[3px]"
+          style={{ width: `${ancho}%`, height: 2, backgroundColor: 'rgba(255,255,255,.4)' }} />
+      ))}
+    </span>
+  )
+}
+
+/** Los cinco que salen: idénticos, limpios, en abanico. */
+const SALIDAS = [
+  { x: -112, giro: -9 }, { x: -56, giro: -4.5 }, { x: 0, giro: 0 },
+  { x: 56, giro: 4.5 }, { x: 112, giro: 9 },
+] as const
+
+const LADO_CARPETA = 84
+
+export function ExpedienteVivo() {
+  const { ref, clase } = useCiclo<HTMLDivElement>(7000, 0.15)
+
+  return (
+    <div ref={ref} className={`${clase} relative mx-auto`}
+      style={{ width: 320, height: 258, maxWidth: '100%' }}>
+
+      {/* ── La carpeta, y su resplandor por detrás ──────────────────── */}
+      <div className="absolute" style={{ left: '50%', top: 8, transform: 'translateX(-50%)' }}>
+        <div className="relative">
+          <span className={`${css.brillo} absolute rounded-full pointer-events-none`}
+            style={{
+              left: '50%', top: '50%', width: 150, height: 150, marginLeft: -75, marginTop: -75,
+              background: 'radial-gradient(circle, rgba(16,185,129,.85) 0%, rgba(16,185,129,.35) 45%, transparent 70%)',
+              filter: 'blur(6px)',
+            }} />
+          <span className={`${css.carpeta} relative block`}>
+            <LogoCD size={LADO_CARPETA} color="#FFFFFF" />
+          </span>
+
+          {/* El visto aterriza en la pestaña, arriba a la izquierda. */}
+          <span className={`${css.vistoPestana} absolute flex items-center justify-center rounded-full`}
+            style={{ width: 24, height: 24, left: -8, top: -8, backgroundColor: VERDE }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 12.5 L10 17.5 L19 7" stroke="#fff" strokeWidth="3.2"
+                strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+        </div>
+      </div>
+
+      {/* ── El desorden que converge ────────────────────────────────── */}
+      {SOPORTES.map((f, i) => (
+        <span key={i} className={`${css.fragmento} absolute`}
           style={{
-            width: 118, height: 88, left: 46 + (i - 2) * 15, top: 52 - i * 11,
-            borderColor: 'rgba(255,255,255,.22)',
-            backgroundColor: `rgba(255,255,255,${0.05 + i * 0.035})`,
-            transform: `rotate(${(i - 2) * 2.4}deg)`,
-            transitionDelay: `${i * 130}ms`,
+            left: '50%', top: 46,
+            // En reposo están en el borde; al armarse, todos en el centro.
+            ['--x' as string]: `${f.x}px`,
+            ['--y' as string]: `${f.y}px`,
+            ['--giro' as string]: `${f.giro}deg`,
+            transitionDelay: `${900 + i * 90}ms, ${2300 + i * 60}ms`,
+          }}>
+          <Soporte tipo={f.tipo} w={f.w} h={f.h} />
+        </span>
+      ))}
+
+      {/* ── El expediente que sale ──────────────────────────────────── */}
+      {SALIDAS.map((d, i) => (
+        <span key={i} className={`${css.emerge} absolute rounded-[4px] border`}
+          style={{
+            left: '50%', top: 150, width: 42, height: 56,
+            marginLeft: -21,
+            borderColor: 'rgba(255,255,255,.3)',
+            backgroundColor: 'rgba(255,255,255,.13)',
+            transform: `translateX(${d.x}px) rotate(${d.giro}deg)`,
+            transitionDelay: `${3000 + i * 110}ms`,
             backdropFilter: 'blur(2px)',
           }}>
-          <div className="p-3 space-y-1.5">
-            {[80, 58, 40].map((w, j) => (
-              <span key={j} className="block h-1 rounded-full"
-                style={{ width: `${w}%`, backgroundColor: 'rgba(255,255,255,.3)' }} />
+          <span className="block p-1.5">
+            {[84, 62, 74, 48].map((ancho, j) => (
+              <span key={j} className="block rounded-full mb-[3px]"
+                style={{ width: `${ancho}%`, height: 2.5, backgroundColor: 'rgba(255,255,255,.42)' }} />
             ))}
-          </div>
-          {i === 4 && (
-            <span className="absolute bottom-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: VERDE }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                <path d="M5 12.5 L10 17.5 L19 7" stroke="#fff" strokeWidth="3.2"
-                  strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-          )}
-        </div>
+          </span>
+          <span className={`${css.selloDoc} absolute`}
+            style={{ right: 4, bottom: 4, animationDelay: `${3800 + i * 110}ms`, color: VERDE }}>
+            <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+              <rect x="1" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
+              <rect x="14" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
+              <rect x="1" y="14" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
+              <rect x="14" y="14" width="4" height="4" fill="currentColor" />
+            </svg>
+          </span>
+        </span>
       ))}
     </div>
   )

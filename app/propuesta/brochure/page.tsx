@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import QRCode from 'qrcode'
+import { LogoHorizontal } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp, HOSTS_COMERCIALES } from '@/lib/dominio'
 import {
-  ExpedienteCrece, ElMomento, CodigoQR, CadenaCustodia, Cifra, Tesela, Secuencia,
+  ExpedienteVivo, ElMomento, CodigoQR, CadenaCustodia, Cifra, Tesela, Secuencia,
   TeselaDuplicados, TeselaHuella, TeselaInfraestructura, TeselaTrazabilidad,
   TeselaBloqueo, TeselaDispositivos, TeselaPaquete,
 } from './Escenas'
@@ -105,12 +106,15 @@ export default function FolletoPage() {
       {/* ── ACTO 1 · La promesa ─────────────────────────────────────────
           Una sola línea. El expediente ya está creciendo detrás mientras se
           lee: la demostración empieza antes que el argumento. */}
-      <section className="px-6 sm:px-8 pt-20 pb-24 sm:pt-28 sm:pb-32" style={{ backgroundColor: MARCA }}>
+      <section className="px-6 sm:px-8 pt-7 pb-24 sm:pb-32" style={{ backgroundColor: MARCA }}>
         <div className="max-w-5xl mx-auto">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: VERDE }}>
-            Contratista Digital
-          </p>
-          <h1 className="mt-5 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white max-w-3xl">
+          {/* La cabecera que la página no tenía. El logo y el nombre quedan a
+              la vista desde el primer píxel y no solo dentro de la portada. */}
+          <header>
+            <LogoHorizontal size={34} color="#FFFFFF" colorNombre="#FFFFFF" />
+          </header>
+
+          <h1 className="mt-16 sm:mt-20 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white max-w-3xl">
             Nunca más un expediente incompleto.
           </h1>
           <p className="mt-7 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
@@ -119,7 +123,7 @@ export default function FolletoPage() {
             ciclo mensual.
           </p>
           <div className="mt-14">
-            <ExpedienteCrece />
+            <ExpedienteVivo />
           </div>
         </div>
       </section>
