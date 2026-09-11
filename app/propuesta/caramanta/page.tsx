@@ -7,6 +7,7 @@ import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp, ORIGEN_APP } from '@/lib/dominio'
 import Revelar from '../Revelar'
 import { TituloEscribe, Destello, Flotante, TarjetaSenal } from './Animado'
+import EnvioAnimado from './EnvioAnimado'
 import Contador from '../Contador'
 import ProgresoScroll from '../ProgresoScroll'
 import Icono from '@/components/ui/Icono'
@@ -98,14 +99,6 @@ const DIAGNOSTICO = [
     dorso: 'Si le devuelven cuentas de cobro por errores de redacción o de transcripción, lo está haciendo mal.' },
   { frente: 'El contratista llama a preguntar por su pago',
     dorso: 'Si un contratista tiene que llamar a preguntar por qué se retrasó su pago, lo está haciendo mal.' },
-]
-
-const DOCUMENTOS = [
-  ['Informe de actividades', 'Contratista'],
-  ['Cuenta de cobro', 'Contratista'],
-  ['Acta de supervisión', 'Supervisor'],
-  ['Acta de pago', 'Secretaría'],
-  ['Acta de terminación bilateral', 'Al cerrar el contrato'],
 ]
 
 const NORMAS = [
@@ -324,54 +317,31 @@ export default async function PropuestaAngelopolis() {
         </Revelar>
       </Seccion>
 
-      {/* ── Qué es ────────────────────────────────────────────────── */}
+      {/* ── Qué es · Cinco documentos ─────────────────────────────
+          Dos secciones que sumaban unas 150 palabras, reemplazadas por la
+          animación real del envío. El argumento —«el sistema escribe los
+          documentos»— se demuestra en dos segundos y se leía en treinta.
+          Ver EnvioAnimado.tsx. */}
       <Seccion oscura>
         <Revelar>
           <Etiqueta oscura>La solución</Etiqueta>
-        </Revelar>
-        <Revelar retraso={120}>
-          <p className="text-xl sm:text-2xl leading-relaxed text-gray-700">
-            <span className="font-semibold text-gray-900">Contratista Digital automatiza</span> el
-            ciclo completo de los contratos de prestación de servicios de un municipio.
-            El contratista carga sus evidencias desde el celular y el sistema genera
-            automáticamente su informe de actividades, su cuenta de cobro y las actas
-            de supervisión y de pago —sin Word, sin errores de transcripción, sin
-            devoluciones—. El supervisor revisa y aprueba desde donde esté; la
-            secretaría descarga el paquete completo del mes en un clic, con cada
-            cuenta lista para pago.
-            Cada documento sale con código QR y huella digital verificable, de modo
-            que cualquier ente de control puede comprobar su autenticidad sin pedirle
-            nada a la alcaldía. Todo queda en un solo lugar, trazable y listo para
-            cargar a SECOP II.
-          </p>
-        </Revelar>
-      </Seccion>
-
-      {/* ── Cinco documentos ──────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>Automatización</Etiqueta>
           <Titulo>Cinco documentos, generados solos</Titulo>
-          <p className="mt-6 text-gray-600 leading-relaxed">
-            El contratista solo registra sus actividades y sube sus evidencias.
-            El sistema escribe todo lo demás.
+          <p className="mt-6 text-gray-600 leading-relaxed max-w-xl">
+            El contratista sube sus evidencias desde el celular. El sistema
+            escribe el resto — con QR verificable y listo para cargar a SECOP II.
           </p>
         </Revelar>
 
-        <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-[#D5E8DF]">
-          {DOCUMENTOS.map(([d, q], i) => (
-            <Revelar key={d} retraso={i * 80} desde="izquierda">
-              <div className="flex items-center justify-between gap-4 bg-white/70 px-6 py-5">
-                <span className="font-medium text-gray-900">{d}</span>
-                <span className="text-sm text-gray-500 text-right shrink-0">{q}</span>
-              </div>
-            </Revelar>
-          ))}
-        </div>
+        <Revelar retraso={140}>
+          <div className="mt-10">
+            <EnvioAnimado />
+          </div>
+        </Revelar>
 
-        <Revelar retraso={480}>
-          <p className="mt-8 text-lg font-semibold text-gray-900">
-            Cero Word. Cero transcripción. Cero cuentas de cobro devueltas por un valor en letras mal escrito.
+        <Revelar retraso={260}>
+          <p className="mt-10 text-lg font-semibold text-gray-900">
+            Cero Word. Cero transcripción. Cero cuentas de cobro devueltas por un
+            valor en letras mal escrito.
           </p>
         </Revelar>
       </Seccion>
