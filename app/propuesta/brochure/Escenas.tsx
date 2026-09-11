@@ -721,6 +721,73 @@ export function TeselaPaquete({ indice }: { indice: number }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
+ * La cadena de custodia, dibujada.
+ *
+ * Cuatro eslabones que nombran lo que el título promete: de quien lo crea a
+ * quien lo verifica. Existe porque «cadena de custodia» es un concepto, y un
+ * concepto sin forma se lee como eslogan; con los cuatro pasos a la vista,
+ * se lee como descripción.
+ *
+ * SE ARMA UNA VEZ. Comparte pantalla con el código QR, que es lo que hay que
+ * mirar y lo que pide un gesto. Una cadena repitiéndose al lado le robaría el
+ * ojo justo cuando se está pidiendo que saquen el teléfono.
+ */
+const CUSTODIA = [
+  ['Creación', 'quién lo hizo'],
+  ['Aprobación', 'quién lo firmó'],
+  ['Sello', 'huella y código'],
+  ['Verificación', 'sin caducidad'],
+] as const
+
+export function CadenaCustodia() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
+
+  useEffect(() => {
+    const nodo = ref.current
+    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    setFase('dormido')
+    const obs = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      obs.disconnect()
+      requestAnimationFrame(() => requestAnimationFrame(() => setFase('armado')))
+    }, { threshold: 0.4 })
+    obs.observe(nodo)
+    const respaldo = setTimeout(() => setFase('armado'), 2500)
+    return () => { obs.disconnect(); clearTimeout(respaldo) }
+  }, [])
+
+  const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
+
+  return (
+    <div ref={ref} className={`${clase} relative`}>
+      {/* El hilo va por detrás y crece de izquierda a derecha: es la cadena. */}
+      <span className={`${css.hiloCustodia} absolute block`}
+        style={{ left: 4, right: 4, top: 4, height: 2, backgroundColor: 'rgba(255,255,255,.16)' }} />
+      <div className="relative grid grid-cols-4 gap-2">
+        {CUSTODIA.map(([paso, pie], i) => {
+          const ultimo = i === CUSTODIA.length - 1
+          return (
+            <div key={paso} className={`${css.eslabonCustodia} flex flex-col`}
+              style={{ transitionDelay: `${260 + i * 130}ms` }}>
+              <span className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: ultimo ? VERDE : 'rgba(255,255,255,.42)' }} />
+              <span className="mt-3 text-[11px] font-semibold leading-tight"
+                style={{ color: ultimo ? VERDE : '#FFFFFF' }}>
+                {paso}
+              </span>
+              <span className="mt-1 text-[10px] leading-tight" style={{ color: 'rgba(255,255,255,.4)' }}>
+                {pie}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
  * El código QR. REAL Y ESCANEABLE, no un dibujo.
  *
  * La retícula la calcula el servidor con la misma librería que imprime los QR

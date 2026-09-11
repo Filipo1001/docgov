@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp, HOSTS_COMERCIALES } from '@/lib/dominio'
 import {
-  ExpedienteCrece, ElMomento, CodigoQR, Cifra, Tesela, Secuencia,
+  ExpedienteCrece, ElMomento, CodigoQR, CadenaCustodia, Cifra, Tesela, Secuencia,
   TeselaDuplicados, TeselaHuella, TeselaInfraestructura, TeselaTrazabilidad,
   TeselaBloqueo, TeselaDispositivos, TeselaPaquete,
 } from './Escenas'
@@ -198,18 +198,33 @@ export default function FolletoPage() {
       <Acto oscura>
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div>
-            <Etiqueta oscura>Verificación</Etiqueta>
-            <Titulo oscura>No nos crea. Escanee el código.</Titulo>
+            <Etiqueta oscura>Cadena de custodia</Etiqueta>
+            <Titulo oscura>Trazabilidad del 100%. De quien lo crea a quien lo verifica.</Titulo>
             <p className="mt-6 leading-relaxed" style={{ color: 'rgba(255,255,255,.62)' }}>
-              Lleva a una página que dice, en este momento, cuántos documentos
-              verificables ha emitido la plataforma. La cifra se actualiza sola:
-              déjela abierta y la verá subir.
+              Cada documento deja constancia de quién lo hizo, quién lo aprobó y a
+              qué hora, en un historial que no se altera. Cuando sale, va sellado con
+              su huella digital y su código único impreso dentro del PDF: si alguien
+              le cambia un dato, deja de coincidir consigo mismo y se nota.
             </p>
-            <p className="mt-4 leading-relaxed" style={{ color: 'rgba(255,255,255,.62)' }}>
-              Cada uno de esos documentos salió con su propio código impreso dentro
-              del PDF. Quien lo reciba —un ente de control, otra secretaría, un
-              juzgado— confirma que es auténtico y que nadie lo cambió después, sin
-              cuenta y sin pedirle permiso a nadie.
+
+            <div className="mt-8">
+              <CadenaCustodia />
+            </div>
+
+            {/* «No caduca» no es una promesa comercial: hay una regla de
+                arquitectura que prohíbe que las URL de verificación dejen de
+                responder, porque el QR va grabado en el mapa de bits de
+                documentos ya radicados en SECOP II. Ver CLAUDE.md. */}
+            <p className="mt-8 leading-relaxed" style={{ color: 'rgba(255,255,255,.62)' }}>
+              Esa custodia no caduca. Un acta firmada hoy se podrá comprobar dentro
+              de años, sin cuenta y sin pedirle permiso a nadie.
+            </p>
+            <p className="mt-5 leading-relaxed text-white">
+              <span className="font-semibold">Escanee el código.</span>{' '}
+              <span style={{ color: 'rgba(255,255,255,.62)' }}>
+                Lleva a cuántos documentos verificables lleva emitidos la plataforma,
+                en este momento.
+              </span>
             </p>
           </div>
           <div className="flex justify-center">

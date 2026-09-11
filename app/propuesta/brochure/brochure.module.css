@@ -157,6 +157,16 @@
 .banda { opacity: 1; transform: scaleX(1); transform-origin: center; transition: opacity 300ms ease 1850ms, transform 420ms cubic-bezier(.2,1.3,.4,1) 1850ms; }
 .dormido .banda { opacity: 0; transform: scaleX(.2); transition-delay: 0ms; transition-duration: 140ms; }
 
+/* ── La cadena de custodia ──────────────────────────────────────────────
+   Entrada escalonada y nada más: no se repite. Compite en la misma pantalla
+   con el código QR, que es lo que hay que mirar, y una cadena en bucle al
+   lado le robaría el ojo justo cuando se pide el gesto de escanear. */
+.eslabonCustodia { opacity: 1; transform: none; transition: opacity 460ms ease, transform 460ms cubic-bezier(.2,.8,.3,1); }
+.dormido .eslabonCustodia { opacity: 0; transform: translateY(8px); }
+
+.hiloCustodia { transform: scaleX(1); transform-origin: left; transition: transform 720ms cubic-bezier(.3,.8,.3,1); }
+.dormido .hiloCustodia { transform: scaleX(0); }
+
 /* ── El código QR que se arma ────────────────────────────────────────────── */
 .modulo { opacity: 1; transform: none; transition: opacity 400ms ease, transform 460ms cubic-bezier(.2,.9,.3,1); }
 .dormido .modulo { opacity: 0; transform: scale(.3); }
