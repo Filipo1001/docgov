@@ -76,7 +76,7 @@
    mientras que una recta parece un imán. */
 .arcoX {
   transform: translateX(0);
-  transition: transform 1700ms cubic-bezier(.55,0,.35,1) 800ms;
+  transition: transform 1150ms cubic-bezier(.55,0,.35,1) 380ms;
   will-change: transform;
 }
 .dormido .arcoX {
@@ -88,7 +88,7 @@
 .arcoY {
   transform: translateY(22px) scale(.3);
   opacity: 0;
-  transition: transform 1700ms cubic-bezier(.2,.75,.5,1) 800ms, opacity 380ms ease 2350ms;
+  transition: transform 1150ms cubic-bezier(.2,.75,.5,1) 380ms, opacity 320ms ease 1380ms;
 }
 .dormido .arcoY {
   transform: translateY(var(--y)) scale(1);
@@ -110,7 +110,7 @@
    El pivote de toda la animación es el instante en que la carpeta recibe. Un
    destello solo no lo sostiene: hace falta que algo SALGA de ahí. */
 .onda { opacity: 0; }
-.armado .onda { animation: br-onda 1100ms cubic-bezier(.2,.7,.3,1) 2500ms; }
+.armado .onda { animation: br-onda 900ms cubic-bezier(.2,.7,.3,1) 1520ms; }
 @keyframes br-onda {
   0%   { opacity: 0; transform: scale(.35); }
   18%  { opacity: .9; }
@@ -121,7 +121,7 @@
    iniciales —que están caladas— y de paso orla el contorno. Es un gesto que
    solo esta marca puede hacer, porque solo esta tiene agujeros. */
 .brillo { opacity: 0; }
-.armado .brillo { animation: br-brillo 1400ms ease-out 2400ms; }
+.armado .brillo { animation: br-brillo 1100ms ease-out 1460ms; }
 @keyframes br-brillo {
   0%   { opacity: 0; transform: scale(.55); }
   30%  { opacity: 1; transform: scale(1.08); }
@@ -130,7 +130,7 @@
 
 /* La carpeta acusa el golpe. */
 .carpeta { transform: none; }
-.armado .carpeta { animation: br-recibe 700ms cubic-bezier(.3,1.3,.4,1) 2480ms; }
+.armado .carpeta { animation: br-recibe 620ms cubic-bezier(.3,1.3,.4,1) 1540ms; }
 @keyframes br-recibe {
   35%  { transform: scale(.91); }
   100% { transform: none; }
@@ -161,7 +161,7 @@
 /* El barrido de comprobación recorre los cinco ya sellados. Es el gesto que
    dice «y además, verificados» sin escribirlo. */
 .barridoVerde { opacity: 0; }
-.armado .barridoVerde { animation: br-barre-fila 1000ms cubic-bezier(.4,0,.3,1) 5200ms; }
+.armado .barridoVerde { animation: br-barre-fila 850ms cubic-bezier(.4,0,.3,1) 2950ms; }
 @keyframes br-barre-fila {
   0%   { opacity: 0; transform: translateX(-150px); }
   14%  { opacity: 1; }
@@ -172,7 +172,7 @@
 /* El visto en la pestaña: el remate. */
 .vistoPestana { opacity: 1; transform: none; }
 .dormido .vistoPestana { opacity: 0; transform: scale(.3); transition: all 160ms; }
-.armado .vistoPestana { animation: br-sello 380ms cubic-bezier(.2,1.4,.4,1) 6000ms backwards; }
+.armado .vistoPestana { animation: br-sello 360ms cubic-bezier(.2,1.4,.4,1) 3400ms backwards; }
 
 /* ── El anillo del envío ─────────────────────────────────────────────────
    Valores calcados de components/EnvioInforme.tsx. */
@@ -193,12 +193,12 @@
    increíble es que la reconozca DEFORMADA, así que la deformación tiene que
    ocurrir en pantalla, no venir de fábrica.
    ═════════════════════════════════════════════════════════════════════════ */
-.gemela { transition: transform 1100ms cubic-bezier(.3,.75,.3,1) 600ms, filter 1100ms ease 600ms; transform: rotate(-7deg) scale(1.28); filter: contrast(1.3) brightness(1.16) saturate(.8); }
+.gemela { transition: transform 820ms cubic-bezier(.3,.75,.3,1) 300ms, filter 820ms ease 300ms; transform: rotate(-7deg) scale(1.28); filter: contrast(1.3) brightness(1.16) saturate(.8); }
 .dormido .gemela { transition-delay: 0ms; transition-duration: 140ms; transform: none; filter: none; }
 
 .barrido { opacity: 1; }
 .dormido .barrido { opacity: 0; }
-.armado .barrido { animation: br-barrido 900ms cubic-bezier(.4,0,.3,1) 1750ms; }
+.armado .barrido { animation: br-barrido 720ms cubic-bezier(.4,0,.3,1) 1160ms; }
 @keyframes br-barrido {
   0%   { opacity: 0; transform: translateX(-56px); }
   12%  { opacity: 1; }
@@ -208,12 +208,12 @@
 
 .lazo { stroke-dasharray: 120; stroke-dashoffset: 0; }
 .dormido .lazo { stroke-dashoffset: 120; transition: stroke-dashoffset 140ms; }
-.armado .lazo { animation: br-lazo 480ms cubic-bezier(.3,.9,.3,1) 2600ms backwards; }
+.armado .lazo { animation: br-lazo 430ms cubic-bezier(.3,.9,.3,1) 1780ms backwards; }
 @keyframes br-lazo { from { stroke-dashoffset: 120; } to { stroke-dashoffset: 0; } }
 
 .alerta { opacity: 1; transform: none; }
 .dormido .alerta { opacity: 0; transform: translateY(6px) scale(.9); transition: all 140ms; }
-.armado .alerta { animation: br-alerta 420ms cubic-bezier(.2,1.35,.4,1) 3050ms backwards; }
+.armado .alerta { animation: br-alerta 400ms cubic-bezier(.2,1.35,.4,1) 2160ms backwards; }
 @keyframes br-alerta { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -379,10 +379,10 @@
   .dormido .aliento, .armado .aliento { animation-play-state: running; }
   @keyframes diag-aliento-quieto { 0%, 100% { opacity: .5; } 50% { opacity: .85; } }
 
-  .armado .brillo { animation: br-brillo-quieto 1400ms ease-out 2400ms; }
+  .armado .brillo { animation: br-brillo-quieto 1100ms ease-out 1460ms; }
   @keyframes br-brillo-quieto { 0%, 100% { opacity: 0; } 30% { opacity: 1; } }
 
-  .armado .onda { animation: br-onda-quieta 1100ms ease-out 2500ms; }
+  .armado .onda { animation: br-onda-quieta 900ms ease-out 1520ms; }
   @keyframes br-onda-quieta { 0%, 100% { opacity: 0; } 20% { opacity: .75; } }
 
   .selloEntra, .estampa, .armado .selloNorma, .armado .alerta {

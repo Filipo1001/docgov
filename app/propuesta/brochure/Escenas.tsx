@@ -29,7 +29,7 @@
  * estado final, quieta y legible — misma regla que Revelar.tsx y Contador.tsx.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 import css from './brochure.module.css'
@@ -61,216 +61,103 @@ function quieto(): boolean {
 /**
  * LA FRANJA DEL FOCO.
  *
- * «Estar en pantalla» y «tener la atención» no son lo mismo, y confundirlos
- * era el defecto de fondo del folleto: una tesela asomando por el borde
- * inferior contaba ya su historia entera mientras el lector miraba otra cosa,
- * y cuando por fin llegaba a ella se la encontraba terminada.
- *
- * Así que el disparador deja de ser la pantalla y pasa a ser su TERCIO
- * CENTRAL. Se consigue encogiendo el área de observación con márgenes
- * negativos: un 28% arriba y otro abajo dejan una franja del 44% en mitad de
- * la pantalla, que es donde de verdad se está mirando.
- *
- * Va con IntersectionObserver y no escuchando el scroll a propósito. El
- * observador lo resuelve el navegador fuera del hilo principal; escuchar el
- * scroll para recalcular posiciones en cada cuadro es justo lo que hace que
- * una página se sienta pegajosa en un teléfono.
+ * «Estar en pantalla» y «tener la atención» no son lo mismo. El disparador no
+ * es la pantalla entera sino su TERCIO CENTRAL: márgenes negativos del 28%
+ * arriba y abajo dejan una franja del 44% en mitad del alto, que es donde de
+ * verdad se está mirando.
  */
 const FRANJA_FOCO = '-28% 0px -28% 0px'
 
+/** Reparto máximo del escalonado, en milisegundos. */
+const ESCALON_MAX = 260
+
 /**
- * Ciclo perpetuo mientras la escena tiene el foco.
+ * Una escena: actúa UNA VEZ al entrar en el foco, y no se repite.
  *
- * `duracion` es lo que dura la vuelta COMPLETA: la coreografía más el reposo
- * en que el resultado se queda quieto para poder leerse. El rebobinado son
- * 200 ms a propósito, mucho más rápido que la ida: lo que importa es ver
- * cómo se construye, no cómo se deshace.
+ * ── POR QUÉ SE FUE EL BUCLE ──────────────────────────────────────────────
+ *
+ * Repetir obligaba a tres cosas, y las tres se percibían como una pausa:
+ * un REBOBINADO visible antes de cada vuelta, un tiempo MUERTO al final de
+ * cada una para que el remate se alcanzara a leer, y —en las teselas— una
+ * ESPERA DE TURNO en la que una tarjeta que ya había contado su historia se
+ * quedaba quieta hasta que su turno expiraba. Ninguna era un error de
+ * milisegundos: eran el precio de repetir.
+ *
+ * Las páginas de producto de Apple no repiten nada. Sus animaciones avanzan
+ * con el recorrido y se quedan donde las dejas. Quitando el bucle desaparecen
+ * las tres pausas de golpe, y lo que queda es lo que se pidió: cada escena se
+ * enciende cuando llegas a ella.
+ *
+ * ── DOS OBSERVADORES, NO UNO ─────────────────────────────────────────────
+ *
+ * El del FOCO manda actuar cuando la escena entra en la franja central. El de
+ * SALIDA rebobina, pero solo cuando la escena ha salido POR COMPLETO de la
+ * pantalla — nunca mientras se ve. Rebobinar dentro del campo de visión era
+ * justamente lo que se leía como un tirón.
+ *
+ * El escalonado sale de la posición horizontal del elemento, no de su índice:
+ * así la ola va de izquierda a derecha en escritorio y en un teléfono —donde
+ * todo está en la misma columna— desaparece sola, sin lógica de puntos de
+ * corte que mantener.
  */
-function useCiclo<T extends HTMLElement>(duracion: number, umbral = 0.4) {
-  const ref = useRef<T>(null)
-  const [visible, setVisible] = useState(false)
-  const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
+function useEscena() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [fase, setFase] = useState<'inicial' | 'listo' | 'corriendo'>('inicial')
 
   useEffect(() => {
     const nodo = ref.current
     if (!nodo || typeof IntersectionObserver === 'undefined') return
-    // La red SOLO actúa si el observador jamás contestó. Sin esta condición
-    // se anularía a sí misma: en un navegador sano el observador responde al
-    // instante, y el respaldo marcaría como visible incluso lo que no lo está.
+
+    let reloj: ReturnType<typeof setTimeout> | undefined
     let respondio = false
-    const obs = new IntersectionObserver(([e]) => {
+
+    const foco = new IntersectionObserver(([e]) => {
       respondio = true
-      setVisible(e.isIntersecting)
-    }, { threshold: umbral, rootMargin: FRANJA_FOCO })
-    obs.observe(nodo)
-    // RED DE SEGURIDAD. Si el observador no ha dicho nada en dos segundos y
-    // medio, se arranca igual. Hay navegadores y situaciones —una pestaña que
-    // el sistema considera oculta, un motor que los suspende— en los que la
-    // llamada no llega nunca, y entonces la escena se quedaría muerta para
-    // siempre. Es el mismo criterio que ya gobierna Revelar.tsx: más vale
-    // animar de más que dejar la página en blanco.
-    const respaldo = setTimeout(() => { if (!respondio) setVisible(true) }, 2500)
-    return () => { obs.disconnect(); clearTimeout(respaldo) }
-  }, [umbral])
+      if (!e.isIntersecting) return
+      if (reloj) clearTimeout(reloj)
+      const r = nodo.getBoundingClientRect()
+      const reparto = Math.round((r.left / Math.max(window.innerWidth, 1)) * ESCALON_MAX)
+      reloj = setTimeout(() => setFase('corriendo'), reparto)
+    }, { threshold: 0, rootMargin: FRANJA_FOCO })
 
-  useEffect(() => {
-    if (!visible) { setFase('quieto'); return }
-    let vivo = true
-    const relojes: ReturnType<typeof setTimeout>[] = []
-    const vuelta = () => {
-      if (!vivo) return
-      setFase('dormido')
-      relojes.push(setTimeout(() => {
-        if (!vivo) return
-        setFase('armado')
-        relojes.push(setTimeout(vuelta, duracion))
-      }, 200))
+    const salida = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) return
+      if (reloj) clearTimeout(reloj)
+      setFase('listo')
+    }, { threshold: 0 })
+
+    foco.observe(nodo)
+    salida.observe(nodo)
+
+    // Punto de partida: rebobinada. Si ya está en el foco al cargar —la
+    // portada lo está—, el observador lo dirá en el mismo cuadro.
+    setFase('listo')
+
+    // Red de seguridad: sin respuesta del observador, la escena actúa igual.
+    // Quedarse rebobinada sería peor que no animar, porque es un estado a
+    // medias y no el resultado.
+    const respaldo = setTimeout(() => { if (!respondio) setFase('corriendo') }, 2500)
+
+    return () => {
+      foco.disconnect(); salida.disconnect()
+      if (reloj) clearTimeout(reloj)
+      clearTimeout(respaldo)
     }
-    vuelta()
-    return () => { vivo = false; relojes.forEach(clearTimeout) }
-  }, [visible, duracion])
-
-  const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
-  return { ref, clase, armado: fase === 'armado', ciclando: fase !== 'quieto' }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   EL DIRECTOR DE ORQUESTA
-   ═══════════════════════════════════════════════════════════════════════════
-
-   Se pidió que las teselas no corrieran cada una por su cuenta, sino en
-   secuencia: de izquierda a derecha, y que cada una arranque cuando la
-   anterior termina. Eso exige un único reloj para las siete — con relojes
-   independientes la sincronía se pierde a los pocos segundos por mucho que
-   se afinen las duraciones.
-
-   LO QUE LA SECUENCIA REGALA: una tesela que ya actuó SE QUEDA en su estado
-   resuelto mientras las demás actúan. La rejilla se va llenando de resultados
-   en vez de parpadear entera, y por eso ninguna necesita reposo propio: su
-   reposo es el turno de las otras. La vuelta completa dura unos 22 s.
-
-   El orden de los turnos es el orden del DOM, que en esta rejilla coincide
-   con el de lectura —izquierda a derecha, arriba abajo— en las tres anchuras.
-
-   `-1` significa que nadie actúa: fuera de pantalla, sin JavaScript o con
-   «reducir movimiento», y ahí cada tesela muestra su estado final.
-*/
-
-/** Lo que dura cada turno, en el orden de la rejilla. Incluye los 200 ms de
- *  rebobinado del principio. */
-const TURNOS = [4000, 2800, 2600, 2400, 3400, 4000, 2600] as const
-
-type Director = {
-  turno: number
-  /** Cada tesela avisa cuándo entra y sale de pantalla. */
-  registrar: (indice: number, visible: boolean) => void
-}
-
-const Turno = createContext<Director>({ turno: -1, registrar: () => {} })
-
-export function Secuencia({ children, className = '' }: { children: ReactNode; className?: string }) {
-  const visibles = useRef<Set<number>>(new Set())
-  const enJuego = useRef(-1)
-  /** Corta el turno en curso y salta al siguiente. Lo llena el efecto. */
-  const saltar = useRef<(() => void) | null>(null)
-  const [turno, setTurno] = useState(-1)
-  const [activo, setActivo] = useState(false)
-
-  const registrar = useCallback((indice: number, visible: boolean) => {
-    if (visible) visibles.current.add(indice)
-    else visibles.current.delete(indice)
-    setActivo(visibles.current.size > 0)
-    // Si la que se acaba de ir era la que estaba actuando, no se hace esperar
-    // al lector: se salta ya. Sin esto, quien baja por el folleto en un
-    // teléfono se queda mirando una tarjeta quieta hasta cuatro segundos,
-    // porque el turno lo tiene algo que ya no está en pantalla.
-    if (!visible && indice === enJuego.current) saltar.current?.()
   }, [])
 
-  useEffect(() => {
-    if (!activo) { setTurno(-1); enJuego.current = -1; return }
-    let vivo = true
-    let reloj: ReturnType<typeof setTimeout> | undefined
-    let ultimo = -1
-
-    const paso = () => {
-      if (!vivo) return
-      // El conjunto se relee en CADA compás: así la secuencia sigue al lector
-      // mientras baja, en vez de repartir turnos a lo que ya no se ve.
-      const lista = [...visibles.current].sort((a, b) => a - b)
-      if (lista.length === 0) { setTurno(-1); enJuego.current = -1; return }
-      const i = lista.find(n => n > ultimo) ?? lista[0]
-      ultimo = i
-      enJuego.current = i
-      setTurno(i)
-      reloj = setTimeout(paso, TURNOS[i])
-    }
-
-    saltar.current = () => { if (reloj) clearTimeout(reloj); paso() }
-    paso()
-    return () => { vivo = false; saltar.current = null; if (reloj) clearTimeout(reloj) }
-  }, [activo])
-
-  const valor = useMemo(() => ({ turno, registrar }), [turno, registrar])
-
-  return (
-    <Turno.Provider value={valor}>
-      <div className={className}>{children}</div>
-    </Turno.Provider>
-  )
+  const clase = fase === 'listo' ? css.dormido : fase === 'corriendo' ? css.armado : ''
+  return { ref, clase, armado: fase === 'corriendo', ciclando: fase !== 'inicial' }
 }
 
 /**
- * El turno de una tesela.
- *
- * CADA TESELA SE OBSERVA A SÍ MISMA, y no la rejilla entera. La primera
- * versión observaba el contenedor con un umbral del 5 %, y en un teléfono eso
- * no funcionaba: en una sola columna la rejilla mide más de 2.300 px contra
- * 812 de pantalla, y el observador no llegaba a dispararse — las siete
- * teselas se quedaban muertas. Un elemento del tamaño de una tarjeta sí es
- * algo que un observador resuelve sin ambigüedad.
- *
- * Y arregla de paso un defecto de diseño que el escritorio tapaba: el turno
- * solo circula entre las teselas QUE SE ESTÁN VIENDO. Con las siete a la
- * vista —tres columnas— la secuencia se lee como una ola, igual que antes. En
- * una sola columna, donde solo caben una o dos, habrían tocado su turno fuera
- * de pantalla y el lector habría esperado veinte segundos mirando una tarjeta
- * quieta.
+ * Envoltorio de la rejilla. Ya no dirige nada —cada tesela se gobierna sola
+ * desde que se fueron los turnos— pero se conserva para no tocar la página.
  */
-function useTurno(indice: number) {
-  const { turno, registrar } = useContext(Turno)
-  const ref = useRef<HTMLDivElement>(null)
-  const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
-
-  useEffect(() => {
-    const nodo = ref.current
-    if (!nodo || typeof IntersectionObserver === 'undefined') return
-    let respondio = false
-    const obs = new IntersectionObserver(([e]) => {
-      respondio = true
-      registrar(indice, e.isIntersecting)
-    }, { threshold: 0, rootMargin: FRANJA_FOCO })
-    obs.observe(nodo)
-    // Misma red: sin respuesta del observador, la tesela entra al reparto de
-    // turnos por su cuenta. Prefiero que anime una que no se ve a que no anime
-    // ninguna de las que sí.
-    const respaldo = setTimeout(() => { if (!respondio) registrar(indice, true) }, 2500)
-    return () => { obs.disconnect(); clearTimeout(respaldo); registrar(indice, false) }
-  }, [indice, registrar])
-
-  useEffect(() => {
-    if (turno === -1) { setFase('quieto'); return }
-    if (turno !== indice) return
-    setFase('dormido')
-    const t = setTimeout(() => setFase('armado'), 200)
-    return () => clearTimeout(t)
-  }, [turno, indice])
-
-  const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
-  return { ref, clase, armado: fase === 'armado', ciclando: fase !== 'quieto' }
+export function Secuencia({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={className}>{children}</div>
 }
 
-/** Cuenta compases dentro de una vuelta. Los tiempos van como constante de
+/** Cuenta compases dentro de una vuelta./** Cuenta compases dentro de una vuelta. Los tiempos van como constante de
  *  módulo: un arreglo nuevo en cada render reiniciaría el efecto sin parar. */
 function usePasos(activo: boolean, tiempos: readonly number[]): number {
   const [n, setN] = useState(0)
@@ -422,7 +309,7 @@ const SALIDAS = [
 const LADO_CARPETA = 92
 
 export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
-  const { ref, clase } = useCiclo<HTMLDivElement>(8000, 0.15)
+  const { ref, clase } = useEscena()
   const t = claro ? TINTA_CLARA : TINTA_OSCURA
 
   return (
@@ -510,7 +397,7 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
             // apilaba a los cinco en el mismo punto: uno solo bajo el logo.
             ['--px' as string]: `${d.x}px`,
             ['--rot' as string]: `${d.giro}deg`,
-            transitionDelay: `${3200 + i * 115}ms`,
+            transitionDelay: `${1980 + i * 85}ms`,
             // SIN `backdrop-filter`. Estaba en los cinco documentos a la vez y
             // es lo más caro que se puede pedir por fotograma en la GPU de un
             // teléfono: obliga a re-muestrear y desenfocar el fondo en cada
@@ -568,36 +455,24 @@ export function ElMomento() {
   // que mostrar los cinco documentos hechos, no cinco recuadros vacíos.
   const [sellado, setSellado] = useState(true)
   const [salidos, setSalidos] = useState(PIEZAS.length)
-  const [visible, setVisible] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const { ref, armado, ciclando } = useEscena()
 
+  // Igual que las demás escenas: toca UNA VEZ al llegar al foco y se queda en
+  // su remate. El bucle anterior tenía 3,5 s de parada muerta al final de cada
+  // vuelta para que el verde se alcanzara a leer — y esa parada era justo lo
+  // que se percibía como un tirón.
   useEffect(() => {
-    const nodo = ref.current
-    if (!nodo) return
-    if (typeof IntersectionObserver === 'undefined') return
-    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting),
-      { threshold: 0, rootMargin: FRANJA_FOCO })
-    obs.observe(nodo)
-    return () => obs.disconnect()
-  }, [])
+    if (!ciclando) { setSellado(true); setSalidos(PIEZAS.length); return }
+    if (!armado) { setSellado(false); setSalidos(0); return }
 
-  useEffect(() => {
-    if (!visible) return
-    let vivo = true
     const relojes: ReturnType<typeof setTimeout>[] = []
-    const vuelta = () => {
-      if (!vivo) return
-      setSellado(false); setSalidos(0)
-      relojes.push(setTimeout(() => setSellado(true), 1700))
-      // 800 ms después del cierre, no a la vez: si la confirmación y los
-      // papeles se pisan, el verde deja de ser un momento.
-      PIEZAS.forEach((_, i) =>
-        relojes.push(setTimeout(() => setSalidos(i + 1), 2500 + i * 240)))
-      relojes.push(setTimeout(vuelta, 7200))
-    }
-    vuelta()
-    return () => { vivo = false; relojes.forEach(clearTimeout) }
-  }, [visible])
+    relojes.push(setTimeout(() => setSellado(true), 1500))
+    // 800 ms después del cierre, no a la vez: si la confirmación y los papeles
+    // se pisan, el verde deja de ser un momento.
+    PIEZAS.forEach((_, i) =>
+      relojes.push(setTimeout(() => setSalidos(i + 1), 2300 + i * 220)))
+    return () => relojes.forEach(clearTimeout)
+  }, [armado, ciclando])
 
   return (
     <div ref={ref}>
@@ -724,8 +599,8 @@ function Foto({ deformada = false }: { deformada?: boolean }) {
   )
 }
 
-export function TeselaDuplicados({ indice }: { indice: number }) {
-  const { ref, clase } = useTurno(indice)
+export function TeselaDuplicados() {
+  const { ref, clase } = useEscena()
   return (
     <div ref={ref} className={`${clase} relative w-full flex items-center justify-center gap-9`}>
       <div className="flex flex-col items-center gap-2">
@@ -769,8 +644,8 @@ const HEX = '0123456789abcdef'
 const HUELLA_LIMPIA = 'a7f3c2e9b4d18056'
 const HUELLA_SUCIA = '3b91e08d7c6a24f5'
 
-export function TeselaHuella({ indice }: { indice: number }) {
-  const { ref, clase, armado, ciclando } = useTurno(indice)
+export function TeselaHuella() {
+  const { ref, clase, armado, ciclando } = useEscena()
   const [huella, setHuella] = useState(HUELLA_SUCIA)
 
   useEffect(() => {
@@ -848,8 +723,8 @@ export function TeselaHuella({ indice }: { indice: number }) {
    comprobable — el rótulo de la tesela y su cuerpo lo dicen así. */
 const NORMAS = ['ISO 27001', 'ISO 27017', 'ISO 27018', 'SOC 2'] as const
 
-export function TeselaInfraestructura({ indice }: { indice: number }) {
-  const { ref, clase } = useTurno(indice)
+export function TeselaInfraestructura() {
+  const { ref, clase } = useEscena()
   return (
     <div ref={ref} className={`${clase} w-full flex items-center justify-center gap-5`}>
       <svg width="54" height="62" viewBox="0 0 54 62" fill="none" aria-hidden="true" className="shrink-0">
@@ -862,7 +737,7 @@ export function TeselaInfraestructura({ indice }: { indice: number }) {
         {NORMAS.map((n, i) => (
           <span key={n}
             className={`${css.selloNorma} rounded-md px-2 py-1 text-[11px] font-semibold tracking-wide text-center`}
-            style={{ backgroundColor: '#EEF2F5', color: MARCA, animationDelay: `${1500 + i * 150}ms` }}>
+            style={{ backgroundColor: '#EEF2F5', color: MARCA, animationDelay: `${1260 + i * 130}ms` }}>
             {n}
           </span>
         ))}
@@ -881,8 +756,8 @@ const CADENA = [
   ['Aprobado', '22 · 16:40'],
 ] as const
 
-export function TeselaTrazabilidad({ indice }: { indice: number }) {
-  const { ref, clase } = useTurno(indice)
+export function TeselaTrazabilidad() {
+  const { ref, clase } = useEscena()
   return (
     <div ref={ref} className={`${clase} w-full relative`}>
       {/* La línea que hace de esto una cadena y no una lista. */}
@@ -918,10 +793,10 @@ export function TeselaTrazabilidad({ indice }: { indice: number }) {
    solo entonces llega lo que faltaba. Sin ese rechazo en pantalla, la tarjeta
    solo enseña una lista que se pone verde — y lo que hay que vender no es que
    se ponga verde: es que antes dijo que no. */
-const COMPASES_BLOQUEO = [1250, 2450, 2950] as const
+const COMPASES_BLOQUEO = [880, 1780, 2220] as const
 
-export function TeselaBloqueo({ indice }: { indice: number }) {
-  const { ref, clase, armado, ciclando } = useTurno(indice)
+export function TeselaBloqueo() {
+  const { ref, clase, armado, ciclando } = useEscena()
   const paso = usePasos(armado, COMPASES_BLOQUEO)
   // Sin ciclo, el estado final: un botón trabado para siempre no es la
   // promesa de la tesela, es su contrario.
@@ -966,10 +841,10 @@ const FORMAS = [
   { w: 138, h: 84, r: 6, rotulo: 'Computador', col: 46 },
 ] as const
 
-const COMPASES_FORMAS = [200, 1400, 2600] as const
+const COMPASES_FORMAS = [140, 1060, 1980] as const
 
-export function TeselaDispositivos({ indice }: { indice: number }) {
-  const { ref, armado, ciclando } = useTurno(indice)
+export function TeselaDispositivos() {
+  const { ref, armado, ciclando } = useEscena()
   const paso = usePasos(armado, COMPASES_FORMAS)
   // Sin turno se queda en el computador, que es el estado final de la vuelta.
   const f = FORMAS[ciclando && paso > 0 ? paso - 1 : FORMAS.length - 1]
@@ -998,8 +873,8 @@ const SUELTOS = [
 ] as const
 const COMPASES_PAQUETE = [260, 500, 740, 980, 1220] as const
 
-export function TeselaPaquete({ indice }: { indice: number }) {
-  const { ref, clase, armado, ciclando } = useTurno(indice)
+export function TeselaPaquete() {
+  const { ref, clase, armado, ciclando } = useEscena()
   const pasos = usePasos(armado, COMPASES_PAQUETE)
   const llegados = ciclando ? pasos : SUELTOS.length
 

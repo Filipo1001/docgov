@@ -207,44 +207,44 @@ export default function FolletoPage() {
           <Tesela
             titulo="Reconoce una evidencia repetida"
             cuerpo="No solo el archivo idéntico. Detecta la misma imagen aunque la hayan recortado, recomprimido o vuelto a fotografiar de la pantalla, y avisa al supervisor antes de que apruebe.">
-            <TeselaDuplicados indice={0} />
+            <TeselaDuplicados />
           </Tesela>
 
           <Tesela
             titulo="Sella cada documento con su huella"
             cuerpo="Cada PDF emitido guarda su huella SHA-256. Si cambia un solo carácter, la huella cambia entera: un documento alterado deja de coincidir consigo mismo y se nota.">
-            <TeselaHuella indice={1} />
+            <TeselaHuella />
           </Tesela>
 
           <Tesela
             titulo="Trabajamos sobre infraestructura certificada"
             cuerpo="La infraestructura sobre la que opera está certificada bajo ISO/IEC 27001, 27017, 27018 y SOC 2 Tipo II, con respaldos automáticos y cifrado en tránsito y en reposo. La mejor tecnología del mundo al servicio de su alcaldía.">
-            <TeselaInfraestructura indice={2} />
+            <TeselaInfraestructura />
           </Tesela>
 
           <Tesela
             titulo="Avisa solo, en el momento"
             cuerpo="Cada cambio de estado sale por correo apenas ocurre: enviado, aprobado, devuelto. Nadie tiene que llamar a preguntar en qué va un informe. Y cada acción queda registrada con su responsable y su hora en un historial que no se altera.">
-            <TeselaTrazabilidad indice={3} />
+            <TeselaTrazabilidad />
           </Tesela>
 
           <Tesela
             titulo="No deja enviar lo incompleto"
             cuerpo="Sin actividades, sin evidencias o sin planilla de seguridad social vigente, el informe no sale. El expediente se arma completo porque no hay forma de armarlo a medias.">
-            <TeselaBloqueo indice={4} />
+            <TeselaBloqueo />
           </Tesela>
 
           <Tesela
             titulo="Funciona en lo que ya tienen"
             cuerpo="Web, sin instalar nada. El mismo expediente desde el celular en una vereda, desde la tableta o desde el computador de la secretaría. Disponible a toda hora.">
-            <TeselaDispositivos indice={5} />
+            <TeselaDispositivos />
           </Tesela>
 
           <Tesela
             ancha
             titulo="Arma el paquete del mes y lo deja listo para SECOP II"
             cuerpo="Los documentos del periodo se descargan ordenados y con sus anexos numerados, listos para cargar. La carga a la plataforma la sigue haciendo una persona: el sistema prepara el paquete, no se conecta con SECOP II.">
-            <TeselaPaquete indice={6} />
+            <TeselaPaquete />
           </Tesela>
         </Secuencia>
       </Acto>
