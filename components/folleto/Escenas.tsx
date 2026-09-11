@@ -197,13 +197,13 @@ function usePasos(activo: boolean, tiempos: readonly number[]): number {
  * desajuste entre lo que pinta el servidor y lo que pinta el navegador.
  */
 const SOPORTES = [
-  { x: -140, y: -70, giro: -17, w: 34, h: 34, tipo: 'foto' },
-  { x: 136, y: -76, giro: 14, w: 28, h: 36, tipo: 'planilla' },
-  { x: -156, y: 30, giro: 10, w: 36, h: 26, tipo: 'recibo' },
-  { x: 150, y: 22, giro: -12, w: 30, h: 34, tipo: 'nota' },
-  { x: -20, y: -104, giro: 7, w: 28, h: 34, tipo: 'cuenta' },
-  { x: 92, y: -14, giro: -8, w: 26, h: 26, tipo: 'foto' },
-  { x: -96, y: -18, giro: 12, w: 24, h: 30, tipo: 'planilla' },
+  { x: -138, y: -72, giro: -17, w: 42, h: 42, tipo: 'foto' },
+  { x: 134, y: -78, giro: 14, w: 36, h: 44, tipo: 'planilla' },
+  { x: -152, y: 32, giro: 10, w: 44, h: 32, tipo: 'recibo' },
+  { x: 148, y: 24, giro: -12, w: 38, h: 42, tipo: 'nota' },
+  { x: -18, y: -106, giro: 7, w: 34, h: 42, tipo: 'cuenta' },
+  { x: 94, y: -12, giro: -8, w: 32, h: 32, tipo: 'foto' },
+  { x: -98, y: -16, giro: 12, w: 30, h: 38, tipo: 'planilla' },
 ] as const
 
 /**
@@ -237,9 +237,14 @@ const TINTA_OSCURA: Tinta = {
 
 const TINTA_CLARA: Tinta = {
   logo: MARCA,
-  borde: 'rgba(25,32,49,.26)',
-  relleno: 'rgba(25,32,49,.05)',
-  renglon: 'rgba(25,32,49,.26)',
+  // Los soportes se veían con un relleno del 5% sobre fondo arena: existían,
+  // medían bien y tenían opacidad 1, pero no se distinguían del fondo. Y son
+  // justo lo que la escena tiene que contar — el desorden que entra. Pasan a
+  // blanco con contorno más firme: papel suelto sobre un escritorio, que es
+  // exactamente lo que representan.
+  borde: 'rgba(25,32,49,.38)',
+  relleno: '#FFFFFF',
+  renglon: 'rgba(25,32,49,.34)',
   orbita: 'rgba(25,32,49,.12)',
   halo: 'rgba(16,185,129,.14)',
   papel: '#FFFFFF',
@@ -376,12 +381,12 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
           style={{
             left: '50%', top: 58, marginLeft: -f.w / 2,
             ['--x' as string]: `${f.x}px`,
-            transitionDelay: `${400 + i * 65}ms`,
+            transitionDelay: `${900 + i * 65}ms`,
           }}>
           <span className={`${css.arcoY} block`}
             style={{
               ['--y' as string]: `${f.y}px`,
-              transitionDelay: `${400 + i * 65}ms, ${1600 + i * 50}ms`,
+              transitionDelay: `${900 + i * 65}ms, ${2100 + i * 50}ms`,
             }}>
             {/* Flotan mientras esperan su turno de viajar. */}
             <span className={`${css.flota} block`}
@@ -408,7 +413,7 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
             // apilaba a los cinco en el mismo punto: uno solo bajo el logo.
             ['--px' as string]: `${d.x}px`,
             ['--rot' as string]: `${d.giro}deg`,
-            transitionDelay: `${2200 + i * 70}ms`,
+            transitionDelay: `${2700 + i * 70}ms`,
             // SIN `backdrop-filter`. Estaba en los cinco documentos a la vez y
             // es lo más caro que se puede pedir por fotograma en la GPU de un
             // teléfono: obliga a re-muestrear y desenfocar el fondo en cada
@@ -423,7 +428,7 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
             ))}
           </span>
           <span className={`${css.selloDoc} absolute`}
-            style={{ right: 4, bottom: 4, animationDelay: `${2900 + i * 70}ms`, color: VERDE }}>
+            style={{ right: 4, bottom: 4, animationDelay: `${3400 + i * 70}ms`, color: VERDE }}>
             <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
               <rect x="1" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
               <rect x="14" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />

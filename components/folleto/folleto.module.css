@@ -119,7 +119,7 @@
    El pivote de toda la animación es el instante en que la carpeta recibe. Un
    destello solo no lo sostiene: hace falta que algo SALGA de ahí. */
 .onda { opacity: 0; }
-.armado .onda { animation: br-onda 900ms cubic-bezier(.2,.7,.3,1) 1820ms; }
+.armado .onda { animation: br-onda 900ms cubic-bezier(.2,.7,.3,1) 2320ms; }
 @keyframes br-onda {
   0%   { opacity: 0; transform: scale(.35); }
   18%  { opacity: .9; }
@@ -130,7 +130,7 @@
    iniciales —que están caladas— y de paso orla el contorno. Es un gesto que
    solo esta marca puede hacer, porque solo esta tiene agujeros. */
 .brillo { opacity: 0; }
-.armado .brillo { animation: br-brillo 1100ms ease-out 1780ms; }
+.armado .brillo { animation: br-brillo 1100ms ease-out 2280ms; }
 @keyframes br-brillo {
   0%   { opacity: 0; transform: scale(.55); }
   30%  { opacity: 1; transform: scale(1.08); }
@@ -139,7 +139,7 @@
 
 /* La carpeta acusa el golpe. */
 .carpeta { transform: none; }
-.armado .carpeta { animation: br-recibe 620ms cubic-bezier(.3,1.3,.4,1) 1800ms; }
+.armado .carpeta { animation: br-recibe 620ms cubic-bezier(.3,1.3,.4,1) 2300ms; }
 @keyframes br-recibe {
   35%  { transform: scale(.91); }
   100% { transform: none; }
@@ -170,7 +170,7 @@
 /* El barrido de comprobación recorre los cinco ya sellados. Es el gesto que
    dice «y además, verificados» sin escribirlo. */
 .barridoVerde { opacity: 0; }
-.armado .barridoVerde { animation: br-barre-fila 850ms cubic-bezier(.4,0,.3,1) 3550ms; }
+.armado .barridoVerde { animation: br-barre-fila 850ms cubic-bezier(.4,0,.3,1) 4050ms; }
 @keyframes br-barre-fila {
   0%   { opacity: 0; transform: translateX(-150px); }
   14%  { opacity: 1; }
@@ -181,7 +181,7 @@
 /* El visto en la pestaña: el remate. */
 .vistoPestana { opacity: 1; transform: none; }
 .dormido .vistoPestana { opacity: 0; transform: scale(.3); transition: all 160ms; }
-.armado .vistoPestana { animation: br-sello 360ms cubic-bezier(.2,1.4,.4,1) 4000ms backwards; }
+.armado .vistoPestana { animation: br-sello 360ms cubic-bezier(.2,1.4,.4,1) 4500ms backwards; }
 
 /* ── El anillo del envío ─────────────────────────────────────────────────
    Valores calcados de components/EnvioInforme.tsx. */
@@ -388,10 +388,10 @@
   .dormido .aliento, .armado .aliento { animation-play-state: running; }
   @keyframes diag-aliento-quieto { 0%, 100% { opacity: .5; } 50% { opacity: .85; } }
 
-  .armado .brillo { animation: br-brillo-quieto 1100ms ease-out 1780ms; }
+  .armado .brillo { animation: br-brillo-quieto 1100ms ease-out 2280ms; }
   @keyframes br-brillo-quieto { 0%, 100% { opacity: 0; } 30% { opacity: 1; } }
 
-  .armado .onda { animation: br-onda-quieta 900ms ease-out 1820ms; }
+  .armado .onda { animation: br-onda-quieta 900ms ease-out 2320ms; }
   @keyframes br-onda-quieta { 0%, 100% { opacity: 0; } 20% { opacity: .75; } }
 
   .selloEntra, .estampa, .armado .selloNorma, .armado .alerta {
