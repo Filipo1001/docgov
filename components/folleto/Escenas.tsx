@@ -576,12 +576,16 @@ export function ElMomento() {
    ACTO 3 · Las siete teselas
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function Tesela({ titulo, cuerpo, children, ancha = false }: {
+function Tesela({ titulo, cuerpo, children, ancha = false, altoEscena = 132 }: {
   titulo: string; cuerpo: string; children: ReactNode; ancha?: boolean
+  /** Alto mínimo de la caja de la escena. 132 sirve a seis de las siete; la de
+   *  duplicados necesita más, porque su insignia («Ya se usó en marzo») no
+   *  cabe en los ~20px de margen que deja una escena de 90px dentro de 132. */
+  altoEscena?: number
 }) {
   return (
     <div className={`rounded-2xl border border-[#E4EAEF] bg-white p-5 sm:p-6 flex flex-col ${ancha ? 'sm:col-span-2 lg:col-span-3' : ''}`}>
-      <div className="flex-1 flex items-center justify-center min-h-[132px] py-2 overflow-hidden">{children}</div>
+      <div className="flex-1 flex items-center justify-center py-2 overflow-hidden" style={{ minHeight: altoEscena }}>{children}</div>
       <p className="mt-4 font-semibold text-gray-900 text-[15px] leading-snug">{titulo}</p>
       <p className="mt-1.5 text-[13px] text-gray-500 leading-relaxed">{cuerpo}</p>
     </div>
@@ -643,9 +647,25 @@ export function TeselaDuplicados() {
         <span className="text-[11px] text-gray-400">abril</span>
       </div>
 
-      <span className={`${css.alerta} absolute px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap`}
-        style={{ bottom: -6, backgroundColor: '#FBF0E2', color: AMBAR }}>
-        Ya se usó en marzo
+      {/* Sin `left` explícito, el navegador colocaba la insignia por su
+          posición «estática» en el flujo — que varía con el ancho del
+          contenedor y en pantallas angostas la dejaba tapando el rótulo
+          «marzo» de la primera foto. El centrado va en un envoltorio aparte,
+          porque `.alerta` anima su propio `transform` (la entrada con rebote)
+          y un `translateX` en el mismo elemento se perdería al terminar la
+          animación, que fija `transform: none`. */}
+      {/* Con -6 la insignia quedaba a la MISMA altura que «marzo»/«abril» y
+          los tapaba enteros: la caja de esta escena medía 132px, la escena
+          90,5, y eso deja solo ~20px de margen a cada lado — menos que los
+          24,5px de la propia insignia, así que no había desplazamiento posible
+          sin recortarla contra el `overflow-hidden` de la tarjeta. La tarjeta
+          pide una caja más alta (172px, ver `altoEscena` en page.tsx) y la
+          insignia baja lo que ese margen nuevo permite. */}
+      <span className="absolute" style={{ bottom: -30, left: '50%', transform: 'translateX(-50%)' }}>
+        <span className={`${css.alerta} block px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap`}
+          style={{ backgroundColor: '#FBF0E2', color: AMBAR }}>
+          Ya se usó en marzo
+        </span>
       </span>
     </div>
   )

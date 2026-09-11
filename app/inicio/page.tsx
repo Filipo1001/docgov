@@ -375,7 +375,8 @@ export default function InicioPage() {
         <Secuencia className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Tesela
             titulo="Reconoce una evidencia repetida"
-            cuerpo="No hace falta que sea el mismo archivo. Reconoce la misma foto aunque la hayan recortado, achicado o vuelto a fotografiar de la pantalla — y se lo advierte al supervisor antes de que apruebe, no después.">
+            cuerpo="No hace falta que sea el mismo archivo. Reconoce la misma foto aunque la hayan recortado, achicado o vuelto a fotografiar de la pantalla — y se lo advierte al supervisor antes de que apruebe, no después."
+            altoEscena={172}>
             <TeselaDuplicados />
           </Tesela>
 
