@@ -189,78 +189,142 @@ function usePasos(activo: boolean, tiempos: readonly number[]): number {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * El desorden que llega: cinco soportes, cada uno reconocible de un vistazo.
+ * El desorden que llega: siete soportes, cada uno reconocible de un vistazo.
  *
- * Tienen que verse DESORDENADOS —girados, de distinto tamaño, con el borde
- * punteado— porque el contraste con los cinco documentos idénticos que salen
- * después es el argumento entero. Si entran ordenados, no hay transformación
- * que mostrar.
+ * Tienen que verse DESORDENADOS —girados, de distinto tamaño y forma, con el
+ * borde punteado— porque el contraste con los cinco documentos idénticos que
+ * salen después es el argumento entero. Si entran ordenados, no hay
+ * transformación que mostrar; y si entran todos iguales, tampoco: se leen
+ * como siete rectángulos y no como los papeles sueltos de un contratista.
  *
  * Las posiciones van escritas a mano y no al azar: `Math.random` daría un
  * desajuste entre lo que pinta el servidor y lo que pinta el navegador.
  */
 const SOPORTES = [
-  { x: -132, y: -58, giro: -16, w: 30, h: 30, tipo: 'foto' },
-  { x: 128, y: -64, giro: 13, w: 26, h: 32, tipo: 'planilla' },
-  { x: -146, y: 34, giro: 9, w: 32, h: 24, tipo: 'recibo' },
-  { x: 140, y: 26, giro: -11, w: 28, h: 30, tipo: 'nota' },
-  { x: -8, y: -96, giro: 6, w: 26, h: 30, tipo: 'cuenta' },
+  { x: -140, y: -70, giro: -17, w: 34, h: 34, tipo: 'foto' },
+  { x: 136, y: -76, giro: 14, w: 28, h: 36, tipo: 'planilla' },
+  { x: -156, y: 30, giro: 10, w: 36, h: 26, tipo: 'recibo' },
+  { x: 150, y: 22, giro: -12, w: 30, h: 34, tipo: 'nota' },
+  { x: -20, y: -104, giro: 7, w: 28, h: 34, tipo: 'cuenta' },
+  { x: 92, y: -14, giro: -8, w: 26, h: 26, tipo: 'foto' },
+  { x: -96, y: -18, giro: 12, w: 24, h: 30, tipo: 'planilla' },
 ] as const
 
+const BORDE_SOPORTE = 'rgba(255,255,255,.34)'
+
 function Soporte({ tipo, w, h }: { tipo: string; w: number; h: number }) {
-  const base = 'block rounded-[3px] border border-dashed'
   if (tipo === 'foto') {
     return (
-      <span className={base} style={{ width: w, height: h, borderColor: 'rgba(255,255,255,.35)',
-        background: 'linear-gradient(135deg,#8FB4C9,#3E6880)' }}>
-        <span className="block rounded-full" style={{ width: 6, height: 6, margin: '4px 0 0 4px',
-          backgroundColor: 'rgba(255,255,255,.8)' }} />
+      <span className="block rounded-[3px] border border-dashed overflow-hidden"
+        style={{ width: w, height: h, borderColor: BORDE_SOPORTE,
+                 background: 'linear-gradient(135deg,#8FB4C9 0%,#4E7A93 55%,#33566B 100%)' }}>
+        <span className="block rounded-full"
+          style={{ width: Math.round(w * .22), height: Math.round(w * .22), margin: '15% 0 0 12%',
+                   backgroundColor: 'rgba(255,255,255,.82)' }} />
+        <span className="block" style={{ marginTop: '18%', height: '38%',
+          background: 'linear-gradient(180deg,transparent,rgba(20,44,60,.7))' }} />
       </span>
     )
   }
+  if (tipo === 'recibo') {
+    // Angosto y con el pie dentado, como un tirilla de caja.
+    return (
+      <span className="block border border-dashed p-1"
+        style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(255,255,255,.14)',
+                 clipPath: 'polygon(0 0,100% 0,100% 88%,88% 100%,75% 88%,62% 100%,50% 88%,38% 100%,25% 88%,12% 100%,0 88%)' }}>
+        {[70, 90, 52].map((a, i) => (
+          <span key={i} className="block rounded-full mb-[3px]"
+            style={{ width: `${a}%`, height: 2, backgroundColor: 'rgba(255,255,255,.45)' }} />
+        ))}
+      </span>
+    )
+  }
+  if (tipo === 'nota') {
+    // Garabato a mano: dos trazos irregulares. Lee como «escrito a bolígrafo».
+    return (
+      <span className="block rounded-[3px] border border-dashed"
+        style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(244,232,178,.22)' }}>
+        <svg viewBox="0 0 30 34" width={w} height={h} fill="none" aria-hidden="true">
+          <path d="M5 10 q6 -4 10 0 t10 -1" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M5 18 q8 -3 13 1 t6 -1" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M5 26 q5 -3 9 0" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      </span>
+    )
+  }
+  if (tipo === 'cuenta') {
+    // Lleva una cifra: es la cuenta de cobro.
+    return (
+      <span className="block rounded-[3px] border border-dashed p-1"
+        style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(255,255,255,.14)' }}>
+        <span className="block rounded-full mb-1" style={{ width: '58%', height: 2, backgroundColor: 'rgba(255,255,255,.45)' }} />
+        <span className="block font-bold leading-none" style={{ fontSize: 9, color: 'rgba(255,255,255,.72)' }}>$</span>
+        <span className="block rounded-full mt-1" style={{ width: '78%', height: 2, backgroundColor: 'rgba(255,255,255,.45)' }} />
+      </span>
+    )
+  }
+  // Planilla: una retícula, que es como se ve una de verdad.
   return (
-    <span className={`${base} p-1`} style={{ width: w, height: h,
-      borderColor: 'rgba(255,255,255,.35)', backgroundColor: 'rgba(255,255,255,.1)' }}>
-      {[86, 60, 72, 44].map((ancho, i) => (
-        <span key={i} className="block rounded-full mb-[3px]"
-          style={{ width: `${ancho}%`, height: 2, backgroundColor: 'rgba(255,255,255,.4)' }} />
-      ))}
+    <span className="block rounded-[3px] border border-dashed p-[3px]"
+      style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(255,255,255,.12)' }}>
+      <span className="grid gap-[2px]" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        {Array.from({ length: 9 }).map((_, i) => (
+          <span key={i} className="block rounded-[1px]"
+            style={{ height: 3, backgroundColor: i % 4 === 0 ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.3)' }} />
+        ))}
+      </span>
     </span>
   )
 }
 
 /** Los cinco que salen: idénticos, limpios, en abanico. */
 const SALIDAS = [
-  { x: -112, giro: -9 }, { x: -56, giro: -4.5 }, { x: 0, giro: 0 },
-  { x: 56, giro: 4.5 }, { x: 112, giro: 9 },
+  { x: -116, giro: -9 }, { x: -58, giro: -4.5 }, { x: 0, giro: 0 },
+  { x: 58, giro: 4.5 }, { x: 116, giro: 9 },
 ] as const
 
-const LADO_CARPETA = 84
+const LADO_CARPETA = 92
 
 export function ExpedienteVivo() {
-  const { ref, clase } = useCiclo<HTMLDivElement>(7000, 0.15)
+  const { ref, clase } = useCiclo<HTMLDivElement>(8000, 0.15)
 
   return (
     <div ref={ref} className={`${clase} relative mx-auto`}
-      style={{ width: 320, height: 258, maxWidth: '100%' }}>
+      style={{ width: 340, height: 300, maxWidth: '100%' }}>
 
-      {/* ── La carpeta, y su resplandor por detrás ──────────────────── */}
-      <div className="absolute" style={{ left: '50%', top: 8, transform: 'translateX(-50%)' }}>
+      {/* ── Atmósfera: late siempre, también en reposo ──────────────── */}
+      <span className={`${css.aliento} absolute rounded-full pointer-events-none`}
+        style={{
+          left: '50%', top: 66, width: 300, height: 300, marginLeft: -150, marginTop: -150,
+          background: 'radial-gradient(circle, rgba(127,203,184,.16) 0%, transparent 62%)',
+        }} />
+
+      {/* ── La órbita, que no para ──────────────────────────────────── */}
+      <svg className={`${css.orbita} absolute pointer-events-none`}
+        width="216" height="216" viewBox="0 0 216 216"
+        style={{ left: '50%', top: 66, marginLeft: -108, marginTop: -108 }} aria-hidden="true">
+        <circle cx="108" cy="108" r="100" fill="none" stroke="rgba(255,255,255,.13)"
+          strokeWidth="1" strokeDasharray="3 9" />
+      </svg>
+
+      {/* ── La carpeta, su resplandor y su onda ─────────────────────── */}
+      <div className="absolute" style={{ left: '50%', top: 20, transform: 'translateX(-50%)' }}>
         <div className="relative">
+          <span className={`${css.onda} absolute rounded-full pointer-events-none`}
+            style={{ left: '50%', top: '50%', width: 130, height: 130, marginLeft: -65, marginTop: -65,
+                     border: `2px solid ${VERDE}` }} />
           <span className={`${css.brillo} absolute rounded-full pointer-events-none`}
             style={{
-              left: '50%', top: '50%', width: 150, height: 150, marginLeft: -75, marginTop: -75,
-              background: 'radial-gradient(circle, rgba(16,185,129,.85) 0%, rgba(16,185,129,.35) 45%, transparent 70%)',
-              filter: 'blur(6px)',
+              left: '50%', top: '50%', width: 164, height: 164, marginLeft: -82, marginTop: -82,
+              background: 'radial-gradient(circle, rgba(16,185,129,.9) 0%, rgba(16,185,129,.38) 45%, transparent 70%)',
+              filter: 'blur(7px)',
             }} />
           <span className={`${css.carpeta} relative block`}>
             <LogoCD size={LADO_CARPETA} color="#FFFFFF" />
           </span>
-
-          {/* El visto aterriza en la pestaña, arriba a la izquierda. */}
           <span className={`${css.vistoPestana} absolute flex items-center justify-center rounded-full`}
-            style={{ width: 24, height: 24, left: -8, top: -8, backgroundColor: VERDE }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            style={{ width: 26, height: 26, left: -9, top: -9, backgroundColor: VERDE }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M5 12.5 L10 17.5 L19 7" stroke="#fff" strokeWidth="3.2"
                 strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -268,42 +332,48 @@ export function ExpedienteVivo() {
         </div>
       </div>
 
-      {/* ── El desorden que converge ────────────────────────────────── */}
+      {/* ── El desorden, que llega por una curva ────────────────────── */}
       {SOPORTES.map((f, i) => (
-        <span key={i} className={`${css.fragmento} absolute`}
+        <span key={i} className={`${css.arcoX} absolute`}
           style={{
-            left: '50%', top: 46,
-            // En reposo están en el borde; al armarse, todos en el centro.
+            left: '50%', top: 58, marginLeft: -f.w / 2,
             ['--x' as string]: `${f.x}px`,
-            ['--y' as string]: `${f.y}px`,
-            ['--giro' as string]: `${f.giro}deg`,
-            transitionDelay: `${900 + i * 90}ms, ${2300 + i * 60}ms`,
+            transitionDelay: `${800 + i * 85}ms`,
           }}>
-          <Soporte tipo={f.tipo} w={f.w} h={f.h} />
+          <span className={`${css.arcoY} block`}
+            style={{
+              ['--y' as string]: `${f.y}px`,
+              transitionDelay: `${800 + i * 85}ms, ${2350 + i * 55}ms`,
+            }}>
+            {/* Flotan mientras esperan su turno de viajar. */}
+            <span className={`${css.flota} block`}
+              style={{ ['--giro' as string]: `${f.giro}deg`, animationDelay: `${i * 420}ms` }}>
+              <Soporte tipo={f.tipo} w={f.w} h={f.h} />
+            </span>
+          </span>
         </span>
       ))}
 
-      {/* ── El expediente que sale ──────────────────────────────────── */}
+      {/* ── El expediente que sale, y su comprobación ───────────────── */}
       {SALIDAS.map((d, i) => (
         <span key={i} className={`${css.emerge} absolute rounded-[4px] border`}
           style={{
-            left: '50%', top: 150, width: 42, height: 56,
-            marginLeft: -21,
-            borderColor: 'rgba(255,255,255,.3)',
-            backgroundColor: 'rgba(255,255,255,.13)',
+            left: '50%', top: 190, width: 44, height: 58, marginLeft: -22,
+            borderColor: 'rgba(255,255,255,.32)',
+            backgroundColor: 'rgba(255,255,255,.14)',
             transform: `translateX(${d.x}px) rotate(${d.giro}deg)`,
-            transitionDelay: `${3000 + i * 110}ms`,
+            transitionDelay: `${3200 + i * 115}ms`,
             backdropFilter: 'blur(2px)',
           }}>
           <span className="block p-1.5">
             {[84, 62, 74, 48].map((ancho, j) => (
               <span key={j} className="block rounded-full mb-[3px]"
-                style={{ width: `${ancho}%`, height: 2.5, backgroundColor: 'rgba(255,255,255,.42)' }} />
+                style={{ width: `${ancho}%`, height: 2.5, backgroundColor: 'rgba(255,255,255,.44)' }} />
             ))}
           </span>
           <span className={`${css.selloDoc} absolute`}
-            style={{ right: 4, bottom: 4, animationDelay: `${3800 + i * 110}ms`, color: VERDE }}>
-            <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+            style={{ right: 4, bottom: 4, animationDelay: `${4400 + i * 115}ms`, color: VERDE }}>
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
               <rect x="1" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
               <rect x="14" y="1" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
               <rect x="1" y="14" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="3" />
@@ -312,6 +382,13 @@ export function ExpedienteVivo() {
           </span>
         </span>
       ))}
+
+      {/* El barrido de comprobación pasa por los cinco ya sellados. */}
+      <span className={`${css.barridoVerde} absolute pointer-events-none`}
+        style={{
+          left: '50%', top: 182, width: 26, height: 74, marginLeft: -13,
+          background: `linear-gradient(90deg, transparent, ${VERDE}55 45%, ${VERDE}99 50%, ${VERDE}55 55%, transparent)`,
+        }} />
     </div>
   )
 }

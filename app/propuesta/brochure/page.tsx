@@ -114,13 +114,17 @@ export default function FolletoPage() {
             <LogoHorizontal size={34} color="#FFFFFF" colorNombre="#FFFFFF" />
           </header>
 
+          {/* TEXTO PROVISIONAL. Se pidió lorem ipsum a propósito, para juzgar
+              la animación sin que el titular compita por la atención. El
+              original está en el historial: «Nunca más un expediente
+              incompleto.» más su bajada. Restaurar antes de publicar. */}
           <h1 className="mt-16 sm:mt-20 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white max-w-3xl">
-            Nunca más un expediente incompleto.
+            Lorem ipsum dolor sit amet consectetur.
           </h1>
           <p className="mt-7 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
-            Gestión documental contractual para alcaldías. El contratista reporta
-            desde su celular; el sistema genera, numera y sella cada documento del
-            ciclo mensual.
+            Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
+            enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+            aliquip ex ea commodo.
           </p>
           <div className="mt-14">
             <ExpedienteVivo />
