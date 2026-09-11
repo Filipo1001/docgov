@@ -137,6 +137,15 @@ const e = StyleSheet.create({
   precioQue: { fontFamily: 'Helvetica-Bold', fontSize: 9.5, lineHeight: 1.4 },
   precioDetalle: { fontSize: 8.5, color: GRIS, marginTop: 7, lineHeight: 1.5 },
 
+  garantias: { marginTop: 10, marginBottom: 2 },
+  garantia: { flexDirection: 'row', marginBottom: 6 },
+  garantiaPunto: {
+    width: 4, height: 4, borderRadius: 2, backgroundColor: VERDE_VIVO,
+    marginTop: 5, marginRight: 8,
+  },
+  garantiaTexto: { flex: 1, fontSize: 8.5, color: GRIS, lineHeight: 1.5 },
+  garantiaFuerte: { fontFamily: 'Helvetica-Bold', color: TINTA },
+
   nota: {
     fontSize: 8.5, color: GRIS, lineHeight: 1.5, marginTop: 10,
     backgroundColor: ARENA, padding: 10, borderRadius: 4,
@@ -149,6 +158,13 @@ const e = StyleSheet.create({
   },
   cierreTitulo: { fontFamily: 'Helvetica-Bold', fontSize: 13, color: '#FFFFFF' },
   cierreTexto: { fontSize: 9, color: '#AEB8C2', marginTop: 5, lineHeight: 1.55 },
+  equipo: {
+    flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: '#39424F', marginHorizontal: -5,
+  },
+  equipoCol: { width: '50%', paddingHorizontal: 5, marginBottom: 8 },
+  equipoTitulo: { fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: '#FFFFFF' },
+  equipoTexto: { fontSize: 8, color: '#8A939D', marginTop: 2, lineHeight: 1.45 },
 
   // ── Pie, con el escudo ──────────────────────────────────────────────────
   pie: {
@@ -302,8 +318,8 @@ export function PropuestaGomezPlataPDF({ escudo }: { escudo: string }) {
                   </View>
                   <Text style={e.tarjetaTexto}>
                     Los documentos del periodo se descargan ordenados y con sus anexos
-                    numerados, listos para cargar. La carga a la plataforma la sigue haciendo
-                    una persona: el sistema prepara el paquete, no se conecta con SECOP II.
+                    numerados. El sistema deja el paquete armado; la carga se hace desde
+                    SECOP II, como siempre.
                   </Text>
                 </View>
               </View>
@@ -328,6 +344,26 @@ export function PropuestaGomezPlataPDF({ escudo }: { escudo: string }) {
               haber hecho bien el trabajo, sino poder demostrarlo — sin tres días de angustia
               revolviendo carpetas para encontrar un acta de supervisión.
             </Text>
+
+            {/* Las garantías, dichas sin rodeos. La sección contaba muy bien lo
+                que pasa cuando alguien pregunta años después, pero no cerraba
+                la duda de hoy: si esto es seguro. Cada línea es comprobable y
+                ninguna promete de más. */}
+            <View style={e.garantias}>
+              {[
+                ['Nada se pierde', 'respaldos automáticos, todos los días, sobre infraestructura certificada bajo ISO/IEC 27001 y SOC 2 Tipo II.'],
+                ['Nada se altera sin que se note', 'cada acción queda con su responsable y su hora en un historial que nadie puede retocar, ni nosotros.'],
+                ['Cada quien ve lo suyo', 'el alcalde ve totales, no cédulas ni cuentas bancarias. Los permisos van por rol, no por confianza.'],
+                ['Nada depende de una sola persona', 'la información es del municipio y se entrega cuando la pida, en PDF y en formato abierto.'],
+              ].map(([t, d]) => (
+                <View key={t} style={e.garantia}>
+                  <View style={e.garantiaPunto} />
+                  <Text style={e.garantiaTexto}>
+                    <Text style={e.garantiaFuerte}>{t}: </Text>{d}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </Seccion>
 
           <Seccion icono={TRAZOS.persona} etiqueta="Quién hace qué"
@@ -357,7 +393,7 @@ export function PropuestaGomezPlataPDF({ escudo }: { escudo: string }) {
               blanco de la versión anterior. */}
           <View break />
           <Seccion icono={TRAZOS.billete} etiqueta="La inversión"
-            titulo={`Lo que cuesta, para ${GOMEZ_PLATA.municipio}.`}>
+            titulo="Dos pagos, y nada más.">
             <View style={e.precios}>
               <View style={e.precioCol}>
                 <View style={e.precioUnico}>
@@ -398,12 +434,32 @@ export function PropuestaGomezPlataPDF({ escudo }: { escudo: string }) {
             </Text>
           </Seccion>
 
+          {/* FUERA «podemos empezar por una secretaría». Ofrecer un alcance
+              reducido antes de que nadie lo pida es hacerse un descuento solo,
+              y peor: sugiere que ni quien lo manda confía del todo en que
+              funcione. En su lugar va lo que de verdad diferencia a esto de un
+              programa que se descarga — que hay gente detrás. */}
           <View style={e.cierre} wrap={false}>
-            <Text style={e.cierreTitulo}>Podemos empezar por una secretaría.</Text>
+            <Text style={e.cierreTitulo}>Detrás de la plataforma hay un equipo.</Text>
             <Text style={e.cierreTexto}>
-              Sin comprometer a todo el municipio desde el primer día. Cuando el primer ciclo
-              mensual cierre bien, se extiende al resto.
+              Esto no es un programa que se entrega y ya. Configuramos el municipio,
+              migramos los contratos en curso, capacitamos por rol y acompañamos el primer
+              ciclo mensual completo. Y después seguimos ahí, todos los meses.
             </Text>
+
+            <View style={e.equipo}>
+              {[
+                ['Implementación', 'Montamos el municipio y migramos lo que ya está en curso.'],
+                ['Capacitación', 'Por rol: contratistas, supervisores y contratación.'],
+                ['Acompañamiento', 'El primer ciclo mensual completo, de principio a fin.'],
+                ['Soporte', 'Permanente, con las actualizaciones incluidas.'],
+              ].map(([t, d]) => (
+                <View key={t} style={e.equipoCol}>
+                  <Text style={e.equipoTitulo}>{t}</Text>
+                  <Text style={e.equipoTexto}>{d}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
 

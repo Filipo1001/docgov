@@ -223,7 +223,7 @@ export default function GomezPlataPage() {
           <Tesela
             ancha
             titulo="Arma el paquete del mes y lo deja listo para SECOP II"
-            cuerpo="Los documentos del periodo se descargan ordenados y con sus anexos numerados, listos para cargar. La carga a la plataforma la sigue haciendo una persona: el sistema prepara el paquete, no se conecta con SECOP II.">
+            cuerpo="Los documentos del periodo se descargan ordenados y con sus anexos numerados, listos para cargar. El sistema deja el paquete armado; la carga se hace desde SECOP II, como siempre.">
             <TeselaPaquete />
           </Tesela>
         </Secuencia>
@@ -270,7 +270,28 @@ export default function GomezPlataPage() {
               demostrarlo — sin tres días de angustia revolviendo carpetas para
               encontrar un acta de supervisión.
             </p>
-            <p className="mt-5 leading-relaxed">
+            {/* LAS GARANTÍAS, DICHAS SIN RODEOS. La sección contaba muy bien lo
+                que pasa cuando alguien pregunta años después, pero no cerraba
+                la duda de hoy: si esto es seguro. Cada línea es comprobable —
+                certificación de la infraestructura, respaldos, historial no
+                alterable, permisos por rol— y ninguna promete de más. */}
+            <div className="mt-8 grid sm:grid-cols-2 gap-x-6 gap-y-4">
+              {[
+                ['Nada se pierde', 'Respaldos automáticos, todos los días, sobre infraestructura certificada bajo ISO/IEC 27001 y SOC 2 Tipo II.'],
+                ['Nada se altera sin que se note', 'Cada acción queda con su responsable y su hora en un historial que nadie puede retocar, ni nosotros.'],
+                ['Cada quien ve lo suyo', 'El alcalde ve totales, no cédulas ni cuentas bancarias. Los permisos van por rol, no por confianza.'],
+                ['Nada depende de una sola persona', 'La información es del municipio y se entrega cuando la pida, en PDF y en formato abierto.'],
+              ].map(([t, d]) => (
+                <div key={t} className="flex gap-2.5">
+                  <span className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: VERDE }} />
+                  <p className="text-[14px] leading-relaxed text-gray-600">
+                    <span className="font-semibold" style={{ color: MARCA }}>{t}. </span>{d}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-8 leading-relaxed">
               <span className="font-semibold" style={{ color: MARCA }}>Escanee el código y véalo funcionando.</span>{' '}
               <span className="text-gray-600">
                 Así de fácil será comprobar un documento suyo dentro de cinco años.
@@ -359,7 +380,7 @@ export default function GomezPlataPage() {
           repite. */}
       <Acto fondo={ARENA}>
         <Etiqueta>La inversión</Etiqueta>
-        <Titulo>Lo que cuesta, para {GOMEZ_PLATA.municipio}.</Titulo>
+        <Titulo>Dos pagos, y nada más.</Titulo>
 
         <AlEntrar className="mt-12 grid sm:grid-cols-2 gap-4">
           <div className="prop-entra rounded-2xl border border-[#E4DFD3] bg-white p-7">
@@ -420,11 +441,12 @@ export default function GomezPlataPage() {
         <div className="max-w-5xl mx-auto">
           <h2 className="text-3xl sm:text-5xl font-bold tracking-tight leading-[1.1] max-w-2xl"
             style={{ color: VERDE_TINTA }}>
-            Podemos empezar por una secretaría.
+            Detrás de la plataforma hay un equipo.
           </h2>
           <p className="mt-6 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(4,53,42,.78)' }}>
-            Sin comprometer a todo el municipio desde el primer día. Cuando el primer
-            ciclo mensual cierre bien, se extiende al resto.
+            Esto no es un programa que se entrega y ya. Configuramos el municipio,
+            migramos los contratos en curso, capacitamos por rol y acompañamos el
+            primer ciclo mensual completo. Y después seguimos ahí, todos los meses.
           </p>
 
           <a
