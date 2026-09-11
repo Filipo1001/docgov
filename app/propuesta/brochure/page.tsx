@@ -3,7 +3,7 @@ import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp } from '@/lib/dominio'
 import {
   ExpedienteCrece, ElMomento, CodigoQR, Cifra, Tesela,
-  TeselaDuplicados, TeselaHuella, TeselaLetras, TeselaTrazabilidad,
+  TeselaDuplicados, TeselaHuella, TeselaInfraestructura, TeselaTrazabilidad,
   TeselaBloqueo, TeselaDispositivos, TeselaPaquete,
 } from './Escenas'
 
@@ -91,7 +91,7 @@ export default function FolletoPage() {
             Contratista Digital
           </p>
           <h1 className="mt-5 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white max-w-3xl">
-            Un mes de contratos, listo para SECOP&nbsp;II en una mañana.
+            Nunca más un expediente incompleto.
           </h1>
           <p className="mt-7 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
             Gestión documental contractual para alcaldías. El contratista reporta
@@ -110,15 +110,14 @@ export default function FolletoPage() {
       <Acto>
         <Etiqueta>El momento</Etiqueta>
         <Titulo>Se envía una vez. El resto lo escribe el sistema.</Titulo>
+        <p className="mt-6 text-lg leading-relaxed text-gray-600 max-w-2xl">
+          El contratista evidencia su trabajo; el supervisor lo supervisa. Los
+          nombres, las fechas, los consecutivos y el valor en letras no vuelven
+          a ser motivo de devolución.
+        </p>
         <div className="mt-12">
           <ElMomento />
         </div>
-        <p className="mt-12 text-lg sm:text-xl leading-relaxed text-gray-700 max-w-2xl">
-          El contratista se ocupa de <span className="font-semibold text-gray-900">evidenciar</span> su
-          trabajo. El supervisor, de <span className="font-semibold text-gray-900">supervisarlo</span>.
-          De los nombres, las fechas, los consecutivos y el valor en letras se
-          ocupa el sistema.
-        </p>
       </Acto>
 
       {/* ── ACTO 3 · Lo que ocurre por dentro ───────────────────────────
@@ -126,7 +125,7 @@ export default function FolletoPage() {
           anima su propio argumento y solo ese. */}
       <Acto>
         <Etiqueta>Por dentro</Etiqueta>
-        <Titulo>Siete cosas que pasan sin que nadie las haga.</Titulo>
+        <Titulo>Siete cosas que ya vienen resueltas.</Titulo>
 
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Tesela
@@ -142,14 +141,14 @@ export default function FolletoPage() {
           </Tesela>
 
           <Tesela
-            titulo="Escribe el valor en letras"
-            cuerpo="La causa número uno de una cuenta de cobro devuelta. El sistema la escribe siempre igual y siempre bien, y numera los consecutivos sin saltos ni repetidos.">
-            <TeselaLetras />
+            titulo="Trabajamos sobre infraestructura certificada"
+            cuerpo="La infraestructura sobre la que opera está certificada bajo ISO/IEC 27001, 27017, 27018 y SOC 2 Tipo II, con respaldos automáticos y cifrado en tránsito y en reposo. La mejor tecnología del mundo al servicio de su alcaldía.">
+            <TeselaInfraestructura />
           </Tesela>
 
           <Tesela
-            titulo="Deja rastro de todo, y notifica"
-            cuerpo="Cada acción queda con su responsable y su hora en un historial que no se altera. Y cada cambio de estado sale por correo y WhatsApp, sin que nadie tenga que avisar.">
+            titulo="Avisa solo, en el momento"
+            cuerpo="Cada cambio de estado sale por correo apenas ocurre: enviado, aprobado, devuelto. Nadie tiene que llamar a preguntar en qué va un informe. Y cada acción queda registrada con su responsable y su hora en un historial que no se altera.">
             <TeselaTrazabilidad />
           </Tesela>
 

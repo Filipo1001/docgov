@@ -116,7 +116,7 @@ const PIEZAS = [
   { n: 'Cuenta de cobro', q: 'Contratista' },
   { n: 'Acta de supervisión', q: 'Supervisor' },
   { n: 'Acta de pago', q: 'Secretaría' },
-  { n: 'Certificación de retención', q: 'Contratación' },
+  { n: 'Acta de terminación', q: 'Al cerrar el contrato' },
 ]
 
 export function ElMomento() {
@@ -275,7 +275,7 @@ export function TeselaDuplicados() {
       </div>
       <span className={`${css.alerta} absolute -bottom-1 px-2.5 py-1 rounded-full text-[10px] font-semibold`}
         style={{ backgroundColor: '#FBF0E2', color: AMBAR }}>
-        Misma imagen
+        Ya se usó en marzo
       </span>
     </div>
   )
@@ -312,20 +312,32 @@ export function TeselaHuella() {
   )
 }
 
-/** El valor en letras: la causa número uno de una cuenta de cobro devuelta. */
-export function TeselaLetras() {
+/** La infraestructura. Es lo único abstracto de la rejilla, así que el peso
+ *  lo cargan los nombres de las normas —concretos y verificables— y no el
+ *  dibujo. El escudo solo les da dónde aterrizar.
+ *
+ *  LA LÍNEA QUE NO SE CRUZA: certificada está la INFRAESTRUCTURA, no el
+ *  producto. El rótulo lo dice y el cuerpo de la tesela lo repite, porque
+ *  afirmar lo contrario ante una entidad pública es falso y verificable. */
+export function TeselaInfraestructura() {
   const { ref, clase } = useAlEntrar<HTMLDivElement>(0.4)
+  const NORMAS = ['ISO 27001', 'ISO 27017', 'ISO 27018', 'SOC 2']
   return (
-    <div ref={ref} className={`${clase} w-full text-center`}>
-      <p className="text-2xl font-bold tracking-tight text-gray-900">$2.450.000</p>
-      <svg className="mx-auto my-2" width="16" height="18" viewBox="0 0 16 18" fill="none" aria-hidden="true">
-        <path d="M8 1 V 14 M3 10 L8 15 L13 10" stroke="#9CA3AF" strokeWidth="1.6"
-          strokeLinecap="round" strokeLinejoin="round" />
+    <div ref={ref} className={`${clase} w-full flex items-center justify-center gap-5`}>
+      <svg width="54" height="62" viewBox="0 0 54 62" fill="none" aria-hidden="true" className="shrink-0">
+        <path d="M27 3 L50 12 V30 C50 44 40 54 27 59 C14 54 4 44 4 30 V12 Z"
+          stroke={MARCA} strokeWidth="2.4" strokeLinejoin="round" className={css.escudo} />
+        <path d="M18 30.5 L24.5 37 L36 25" stroke={VERDE} strokeWidth="3"
+          strokeLinecap="round" strokeLinejoin="round" className={css.escudo} />
       </svg>
-      <p className={`${css.enLetras} text-[11px] font-semibold uppercase tracking-wide leading-relaxed`}
-        style={{ color: MARCA }}>
-        Dos millones cuatrocientos<br />cincuenta mil pesos m/cte
-      </p>
+      <div className="flex flex-col gap-1.5">
+        {NORMAS.map((n, i) => (
+          <span key={n} className={`${css.selloNorma} rounded-md px-2 py-1 text-[10px] font-semibold tracking-wide text-center`}
+            style={{ backgroundColor: '#EEF2F5', color: MARCA, transitionDelay: `${520 + i * 130}ms` }}>
+            {n}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -347,10 +359,16 @@ export function TeselaTrazabilidad() {
             style={{ backgroundColor: i === pasos.length - 1 ? VERDE : '#C6D2DB' }} />
           <span className="text-[12px] font-medium text-gray-700 flex-1">{q}</span>
           <span className="text-[10px] text-gray-400 font-mono">{cuando}</span>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0">
-            <rect x="5" y="11" width="14" height="10" rx="2" stroke="#9CA3AF" strokeWidth="2.4" />
-            <path d="M8 11 V 7 a4 4 0 0 1 8 0 v 4" stroke="#9CA3AF" strokeWidth="2.4" strokeLinecap="round" />
-          </svg>
+          {/* El sobre sale en el mismo instante que el estado cambia: es el
+              argumento de la tesela, no un adorno al margen. */}
+          <span className={`${css.sobre} shrink-0 flex items-center gap-1`}
+            style={{ transitionDelay: `${i * 150 + 260}ms` }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="2" y="5" width="20" height="14" rx="2.5" stroke={VERDE} strokeWidth="2.2" />
+              <path d="M3 7 L12 13.5 L21 7" stroke={VERDE} strokeWidth="2.2"
+                strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
         </div>
       ))}
     </div>

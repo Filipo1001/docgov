@@ -79,9 +79,21 @@
 .letraMala { transition: color 240ms ease, background-color 240ms ease; }
 .armado .letraMala { color: #fff; background-color: #E0574F; }
 
-/* ── TESELA · El valor en letras ─────────────────────────────────────────── */
-.enLetras { transition: opacity 420ms ease 520ms; opacity: 1; }
-.dormido .enLetras, .reposo .enLetras { opacity: 0; }
+/* ── TESELA · La infraestructura ─────────────────────────────────────────
+   El escudo se traza y los cuatro sellos aterrizan uno a uno. El peso lo dan
+   los nombres de las normas, que son concretos y verificables — no el dibujo. */
+.escudo { stroke-dasharray: 210; stroke-dashoffset: 0; }
+.dormido .escudo { stroke-dashoffset: 210; }
+.escudo { transition: stroke-dashoffset 900ms cubic-bezier(.3,.7,.3,1); }
+
+.selloNorma { opacity: 1; transform: none; }
+.dormido .selloNorma { opacity: 0; transform: translateY(-8px) scale(.86); }
+.selloNorma { transition: opacity 340ms ease, transform 380ms cubic-bezier(.2,1.3,.4,1); }
+
+/* ── TESELA · El sobre que sale solo ─────────────────────────────────────── */
+.sobre { opacity: 1; transform: none; }
+.dormido .sobre { opacity: 0; transform: translateX(-6px); }
+.sobre { transition: opacity 300ms ease, transform 340ms cubic-bezier(.2,.9,.3,1); }
 
 /* ── TESELA · La cadena de trazabilidad ──────────────────────────────────── */
 .eslabon { opacity: 1; transform: none; transition: opacity 380ms ease, transform 380ms cubic-bezier(.2,.8,.3,1); }
@@ -116,7 +128,7 @@
 /* ── Quien pidió menos movimiento, no lo recibe por la puerta de atrás ───── */
 @media (prefers-reduced-motion: reduce) {
   .entra, .hoja, .renglon, .gemela, .eslabon, .modulo, .marco, .vuela,
-  .barraLlena, .botonMuda, .enLetras, .letraMala, .cifra {
+  .barraLlena, .botonMuda, .letraMala, .cifra, .escudo, .selloNorma, .sobre {
     transition: none !important;
     opacity: 1 !important;
     transform: none !important;
