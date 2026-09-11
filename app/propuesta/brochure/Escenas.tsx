@@ -8,16 +8,19 @@
  * tesela anima EXACTAMENTE el argumento que tiene que dejar creído, y solo
  * ese. Si una se puede contar con una frase, no lleva animación.
  *
- * ── TODAS VIVEN EN BUCLE ─────────────────────────────────────────────────
+ * ── LAS SIETE ACTÚAN EN SECUENCIA ────────────────────────────────────────
  *
- * Se pidió que no se movieran una sola vez. Cada una cuenta su historia,
- * SOSTIENE el resultado unos segundos y vuelve a empezar: una animación cuyo
- * remate no se alcanza a leer no vende nada. Las duraciones son distintas
- * —de 4,2 a 5,4 s— para que las siete no laten al unísono, que en una rejilla
- * sería un casino y no una demostración.
+ * No en bucles paralelos: por turnos, de izquierda a derecha, cada una
+ * arrancando cuando la anterior termina. Eso lo gobierna `Secuencia` con un
+ * único reloj — ver su comentario. Una tesela que ya actuó se queda resuelta
+ * mientras las demás actúan, así que ninguna necesita reposo propio: su
+ * reposo es el turno de las otras.
  *
- * Solo corren mientras están en pantalla. La rejilla entera moviéndose fuera
- * de vista es batería del teléfono de un secretario gastada en nada.
+ * Fuera de la rejilla, `ExpedienteCrece` y `CodigoQR` conservan su bucle
+ * independiente: están solos en su sección y no tienen con quién turnarse.
+ *
+ * Nada corre fuera de pantalla. La página entera moviéndose sin que nadie la
+ * mire es batería del teléfono de un secretario gastada en nada.
  *
  * React lleva el compás y el CSS hace la música: las teselas alternan una
  * clase y toda la coreografía cuelga de retardos en brochure.module.css.
@@ -26,7 +29,7 @@
  * estado final, quieta y legible — misma regla que Revelar.tsx y Contador.tsx.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 import css from './brochure.module.css'
@@ -80,6 +83,93 @@ function useCiclo<T extends HTMLElement>(duracion: number, umbral = 0.4) {
 
   const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
   return { ref, clase, armado: fase === 'armado', ciclando: fase !== 'quieto' }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EL DIRECTOR DE ORQUESTA
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Se pidió que las teselas no corrieran cada una por su cuenta, sino en
+   secuencia: de izquierda a derecha, y que cada una arranque cuando la
+   anterior termina. Eso exige un único reloj para las siete — con relojes
+   independientes la sincronía se pierde a los pocos segundos por mucho que
+   se afinen las duraciones.
+
+   LO QUE LA SECUENCIA REGALA: una tesela que ya actuó SE QUEDA en su estado
+   resuelto mientras las demás actúan. La rejilla se va llenando de resultados
+   en vez de parpadear entera, y por eso ninguna necesita reposo propio: su
+   reposo es el turno de las otras. La vuelta completa dura unos 22 s.
+
+   El orden de los turnos es el orden del DOM, que en esta rejilla coincide
+   con el de lectura —izquierda a derecha, arriba abajo— en las tres anchuras.
+
+   `-1` significa que nadie actúa: fuera de pantalla, sin JavaScript o con
+   «reducir movimiento», y ahí cada tesela muestra su estado final.
+*/
+
+/** Lo que dura cada turno, en el orden de la rejilla. Incluye los 200 ms de
+ *  rebobinado del principio. */
+const TURNOS = [4000, 2800, 2600, 2400, 3400, 4000, 2600] as const
+
+const Turno = createContext<number>(-1)
+
+export function Secuencia({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+  const [turno, setTurno] = useState(-1)
+
+  useEffect(() => {
+    const nodo = ref.current
+    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    // Umbral bajo y deliberado: basta con que asome un borde de la rejilla
+    // para que la secuencia arranque, de modo que la primera tesela ya esté
+    // actuando cuando el lector termine de bajar hasta ella.
+    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.05 })
+    obs.observe(nodo)
+    return () => obs.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!visible) { setTurno(-1); return }
+    let vivo = true
+    const relojes: ReturnType<typeof setTimeout>[] = []
+    const paso = (i: number) => {
+      if (!vivo) return
+      setTurno(i)
+      relojes.push(setTimeout(() => paso((i + 1) % TURNOS.length), TURNOS[i]))
+    }
+    paso(0)
+    return () => { vivo = false; relojes.forEach(clearTimeout) }
+  }, [visible])
+
+  return (
+    <Turno.Provider value={turno}>
+      <div ref={ref} className={className}>{children}</div>
+    </Turno.Provider>
+  )
+}
+
+/**
+ * El turno de una tesela.
+ *
+ * Cuando le toca, rebobina 200 ms y actúa. Cuando NO le toca no se toca nada:
+ * se queda exactamente como la dejó su actuación —resuelta— y esa quietud es
+ * su reposo.
+ */
+function useTurno(indice: number) {
+  const turno = useContext(Turno)
+  const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
+
+  useEffect(() => {
+    if (turno === -1) { setFase('quieto'); return }
+    if (turno !== indice) return
+    setFase('dormido')
+    const t = setTimeout(() => setFase('armado'), 200)
+    return () => clearTimeout(t)
+  }, [turno, indice])
+
+  const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
+  return { clase, armado: fase === 'armado', ciclando: fase !== 'quieto', miTurno: turno === indice }
 }
 
 /** Cuenta compases dentro de una vuelta. Los tiempos van como constante de
@@ -275,7 +365,7 @@ function Tesela({ titulo, cuerpo, children, ancha = false }: {
   titulo: string; cuerpo: string; children: ReactNode; ancha?: boolean
 }) {
   return (
-    <div className={`rounded-2xl border border-[#E4EAEF] bg-white p-5 sm:p-6 flex flex-col ${ancha ? 'sm:col-span-2' : ''}`}>
+    <div className={`rounded-2xl border border-[#E4EAEF] bg-white p-5 sm:p-6 flex flex-col ${ancha ? 'sm:col-span-2 lg:col-span-3' : ''}`}>
       <div className="flex-1 flex items-center justify-center min-h-[132px] py-2 overflow-hidden">{children}</div>
       <p className="mt-4 font-semibold text-gray-900 text-[15px] leading-snug">{titulo}</p>
       <p className="mt-1.5 text-[13px] text-gray-500 leading-relaxed">{cuerpo}</p>
@@ -310,10 +400,10 @@ function Foto({ deformada = false }: { deformada?: boolean }) {
   )
 }
 
-export function TeselaDuplicados() {
-  const { ref, clase } = useCiclo<HTMLDivElement>(5400)
+export function TeselaDuplicados({ indice }: { indice: number }) {
+  const { clase } = useTurno(indice)
   return (
-    <div ref={ref} className={`${clase} relative w-full flex items-center justify-center gap-9`}>
+    <div className={`${clase} relative w-full flex items-center justify-center gap-9`}>
       <div className="flex flex-col items-center gap-2">
         <Foto />
         <span className="text-[10px] text-gray-400">marzo</span>
@@ -355,8 +445,8 @@ const HEX = '0123456789abcdef'
 const HUELLA_LIMPIA = 'a7f3c2e9b4d18056'
 const HUELLA_SUCIA = '3b91e08d7c6a24f5'
 
-export function TeselaHuella() {
-  const { ref, clase, armado, ciclando } = useCiclo<HTMLDivElement>(4400)
+export function TeselaHuella({ indice }: { indice: number }) {
+  const { clase, armado, ciclando } = useTurno(indice)
   const [huella, setHuella] = useState(HUELLA_SUCIA)
 
   useEffect(() => {
@@ -396,7 +486,7 @@ export function TeselaHuella() {
   }, [armado, ciclando])
 
   return (
-    <div ref={ref} className={`${clase} w-full`}>
+    <div className={`${clase} w-full`}>
       <div className="rounded-lg border border-[#E4EAEF] bg-[#FAFBFC] px-3 py-2.5">
         <p className="text-[11px] text-gray-500 leading-relaxed">
           Valor del contrato:{' '}
@@ -430,10 +520,10 @@ export function TeselaHuella() {
    comprobable — el rótulo de la tesela y su cuerpo lo dicen así. */
 const NORMAS = ['ISO 27001', 'ISO 27017', 'ISO 27018', 'SOC 2'] as const
 
-export function TeselaInfraestructura() {
-  const { ref, clase } = useCiclo<HTMLDivElement>(4600)
+export function TeselaInfraestructura({ indice }: { indice: number }) {
+  const { clase } = useTurno(indice)
   return (
-    <div ref={ref} className={`${clase} w-full flex items-center justify-center gap-5`}>
+    <div className={`${clase} w-full flex items-center justify-center gap-5`}>
       <svg width="54" height="62" viewBox="0 0 54 62" fill="none" aria-hidden="true" className="shrink-0">
         <path d="M27 3 L50 12 V30 C50 44 40 54 27 59 C14 54 4 44 4 30 V12 Z"
           stroke={MARCA} strokeWidth="2.4" strokeLinejoin="round" className={css.escudo} />
@@ -463,10 +553,10 @@ const CADENA = [
   ['Aprobado', '22 · 16:40'],
 ] as const
 
-export function TeselaTrazabilidad() {
-  const { ref, clase } = useCiclo<HTMLDivElement>(4200)
+export function TeselaTrazabilidad({ indice }: { indice: number }) {
+  const { clase } = useTurno(indice)
   return (
-    <div ref={ref} className={`${clase} w-full relative`}>
+    <div className={`${clase} w-full relative`}>
       {/* La línea que hace de esto una cadena y no una lista. */}
       <span className={`${css.cadena} absolute block`}
         style={{ left: 2.5, top: 10, width: 2, height: 52, backgroundColor: '#DCE4EA' }} />
@@ -502,8 +592,8 @@ export function TeselaTrazabilidad() {
    se ponga verde: es que antes dijo que no. */
 const COMPASES_BLOQUEO = [1250, 2450, 2950] as const
 
-export function TeselaBloqueo() {
-  const { ref, clase, armado, ciclando } = useCiclo<HTMLDivElement>(5200)
+export function TeselaBloqueo({ indice }: { indice: number }) {
+  const { clase, armado, ciclando } = useTurno(indice)
   const paso = usePasos(armado, COMPASES_BLOQUEO)
   // Sin ciclo, el estado final: un botón trabado para siempre no es la
   // promesa de la tesela, es su contrario.
@@ -511,7 +601,7 @@ export function TeselaBloqueo() {
   const puedeEnviar = !ciclando || paso >= 3
 
   return (
-    <div ref={ref} className={`${clase} w-full`}>
+    <div className={`${clase} w-full`}>
       <div className="space-y-1.5">
         {[['Actividades', true], ['Evidencias', true], ['Planilla de seguridad social', completo]].map(([t, ok]) => (
           <div key={t as string} className="flex items-center gap-2">
@@ -548,33 +638,21 @@ const FORMAS = [
   { w: 138, h: 84, r: 6, rotulo: 'Computador', col: 46 },
 ] as const
 
-export function TeselaDispositivos() {
-  const [i, setI] = useState(2)
-  const [visible, setVisible] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+const COMPASES_FORMAS = [200, 1400, 2600] as const
 
-  useEffect(() => {
-    const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
-    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.4 })
-    obs.observe(nodo)
-    return () => obs.disconnect()
-  }, [])
+export function TeselaDispositivos({ indice }: { indice: number }) {
+  const { armado, ciclando } = useTurno(indice)
+  const paso = usePasos(armado, COMPASES_FORMAS)
+  // Sin turno se queda en el computador, que es el estado final de la vuelta.
+  const f = FORMAS[ciclando && paso > 0 ? paso - 1 : FORMAS.length - 1]
 
-  useEffect(() => {
-    if (!visible) return
-    const id = setInterval(() => setI(p => (p + 1) % FORMAS.length), 2200)
-    return () => clearInterval(id)
-  }, [visible])
-
-  const f = FORMAS[i]
   return (
-    <div ref={ref} className="w-full flex flex-col items-center justify-center" style={{ minHeight: 116 }}>
+    <div className="w-full flex flex-col items-center justify-center" style={{ minHeight: 116 }}>
       <div className={`${css.marco} border-2 flex flex-wrap content-start gap-1.5 p-2.5 overflow-hidden`}
         style={{ width: f.w, height: f.h, borderRadius: f.r, borderColor: '#C6D2DB' }}>
         {[0, 1, 2, 3, 4, 5].map(j => (
           <span key={j} className={`${css.barraFlex} block h-1.5 rounded-full shrink-0`}
-            style={{ width: `${f.col === 100 ? 100 : 46}%`, backgroundColor: '#E6EDF2' }} />
+            style={{ width: `${f.col}%`, backgroundColor: '#E6EDF2' }} />
         ))}
       </div>
       <span className="mt-3 text-[10px] text-gray-400">{f.rotulo}</span>
@@ -592,13 +670,13 @@ const SUELTOS = [
 ] as const
 const COMPASES_PAQUETE = [260, 500, 740, 980, 1220] as const
 
-export function TeselaPaquete() {
-  const { ref, clase, armado, ciclando } = useCiclo<HTMLDivElement>(4800)
+export function TeselaPaquete({ indice }: { indice: number }) {
+  const { clase, armado, ciclando } = useTurno(indice)
   const pasos = usePasos(armado, COMPASES_PAQUETE)
   const llegados = ciclando ? pasos : SUELTOS.length
 
   return (
-    <div ref={ref} className={`${clase} relative w-full flex flex-col items-center justify-center`} style={{ height: 126 }}>
+    <div className={`${clase} relative w-full flex flex-col items-center justify-center`} style={{ height: 126 }}>
       <div className="relative" style={{ width: 120, height: 84 }}>
         {SUELTOS.map((s, i) => {
           const dentro = llegados > i
