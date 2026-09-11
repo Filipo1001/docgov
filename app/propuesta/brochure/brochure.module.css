@@ -140,12 +140,16 @@
    Con rebote: un documento que se posa sin pasarse de largo se siente
    dibujado; uno que se pasa y corrige, soltado por una mano. */
 .emerge {
-  opacity: 1; transform: none;
+  opacity: 1;
+  /* `--px` y `--rot` los pone cada documento: son su sitio en el abanico. Las
+     dos reglas los conservan y solo se diferencian en lo que AÑADEN, de modo
+     que el movimiento nunca borra la posición. */
+  transform: translateX(var(--px)) rotate(var(--rot));
   transition: opacity 460ms ease, transform 760ms cubic-bezier(.18,1.12,.36,1);
 }
 .dormido .emerge {
   opacity: 0;
-  transform: translate(0, -58px) scale(.24);
+  transform: translateX(var(--px)) rotate(var(--rot)) translateY(-58px) scale(.24);
   transition-duration: 160ms;
   transition-delay: 0ms !important;
 }
@@ -335,14 +339,13 @@
         extremos para que solo quede interpolando la opacidad. */
   .arcoX, .dormido .arcoX,
   .arcoY, .dormido .arcoY,
-  .emerge, .dormido .emerge,
   .selloDoc, .dormido .selloDoc,
   .vistoPestana, .dormido .vistoPestana,
   .eslabon, .dormido .eslabon,
   .punto, .dormido .punto,
   .cadena, .dormido .cadena,
   .modulo, .dormido .modulo,
-  .vuela, .banda, .dormido .banda,
+  .banda, .dormido .banda,
   .selloNorma, .dormido .selloNorma,
   .eslabonCustodia, .dormido .eslabonCustodia,
   .hiloCustodia, .dormido .hiloCustodia,
@@ -350,6 +353,16 @@
   :global(.prop-entra), .dormido :global(.prop-entra) {
     transform: none !important;
   }
+
+  /* 1.b · Los que llevan su POSICIÓN en el transform no pueden recibir
+        `transform: none`: eso no les quita el movimiento, les quita el sitio, y
+        los cinco documentos acabarían apilados uno encima de otro. A estos se
+        les iguala el reposo con el destino —así no hay viaje— o se les corta
+        la transición, que es lo mismo sin tocar coordenadas. */
+  .dormido .emerge {
+    transform: translateX(var(--px)) rotate(var(--rot)) !important;
+  }
+  .vuela { transition: none !important; }
 
   /* 2 · Animaciones que son PURO desplazamiento: no tienen equivalente suave,
         así que se van. Lo que comunicaban lo dice ya el estado final. */

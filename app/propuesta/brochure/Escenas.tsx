@@ -481,7 +481,15 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
             left: '50%', top: 190, width: 44, height: 58, marginLeft: -22,
             borderColor: t.bordePapel,
             backgroundColor: t.papel,
-            transform: `translateX(${d.x}px) rotate(${d.giro}deg)`,
+            // La posición viaja en variables y NO en `transform`, para que el
+            // CSS pueda componer «dónde va» con «cómo llega». Cuando estaba en
+            // línea pasaban dos cosas malas: la regla de reposo nunca se
+            // aplicaba —un estilo en línea gana a cualquier clase, así que los
+            // documentos jamás llegaron a salir de la carpeta, solo aparecían—
+            // y la de «reducir movimiento», que sí lleva `!important`, los
+            // apilaba a los cinco en el mismo punto: uno solo bajo el logo.
+            ['--px' as string]: `${d.x}px`,
+            ['--rot' as string]: `${d.giro}deg`,
             transitionDelay: `${3200 + i * 115}ms`,
             // SIN `backdrop-filter`. Estaba en los cinco documentos a la vez y
             // es lo más caro que se puede pedir por fotograma en la GPU de un
