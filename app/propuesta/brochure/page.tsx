@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import QRCode from 'qrcode'
 import { LogoHorizontal } from '@/components/Logo'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 import { MARCA } from '@/lib/marca'
 import { enlaceWhatsApp, HOSTS_COMERCIALES } from '@/lib/dominio'
 import {
-  ExpedienteVivo, ElMomento, CodigoQR, CadenaCustodia, Cifra, Tesela, Secuencia,
+  ExpedienteVivo, ElMomento, CodigoQR, CadenaCustodia, Tesela, Secuencia, AlEntrar,
   TeselaDuplicados, TeselaHuella, TeselaInfraestructura, TeselaTrazabilidad,
   TeselaBloqueo, TeselaDispositivos, TeselaPaquete,
 } from './Escenas'
@@ -287,62 +289,74 @@ export default function FolletoPage() {
         </div>
       </Acto>
 
-      {/* ── ACTO 5 · La cuenta ──────────────────────────────────────────
-          Aritmética sobre un municipio hipotético de cien contratos, no sobre
-          un cliente. El único supuesto —veinte minutos por documento— va
-          escrito, para que quien lo dude pueda ajustarlo y seguir leyendo. */}
+      {/* ── ACTO 5 · Quién hace qué ─────────────────────────────────────
+          Sustituye a «La cuenta» y a «Las cifras», que se retiraron. El
+          argumento cambia de aritmética a personas, y gana: un secretario no
+          se imagina 167 horas, pero sí se imagina a su supervisor dejando de
+          revisar si es la cuenta 6 o la 7.
+
+          TODO LO QUE SE AFIRMA AQUÍ ESTÁ VERIFICADO CONTRA EL CÓDIGO. Se
+          quedaron fuera dos cosas que se habían pedido, por no ser ciertas
+          hoy: los otrosíes —no existen en el sistema, cero coincidencias— y
+          que el software «avise si el IBC está correcto». Lo que hace es
+          calcular la base que corresponde por la regla legal y ponérsela
+          delante a quien revisa, junto al mes realmente cotizado; la decisión
+          la sigue tomando una persona. Prometer una validación automática
+          sería más vendedor y se caería en la primera demostración. */}
       <Acto fondo={ARENA}>
-        <Etiqueta>La cuenta</Etiqueta>
-        <Titulo>Cien contratos son quinientos documentos al mes.</Titulo>
-
-        <div className="mt-12 grid sm:grid-cols-3 gap-4">
-          {[
-            { cifra: <Cifra hasta={500} />, pie: 'documentos al mes', nota: 'Cinco por contrato: informe, cuenta de cobro, acta de supervisión, acta de pago y certificación de retención.' },
-            { cifra: <><Cifra hasta={167} /> h</>, pie: 'de transcripción', nota: 'A veinte minutos por documento — nombre, cédula, número de contrato, fechas, valor en letras, consecutivo.' },
-            { cifra: <Cifra hasta={1} />, pie: 'empleado de tiempo completo', nota: 'Eso es lo que cuesta, todos los meses, hacer a mano lo que el sistema hace solo.', fuerte: true },
-          ].map(({ cifra, pie, nota, fuerte }) => (
-            <div key={pie} className="rounded-2xl border p-6"
-              style={{ borderColor: fuerte ? MARCA : '#E4EAEF', backgroundColor: fuerte ? '#FFFFFF' : 'transparent' }}>
-              <p className="text-4xl font-bold tracking-tight" style={{ color: fuerte ? MARCA : '#111827' }}>
-                {cifra}
-              </p>
-              <p className="mt-1.5 text-sm font-semibold text-gray-900">{pie}</p>
-              <p className="mt-3 text-[13px] text-gray-500 leading-relaxed">{nota}</p>
-            </div>
-          ))}
-        </div>
-
-        <p className="mt-8 text-[13px] text-gray-400 leading-relaxed max-w-2xl">
-          Y eso es solo el tiempo de escribirlos. No cuenta perseguir soportes,
-          rehacer lo devuelto, ni buscar el expediente del contrato 47 cuando
-          alguien lo pide.
+        <Etiqueta>Quién hace qué</Etiqueta>
+        <Titulo>Cada quien vuelve a su oficio.</Titulo>
+        <p className="mt-6 text-lg leading-relaxed text-gray-600 max-w-2xl">
+          El trabajo de oficina no desaparece porque alguien lo haga más rápido.
+          Desaparece porque deja de existir.
         </p>
-      </Acto>
 
-      {/* ── ACTO 6 · Lo que ya está andando ─────────────────────────────
-          Sin fecha de arranque y sin nombrar municipio. Las cifras son
-          reales y se reverifican contra producción antes de publicar. */}
-      <Acto fondo={NIEVE}>
-        <Etiqueta>En operación</Etiqueta>
-        <Titulo>No es una maqueta.</Titulo>
-
-        <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 gap-8">
+        <AlEntrar className="mt-12 grid sm:grid-cols-2 gap-4">
           {[
-            [<Cifra key="d" hasta={518} />, 'documentos emitidos y verificables'],
-            [<Cifra key="e" hasta={4128} />, 'evidencias archivadas'],
-            [<><Cifra key="v" hasta={3722} /></>, 'millones de pesos bajo gestión'],
-            [<><Cifra key="h" hasta={44.7} decimales={1} /> h</>, 'mediana de aprobación de un informe'],
-          ].map(([cifra, pie], i) => (
-            <div key={i}>
-              <p className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ color: MARCA }}>{cifra}</p>
-              <p className="mt-2 text-sm leading-snug text-gray-500">{pie}</p>
+            {
+              glifo: Iconos.navegacion.contratistas,
+              quien: 'El contratista',
+              titular: 'Ahora solo se ocupa de evidenciar su trabajo.',
+              cuerpo: 'Sube actividades y soportes desde el celular, donde esté. No redacta informes, no arma cuentas de cobro, no cuadra consecutivos ni escribe valores en letras. Y deja de recibir devoluciones por un dato que nunca debió escribir a mano.',
+            },
+            {
+              glifo: Iconos.navegacion.firmas,
+              quien: 'El supervisor',
+              titular: 'Ahora solo se dedica a supervisar lo trabajado.',
+              cuerpo: 'Revisa cada obligación con su evidencia al lado, y aprueba o devuelve. No comprueba fechas, ni si es la cuenta 6 o la 7, ni redacta actas de supervisión, de pago ni de terminación: las escribe el sistema. Y al revisar la seguridad social tiene delante la base de cotización que le corresponde al contrato y el mes realmente cotizado — para que aprobar deje de ser un acto de fe.',
+            },
+            {
+              glifo: Iconos.navegacion.contratos,
+              quien: 'Contratación',
+              titular: 'Monta el municipio una vez y deja de perseguir papeles.',
+              cuerpo: 'Crea las secretarías, los usuarios y los contratos con sus obligaciones, sus periodos y sus soportes —CDP, CRP, RUT y certificación bancaria— en una sola ficha. Después, cada periodo queda con su paquete armado y ordenado, listo para cargar a SECOP II.',
+            },
+            {
+              glifo: Iconos.navegacion.municipio,
+              quien: 'El alcalde',
+              titular: 'Toda la alcaldía en la palma de la mano.',
+              cuerpo: 'Una tarjeta por secretaría con su secretario, sus contratistas y su ejecución. La ejecución mensual del año, el presupuesto por secretaría y el calendario de vencimientos. Solo lectura agregada: no expone cédulas ni datos bancarios.',
+            },
+          ].map((a, i) => (
+            <div key={a.quien}
+              className="prop-entra rounded-2xl border border-[#E4DFD3] bg-white p-6 sm:p-7"
+              style={{ transitionDelay: `${i * 110}ms` }}>
+              <span className="inline-flex items-center justify-center w-11 h-11 rounded-xl"
+                style={{ backgroundColor: '#EAF5F0', color: VERDE_TEXTO }}>
+                <Icono glifo={a.glifo} tamano="lg" />
+              </span>
+              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                {a.quien}
+              </p>
+              <p className="mt-2 text-xl font-bold leading-snug" style={{ color: MARCA }}>
+                {a.titular}
+              </p>
+              <p className="mt-3 text-[15px] leading-relaxed text-gray-600">{a.cuerpo}</p>
             </div>
           ))}
-        </div>
+        </AlEntrar>
       </Acto>
 
-      {/* ── ACTO 7 · El cierre ──────────────────────────────────────────
-          Una sola acción en toda la página. */}
       {/* El cierre es el ÚNICO bloque saturado de la página, y lo es por
           necesidad: sin secciones oscuras nada marcaba un destino, y una
           llamada a la acción que se confunde con el resto del recorrido no es

@@ -36,6 +36,8 @@ import css from './brochure.module.css'
 
 const VERDE = '#10b981'
 const AMBAR = '#D98324'
+/** El verde pleno no se lee como texto sobre claro; este sí. */
+const VERDE_OSCURO = '#0B7A5C'
 const ROJO = '#E0574F'
 
 function quieto(): boolean {
@@ -930,6 +932,35 @@ export function TeselaPaquete({ indice }: { indice: number }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
+ * Aparición escalonada, una sola vez.
+ *
+ * Para bloques donde lo que vende es el TEXTO y no el movimiento: la sección
+ * no puede quedarse muerta en una página donde todo lo demás respira, pero
+ * tampoco puede competir con las escenas que sí están demostrando algo.
+ */
+export function AlEntrar({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
+
+  useEffect(() => {
+    const nodo = ref.current
+    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    setFase('dormido')
+    const obs = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      obs.disconnect()
+      requestAnimationFrame(() => requestAnimationFrame(() => setFase('armado')))
+    }, { threshold: 0.15 })
+    obs.observe(nodo)
+    const respaldo = setTimeout(() => setFase('armado'), 2500)
+    return () => { obs.disconnect(); clearTimeout(respaldo) }
+  }, [])
+
+  const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
+  return <div ref={ref} className={`${clase} ${className}`}>{children}</div>
+}
+
+/**
  * La cadena de custodia, dibujada.
  *
  * Cuatro eslabones que nombran lo que el título promete: de quien lo crea a
@@ -972,7 +1003,7 @@ export function CadenaCustodia() {
     <div ref={ref} className={`${clase} relative`}>
       {/* El hilo va por detrás y crece de izquierda a derecha: es la cadena. */}
       <span className={`${css.hiloCustodia} absolute block`}
-        style={{ left: 4, right: 4, top: 4, height: 2, backgroundColor: 'rgba(255,255,255,.16)' }} />
+        style={{ left: 4, right: 4, top: 4, height: 2, backgroundColor: 'rgba(25,32,49,.14)' }} />
       <div className="relative grid grid-cols-4 gap-2">
         {CUSTODIA.map(([paso, pie], i) => {
           const ultimo = i === CUSTODIA.length - 1
@@ -980,12 +1011,12 @@ export function CadenaCustodia() {
             <div key={paso} className={`${css.eslabonCustodia} flex flex-col`}
               style={{ transitionDelay: `${260 + i * 130}ms` }}>
               <span className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: ultimo ? VERDE : 'rgba(255,255,255,.42)' }} />
+                style={{ backgroundColor: ultimo ? VERDE : 'rgba(25,32,49,.38)' }} />
               <span className="mt-3 text-[11px] font-semibold leading-tight"
-                style={{ color: ultimo ? VERDE : '#FFFFFF' }}>
+                style={{ color: ultimo ? VERDE_OSCURO : MARCA }}>
                 {paso}
               </span>
-              <span className="mt-1 text-[10px] leading-tight" style={{ color: 'rgba(255,255,255,.4)' }}>
+              <span className="mt-1 text-[10px] leading-tight text-gray-500">
                 {pie}
               </span>
             </div>
@@ -1052,48 +1083,5 @@ export function CodigoQR({ modulos, lado }: { modulos: boolean[]; lado: number }
         ))}
       </div>
     </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Contador que cuenta al entrar
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-export function Cifra({ hasta, sufijo = '', prefijo = '', decimales = 0 }: {
-  hasta: number; sufijo?: string; prefijo?: string; decimales?: number
-}) {
-  const [n, setN] = useState<number | null>(null)
-  const ref = useRef<HTMLSpanElement>(null)
-
-  useEffect(() => {
-    const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
-    setN(0)
-    const obs = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return
-      obs.disconnect()
-      const DUR = 1400
-      const t0 = performance.now()
-      const paso = (ahora: number) => {
-        const p = Math.min((ahora - t0) / DUR, 1)
-        // Desaceleración cúbica: arranca rápido y se posa, que es como se lee
-        // una cifra que «sube».
-        setN(hasta * (1 - Math.pow(1 - p, 3)))
-        if (p < 1) requestAnimationFrame(paso)
-        else setN(null)
-      }
-      requestAnimationFrame(paso)
-    }, { threshold: 0.5 })
-    obs.observe(nodo)
-    return () => obs.disconnect()
-  }, [hasta])
-
-  const valor = n === null ? hasta : n
-  return (
-    <span ref={ref}>
-      {prefijo}{valor.toLocaleString('es-CO', {
-        minimumFractionDigits: decimales, maximumFractionDigits: decimales,
-      })}{sufijo}
-    </span>
   )
 }

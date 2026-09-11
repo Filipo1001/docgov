@@ -22,6 +22,9 @@
    Sin JavaScript el folleto se lee entero y quieto.
    ───────────────────────────────────────────────────────────────────────── */
 
+:global(.prop-entra) { opacity: 1; transform: none; transition: opacity 520ms ease, transform 520ms cubic-bezier(.2,.7,.3,1); }
+.dormido :global(.prop-entra) { opacity: 0; transform: translateY(16px); }
+
 .entra { opacity: 1; transform: none; transition: opacity 520ms ease, transform 520ms cubic-bezier(.2,.7,.3,1); }
 .dormido .entra { opacity: 0; transform: translateY(14px); }
 
