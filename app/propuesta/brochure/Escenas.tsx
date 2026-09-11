@@ -150,6 +150,9 @@ const Turno = createContext<Director>({ turno: -1, registrar: () => {} })
 
 export function Secuencia({ children, className = '' }: { children: ReactNode; className?: string }) {
   const visibles = useRef<Set<number>>(new Set())
+  const enJuego = useRef(-1)
+  /** Corta el turno en curso y salta al siguiente. Lo llena el efecto. */
+  const saltar = useRef<(() => void) | null>(null)
   const [turno, setTurno] = useState(-1)
   const [activo, setActivo] = useState(false)
 
@@ -157,26 +160,35 @@ export function Secuencia({ children, className = '' }: { children: ReactNode; c
     if (visible) visibles.current.add(indice)
     else visibles.current.delete(indice)
     setActivo(visibles.current.size > 0)
+    // Si la que se acaba de ir era la que estaba actuando, no se hace esperar
+    // al lector: se salta ya. Sin esto, quien baja por el folleto en un
+    // teléfono se queda mirando una tarjeta quieta hasta cuatro segundos,
+    // porque el turno lo tiene algo que ya no está en pantalla.
+    if (!visible && indice === enJuego.current) saltar.current?.()
   }, [])
 
   useEffect(() => {
-    if (!activo) { setTurno(-1); return }
+    if (!activo) { setTurno(-1); enJuego.current = -1; return }
     let vivo = true
-    const relojes: ReturnType<typeof setTimeout>[] = []
+    let reloj: ReturnType<typeof setTimeout> | undefined
     let ultimo = -1
+
     const paso = () => {
       if (!vivo) return
-      // Se relee el conjunto en CADA compás, no al arrancar: así el turno
-      // sigue al lector mientras baja, sin reiniciar la secuencia.
+      // El conjunto se relee en CADA compás: así la secuencia sigue al lector
+      // mientras baja, en vez de repartir turnos a lo que ya no se ve.
       const lista = [...visibles.current].sort((a, b) => a - b)
-      if (lista.length === 0) { setTurno(-1); return }
+      if (lista.length === 0) { setTurno(-1); enJuego.current = -1; return }
       const i = lista.find(n => n > ultimo) ?? lista[0]
       ultimo = i
+      enJuego.current = i
       setTurno(i)
-      relojes.push(setTimeout(paso, TURNOS[i]))
+      reloj = setTimeout(paso, TURNOS[i])
     }
+
+    saltar.current = () => { if (reloj) clearTimeout(reloj); paso() }
     paso()
-    return () => { vivo = false; relojes.forEach(clearTimeout) }
+    return () => { vivo = false; saltar.current = null; if (reloj) clearTimeout(reloj) }
   }, [activo])
 
   const valor = useMemo(() => ({ turno, registrar }), [turno, registrar])
@@ -421,8 +433,11 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
           <span className={`${css.brillo} absolute rounded-full pointer-events-none`}
             style={{
               left: '50%', top: '50%', width: 164, height: 164, marginLeft: -82, marginTop: -82,
-              background: 'radial-gradient(circle, rgba(16,185,129,.9) 0%, rgba(16,185,129,.38) 45%, transparent 70%)',
-              filter: 'blur(7px)',
+              // El desenfoque va COCIDO EN EL DEGRADADO y no en un `filter`.
+              // Un radial con suficientes paradas ES un desenfoque, pero
+              // gratis: `filter: blur()` sobre algo que además escala obliga a
+              // rasterizar de nuevo en cada fotograma.
+              background: 'radial-gradient(circle, rgba(16,185,129,.92) 0%, rgba(16,185,129,.66) 22%, rgba(16,185,129,.34) 42%, rgba(16,185,129,.14) 58%, rgba(16,185,129,.04) 72%, transparent 82%)',
             }} />
           <span className={`${css.carpeta} relative block`}>
             <LogoCD size={LADO_CARPETA} color={t.logo} />
@@ -468,7 +483,12 @@ export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
             backgroundColor: t.papel,
             transform: `translateX(${d.x}px) rotate(${d.giro}deg)`,
             transitionDelay: `${3200 + i * 115}ms`,
-            backdropFilter: 'blur(2px)',
+            // SIN `backdrop-filter`. Estaba en los cinco documentos a la vez y
+            // es lo más caro que se puede pedir por fotograma en la GPU de un
+            // teléfono: obliga a re-muestrear y desenfocar el fondo en cada
+            // cuadro mientras el elemento se mueve. Y no aportaba NADA — el
+            // fondo de esta sección es un color plano, y desenfocar un color
+            // plano devuelve el mismo color plano. Puro coste.
           }}>
           <span className="block p-1.5">
             {[84, 62, 74, 48].map((ancho, j) => (
@@ -621,7 +641,7 @@ export function ElMomento() {
                 </span>
                 <span className={`min-w-0 transition-opacity duration-300 ${fuera ? 'opacity-100' : 'opacity-0'}`}>
                   <span className="block text-xs font-semibold leading-snug text-gray-900">{p.n}</span>
-                  <span className="block text-[10px] text-gray-400 mt-0.5">{p.q}</span>
+                  <span className="block text-[11px] text-gray-400 mt-0.5">{p.q}</span>
                 </span>
               </div>
             </div>
@@ -681,7 +701,7 @@ export function TeselaDuplicados({ indice }: { indice: number }) {
     <div ref={ref} className={`${clase} relative w-full flex items-center justify-center gap-9`}>
       <div className="flex flex-col items-center gap-2">
         <Foto />
-        <span className="text-[10px] text-gray-400">marzo</span>
+        <span className="text-[11px] text-gray-400">marzo</span>
       </div>
 
       {/* El lazo se tensa una vez que el barrido ya pasó por las dos. */}
@@ -700,10 +720,10 @@ export function TeselaDuplicados({ indice }: { indice: number }) {
 
       <div className="flex flex-col items-center gap-2">
         <Foto deformada />
-        <span className="text-[10px] text-gray-400">abril</span>
+        <span className="text-[11px] text-gray-400">abril</span>
       </div>
 
-      <span className={`${css.alerta} absolute px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap`}
+      <span className={`${css.alerta} absolute px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap`}
         style={{ bottom: -6, backgroundColor: '#FBF0E2', color: AMBAR }}>
         Ya se usó en marzo
       </span>
@@ -783,7 +803,7 @@ export function TeselaHuella({ indice }: { indice: number }) {
           </span>
         ))}
       </div>
-      <p className="mt-2 text-center text-[10px] text-gray-400 font-mono">SHA-256</p>
+      <p className="mt-2 text-center text-[11px] text-gray-400 font-mono">SHA-256</p>
     </div>
   )
 }
@@ -812,7 +832,7 @@ export function TeselaInfraestructura({ indice }: { indice: number }) {
       <div className="flex flex-col gap-1.5">
         {NORMAS.map((n, i) => (
           <span key={n}
-            className={`${css.selloNorma} rounded-md px-2 py-1 text-[10px] font-semibold tracking-wide text-center`}
+            className={`${css.selloNorma} rounded-md px-2 py-1 text-[11px] font-semibold tracking-wide text-center`}
             style={{ backgroundColor: '#EEF2F5', color: MARCA, animationDelay: `${1500 + i * 150}ms` }}>
             {n}
           </span>
@@ -848,8 +868,8 @@ export function TeselaTrazabilidad({ indice }: { indice: number }) {
                 backgroundColor: i === CADENA.length - 1 ? VERDE : '#9FB2BF',
                 transitionDelay: `${i * 340 + 220}ms`,
               }} />
-            <span className="text-[12px] font-medium text-gray-700 flex-1">{q}</span>
-            <span className="text-[10px] text-gray-400 font-mono">{cuando}</span>
+            <span className="text-[13px] font-medium text-gray-700 flex-1">{q}</span>
+            <span className="text-[11px] text-gray-400 font-mono">{cuando}</span>
             <span className={`${css.sobre} shrink-0`} style={{ animationDelay: `${i * 340 + 380}ms` }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <rect x="2" y="5" width="20" height="14" rx="2.5" stroke={VERDE} strokeWidth="2.2" />
@@ -892,11 +912,11 @@ export function TeselaBloqueo({ indice }: { indice: number }) {
                   : <path d="M7 7 L17 17 M17 7 L7 17" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" />}
               </svg>
             </span>
-            <span className="text-[12px] text-gray-600">{t as string}</span>
+            <span className="text-[13px] text-gray-600">{t as string}</span>
           </div>
         ))}
       </div>
-      <div className={`${css.botonMuda} ${css.sacude} mt-3.5 rounded-lg py-2 text-center text-[12px] font-semibold`}
+      <div className={`${css.botonMuda} ${css.sacude} mt-3.5 rounded-lg py-2 text-center text-[13px] font-semibold`}
         style={{
           backgroundColor: puedeEnviar ? VERDE : '#EEF1F4',
           color: puedeEnviar ? '#fff' : '#A3AEB8',
@@ -934,7 +954,7 @@ export function TeselaDispositivos({ indice }: { indice: number }) {
             style={{ width: `${f.col}%`, backgroundColor: '#E6EDF2' }} />
         ))}
       </div>
-      <span className="mt-3 text-[10px] text-gray-400">{f.rotulo}</span>
+      <span className="mt-3 text-[11px] text-gray-400">{f.rotulo}</span>
     </div>
   )
 }
@@ -981,14 +1001,14 @@ export function TeselaPaquete({ indice }: { indice: number }) {
         {/* La banda que cierra el paquete, cuando ya está todo dentro. */}
         <span className={`${css.banda} absolute flex items-center justify-center rounded`}
           style={{
-            left: 30, top: 36, width: 62, height: 17, zIndex: 10,
+            left: 26, top: 36, width: 70, height: 18, zIndex: 10,
             backgroundColor: MARCA, color: '#fff',
           }}>
-          <span className="text-[8px] font-bold tracking-wide">SECOP II</span>
+          <span className="text-[10px] font-bold tracking-wide">SECOP II</span>
         </span>
       </div>
 
-      <span className="mt-1 text-[10px] text-gray-400 tabular-nums">
+      <span className="mt-1 text-[11px] text-gray-400 tabular-nums">
         {llegados} de {SUELTOS.length} documentos
       </span>
     </div>
@@ -1084,7 +1104,7 @@ export function CadenaCustodia() {
                 style={{ color: ultimo ? VERDE_OSCURO : MARCA }}>
                 {paso}
               </span>
-              <span className="mt-1 text-[10px] leading-tight text-gray-500">
+              <span className="mt-1 text-[11px] leading-tight text-gray-500">
                 {pie}
               </span>
             </div>

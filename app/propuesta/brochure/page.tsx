@@ -401,7 +401,7 @@ export default function FolletoPage() {
             ].map(([t, d]) => (
               <div key={t}>
                 <p className="text-sm font-semibold" style={{ color: VERDE_TINTA }}>{t}</p>
-                <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: 'rgba(4,53,42,.62)' }}>{d}</p>
+                <p className="mt-1.5 text-sm leading-relaxed" style={{ color: 'rgba(4,53,42,.62)' }}>{d}</p>
               </div>
             ))}
           </div>
