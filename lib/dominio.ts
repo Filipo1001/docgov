@@ -79,6 +79,12 @@ const RUTAS_COMERCIALES = [
   '/icon.svg',
   '/apple-icon.png',
   '/marca',
+  // Escudos de los municipios a los que se presenta una propuesta. Van aquí
+  // por lo mismo que `/marca`: sin esta entrada el ápice los redirige al
+  // subdominio de la aplicación, y la propuesta cargaría su escudo dando un
+  // salto a otro dominio en cada visita. Funciona, pero es un rodeo que no
+  // tiene por qué existir.
+  '/municipios',
 ]
 
 export function esRutaComercial(pathname: string): boolean {
