@@ -34,11 +34,19 @@ import {
  * entrega —implementación, capacitación, soporte, actualizaciones— es trabajo
  * de empresa, no un favor personal.
  *
- * EL COLOR TRABAJA. Azul noche donde se pide confianza (portada, verificación,
- * cierre) y claro donde se demuestra (el envío, las capacidades, la cuenta).
- * El vaivén oscuro→claro→oscuro ES la narración: gravedad, alivio, compromiso.
- * El verde aparece solo cuando algo queda confirmado — que es lo que el verde
- * ya significa dentro del producto.
+ * SIN NINGÚN FONDO OSCURO, por decisión. Eso costó el motor del ritmo —el
+ * vaivén oscuro→claro→oscuro que hacía de gravedad, alivio y compromiso— y lo
+ * reemplaza la ALTERNANCIA DE TEMPERATURA: arena y nieve, cálido y frío, casi
+ * a la misma claridad. El corte entre secciones se nota sin que ninguna pese
+ * más que otra.
+ *
+ * Las teselas van sobre arena y no sobre nieve porque son tarjetas blancas:
+ * sobre el neutro se desvanecerían.
+ *
+ * Y EL DESTINO LO MARCA EL VERDE. Sin secciones oscuras nada señalaba un
+ * final, y una llamada a la acción que se confunde con el recorrido no es un
+ * destino. El cierre es el único bloque saturado de la página — en el mismo
+ * color con el que el producto lleva toda la página diciendo «confirmado».
  */
 
 /**
@@ -54,8 +62,27 @@ function destinoQR(): string {
   return 'http://localhost:3000/propuesta/emitidos'
 }
 
-const TINTA_CLARA = '#F7F9FA'
+/**
+ * Los dos suelos del folleto, y por qué son dos.
+ *
+ * Al quitar las secciones oscuras se cayó el motor del ritmo: el vaivén
+ * oscuro→claro→oscuro que hacía de gravedad, alivio y compromiso. Lo
+ * reemplaza la ALTERNANCIA DE TEMPERATURA — un neutro frío y un cálido casi a
+ * la misma claridad. El corte entre secciones se nota sin que ninguna pese
+ * más que otra, que es exactamente lo que se pedía.
+ *
+ * Y resuelve un problema que el blanco solo no resolvía: las siete teselas son
+ * tarjetas blancas, y sobre un fondo casi blanco no se ven. Sobre arena sí.
+ * Por eso van ahí y no en el neutro.
+ */
+const ARENA = '#F5F1E9'
+const NIEVE = '#FAFBFC'
+
 const VERDE = '#10b981'
+/** Verde legible como texto sobre claro; el pleno solo sirve de superficie. */
+const VERDE_TEXTO = '#0B7A5C'
+/** Y su recíproco: tinta sobre el verde pleno del cierre. */
+const VERDE_TINTA = '#04352A'
 
 export const metadata: Metadata = {
   title: 'Contratista Digital · Gestión documental contractual para alcaldías',
@@ -65,30 +92,30 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-function Acto({ oscura = false, children }: { oscura?: boolean; children: React.ReactNode }) {
+function Acto({ fondo = NIEVE, children }: { fondo?: string; children: React.ReactNode }) {
   return (
     <section
       className="px-6 sm:px-8 py-20 sm:py-28"
-      style={{ backgroundColor: oscura ? MARCA : TINTA_CLARA }}
+      style={{ backgroundColor: fondo }}
     >
       <div className="max-w-5xl mx-auto">{children}</div>
     </section>
   )
 }
 
-function Etiqueta({ oscura = false, children }: { oscura?: boolean; children: React.ReactNode }) {
+function Etiqueta({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[11px] font-semibold uppercase tracking-[0.16em]"
-      style={{ color: oscura ? 'rgba(255,255,255,.45)' : '#94A3AF' }}>
+      style={{ color: VERDE_TEXTO }}>
       {children}
     </p>
   )
 }
 
-function Titulo({ oscura = false, children }: { oscura?: boolean; children: React.ReactNode }) {
+function Titulo({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="mt-3 text-3xl sm:text-4xl font-bold tracking-tight leading-[1.12]"
-      style={{ color: oscura ? '#FFFFFF' : '#111827' }}>
+      style={{ color: MARCA }}>
       {children}
     </h2>
   )
@@ -106,12 +133,12 @@ export default function FolletoPage() {
       {/* ── ACTO 1 · La promesa ─────────────────────────────────────────
           Una sola línea. El expediente ya está creciendo detrás mientras se
           lee: la demostración empieza antes que el argumento. */}
-      <section className="px-6 sm:px-8 pt-7 pb-24 sm:pb-32" style={{ backgroundColor: MARCA }}>
+      <section className="px-6 sm:px-8 pt-7 pb-24 sm:pb-32" style={{ backgroundColor: ARENA }}>
         <div className="max-w-5xl mx-auto">
           {/* La cabecera que la página no tenía. El logo y el nombre quedan a
               la vista desde el primer píxel y no solo dentro de la portada. */}
           <header>
-            <LogoHorizontal size={34} color="#FFFFFF" colorNombre="#FFFFFF" />
+            <LogoHorizontal size={34} />
           </header>
 
           {/* Dos columnas a partir de `lg`, y no antes: la escena mide 340px de
@@ -131,10 +158,11 @@ export default function FolletoPage() {
                   termina su mes. Dice «listo para CARGAR a SECOP II», no
                   «integrado con»: el sistema arma el paquete y la carga la
                   sigue haciendo una persona. Ver PRODUCTO.md. */}
-              <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white">
+              <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05]"
+                style={{ color: MARCA }}>
                 El cierre del mes deja de ser un problema.
               </h1>
-              <p className="mt-7 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
+              <p className="mt-7 text-lg leading-relaxed max-w-xl text-gray-600">
                 Ni plantillas de Word, ni consecutivos a mano, ni perseguir soportes
                 uno por uno. El contratista reporta desde su celular y el sistema arma
                 el expediente completo de cada contrato, listo para cargar a SECOP&nbsp;II.
@@ -142,7 +170,7 @@ export default function FolletoPage() {
             </div>
 
             <div className="flex justify-center lg:justify-end">
-              <ExpedienteVivo />
+              <ExpedienteVivo claro />
             </div>
           </div>
         </div>
@@ -151,7 +179,7 @@ export default function FolletoPage() {
       {/* ── ACTO 2 · La demostración ────────────────────────────────────
           Entra la luz. Es el punto de alivio de la página y por eso cambia el
           fondo: el contraste hace el trabajo que haría un párrafo. */}
-      <Acto>
+      <Acto fondo={NIEVE}>
         <Etiqueta>El momento</Etiqueta>
         <Titulo>Se envía una vez. El resto lo escribe el sistema.</Titulo>
         <p className="mt-6 text-lg leading-relaxed text-gray-600 max-w-2xl">
@@ -167,7 +195,9 @@ export default function FolletoPage() {
       {/* ── ACTO 3 · Lo que ocurre por dentro ───────────────────────────
           Se pidió que las ventajas no fueran palabras ni emojis. Cada tesela
           anima su propio argumento y solo ese. */}
-      <Acto>
+      {/* Arena: las teselas son tarjetas blancas y sobre el neutro se
+          desvanecerían. Aquí se leen como tarjetas. */}
+      <Acto fondo={ARENA}>
         <Etiqueta>Por dentro</Etiqueta>
         <Titulo>Siete cosas que ya vienen resueltas.</Titulo>
 
@@ -219,12 +249,12 @@ export default function FolletoPage() {
 
       {/* ── ACTO 4 · La prueba ──────────────────────────────────────────
           Vuelve el azul: aquí se pide confianza otra vez. */}
-      <Acto oscura>
+      <Acto fondo={NIEVE}>
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div>
-            <Etiqueta oscura>Cadena de custodia</Etiqueta>
-            <Titulo oscura>Trazabilidad del 100%. De quien lo crea a quien lo verifica.</Titulo>
-            <p className="mt-6 leading-relaxed" style={{ color: 'rgba(255,255,255,.62)' }}>
+            <Etiqueta>Cadena de custodia</Etiqueta>
+            <Titulo>Trazabilidad del 100%. De quien lo crea a quien lo verifica.</Titulo>
+            <p className="mt-6 leading-relaxed text-gray-600">
               Cada documento deja constancia de quién lo hizo, quién lo aprobó y a
               qué hora, en un historial que no se altera. Cuando sale, va sellado con
               su huella digital y su código único impreso dentro del PDF: si alguien
@@ -239,13 +269,13 @@ export default function FolletoPage() {
                 arquitectura que prohíbe que las URL de verificación dejen de
                 responder, porque el QR va grabado en el mapa de bits de
                 documentos ya radicados en SECOP II. Ver CLAUDE.md. */}
-            <p className="mt-8 leading-relaxed" style={{ color: 'rgba(255,255,255,.62)' }}>
+            <p className="mt-8 leading-relaxed text-gray-600">
               Esa custodia no caduca. Un acta firmada hoy se podrá comprobar dentro
               de años, sin cuenta y sin pedirle permiso a nadie.
             </p>
-            <p className="mt-5 leading-relaxed text-white">
-              <span className="font-semibold">Escanee el código.</span>{' '}
-              <span style={{ color: 'rgba(255,255,255,.62)' }}>
+            <p className="mt-5 leading-relaxed">
+              <span className="font-semibold" style={{ color: MARCA }}>Escanee el código.</span>{' '}
+              <span className="text-gray-600">
                 Lleva a cuántos documentos verificables lleva emitidos la plataforma,
                 en este momento.
               </span>
@@ -261,7 +291,7 @@ export default function FolletoPage() {
           Aritmética sobre un municipio hipotético de cien contratos, no sobre
           un cliente. El único supuesto —veinte minutos por documento— va
           escrito, para que quien lo dude pueda ajustarlo y seguir leyendo. */}
-      <Acto>
+      <Acto fondo={ARENA}>
         <Etiqueta>La cuenta</Etiqueta>
         <Titulo>Cien contratos son quinientos documentos al mes.</Titulo>
 
@@ -292,9 +322,9 @@ export default function FolletoPage() {
       {/* ── ACTO 6 · Lo que ya está andando ─────────────────────────────
           Sin fecha de arranque y sin nombrar municipio. Las cifras son
           reales y se reverifican contra producción antes de publicar. */}
-      <Acto oscura>
-        <Etiqueta oscura>En operación</Etiqueta>
-        <Titulo oscura>No es una maqueta.</Titulo>
+      <Acto fondo={NIEVE}>
+        <Etiqueta>En operación</Etiqueta>
+        <Titulo>No es una maqueta.</Titulo>
 
         <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 gap-8">
           {[
@@ -304,8 +334,8 @@ export default function FolletoPage() {
             [<><Cifra key="h" hasta={44.7} decimales={1} /> h</>, 'mediana de aprobación de un informe'],
           ].map(([cifra, pie], i) => (
             <div key={i}>
-              <p className="text-3xl sm:text-4xl font-bold tracking-tight text-white">{cifra}</p>
-              <p className="mt-2 text-sm leading-snug" style={{ color: 'rgba(255,255,255,.5)' }}>{pie}</p>
+              <p className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ color: MARCA }}>{cifra}</p>
+              <p className="mt-2 text-sm leading-snug text-gray-500">{pie}</p>
             </div>
           ))}
         </div>
@@ -313,23 +343,32 @@ export default function FolletoPage() {
 
       {/* ── ACTO 7 · El cierre ──────────────────────────────────────────
           Una sola acción en toda la página. */}
-      <section className="px-6 sm:px-8 py-24 sm:py-32" style={{ backgroundColor: MARCA }}>
+      {/* El cierre es el ÚNICO bloque saturado de la página, y lo es por
+          necesidad: sin secciones oscuras nada marcaba un destino, y una
+          llamada a la acción que se confunde con el resto del recorrido no es
+          un destino. El verde pleno lo resuelve sin traer de vuelta el negro,
+          y de paso es el color con el que el producto lleva toda la página
+          diciendo «confirmado». */}
+      <section className="px-6 sm:px-8 py-24 sm:py-32" style={{ backgroundColor: VERDE }}>
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl sm:text-5xl font-bold tracking-tight leading-[1.1] text-white max-w-2xl">
+          <h2 className="text-3xl sm:text-5xl font-bold tracking-tight leading-[1.1] max-w-2xl"
+            style={{ color: VERDE_TINTA }}>
             Hablemos de su municipio.
           </h2>
-          <p className="mt-6 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
+          <p className="mt-6 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(4,53,42,.78)' }}>
             El alcance y la inversión dependen de cuántos contratos maneja y de
             cuántas secretarías entran. Uno de nuestros asesores lo calcula con
             usted y le muestra la plataforma funcionando, con documentos reales.
           </p>
 
+          {/* Sobre el verde pleno, el botón se vuelve tinta de marca: es el
+              contraste más alto que la paleta permite sin inventar un color. */}
           <a
             href={enlaceWhatsApp('Buen día. Quisiera conocer Contratista Digital para mi alcaldía.')}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-10 inline-flex items-center gap-3 rounded-full px-8 py-4 font-semibold transition-transform hover:scale-[1.03]"
-            style={{ backgroundColor: VERDE, color: '#06281F' }}
+            className="mt-10 inline-flex items-center gap-3 rounded-full px-8 py-4 font-semibold text-white transition-transform hover:scale-[1.03]"
+            style={{ backgroundColor: MARCA }}
           >
             Hablar con un asesor
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -339,7 +378,7 @@ export default function FolletoPage() {
           </a>
 
           <div className="mt-16 pt-8 grid sm:grid-cols-4 gap-6"
-            style={{ borderTop: '1px solid rgba(255,255,255,.12)' }}>
+            style={{ borderTop: '1px solid rgba(4,53,42,.18)' }}>
             {[
               ['Implementación', 'Configuramos el municipio y migramos los contratos en curso.'],
               ['Capacitación', 'Por rol: contratistas, supervisores y contratación.'],
@@ -347,8 +386,8 @@ export default function FolletoPage() {
               ['Soporte', 'Y las actualizaciones van incluidas, sin cobro aparte.'],
             ].map(([t, d]) => (
               <div key={t}>
-                <p className="text-sm font-semibold text-white">{t}</p>
-                <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,.45)' }}>{d}</p>
+                <p className="text-sm font-semibold" style={{ color: VERDE_TINTA }}>{t}</p>
+                <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: 'rgba(4,53,42,.62)' }}>{d}</p>
               </div>
             ))}
           </div>
