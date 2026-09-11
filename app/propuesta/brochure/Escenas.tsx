@@ -40,6 +40,19 @@ const AMBAR = '#D98324'
 const VERDE_OSCURO = '#0B7A5C'
 const ROJO = '#E0574F'
 
+/**
+ * ¿Pidió este aparato menos movimiento?
+ *
+ * YA NO DETIENE LOS CICLOS, y ese fue el error que dejó el folleto muerto en
+ * todo iPhone con el ajuste puesto — que son muchísimos, porque se activa para
+ * quitarle el zoom a iOS, no para desactivar páginas. Las escenas siguen
+ * corriendo y contando su historia; el CSS se encarga de que la cuenten con
+ * opacidad y color en vez de con desplazamientos, giros y escalas.
+ *
+ * Queda para lo único que el CSS no puede matizar: el revuelto de caracteres
+ * de la huella, que es texto cambiando a toda velocidad y no tiene versión
+ * suave.
+ */
 function quieto(): boolean {
   return typeof window !== 'undefined'
     && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
@@ -60,7 +73,7 @@ function useCiclo<T extends HTMLElement>(duracion: number, umbral = 0.4) {
 
   useEffect(() => {
     const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    if (!nodo || typeof IntersectionObserver === 'undefined') return
     // La red SOLO actúa si el observador jamás contestó. Sin esta condición
     // se anularía a sí misma: en un navegador sano el observador responde al
     // instante, y el respaldo marcaría como visible incluso lo que no lo está.
@@ -199,7 +212,7 @@ function useTurno(indice: number) {
 
   useEffect(() => {
     const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    if (!nodo || typeof IntersectionObserver === 'undefined') return
     let respondio = false
     const obs = new IntersectionObserver(([e]) => {
       respondio = true
@@ -513,7 +526,7 @@ export function ElMomento() {
   useEffect(() => {
     const nodo = ref.current
     if (!nodo) return
-    if (quieto() || typeof IntersectionObserver === 'undefined') return
+    if (typeof IntersectionObserver === 'undefined') return
     const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.3 })
     obs.observe(nodo)
     return () => obs.disconnect()
@@ -712,10 +725,14 @@ export function TeselaHuella({ indice }: { indice: number }) {
   const [huella, setHuella] = useState(HUELLA_SUCIA)
 
   useEffect(() => {
-    // Sin ciclo —sin JavaScript útil o con «reducir movimiento»— la tesela se
-    // queda en su estado final, que es la huella ya alterada.
+    // Sin ciclo —sin JavaScript útil— la tesela se queda en su estado final,
+    // que es la huella ya alterada.
     if (!ciclando) { setHuella(HUELLA_SUCIA); return }
     if (!armado) { setHuella(HUELLA_LIMPIA); return }
+    // Con «reducir movimiento», la huella cambia de golpe y en rojo. El
+    // remolino es texto girando a toda velocidad y no tiene versión suave,
+    // pero su conclusión —cambió entera— se entiende igual sin él.
+    if (quieto()) { setHuella(HUELLA_SUCIA); return }
 
     let fijos = 0
     let revuelve: ReturnType<typeof setInterval> | undefined
@@ -995,7 +1012,7 @@ export function AlEntrar({ children, className = '' }: { children: ReactNode; cl
 
   useEffect(() => {
     const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    if (!nodo || typeof IntersectionObserver === 'undefined') return
     setFase('dormido')
     const obs = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return
@@ -1036,7 +1053,7 @@ export function CadenaCustodia() {
 
   useEffect(() => {
     const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    if (!nodo || typeof IntersectionObserver === 'undefined') return
     setFase('dormido')
     const obs = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return
@@ -1104,7 +1121,7 @@ export function CodigoQR({ modulos, lado }: { modulos: boolean[]; lado: number }
 
   useEffect(() => {
     const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    if (!nodo || typeof IntersectionObserver === 'undefined') return
     setFase('dormido')
     const obs = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return

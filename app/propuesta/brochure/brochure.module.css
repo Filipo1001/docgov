@@ -301,15 +301,93 @@
 .modulo { opacity: 1; transform: none; transition: opacity 400ms ease, transform 460ms cubic-bezier(.2,.9,.3,1); }
 .dormido .modulo { opacity: 0; transform: scale(.3); }
 
-/* ── Quien pidió menos movimiento no lo recibe por la puerta de atrás ───── */
+/* ═════════════════════════════════════════════════════════════════════════
+   «REDUCIR MOVIMIENTO»: SE QUITA EL QUE MAREA, NO EL QUE CUENTA
+
+   La primera versión apagaba TODO, y eso dejaba la página muerta en cualquier
+   iPhone con el ajuste puesto — que son muchísimos, porque la gente lo activa
+   para quitarle el zoom a iOS, no para desactivar folletos. Un folleto cuyo
+   argumento es «mire lo que hace el sistema» no puede quedarse en una foto.
+
+   La norma pide evitar el movimiento que dispara trastornos vestibulares:
+   cosas que VIAJAN por la pantalla, GIRAN, ESCALAN o hacen parallax. No pide
+   suprimir un cambio de opacidad ni uno de color.
+
+   Así que aquí sigue pasando todo —los documentos se escriben, los sellos
+   caen, la carpeta se enciende, las teselas se turnan— pero mediante OPACIDAD
+   y COLOR en vez de desplazamiento. Nada cruza la pantalla, nada gira y nada
+   crece.
+   ═════════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
-  .entra, .emerge, .selloDoc, .vistoPestana, .renglon, .gemela, .eslabon, .modulo, .marco, .vuela, .punto,
-  .cadena, .banda, .barraFlex, .botonMuda, .marcaEstado, .letraMala, .cifra,
-  .escudo, .visto, .selloNorma, .lazo, .alerta, .barrido, .sobre {
-    transition: none !important;
-    animation: none !important;
-    opacity: 1 !important;
+
+  /* 1 · Lo que viajaba, aparece en su sitio. Se anula el transform en los dos
+        extremos para que solo quede interpolando la opacidad. */
+  .arcoX, .dormido .arcoX,
+  .arcoY, .dormido .arcoY,
+  .emerge, .dormido .emerge,
+  .selloDoc, .dormido .selloDoc,
+  .vistoPestana, .dormido .vistoPestana,
+  .eslabon, .dormido .eslabon,
+  .punto, .dormido .punto,
+  .cadena, .dormido .cadena,
+  .modulo, .dormido .modulo,
+  .vuela, .banda, .dormido .banda,
+  .selloNorma, .dormido .selloNorma,
+  .eslabonCustodia, .dormido .eslabonCustodia,
+  .hiloCustodia, .dormido .hiloCustodia,
+  .entra, .dormido .entra,
+  :global(.prop-entra), .dormido :global(.prop-entra) {
     transform: none !important;
-    stroke-dashoffset: 0 !important;
   }
+
+  /* 2 · Animaciones que son PURO desplazamiento: no tienen equivalente suave,
+        así que se van. Lo que comunicaban lo dice ya el estado final. */
+  .orbita, .flota, .carpeta, .barrido, .barridoVerde, .sacude,
+  .armado .barrido, .armado .barridoVerde, .armado .sacude {
+    animation: none !important;
+  }
+
+  /* 3 · Las que sí tienen equivalente: se rehacen solo con opacidad. */
+  .aliento { animation: diag-aliento-quieto 6s ease-in-out infinite; }
+  @keyframes diag-aliento-quieto { 0%, 100% { opacity: .5; } 50% { opacity: .85; } }
+
+  .armado .brillo { animation: br-brillo-quieto 1400ms ease-out 2400ms; }
+  @keyframes br-brillo-quieto { 0%, 100% { opacity: 0; } 30% { opacity: 1; } }
+
+  .armado .onda { animation: br-onda-quieta 1100ms ease-out 2500ms; }
+  @keyframes br-onda-quieta { 0%, 100% { opacity: 0; } 20% { opacity: .75; } }
+
+  .selloEntra, .estampa, .armado .selloNorma, .armado .alerta {
+    animation: br-solo-aparece 360ms ease-out forwards !important;
+  }
+  @keyframes br-solo-aparece { from { opacity: 0; } to { opacity: 1; } }
+
+  /* 4 · Los trazos que se dibujaban solos se muestran ya completos: dibujar
+        una línea es movimiento, pero su resultado no. */
+  .anilloCierre, .checkTrazo, .escudo, .visto, .lazo,
+  .dormido .escudo, .dormido .visto, .dormido .lazo, .armado .lazo {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+    transition: none !important;
+  }
+
+  /* 5 · La foto de abril se queda deformada desde el principio. Que el sistema
+        reconozca una copia DISFRAZADA es el argumento de esa tesela: si se
+        quita la deformación no queda nada que reconocer. Lo que se elimina es
+        el viaje hasta ella, no el hecho. */
+  .gemela, .dormido .gemela {
+    transition: none !important;
+    transform: rotate(-7deg) scale(1.28) !important;
+    filter: contrast(1.3) brightness(1.16) saturate(.8) !important;
+  }
+
+  /* 6 · El morfeo de dispositivos deja de interpolar: cambia de golpe. Sigue
+        contando que el mismo expediente cabe en las tres pantallas. */
+  .marco, .barraFlex { transition: none !important; }
+
+  /* 7 · Lo que NO se toca, porque nunca fue movimiento: el color del destello
+        de la huella, el ancho de un renglón que se llena, y los cambios de
+        estado de la lista de bloqueo. */
 }
+
+
