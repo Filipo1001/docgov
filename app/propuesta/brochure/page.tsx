@@ -201,30 +201,30 @@ export default function FolletoPage() {
           desvanecerían. Aquí se leen como tarjetas. */}
       <Acto fondo={ARENA}>
         <Etiqueta>Por dentro</Etiqueta>
-        <Titulo>Siete cosas que ya vienen resueltas.</Titulo>
+        <Titulo>La mejor tecnología del mundo al servicio de su alcaldía.</Titulo>
 
         <Secuencia className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Tesela
             titulo="Reconoce una evidencia repetida"
-            cuerpo="No solo el archivo idéntico. Detecta la misma imagen aunque la hayan recortado, recomprimido o vuelto a fotografiar de la pantalla, y avisa al supervisor antes de que apruebe.">
+            cuerpo="No hace falta que sea el mismo archivo. Reconoce la misma foto aunque la hayan recortado, achicado o vuelto a fotografiar de la pantalla — y se lo advierte al supervisor antes de que apruebe, no después.">
             <TeselaDuplicados />
           </Tesela>
 
           <Tesela
             titulo="Sella cada documento con su huella"
-            cuerpo="Cada PDF emitido guarda su huella SHA-256. Si cambia un solo carácter, la huella cambia entera: un documento alterado deja de coincidir consigo mismo y se nota.">
+            cuerpo="Cada documento sale con una huella única. Si alguien le cambia un dato —un valor, una fecha, un nombre— la huella deja de coincidir y el cambio queda a la vista. Es el estándar SHA-256, el mismo que usa la banca.">
             <TeselaHuella />
           </Tesela>
 
           <Tesela
             titulo="Trabajamos sobre infraestructura certificada"
-            cuerpo="La infraestructura sobre la que opera está certificada bajo ISO/IEC 27001, 27017, 27018 y SOC 2 Tipo II, con respaldos automáticos y cifrado en tránsito y en reposo. La mejor tecnología del mundo al servicio de su alcaldía.">
+            cuerpo="La infraestructura sobre la que opera está certificada bajo ISO/IEC 27001, 27017, 27018 y SOC 2 Tipo II. La información viaja cifrada, se guarda cifrada y se respalda sola, sin que nadie en la alcaldía tenga que acordarse de hacerlo.">
             <TeselaInfraestructura />
           </Tesela>
 
           <Tesela
             titulo="Avisa solo, en el momento"
-            cuerpo="Cada cambio de estado sale por correo apenas ocurre: enviado, aprobado, devuelto. Nadie tiene que llamar a preguntar en qué va un informe. Y cada acción queda registrada con su responsable y su hora en un historial que no se altera.">
+            cuerpo="Cada vez que algo cambia sale un correo, en el momento: enviado, aprobado, devuelto. Nadie tiene que llamar a preguntar en qué va un informe. Y todo queda anotado con su responsable y su hora, en un historial que nadie puede retocar.">
             <TeselaTrazabilidad />
           </Tesela>
 
@@ -267,19 +267,33 @@ export default function FolletoPage() {
               <CadenaCustodia />
             </div>
 
-            {/* «No caduca» no es una promesa comercial: hay una regla de
-                arquitectura que prohíbe que las URL de verificación dejen de
-                responder, porque el QR va grabado en el mapa de bits de
+            {/* EL GIRO QUE PEDÍA ESTE PÁRRAFO. Antes decía que «cualquiera»
+                puede comprobar un documento, y eso, leído por un secretario de
+                despacho, no suena a garantía: suena a que lo van a auditar. El
+                mismo hecho, contado desde su lado, es exactamente lo contrario
+                — es lo que lo respalda a él el día que le pregunten.
+
+                Y no es una promesa comercial: hay una regla de arquitectura
+                que prohíbe que las direcciones de verificación dejen de
+                responder, porque el código va grabado en el mapa de bits de
                 documentos ya radicados en SECOP II. Ver CLAUDE.md. */}
             <p className="mt-8 leading-relaxed text-gray-600">
-              Esa custodia no caduca. Un acta firmada hoy se podrá comprobar dentro
-              de años, sin cuenta y sin pedirle permiso a nadie.
+              El día que deje el cargo —o el día que decidan no seguir con
+              nosotros— cada documento que usted firmó se sigue pudiendo
+              comprobar. No se vence, no se apaga y no depende de que sigamos
+              trabajando juntos.
+            </p>
+            <p className="mt-4 leading-relaxed text-gray-600">
+              Porque la pregunta nunca llega el mes que uno la espera: llega años
+              después, cuando ya nadie recuerda quién archivó qué. Y entonces lo
+              que lo respalda no es haber hecho bien el trabajo, sino poder
+              demostrarlo — sin tres días de angustia revolviendo carpetas para
+              encontrar un acta de supervisión.
             </p>
             <p className="mt-5 leading-relaxed">
-              <span className="font-semibold" style={{ color: MARCA }}>Escanee el código.</span>{' '}
+              <span className="font-semibold" style={{ color: MARCA }}>Escanee el código y véalo funcionando.</span>{' '}
               <span className="text-gray-600">
-                Lleva a cuántos documentos verificables lleva emitidos la plataforma,
-                en este momento.
+                Así de fácil será comprobar un documento suyo dentro de cinco años.
               </span>
             </p>
           </div>
@@ -307,8 +321,8 @@ export default function FolletoPage() {
         <Etiqueta>Quién hace qué</Etiqueta>
         <Titulo>Cada quien vuelve a su oficio.</Titulo>
         <p className="mt-6 text-lg leading-relaxed text-gray-600 max-w-2xl">
-          El trabajo de oficina no desaparece porque alguien lo haga más rápido.
-          Desaparece porque deja de existir.
+          No se trata de hacer el mismo papeleo más rápido. Se trata de que ya
+          nadie en la alcaldía tenga que hacerlo.
         </p>
 
         <AlEntrar className="mt-12 grid sm:grid-cols-2 gap-4">
@@ -335,7 +349,7 @@ export default function FolletoPage() {
               glifo: Iconos.navegacion.municipio,
               quien: 'El alcalde',
               titular: 'Toda la alcaldía en la palma de la mano.',
-              cuerpo: 'Una tarjeta por secretaría con su secretario, sus contratistas y su ejecución. La ejecución mensual del año, el presupuesto por secretaría y el calendario de vencimientos. Solo lectura agregada: no expone cédulas ni datos bancarios.',
+              cuerpo: 'Una tarjeta por secretaría con su secretario, sus contratistas y su ejecución. La ejecución mensual del año, el presupuesto por secretaría y el calendario de vencimientos. Ve los totales, no los datos de las personas: ni cédulas ni cuentas bancarias.',
             },
           ].map((a, i) => (
             <div key={a.quien}
