@@ -1,0 +1,131 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Folleto general de Contratista Digital.
+
+   Va en módulo y no en globals.css a propósito: son ~250 líneas de animación
+   que sirven a una sola página y que, mientras sea un preview, puede
+   desaparecer entera. Borrar una carpeta es más seguro que extraer doscientas
+   líneas de un archivo compartido.
+
+   REGLA DE LA CASA, HEREDADA: el estado por defecto es el RESULTADO FINAL, no
+   uno intermedio. Todo lo que anima parte de una clase que el servidor ya
+   pinta legible; el movimiento se añade solo cuando el script confirma que
+   puede. Sin JavaScript el folleto se lee entero.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Entrada genérica de escena ──────────────────────────────────────────── */
+.entra { opacity: 1; transform: none; }
+.armado .entra { opacity: 1; transform: none; }
+.dormido .entra {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.entra { transition: opacity 520ms ease, transform 520ms cubic-bezier(.2,.7,.3,1); }
+
+/* ── ACTO 1 · El expediente que crece ────────────────────────────────────
+   Cinco hojas que se apilan. No es decoración: es la primera vez que el
+   lector ve la promesa —un expediente completo— antes de leer una palabra. */
+.hoja {
+  transform-origin: 50% 100%;
+  opacity: 1;
+}
+.dormido .hoja { opacity: 0; transform: translateY(26px) scale(.94); }
+.hoja { transition: opacity 620ms ease, transform 680ms cubic-bezier(.2,.8,.25,1); }
+
+/* ── El anillo del envío ─────────────────────────────────────────────────
+   Mismos valores que components/EnvioInforme.tsx. Que el folleto y el
+   producto compartan la pieza es el argumento: lo que se ve aquí es lo que
+   verá el contratista. */
+@keyframes br-cierre { from { stroke-dashoffset: 251.3; } to { stroke-dashoffset: 0; } }
+.anilloCierre { animation: br-cierre 1.1s cubic-bezier(.4,0,.2,1) forwards; }
+
+@keyframes br-sello { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+.selloEntra { animation: br-sello 320ms cubic-bezier(.2,1.4,.4,1) forwards; }
+
+@keyframes br-check { from { stroke-dashoffset: 34; } to { stroke-dashoffset: 0; } }
+.checkTrazo { animation: br-check 420ms ease-out 180ms forwards; stroke-dashoffset: 34; }
+
+/* ── Los documentos que se escriben solos ────────────────────────────────── */
+.renglon { transition: width 340ms cubic-bezier(.3,.8,.3,1); }
+
+/* El sello no aparece: cae, grande y girado, y se asienta. */
+@keyframes br-estampa {
+  from { opacity: 0; transform: scale(2.1) rotate(-14deg); }
+  to   { opacity: 1; transform: none; }
+}
+.estampa { animation: br-estampa 420ms cubic-bezier(.2,1.3,.4,1) forwards; }
+
+/* ── TESELA · Evidencias repetidas (pHash) ───────────────────────────────
+   La pieza más difícil de creer y por eso la que más hay que MOSTRAR: la foto
+   de la derecha está recortada, girada y recomprimida, y aun así el sistema
+   la reconoce. */
+.gemela { transition: transform 700ms cubic-bezier(.3,.8,.3,1), filter 700ms ease; }
+.armado .gemela { transform: rotate(-4deg) scale(1.14); filter: contrast(1.25) brightness(.9); }
+
+.lazo { stroke-dasharray: 120; stroke-dashoffset: 120; }
+.armado .lazo { animation: br-lazo 560ms ease-out 620ms forwards; }
+@keyframes br-lazo { to { stroke-dashoffset: 0; } }
+
+.alerta { opacity: 0; transform: translateY(6px) scale(.9); }
+.armado .alerta { animation: br-alerta 400ms cubic-bezier(.2,1.3,.4,1) 1.05s forwards; }
+@keyframes br-alerta { to { opacity: 1; transform: none; } }
+
+/* ── TESELA · La huella SHA-256 ──────────────────────────────────────────
+   Se altera un carácter del documento y la huella entera cambia. El efecto
+   avalancha explicado sin una sola palabra técnica. */
+.cifra { display: inline-block; transition: color 160ms ease; }
+.armado .cifraGira { animation: br-gira 540ms steps(9) 700ms; }
+@keyframes br-gira { 0% { opacity:.35 } 100% { opacity:1 } }
+
+.letraMala { transition: color 240ms ease, background-color 240ms ease; }
+.armado .letraMala { color: #fff; background-color: #E0574F; }
+
+/* ── TESELA · El valor en letras ─────────────────────────────────────────── */
+.enLetras { transition: opacity 420ms ease 520ms; opacity: 1; }
+.dormido .enLetras, .reposo .enLetras { opacity: 0; }
+
+/* ── TESELA · La cadena de trazabilidad ──────────────────────────────────── */
+.eslabon { opacity: 1; transform: none; transition: opacity 380ms ease, transform 380ms cubic-bezier(.2,.8,.3,1); }
+.dormido .eslabon { opacity: 0; transform: translateX(-10px); }
+
+/* ── TESELA · El bloqueo ─────────────────────────────────────────────────── */
+.barraLlena { transition: width 620ms cubic-bezier(.3,.8,.3,1) 300ms; }
+.botonMuda { transition: background-color 420ms ease, color 420ms ease; }
+
+/* ── TESELA · Cualquier dispositivo ──────────────────────────────────────── */
+.marco { transition: width 760ms cubic-bezier(.4,.1,.2,1), height 760ms cubic-bezier(.4,.1,.2,1), border-radius 760ms ease; }
+
+/* ── TESELA · El paquete ─────────────────────────────────────────────────── */
+.vuela { transition: transform 720ms cubic-bezier(.3,.8,.25,1), opacity 500ms ease; }
+
+/* ── El código QR que se arma ────────────────────────────────────────────── */
+.modulo { opacity: 1; transform: none; transition: opacity 400ms ease, transform 460ms cubic-bezier(.2,.9,.3,1); }
+.dormido .modulo { opacity: 0; transform: scale(.3); }
+
+/* ── Cursor del tecleo ───────────────────────────────────────────────────── */
+.cursor::after {
+  content: '';
+  display: inline-block;
+  width: .06em; height: 1em;
+  margin-left: .06em;
+  background: currentColor;
+  vertical-align: -.12em;
+  animation: br-parpadeo 1s steps(2, start) infinite;
+}
+@keyframes br-parpadeo { 50% { opacity: 0; } }
+
+/* ── Quien pidió menos movimiento, no lo recibe por la puerta de atrás ───── */
+@media (prefers-reduced-motion: reduce) {
+  .entra, .hoja, .renglon, .gemela, .eslabon, .modulo, .marco, .vuela,
+  .barraLlena, .botonMuda, .enLetras, .letraMala, .cifra {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .anilloCierre, .selloEntra, .checkTrazo, .estampa,
+  .armado .lazo, .armado .alerta, .armado .cifraGira {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+    opacity: 1 !important;
+  }
+  .cursor::after { animation: none; }
+}
