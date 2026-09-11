@@ -59,7 +59,7 @@ import {
   ExpedienteVivo, ElMomento, CodigoQR, CadenaCustodia, Tesela, Secuencia, AlEntrar,
   TeselaDuplicados, TeselaHuella, TeselaInfraestructura, TeselaTrazabilidad,
   TeselaBloqueo, TeselaDispositivos, TeselaPaquete,
-} from './Escenas'
+} from '@/components/folleto/Escenas'
 
 /** Número tal como se lee en pantalla: +57 319 242 0334 */
 const WHATSAPP_LEGIBLE = WHATSAPP_COMERCIAL.replace(
