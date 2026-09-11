@@ -22,10 +22,12 @@
  * que corresponde— no deja enviar el informe (Decreto 1273 de 2018).
  *
  * Por eso va en la rejilla pero con otro trato: no se escribe sola como las
- * otras —llega ya escrita— y su sello es un visto de verificación, no el QR
- * de un documento emitido por la plataforma. Presentarla como un sexto
- * documento generado sería más cómodo y se caería en la primera demostración,
- * que es justo donde una propuesta no se puede caer.
+ * otras —llega ya escrita—, su sello es un visto de verificación y no el QR
+ * de un documento emitido por la plataforma, y su rótulo dice quién la pone.
+ * Presentarla como un sexto documento generado sería más cómodo y se caería
+ * en la primera demostración, que es justo donde una propuesta no se puede
+ * caer. La distinción se sostiene sola en la tarjeta: el párrafo que la
+ * explicaba se quitó por ruido, no por dejar de ser cierta.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -116,8 +118,6 @@ export default function EnvioAnimado() {
   }, [correr])
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
-
-  const listo = salidos >= PIEZAS.length
 
   return (
     <div ref={ref}>
@@ -218,16 +218,6 @@ export default function EnvioAnimado() {
         })}
       </div>
 
-      {/* La distinción, dicha una vez y sin rodeos. Es cumplimiento, no
-          automatización, y vende igual de bien contándola como es. */}
-      <p
-        className={`prop-rotulo mt-6 text-sm text-gray-500 leading-relaxed ${listo ? 'dentro' : ''}`}
-      >
-        <span className="font-medium text-gray-900">La planilla no la genera el sistema:</span>{' '}
-        la expide el operador de seguridad social y la adjunta el contratista. El
-        sistema la verifica, y sin planilla válida del mes que corresponde no deja
-        enviar el informe — Decreto 1273 de 2018.
-      </p>
     </div>
   )
 }

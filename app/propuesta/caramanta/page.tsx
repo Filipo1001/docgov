@@ -10,8 +10,6 @@ import { TituloEscribe, Destello, Flotante, TarjetaSenal } from './Animado'
 import EnvioAnimado from './EnvioAnimado'
 import Contador from '../Contador'
 import ProgresoScroll from '../ProgresoScroll'
-import Icono from '@/components/ui/Icono'
-import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 /**
  * Propuesta comercial para la Alcaldía de Caramanta.
@@ -101,13 +99,6 @@ const DIAGNOSTICO = [
     dorso: 'Si un contratista tiene que llamar a preguntar por qué se retrasó su pago, lo está haciendo mal.' },
 ]
 
-const NORMAS = [
-  ['Decreto 1082 de 2015', 'Bloquea el pago sin informe y sin supervisión'],
-  ['Ley 1150 de 2007, Art. 83', 'Acta de supervisión por cada periodo'],
-  ['Decreto 1273 de 2018', 'No deja enviar sin planilla de seguridad social válida'],
-  ['Integridad documental', 'Huella SHA-256 verificable por terceros'],
-  ['Trazabilidad', 'Cada movimiento con fecha, hora y responsable'],
-]
 
 /** Consultadas a producción el 1 de septiembre de 2026. Reverificar antes de reusar. */
 const CIFRAS: [number, string][] = [
@@ -174,35 +165,6 @@ function Titulo({ children, oscura = false }: { children: React.ReactNode; oscur
   )
 }
 
-/**
- * Tarjeta de rol.
- *
- * El icono sale del catálogo del proyecto y no de un emoji: los emojis los
- * dibuja cada sistema operativo a su manera —un 👔 en Android no se parece al
- * de un iPhone— y en un documento que se reenvía y se proyecta eso rompe la
- * identidad. Ver lib/iconos.ts.
- */
-function Rol({ glifo, titulo, puntos }: { glifo: LucideIcon; titulo: string; puntos: string[] }) {
-  return (
-    <div className="rounded-2xl border border-[#D5E8DF] bg-white/60 p-6 h-full">
-      <div
-        className="w-11 h-11 rounded-xl flex items-center justify-center"
-        style={{ backgroundColor: PASTEL_ALT }}
-      >
-        <Icono glifo={glifo} tamano="lg" className="text-[#192031]" />
-      </div>
-      <h3 className="mt-4 font-semibold text-gray-900">{titulo}</h3>
-      <ul className="mt-3 space-y-2.5">
-        {puntos.map(p => (
-          <li key={p} className="flex gap-2.5 text-sm text-gray-600 leading-relaxed">
-            <span className="mt-2 w-1 h-1 rounded-full bg-gray-400 shrink-0" />
-            <span>{p}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
 
 // ── Página ──────────────────────────────────────────────────────────────────
 
@@ -338,168 +300,6 @@ export default async function PropuestaAngelopolis() {
           </div>
         </Revelar>
 
-        <Revelar retraso={260}>
-          <p className="mt-10 text-lg font-semibold text-gray-900">
-            Cero Word. Cero transcripción. Cero cuentas de cobro devueltas por un
-            valor en letras mal escrito.
-          </p>
-        </Revelar>
-      </Seccion>
-
-      {/* ── La alcaldía en la palma de la mano ────────────────────── */}
-      <Seccion oscura>
-        <Revelar>
-          <Etiqueta oscura>Visibilidad</Etiqueta>
-          <Titulo oscura>La alcaldía en la palma de la mano</Titulo>
-          <p className="mt-6 text-gray-600 leading-relaxed">
-            Cuántos contratistas tiene, qué está haciendo cada uno y en qué punto
-            va su pago. Desde el celular, en cualquier lugar, a cualquier hora.
-          </p>
-        </Revelar>
-
-        <Revelar retraso={160}>
-          <div className="mt-10 rounded-2xl bg-white/70 p-6 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Estado de todos los periodos, en vivo
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {['Borrador', 'Enviado', 'En revisión', 'Aprobado', 'Radicado'].map((e, i) => (
-                <div key={e} className="flex items-center gap-2">
-                  <span className="rounded-lg bg-[#E7F3EE] px-3.5 py-2 text-sm">{e}</span>
-                  {i < 4 && <span className="text-gray-300">→</span>}
-                </div>
-              ))}
-            </div>
-            <p className="mt-6 text-sm text-gray-500 leading-relaxed">
-              Más el valor total bajo gestión, el porcentaje de cumplimiento y qué
-              está esperando su revisión en este momento.
-            </p>
-          </div>
-        </Revelar>
-      </Seccion>
-
-      {/* ── Control antifraude ────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>Control</Etiqueta>
-          <Titulo>El sistema detecta evidencias repetidas</Titulo>
-        </Revelar>
-
-        <Revelar retraso={140}>
-          <div className="mt-10 rounded-2xl border border-[#D5E8DF] p-6 sm:p-8">
-            <p className="text-lg font-semibold text-gray-900">No solo el archivo idéntico.</p>
-            <p className="mt-3 text-gray-600 leading-relaxed">
-              Detecta la misma imagen aunque la hayan recortado, comprimido o vuelto
-              a fotografiar de la pantalla. Si una evidencia ya se usó en otro periodo
-              del mismo contrato, el supervisor lo sabe antes de aprobar.
-            </p>
-          </div>
-        </Revelar>
-
-        <Revelar retraso={260}>
-          <div className="mt-4 rounded-2xl border border-[#D5E8DF] p-6 sm:p-8">
-            <p className="text-lg font-semibold text-gray-900">La seguridad social es bloqueante.</p>
-            <p className="mt-3 text-gray-600 leading-relaxed">
-              No deja enviar el informe sin planilla válida, y avisa si la misma
-              planilla se está reutilizando en más periodos de los que cubre.
-            </p>
-          </div>
-        </Revelar>
-      </Seccion>
-
-      {/* ── Una sola plataforma + roles ───────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>El día a día</Etiqueta>
-          <Titulo>Una sola plataforma. Se acabaron las entradas paralelas.</Titulo>
-          <p className="mt-6 text-gray-600 leading-relaxed">
-            Hoy un informe puede llegar por correo, por WhatsApp, impreso, en Drive o
-            en una memoria USB. Cinco puertas de entrada para el mismo documento
-            significan cinco lugares donde buscarlo después.{' '}
-            <span className="font-semibold text-gray-900">
-              Contratista Digital cierra las cinco y deja una.
-            </span>
-          </p>
-        </Revelar>
-
-        <div className="mt-12 grid md:grid-cols-3 gap-4">
-          <Revelar retraso={100}>
-            <Rol
-              glifo={Iconos.navegacion.contratistas}
-              titulo="El contratista"
-              puntos={[
-                'Carga sus evidencias desde el celular, donde esté',
-                'El sistema genera su informe y su cuenta de cobro — se acabó el Word y sus malentendidos',
-                'Recibe avisos automáticos de cada cambio: enviado, aprobado, devuelto',
-              ]}
-            />
-          </Revelar>
-          <Revelar retraso={200}>
-            <Rol
-              glifo={Iconos.estado.verificado}
-              titulo="El supervisor"
-              puntos={[
-                'Revisa evidencias y aprueba pagos desde el móvil, sin abrir un computador',
-                'Sigue la trazabilidad de cientos de contratos desde el teléfono',
-                'El sistema le avisa si una evidencia ya fue usada antes',
-              ]}
-            />
-          </Revelar>
-          <Revelar retraso={300}>
-            <Rol
-              glifo={Iconos.navegacion.municipio}
-              titulo="La secretaría"
-              puntos={[
-                'Cierra en lote todas las cuentas aprobadas del mes; si el municipio numera, la numeración consecutiva es automática',
-                'Descarga el paquete completo del mes en un clic',
-                'Cada periodo queda listo para cargar a SECOP II',
-              ]}
-            />
-          </Revelar>
-        </div>
-
-        <Revelar retraso={440}>
-          <div className="mt-10 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
-            <h3 className="font-semibold text-gray-900">Automatización de punta a punta</h3>
-            <p className="mt-2 text-gray-600 leading-relaxed">
-              El contratista sube evidencias. Todo lo demás —documentos,
-              notificaciones, verificación, expediente— lo hace el sistema.
-            </p>
-          </div>
-        </Revelar>
-      </Seccion>
-
-      {/* ── Recordatorios ─────────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>Seguimiento</Etiqueta>
-          <Titulo>El sistema persigue, no ustedes</Titulo>
-        </Revelar>
-
-        <div className="mt-10 space-y-3">
-          {[
-            ['Día 25', 'Aviso a quien tiene el informe en borrador'],
-            ['Día 28', 'Recordatorio urgente'],
-            ['Día 2', 'Aviso de plazo vencido'],
-            ['Cada 5 días', 'Cuentas aprobadas sin cerrar → aviso a secretaría'],
-            ['60 y 30 días antes', 'Contratos por vencer → aviso a supervisión y administración'],
-          ].map(([c, t], i) => (
-            <Revelar key={c} retraso={i * 90}>
-              {/* Apilado en móvil. La etiqueta medía 144 px fijos y dejaba 163 px
-                  para el texto en una pantalla de 375: cada renglón se partía en
-                  tres. En línea a partir de `sm`, donde sí hay ancho. */}
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-5 sm:items-start">
-                <span
-                  className="self-start shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-white sm:w-36 sm:text-center"
-                  style={{ backgroundColor: MARCA }}
-                >
-                  {c}
-                </span>
-                <span className="text-gray-700 sm:pt-1.5 text-sm">{t}</span>
-              </div>
-            </Revelar>
-          ))}
-        </div>
       </Seccion>
 
       {/* ── Verificación QR ───────────────────────────────────────── */}
@@ -525,28 +325,6 @@ export default async function PropuestaAngelopolis() {
               documento un auditor, un banco o un ente de control.
             </p>
           </Revelar>
-        </div>
-      </Seccion>
-
-      {/* ── Cumplimiento ──────────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>Cumplimiento</Etiqueta>
-          <Titulo>Control, no promesas</Titulo>
-          <p className="mt-6 text-gray-600 leading-relaxed">
-            Todo lo de esta tabla se puede demostrar en vivo, hoy.
-          </p>
-        </Revelar>
-
-        <div className="mt-10 space-y-px rounded-2xl overflow-hidden border border-[#D5E8DF]">
-          {NORMAS.map(([norma, que], i) => (
-            <Revelar key={norma} retraso={i * 80} desde="izquierda">
-              <div className="grid sm:grid-cols-[1fr_1.4fr] gap-1 sm:gap-6 bg-white/70 px-6 py-5">
-                <span className="font-semibold text-gray-900 text-sm">{norma}</span>
-                <span className="text-sm text-gray-600">{que}</span>
-              </div>
-            </Revelar>
-          ))}
         </div>
       </Seccion>
 
@@ -623,113 +401,6 @@ export default async function PropuestaAngelopolis() {
         </Revelar>
 
 
-        {/* Vigencia. Se enuncia igual que en las actas que la propia plataforma
-            genera, para que el contrato y el sistema digan lo mismo. */}
-        <Revelar retraso={320}>
-          <div className="mt-4 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Vigencia</p>
-            <p className="mt-3 text-lg font-semibold text-gray-900">
-              Desde la suscripción del acta de inicio y hasta el 31 de diciembre de 2026.
-            </p>
-          </div>
-        </Revelar>
-
-        {/* La cuenta la ata quien tenga que atarla. Sin cifras y sin comparar. */}
-        <Revelar retraso={360}>
-          <p className="mt-8 text-xs text-gray-400 leading-relaxed">
-            Para dimensionar: un proceso de responsabilidad fiscal se resuelve con
-            el patrimonio del funcionario, no con el presupuesto del municipio.
-          </p>
-        </Revelar>
-      </Seccion>
-
-      {/* ── Puesta en marcha ──────────────────────────────────────── */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>Puesta en marcha</Etiqueta>
-          <Titulo>Cuatro semanas</Titulo>
-        </Revelar>
-
-        <div className="mt-12 space-y-4">
-          {[
-            ['Semana 1', 'Configuración del municipio, dependencias y usuarios'],
-            ['Semana 2', 'Carga de contratos vigentes y migración del historial'],
-            ['Semana 3', 'Capacitación por rol: contratistas, supervisores y secretaría'],
-            ['Semana 4', 'Primer ciclo completo acompañado, de principio a fin'],
-          ].map(([s, t], i) => (
-            <Revelar key={s} retraso={i * 100}>
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-5 sm:items-start">
-                <span
-                  className="self-start shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-900"
-                  style={{ backgroundColor: MARCA }}
-                >
-                  {s}
-                </span>
-                <span className="text-gray-700 sm:pt-1.5">{t}</span>
-              </div>
-            </Revelar>
-          ))}
-        </div>
-
-        <Revelar retraso={500}>
-          <div className="mt-12 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
-            <p className="font-semibold text-gray-900">Podemos empezar con una sola secretaría</p>
-            <p className="mt-2 text-gray-600 leading-relaxed">
-              Sin comprometer todo el municipio desde el primer día. Cuando el primer
-              ciclo cierre bien, se extiende al resto.
-            </p>
-          </div>
-        </Revelar>
-      </Seccion>
-
-      {/* ── Al terminar el contrato ───────────────────────────────
-          Va antes de las cifras y no al final escondido: quien firma quiere
-          saber qué pasa con su información ANTES de que le impresionen los
-          números, no después. Decirlo de frente es un argumento, no un riesgo. */}
-      <Seccion>
-        <Revelar>
-          <Etiqueta>Al terminar el contrato</Etiqueta>
-          <Titulo>La información es del municipio</Titulo>
-          <p className="mt-6 text-gray-600 leading-relaxed">
-            Lo que pasa el 31 de diciembre queda escrito desde ahora, no se
-            resuelve después.
-          </p>
-        </Revelar>
-
-        <div className="mt-10 space-y-3">
-          {[
-            ['Consulta por 3 meses',
-             'La plataforma sigue disponible en modo consulta durante los tres meses siguientes a la terminación, sin permitir la creación de nuevos contratos ni periodos.'],
-            ['Entrega en 30 días hábiles',
-             'La totalidad de la información se entrega en dos formatos: los documentos en PDF, organizados por contrato y periodo, y los datos en formato abierto (XLSX y CSV).'],
-            ['Con acta de entrega',
-             'Se entrega al supervisor del contrato o a quien la Alcaldía designe por escrito, mediante acta firmada.'],
-            ['Verificación indefinida',
-             'Los códigos QR de los documentos ya emitidos siguen resolviendo de forma indefinida y sin costo. Un acta firmada en 2026 se podrá verificar años después.'],
-            ['Conservar o eliminar, lo decide la Alcaldía',
-             'Vencido el plazo de consulta, la información se conserva o se elimina según instrucción escrita de la Alcaldía y sus tablas de retención documental, conforme a la Ley 1581 de 2012.'],
-          ].map(([t, d], i) => (
-            <Revelar key={t} retraso={i * 80} desde="izquierda">
-              <div className="rounded-2xl border border-[#D5E8DF] p-6">
-                <p className="font-semibold text-gray-900">{t}</p>
-                <p className="mt-2 text-sm text-gray-600 leading-relaxed">{d}</p>
-              </div>
-            </Revelar>
-          ))}
-        </div>
-
-        <Revelar retraso={440}>
-          <div className="mt-8 rounded-2xl p-6 sm:p-8" style={{ backgroundColor: '#F6F7F9' }}>
-            <p className="text-gray-700 leading-relaxed">
-              <span className="font-semibold text-gray-900">Sobre la verificación, una precisión técnica.</span>{' '}
-              El código QR va impreso dentro de cada PDF: la dirección queda
-              grabada en la imagen y no se puede reescribir después. Por eso el
-              compromiso de mantenerla activa es indefinido y no depende de que
-              el contrato siga vigente — de lo contrario, el día que un ente de
-              control escanee un documento de 2026 no cargaría nada.
-            </p>
-          </div>
-        </Revelar>
       </Seccion>
 
       {/* ── Las cifras, al final ──────────────────────────────────── */}
