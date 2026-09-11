@@ -50,6 +50,8 @@ const NIEVE = '#FAFBFC'
 const VERDE = '#10b981'
 const VERDE_TEXTO = '#0B7A5C'
 const VERDE_TINTA = '#04352A'
+/** Panel del precio recurrente. Ver el comentario de esa sección. */
+const VERDE_PANEL = '#E9F5F0'
 
 function destinoQR(): string {
   if (process.env.VERCEL_ENV === 'production') return `https://${HOSTS_COMERCIALES[0]}/propuesta/emitidos`
@@ -375,13 +377,30 @@ export default function GomezPlataPage() {
             </p>
           </div>
 
-          <div className="prop-entra rounded-2xl p-7" style={{ backgroundColor: MARCA }}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+          {/* EN VERDE Y NO EN NEGRO, y es una corrección deliberada. Esta
+              tarjeta llevaba el fondo de tinta de marca, casi negro, y un
+              bloque oscuro encima de una cifra se lee como una factura:
+              comunica peso, cierre, gasto. Es además la cifra con la que el
+              municipio va a convivir todos los meses, así que era justo la que
+              menos convenía cargar.
+
+              El verde es el color con el que este producto lleva toda la
+              página diciendo «confirmado» — y el mismo número dentro de él se
+              lee como una decisión tomada y no como una carga. En panel tenue
+              con la cifra en verde oscuro, no en verde pleno: el pleno está
+              reservado al cierre, que es el único destino de la página, y
+              gastarlo aquí le quitaría fuerza allí. */}
+          <div className="prop-entra rounded-2xl p-7 border-2"
+            style={{ backgroundColor: VERDE_PANEL, borderColor: VERDE }}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+              style={{ color: VERDE_TEXTO }}>
               Cada mes
             </p>
-            <p className="mt-4 text-4xl font-bold tracking-tight text-white">$2.400.000</p>
-            <p className="mt-2 text-sm font-semibold text-white">Operación de la plataforma</p>
-            <p className="mt-3 text-[15px] leading-relaxed" style={{ color: 'rgba(255,255,255,.66)' }}>
+            <p className="mt-4 text-4xl font-bold tracking-tight" style={{ color: VERDE_TEXTO }}>
+              $2.400.000
+            </p>
+            <p className="mt-2 text-sm font-semibold" style={{ color: MARCA }}>Operación de la plataforma</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-gray-600">
               Uso ilimitado para todas las secretarías, soporte, actualizaciones,
               alojamiento y respaldos. No se cobra aparte por usuario, por documento
               ni por almacenamiento.
