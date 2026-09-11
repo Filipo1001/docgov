@@ -29,7 +29,7 @@
  * estado final, quieta y legible — misma regla que Revelar.tsx y Contador.tsx.
  */
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
 import css from './brochure.module.css'
@@ -61,9 +61,23 @@ function useCiclo<T extends HTMLElement>(duracion: number, umbral = 0.4) {
   useEffect(() => {
     const nodo = ref.current
     if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
-    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: umbral })
+    // La red SOLO actúa si el observador jamás contestó. Sin esta condición
+    // se anularía a sí misma: en un navegador sano el observador responde al
+    // instante, y el respaldo marcaría como visible incluso lo que no lo está.
+    let respondio = false
+    const obs = new IntersectionObserver(([e]) => {
+      respondio = true
+      setVisible(e.isIntersecting)
+    }, { threshold: umbral })
     obs.observe(nodo)
-    return () => obs.disconnect()
+    // RED DE SEGURIDAD. Si el observador no ha dicho nada en dos segundos y
+    // medio, se arranca igual. Hay navegadores y situaciones —una pestaña que
+    // el sistema considera oculta, un motor que los suspende— en los que la
+    // llamada no llega nunca, y entonces la escena se quedaría muerta para
+    // siempre. Es el mismo criterio que ya gobierna Revelar.tsx: más vale
+    // animar de más que dejar la página en blanco.
+    const respaldo = setTimeout(() => { if (!respondio) setVisible(true) }, 2500)
+    return () => { obs.disconnect(); clearTimeout(respaldo) }
   }, [umbral])
 
   useEffect(() => {
@@ -113,40 +127,50 @@ function useCiclo<T extends HTMLElement>(duracion: number, umbral = 0.4) {
  *  rebobinado del principio. */
 const TURNOS = [4000, 2800, 2600, 2400, 3400, 4000, 2600] as const
 
-const Turno = createContext<number>(-1)
+type Director = {
+  turno: number
+  /** Cada tesela avisa cuándo entra y sale de pantalla. */
+  registrar: (indice: number, visible: boolean) => void
+}
+
+const Turno = createContext<Director>({ turno: -1, registrar: () => {} })
 
 export function Secuencia({ children, className = '' }: { children: ReactNode; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [visible, setVisible] = useState(false)
+  const visibles = useRef<Set<number>>(new Set())
   const [turno, setTurno] = useState(-1)
+  const [activo, setActivo] = useState(false)
 
-  useEffect(() => {
-    const nodo = ref.current
-    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
-    // Umbral bajo y deliberado: basta con que asome un borde de la rejilla
-    // para que la secuencia arranque, de modo que la primera tesela ya esté
-    // actuando cuando el lector termine de bajar hasta ella.
-    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.05 })
-    obs.observe(nodo)
-    return () => obs.disconnect()
+  const registrar = useCallback((indice: number, visible: boolean) => {
+    if (visible) visibles.current.add(indice)
+    else visibles.current.delete(indice)
+    setActivo(visibles.current.size > 0)
   }, [])
 
   useEffect(() => {
-    if (!visible) { setTurno(-1); return }
+    if (!activo) { setTurno(-1); return }
     let vivo = true
     const relojes: ReturnType<typeof setTimeout>[] = []
-    const paso = (i: number) => {
+    let ultimo = -1
+    const paso = () => {
       if (!vivo) return
+      // Se relee el conjunto en CADA compás, no al arrancar: así el turno
+      // sigue al lector mientras baja, sin reiniciar la secuencia.
+      const lista = [...visibles.current].sort((a, b) => a - b)
+      if (lista.length === 0) { setTurno(-1); return }
+      const i = lista.find(n => n > ultimo) ?? lista[0]
+      ultimo = i
       setTurno(i)
-      relojes.push(setTimeout(() => paso((i + 1) % TURNOS.length), TURNOS[i]))
+      relojes.push(setTimeout(paso, TURNOS[i]))
     }
-    paso(0)
+    paso()
     return () => { vivo = false; relojes.forEach(clearTimeout) }
-  }, [visible])
+  }, [activo])
+
+  const valor = useMemo(() => ({ turno, registrar }), [turno, registrar])
 
   return (
-    <Turno.Provider value={turno}>
-      <div ref={ref} className={className}>{children}</div>
+    <Turno.Provider value={valor}>
+      <div className={className}>{children}</div>
     </Turno.Provider>
   )
 }
@@ -154,13 +178,40 @@ export function Secuencia({ children, className = '' }: { children: ReactNode; c
 /**
  * El turno de una tesela.
  *
- * Cuando le toca, rebobina 200 ms y actúa. Cuando NO le toca no se toca nada:
- * se queda exactamente como la dejó su actuación —resuelta— y esa quietud es
- * su reposo.
+ * CADA TESELA SE OBSERVA A SÍ MISMA, y no la rejilla entera. La primera
+ * versión observaba el contenedor con un umbral del 5 %, y en un teléfono eso
+ * no funcionaba: en una sola columna la rejilla mide más de 2.300 px contra
+ * 812 de pantalla, y el observador no llegaba a dispararse — las siete
+ * teselas se quedaban muertas. Un elemento del tamaño de una tarjeta sí es
+ * algo que un observador resuelve sin ambigüedad.
+ *
+ * Y arregla de paso un defecto de diseño que el escritorio tapaba: el turno
+ * solo circula entre las teselas QUE SE ESTÁN VIENDO. Con las siete a la
+ * vista —tres columnas— la secuencia se lee como una ola, igual que antes. En
+ * una sola columna, donde solo caben una o dos, habrían tocado su turno fuera
+ * de pantalla y el lector habría esperado veinte segundos mirando una tarjeta
+ * quieta.
  */
 function useTurno(indice: number) {
-  const turno = useContext(Turno)
+  const { turno, registrar } = useContext(Turno)
+  const ref = useRef<HTMLDivElement>(null)
   const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
+
+  useEffect(() => {
+    const nodo = ref.current
+    if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
+    let respondio = false
+    const obs = new IntersectionObserver(([e]) => {
+      respondio = true
+      registrar(indice, e.isIntersecting)
+    }, { threshold: 0.3 })
+    obs.observe(nodo)
+    // Misma red: sin respuesta del observador, la tesela entra al reparto de
+    // turnos por su cuenta. Prefiero que anime una que no se ve a que no anime
+    // ninguna de las que sí.
+    const respaldo = setTimeout(() => { if (!respondio) registrar(indice, true) }, 2500)
+    return () => { obs.disconnect(); clearTimeout(respaldo); registrar(indice, false) }
+  }, [indice, registrar])
 
   useEffect(() => {
     if (turno === -1) { setFase('quieto'); return }
@@ -171,7 +222,7 @@ function useTurno(indice: number) {
   }, [turno, indice])
 
   const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
-  return { clase, armado: fase === 'armado', ciclando: fase !== 'quieto', miTurno: turno === indice }
+  return { ref, clase, armado: fase === 'armado', ciclando: fase !== 'quieto' }
 }
 
 /** Cuenta compases dentro de una vuelta. Los tiempos van como constante de
@@ -612,9 +663,9 @@ function Foto({ deformada = false }: { deformada?: boolean }) {
 }
 
 export function TeselaDuplicados({ indice }: { indice: number }) {
-  const { clase } = useTurno(indice)
+  const { ref, clase } = useTurno(indice)
   return (
-    <div className={`${clase} relative w-full flex items-center justify-center gap-9`}>
+    <div ref={ref} className={`${clase} relative w-full flex items-center justify-center gap-9`}>
       <div className="flex flex-col items-center gap-2">
         <Foto />
         <span className="text-[10px] text-gray-400">marzo</span>
@@ -657,7 +708,7 @@ const HUELLA_LIMPIA = 'a7f3c2e9b4d18056'
 const HUELLA_SUCIA = '3b91e08d7c6a24f5'
 
 export function TeselaHuella({ indice }: { indice: number }) {
-  const { clase, armado, ciclando } = useTurno(indice)
+  const { ref, clase, armado, ciclando } = useTurno(indice)
   const [huella, setHuella] = useState(HUELLA_SUCIA)
 
   useEffect(() => {
@@ -697,7 +748,7 @@ export function TeselaHuella({ indice }: { indice: number }) {
   }, [armado, ciclando])
 
   return (
-    <div className={`${clase} w-full`}>
+    <div ref={ref} className={`${clase} w-full`}>
       <div className="rounded-lg border border-[#E4EAEF] bg-[#FAFBFC] px-3 py-2.5">
         <p className="text-[11px] text-gray-500 leading-relaxed">
           Valor del contrato:{' '}
@@ -732,9 +783,9 @@ export function TeselaHuella({ indice }: { indice: number }) {
 const NORMAS = ['ISO 27001', 'ISO 27017', 'ISO 27018', 'SOC 2'] as const
 
 export function TeselaInfraestructura({ indice }: { indice: number }) {
-  const { clase } = useTurno(indice)
+  const { ref, clase } = useTurno(indice)
   return (
-    <div className={`${clase} w-full flex items-center justify-center gap-5`}>
+    <div ref={ref} className={`${clase} w-full flex items-center justify-center gap-5`}>
       <svg width="54" height="62" viewBox="0 0 54 62" fill="none" aria-hidden="true" className="shrink-0">
         <path d="M27 3 L50 12 V30 C50 44 40 54 27 59 C14 54 4 44 4 30 V12 Z"
           stroke={MARCA} strokeWidth="2.4" strokeLinejoin="round" className={css.escudo} />
@@ -765,9 +816,9 @@ const CADENA = [
 ] as const
 
 export function TeselaTrazabilidad({ indice }: { indice: number }) {
-  const { clase } = useTurno(indice)
+  const { ref, clase } = useTurno(indice)
   return (
-    <div className={`${clase} w-full relative`}>
+    <div ref={ref} className={`${clase} w-full relative`}>
       {/* La línea que hace de esto una cadena y no una lista. */}
       <span className={`${css.cadena} absolute block`}
         style={{ left: 2.5, top: 10, width: 2, height: 52, backgroundColor: '#DCE4EA' }} />
@@ -804,7 +855,7 @@ export function TeselaTrazabilidad({ indice }: { indice: number }) {
 const COMPASES_BLOQUEO = [1250, 2450, 2950] as const
 
 export function TeselaBloqueo({ indice }: { indice: number }) {
-  const { clase, armado, ciclando } = useTurno(indice)
+  const { ref, clase, armado, ciclando } = useTurno(indice)
   const paso = usePasos(armado, COMPASES_BLOQUEO)
   // Sin ciclo, el estado final: un botón trabado para siempre no es la
   // promesa de la tesela, es su contrario.
@@ -812,7 +863,7 @@ export function TeselaBloqueo({ indice }: { indice: number }) {
   const puedeEnviar = !ciclando || paso >= 3
 
   return (
-    <div className={`${clase} w-full`}>
+    <div ref={ref} className={`${clase} w-full`}>
       <div className="space-y-1.5">
         {[['Actividades', true], ['Evidencias', true], ['Planilla de seguridad social', completo]].map(([t, ok]) => (
           <div key={t as string} className="flex items-center gap-2">
@@ -852,13 +903,13 @@ const FORMAS = [
 const COMPASES_FORMAS = [200, 1400, 2600] as const
 
 export function TeselaDispositivos({ indice }: { indice: number }) {
-  const { armado, ciclando } = useTurno(indice)
+  const { ref, armado, ciclando } = useTurno(indice)
   const paso = usePasos(armado, COMPASES_FORMAS)
   // Sin turno se queda en el computador, que es el estado final de la vuelta.
   const f = FORMAS[ciclando && paso > 0 ? paso - 1 : FORMAS.length - 1]
 
   return (
-    <div className="w-full flex flex-col items-center justify-center" style={{ minHeight: 116 }}>
+    <div ref={ref} className="w-full flex flex-col items-center justify-center" style={{ minHeight: 116 }}>
       <div className={`${css.marco} border-2 flex flex-wrap content-start gap-1.5 p-2.5 overflow-hidden`}
         style={{ width: f.w, height: f.h, borderRadius: f.r, borderColor: '#C6D2DB' }}>
         {[0, 1, 2, 3, 4, 5].map(j => (
@@ -882,12 +933,12 @@ const SUELTOS = [
 const COMPASES_PAQUETE = [260, 500, 740, 980, 1220] as const
 
 export function TeselaPaquete({ indice }: { indice: number }) {
-  const { clase, armado, ciclando } = useTurno(indice)
+  const { ref, clase, armado, ciclando } = useTurno(indice)
   const pasos = usePasos(armado, COMPASES_PAQUETE)
   const llegados = ciclando ? pasos : SUELTOS.length
 
   return (
-    <div className={`${clase} relative w-full flex flex-col items-center justify-center`} style={{ height: 126 }}>
+    <div ref={ref} className={`${clase} relative w-full flex flex-col items-center justify-center`} style={{ height: 126 }}>
       <div className="relative" style={{ width: 120, height: 84 }}>
         {SUELTOS.map((s, i) => {
           const dentro = llegados > i
