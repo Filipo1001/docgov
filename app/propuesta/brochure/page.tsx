@@ -118,16 +118,26 @@ export default function FolletoPage() {
               la animación sin que el titular compita por la atención. El
               original está en el historial: «Nunca más un expediente
               incompleto.» más su bajada. Restaurar antes de publicar. */}
-          <h1 className="mt-16 sm:mt-20 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white max-w-3xl">
-            Lorem ipsum dolor sit amet consectetur.
-          </h1>
-          <p className="mt-7 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
-            Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
-            enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-            aliquip ex ea commodo.
-          </p>
-          <div className="mt-14">
-            <ExpedienteVivo />
+          {/* Dos columnas a partir de `lg`, y no antes: la escena mide 340px de
+              ancho y en una media columna de tableta quedaría espachurrada
+              contra el titular. Por debajo de ese corte se apilan, y el orden
+              del DOM deja el texto primero — que es el orden en que hay que
+              leerlo en un teléfono. */}
+          <div className="mt-14 sm:mt-20 grid lg:grid-cols-2 gap-14 lg:gap-10 items-center">
+            <div>
+              <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white">
+                Lorem ipsum dolor sit amet consectetur.
+              </h1>
+              <p className="mt-7 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
+                Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
+                enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+                aliquip ex ea commodo.
+              </p>
+            </div>
+
+            <div className="flex justify-center lg:justify-end">
+              <ExpedienteVivo />
+            </div>
           </div>
         </div>
       </section>
