@@ -3,17 +3,27 @@
 /**
  * Las escenas animadas del folleto.
  *
- * NINGUNA ES DECORATIVA. Se pidió expresamente que las ventajas no fueran
- * «palabras ni emojis, sino animaciones», y el criterio que aplico es más
- * estrecho todavía: cada tesela anima EXACTAMENTE el argumento que tiene que
- * dejar creído, y solo ese. La de evidencias repetidas deforma la foto porque
- * lo increíble es que la reconozca deformada; la de la huella revuelve el
- * SHA-256 porque el efecto avalancha no se entiende leyéndolo. Si una tesela
- * se puede contar con una frase, no lleva animación.
+ * NINGUNA ES DECORATIVA. Se pidió que las ventajas no fueran «palabras ni
+ * emojis, sino animaciones», y el criterio es más estrecho todavía: cada
+ * tesela anima EXACTAMENTE el argumento que tiene que dejar creído, y solo
+ * ese. Si una se puede contar con una frase, no lleva animación.
  *
- * Todas arrancan en su estado FINAL y solo retroceden cuando el script
- * confirma que puede animar. Sin JavaScript el folleto se lee completo — misma
- * regla que gobierna Revelar.tsx y Contador.tsx.
+ * ── TODAS VIVEN EN BUCLE ─────────────────────────────────────────────────
+ *
+ * Se pidió que no se movieran una sola vez. Cada una cuenta su historia,
+ * SOSTIENE el resultado unos segundos y vuelve a empezar: una animación cuyo
+ * remate no se alcanza a leer no vende nada. Las duraciones son distintas
+ * —de 4,2 a 5,4 s— para que las siete no laten al unísono, que en una rejilla
+ * sería un casino y no una demostración.
+ *
+ * Solo corren mientras están en pantalla. La rejilla entera moviéndose fuera
+ * de vista es batería del teléfono de un secretario gastada en nada.
+ *
+ * React lleva el compás y el CSS hace la música: las teselas alternan una
+ * clase y toda la coreografía cuelga de retardos en brochure.module.css.
+ *
+ * Sin JavaScript, o con «reducir movimiento», cada escena se queda en su
+ * estado final, quieta y legible — misma regla que Revelar.tsx y Contador.tsx.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -23,6 +33,7 @@ import css from './brochure.module.css'
 
 const VERDE = '#10b981'
 const AMBAR = '#D98324'
+const ROJO = '#E0574F'
 
 function quieto(): boolean {
   return typeof window !== 'undefined'
@@ -30,32 +41,57 @@ function quieto(): boolean {
 }
 
 /**
- * Dispara al entrar en pantalla. Devuelve `dormido` solo si el efecto llegó a
- * armarse: si no hay observador, o si se pidió menos movimiento, nunca duerme
- * y la escena se queda en su estado final.
+ * Ciclo perpetuo mientras la tesela está a la vista.
+ *
+ * `duracion` es lo que dura la vuelta COMPLETA: la coreografía más el reposo
+ * en que el resultado se queda quieto para poder leerse. El rebobinado son
+ * 200 ms a propósito, mucho más rápido que la ida: lo que importa es ver
+ * cómo se construye, no cómo se deshace.
  */
-function useAlEntrar<T extends HTMLElement>(umbral = 0.35) {
+function useCiclo<T extends HTMLElement>(duracion: number, umbral = 0.4) {
   const ref = useRef<T>(null)
-  const [fase, setFase] = useState<'inicial' | 'dormido' | 'armado'>('inicial')
+  const [visible, setVisible] = useState(false)
+  const [fase, setFase] = useState<'quieto' | 'dormido' | 'armado'>('quieto')
 
   useEffect(() => {
     const nodo = ref.current
     if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
-    setFase('dormido')
-    const obs = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return
-      obs.disconnect()
-      // Un cuadro de respiro: el navegador tiene que pintar el estado dormido
-      // antes de que la transición tenga algo desde donde salir.
-      requestAnimationFrame(() => requestAnimationFrame(() => setFase('armado')))
-    }, { threshold: umbral })
+    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: umbral })
     obs.observe(nodo)
-    const respaldo = setTimeout(() => setFase('armado'), 3000)
-    return () => { obs.disconnect(); clearTimeout(respaldo) }
+    return () => obs.disconnect()
   }, [umbral])
 
+  useEffect(() => {
+    if (!visible) { setFase('quieto'); return }
+    let vivo = true
+    const relojes: ReturnType<typeof setTimeout>[] = []
+    const vuelta = () => {
+      if (!vivo) return
+      setFase('dormido')
+      relojes.push(setTimeout(() => {
+        if (!vivo) return
+        setFase('armado')
+        relojes.push(setTimeout(vuelta, duracion))
+      }, 200))
+    }
+    vuelta()
+    return () => { vivo = false; relojes.forEach(clearTimeout) }
+  }, [visible, duracion])
+
   const clase = fase === 'dormido' ? css.dormido : fase === 'armado' ? css.armado : ''
-  return { ref, clase, armado: fase === 'armado' }
+  return { ref, clase, armado: fase === 'armado', ciclando: fase !== 'quieto' }
+}
+
+/** Cuenta compases dentro de una vuelta. Los tiempos van como constante de
+ *  módulo: un arreglo nuevo en cada render reiniciaría el efecto sin parar. */
+function usePasos(activo: boolean, tiempos: readonly number[]): number {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    if (!activo) { setN(0); return }
+    const relojes = tiempos.map((t, i) => setTimeout(() => setN(i + 1), t))
+    return () => relojes.forEach(clearTimeout)
+  }, [activo, tiempos])
+  return n
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -63,24 +99,19 @@ function useAlEntrar<T extends HTMLElement>(umbral = 0.35) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export function ExpedienteCrece() {
-  const { ref, clase } = useAlEntrar<HTMLDivElement>(0.2)
+  const { ref, clase } = useCiclo<HTMLDivElement>(5800, 0.2)
   return (
     <div ref={ref} className={`${clase} relative mx-auto`} style={{ width: 210, height: 150 }}>
       {[0, 1, 2, 3, 4].map(i => (
-        <div
-          key={i}
-          className={`${css.hoja} absolute rounded-lg border`}
+        <div key={i} className={`${css.hoja} absolute rounded-lg border`}
           style={{
-            width: 118, height: 88,
-            left: 46 + (i - 2) * 15,
-            top: 52 - i * 11,
+            width: 118, height: 88, left: 46 + (i - 2) * 15, top: 52 - i * 11,
             borderColor: 'rgba(255,255,255,.22)',
             backgroundColor: `rgba(255,255,255,${0.05 + i * 0.035})`,
             transform: `rotate(${(i - 2) * 2.4}deg)`,
-            transitionDelay: `${i * 110}ms`,
+            transitionDelay: `${i * 130}ms`,
             backdropFilter: 'blur(2px)',
-          }}
-        >
+          }}>
           <div className="p-3 space-y-1.5">
             {[80, 58, 40].map((w, j) => (
               <span key={j} className="block h-1 rounded-full"
@@ -120,32 +151,39 @@ const PIEZAS = [
 ]
 
 export function ElMomento() {
-  const [sellado, setSellado] = useState(false)
-  const [salidos, setSalidos] = useState(0)
-  const relojes = useRef<ReturnType<typeof setTimeout>[]>([])
+  // Arrancan en el RESULTADO, no en el proceso: sin JavaScript la escena tiene
+  // que mostrar los cinco documentos hechos, no cinco recuadros vacíos.
+  const [sellado, setSellado] = useState(true)
+  const [salidos, setSalidos] = useState(PIEZAS.length)
+  const [visible, setVisible] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const nodo = ref.current
     if (!nodo) return
-    const correr = () => {
-      if (quieto()) { setSellado(true); setSalidos(PIEZAS.length); return }
-      relojes.current.push(setTimeout(() => setSellado(true), 1700))
-      // 800 ms después del cierre, no a la vez: si la confirmación y los
-      // papeles se pisan, el verde deja de ser un momento.
-      PIEZAS.forEach((_, i) =>
-        relojes.current.push(setTimeout(() => setSalidos(i + 1), 2500 + i * 240)))
-    }
-    if (typeof IntersectionObserver === 'undefined') { correr(); return }
-    const obs = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return
-      obs.disconnect(); correr()
-    }, { threshold: 0.3 })
+    if (quieto() || typeof IntersectionObserver === 'undefined') return
+    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.3 })
     obs.observe(nodo)
     return () => obs.disconnect()
   }, [])
 
-  useEffect(() => () => relojes.current.forEach(clearTimeout), [])
+  useEffect(() => {
+    if (!visible) return
+    let vivo = true
+    const relojes: ReturnType<typeof setTimeout>[] = []
+    const vuelta = () => {
+      if (!vivo) return
+      setSellado(false); setSalidos(0)
+      relojes.push(setTimeout(() => setSellado(true), 1700))
+      // 800 ms después del cierre, no a la vez: si la confirmación y los
+      // papeles se pisan, el verde deja de ser un momento.
+      PIEZAS.forEach((_, i) =>
+        relojes.push(setTimeout(() => setSalidos(i + 1), 2500 + i * 240)))
+      relojes.push(setTimeout(vuelta, 7200))
+    }
+    vuelta()
+    return () => { vivo = false; relojes.forEach(clearTimeout) }
+  }, [visible])
 
   return (
     <div ref={ref}>
@@ -230,7 +268,7 @@ export function ElMomento() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ACTO 3 · Las teselas de capacidad
+   ACTO 3 · Las siete teselas
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function Tesela({ titulo, cuerpo, children, ancha = false }: {
@@ -238,71 +276,140 @@ function Tesela({ titulo, cuerpo, children, ancha = false }: {
 }) {
   return (
     <div className={`rounded-2xl border border-[#E4EAEF] bg-white p-5 sm:p-6 flex flex-col ${ancha ? 'sm:col-span-2' : ''}`}>
-      <div className="flex-1 flex items-center justify-center min-h-[132px] py-2">{children}</div>
+      <div className="flex-1 flex items-center justify-center min-h-[132px] py-2 overflow-hidden">{children}</div>
       <p className="mt-4 font-semibold text-gray-900 text-[15px] leading-snug">{titulo}</p>
       <p className="mt-1.5 text-[13px] text-gray-500 leading-relaxed">{cuerpo}</p>
     </div>
   )
 }
+export { Tesela }
 
-/** La foto de la derecha está girada, ampliada y recontrastada — y aun así el
- *  sistema la empareja. Es el argumento entero, hecho imagen. */
-export function TeselaDuplicados() {
-  const { ref, clase } = useAlEntrar<HTMLDivElement>(0.4)
-  const foto = (girada: boolean) => (
-    <span className={`${girada ? css.gemela : ''} block rounded-lg overflow-hidden`}
-      style={{ width: 62, height: 62, background: 'linear-gradient(135deg,#8FB4C9 0%,#5C8AA6 45%,#3E6880 100%)' }}>
-      <span className="block w-full h-full relative">
-        <span className="absolute rounded-full" style={{ width: 14, height: 14, top: 9, right: 10, backgroundColor: 'rgba(255,255,255,.75)' }} />
-        <span className="absolute" style={{ left: 0, right: 0, bottom: 0, height: 26,
-          background: 'linear-gradient(180deg,transparent,rgba(28,52,68,.65))' }} />
-      </span>
+/* ── 1 · Evidencias repetidas ────────────────────────────────────────────
+   Cuatro tiempos. La foto de abril se deforma A LA VISTA —se acerca, se gira,
+   se aclara— porque lo increíble no es que reconozca una copia: es que
+   reconozca una copia disfrazada. Si la deformación viene de fábrica, el
+   argumento no se ve ocurrir. El recorte sale solo: la escena crece dentro de
+   un marco que no crece. */
+
+/** Escena de obra: cielo, suelo, un poste con travesaño. Sin degradados ni
+ *  `id`, que con dos copias en pantalla chocarían entre sí. */
+function Foto({ deformada = false }: { deformada?: boolean }) {
+  return (
+    <span className="block rounded-lg overflow-hidden shrink-0" style={{ width: 66, height: 66 }}>
+      <svg viewBox="0 0 66 66" width="66" height="66" className={deformada ? css.gemela : undefined}
+        style={{ display: 'block' }} aria-hidden="true">
+        <rect width="66" height="66" fill="#A9C9DD" />
+        <circle cx="50" cy="15" r="7" fill="#F2E2B8" />
+        <rect y="44" width="66" height="22" fill="#7E9B72" />
+        <rect y="44" width="66" height="4" fill="#6C8862" />
+        <rect x="30" y="16" width="5" height="30" fill="#5A4B3F" />
+        <rect x="19" y="21" width="27" height="4" rx="1" fill="#5A4B3F" />
+        <rect x="8" y="50" width="18" height="9" rx="1.5" fill="#C4B49B" />
+      </svg>
     </span>
   )
+}
+
+export function TeselaDuplicados() {
+  const { ref, clase } = useCiclo<HTMLDivElement>(5400)
   return (
-    <div ref={ref} className={`${clase} relative w-full flex items-center justify-center gap-10`}>
+    <div ref={ref} className={`${clase} relative w-full flex items-center justify-center gap-9`}>
       <div className="flex flex-col items-center gap-2">
-        {foto(false)}
+        <Foto />
         <span className="text-[10px] text-gray-400">marzo</span>
       </div>
-      <svg className="absolute" width="120" height="40" viewBox="0 0 120 40" style={{ pointerEvents: 'none' }} aria-hidden="true">
-        <path d="M12 20 C 40 6, 80 6, 108 20" fill="none" stroke={AMBAR} strokeWidth="2"
+
+      {/* El lazo se tensa una vez que el barrido ya pasó por las dos. */}
+      <svg className="absolute pointer-events-none" width="132" height="44" viewBox="0 0 132 44"
+        style={{ top: 6 }} aria-hidden="true">
+        <path d="M16 26 C 46 6, 86 6, 116 26" fill="none" stroke={AMBAR} strokeWidth="2"
           strokeLinecap="round" className={css.lazo} />
       </svg>
+
+      {/* El barrido: el sistema mirando. */}
+      <span className={`${css.barrido} absolute pointer-events-none`}
+        style={{
+          width: 22, height: 78, top: 2,
+          background: `linear-gradient(90deg, transparent, ${VERDE}44 45%, ${VERDE}77 50%, ${VERDE}44 55%, transparent)`,
+        }} />
+
       <div className="flex flex-col items-center gap-2">
-        {foto(true)}
+        <Foto deformada />
         <span className="text-[10px] text-gray-400">abril</span>
       </div>
-      <span className={`${css.alerta} absolute -bottom-1 px-2.5 py-1 rounded-full text-[10px] font-semibold`}
-        style={{ backgroundColor: '#FBF0E2', color: AMBAR }}>
+
+      <span className={`${css.alerta} absolute px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap`}
+        style={{ bottom: -6, backgroundColor: '#FBF0E2', color: AMBAR }}>
         Ya se usó en marzo
       </span>
     </div>
   )
 }
 
-/** Se altera un carácter del documento y la huella entera cambia. */
+/* ── 2 · La huella ───────────────────────────────────────────────────────
+   Causa y efecto, en ese orden: el dígito alterado destella primero y la
+   huella entra en remolino después. El revuelto va en React porque el azar no
+   se escribe en CSS, y los caracteres se van fijando de izquierda a derecha
+   para que la avalancha se vea PROPAGARSE y no aparecer de golpe. */
+const HEX = '0123456789abcdef'
+const HUELLA_LIMPIA = 'a7f3c2e9b4d18056'
+const HUELLA_SUCIA = '3b91e08d7c6a24f5'
+
 export function TeselaHuella() {
-  const { ref, clase, armado } = useAlEntrar<HTMLDivElement>(0.4)
-  const antes = 'a7f3c2e9b4d18056'
-  const despues = '3b91e08d7c6a24f5'
-  const huella = armado ? despues : antes
+  const { ref, clase, armado, ciclando } = useCiclo<HTMLDivElement>(4400)
+  const [huella, setHuella] = useState(HUELLA_SUCIA)
+
+  useEffect(() => {
+    // Sin ciclo —sin JavaScript útil o con «reducir movimiento»— la tesela se
+    // queda en su estado final, que es la huella ya alterada.
+    if (!ciclando) { setHuella(HUELLA_SUCIA); return }
+    if (!armado) { setHuella(HUELLA_LIMPIA); return }
+
+    let fijos = 0
+    let revuelve: ReturnType<typeof setInterval> | undefined
+    let asienta: ReturnType<typeof setInterval> | undefined
+
+    // El remolino arranca 900 ms después del destello: primero la causa
+    // —el dígito alterado— y solo entonces el efecto.
+    const arranque = setTimeout(() => {
+      revuelve = setInterval(() => {
+        setHuella(HUELLA_SUCIA.split('').map((c, i) =>
+          i < fijos ? c : HEX[Math.floor(Math.random() * 16)]).join(''))
+      }, 45)
+      // Los caracteres se fijan de izquierda a derecha para que la avalancha
+      // se vea PROPAGARSE y no aparecer de golpe.
+      asienta = setInterval(() => {
+        fijos += 1
+        if (fijos > HUELLA_SUCIA.length) {
+          if (revuelve) clearInterval(revuelve)
+          if (asienta) clearInterval(asienta)
+          setHuella(HUELLA_SUCIA)
+        }
+      }, 85)
+    }, 900)
+
+    return () => {
+      clearTimeout(arranque)
+      if (revuelve) clearInterval(revuelve)
+      if (asienta) clearInterval(asienta)
+    }
+  }, [armado, ciclando])
+
   return (
     <div ref={ref} className={`${clase} w-full`}>
       <div className="rounded-lg border border-[#E4EAEF] bg-[#FAFBFC] px-3 py-2.5">
         <p className="text-[11px] text-gray-500 leading-relaxed">
           Valor del contrato:{' '}
           <span className={`${css.letraMala} rounded px-1 font-semibold`}
-            style={{ color: armado ? undefined : '#374151' }}>
+            style={{ color: '#374151' }}>
             {armado ? '$2.460.000' : '$2.450.000'}
           </span>
         </p>
       </div>
       <div className="mt-3 flex items-center gap-1.5 flex-wrap justify-center">
         {huella.split('').map((c, i) => (
-          <span key={i}
-            className={`${css.cifra} ${armado ? css.cifraGira : ''} font-mono text-[13px] w-[15px] text-center`}
-            style={{ color: armado ? '#E0574F' : '#6B7280', animationDelay: `${i * 22}ms` }}>
+          <span key={i} className={`${css.cifra} font-mono text-[13px] w-[15px] text-center`}
+            style={{ color: armado ? ROJO : '#6B7280' }}>
             {c}
           </span>
         ))}
@@ -312,28 +419,32 @@ export function TeselaHuella() {
   )
 }
 
-/** La infraestructura. Es lo único abstracto de la rejilla, así que el peso
- *  lo cargan los nombres de las normas —concretos y verificables— y no el
- *  dibujo. El escudo solo les da dónde aterrizar.
- *
- *  LA LÍNEA QUE NO SE CRUZA: certificada está la INFRAESTRUCTURA, no el
- *  producto. El rótulo lo dice y el cuerpo de la tesela lo repite, porque
- *  afirmar lo contrario ante una entidad pública es falso y verificable. */
+/* ── 3 · Infraestructura ─────────────────────────────────────────────────
+   El contorno se traza y SOLO ENTONCES aparece el visto: dentro de algo que
+   ya existe. Los sellos no se deslizan —se estampan—, que es lo que hace un
+   sello. El peso lo cargan los nombres de las normas, concretos y
+   verificables; el dibujo solo les da dónde aterrizar.
+
+   LA LÍNEA QUE NO SE CRUZA: certificada está la INFRAESTRUCTURA, no el
+   producto. Afirmar lo contrario ante una entidad pública es falso y
+   comprobable — el rótulo de la tesela y su cuerpo lo dicen así. */
+const NORMAS = ['ISO 27001', 'ISO 27017', 'ISO 27018', 'SOC 2'] as const
+
 export function TeselaInfraestructura() {
-  const { ref, clase } = useAlEntrar<HTMLDivElement>(0.4)
-  const NORMAS = ['ISO 27001', 'ISO 27017', 'ISO 27018', 'SOC 2']
+  const { ref, clase } = useCiclo<HTMLDivElement>(4600)
   return (
     <div ref={ref} className={`${clase} w-full flex items-center justify-center gap-5`}>
       <svg width="54" height="62" viewBox="0 0 54 62" fill="none" aria-hidden="true" className="shrink-0">
         <path d="M27 3 L50 12 V30 C50 44 40 54 27 59 C14 54 4 44 4 30 V12 Z"
           stroke={MARCA} strokeWidth="2.4" strokeLinejoin="round" className={css.escudo} />
         <path d="M18 30.5 L24.5 37 L36 25" stroke={VERDE} strokeWidth="3"
-          strokeLinecap="round" strokeLinejoin="round" className={css.escudo} />
+          strokeLinecap="round" strokeLinejoin="round" className={css.visto} />
       </svg>
       <div className="flex flex-col gap-1.5">
         {NORMAS.map((n, i) => (
-          <span key={n} className={`${css.selloNorma} rounded-md px-2 py-1 text-[10px] font-semibold tracking-wide text-center`}
-            style={{ backgroundColor: '#EEF2F5', color: MARCA, transitionDelay: `${520 + i * 130}ms` }}>
+          <span key={n}
+            className={`${css.selloNorma} rounded-md px-2 py-1 text-[10px] font-semibold tracking-wide text-center`}
+            style={{ backgroundColor: '#EEF2F5', color: MARCA, animationDelay: `${1500 + i * 150}ms` }}>
             {n}
           </span>
         ))}
@@ -342,49 +453,70 @@ export function TeselaInfraestructura() {
   )
 }
 
-/** La cadena de trazabilidad: cada acción con su responsable y su hora. */
+/* ── 4 · Trazabilidad y correo ───────────────────────────────────────────
+   El renglón aterriza, su punto se SELLA —el candado de antes, vuelto gesto—
+   y el sobre SALE VOLANDO. Que el sobre estuviera ahí no era lo mismo que
+   haberse enviado, y lo que se vende es justamente el envío. */
+const CADENA = [
+  ['Enviado', '21 · 14:32'],
+  ['En revisión', '22 · 09:15'],
+  ['Aprobado', '22 · 16:40'],
+] as const
+
 export function TeselaTrazabilidad() {
-  const { ref, clase } = useAlEntrar<HTMLDivElement>(0.4)
-  const pasos = [
-    ['Enviado', '21 · 14:32'],
-    ['En revisión', '22 · 09:15'],
-    ['Aprobado', '22 · 16:40'],
-  ]
+  const { ref, clase } = useCiclo<HTMLDivElement>(4200)
   return (
-    <div ref={ref} className={`${clase} w-full space-y-2`}>
-      {pasos.map(([q, cuando], i) => (
-        <div key={q} className={`${css.eslabon} flex items-center gap-2.5`}
-          style={{ transitionDelay: `${i * 150}ms` }}>
-          <span className="w-1.5 h-1.5 rounded-full shrink-0"
-            style={{ backgroundColor: i === pasos.length - 1 ? VERDE : '#C6D2DB' }} />
-          <span className="text-[12px] font-medium text-gray-700 flex-1">{q}</span>
-          <span className="text-[10px] text-gray-400 font-mono">{cuando}</span>
-          {/* El sobre sale en el mismo instante que el estado cambia: es el
-              argumento de la tesela, no un adorno al margen. */}
-          <span className={`${css.sobre} shrink-0 flex items-center gap-1`}
-            style={{ transitionDelay: `${i * 150 + 260}ms` }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect x="2" y="5" width="20" height="14" rx="2.5" stroke={VERDE} strokeWidth="2.2" />
-              <path d="M3 7 L12 13.5 L21 7" stroke={VERDE} strokeWidth="2.2"
-                strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-        </div>
-      ))}
+    <div ref={ref} className={`${clase} w-full relative`}>
+      {/* La línea que hace de esto una cadena y no una lista. */}
+      <span className={`${css.cadena} absolute block`}
+        style={{ left: 2.5, top: 10, width: 2, height: 52, backgroundColor: '#DCE4EA' }} />
+      <div className="space-y-3 relative">
+        {CADENA.map(([q, cuando], i) => (
+          <div key={q} className={`${css.eslabon} flex items-center gap-2.5`}
+            style={{ transitionDelay: `${i * 340}ms` }}>
+            <span className={`${css.punto} w-[7px] h-[7px] rounded-full shrink-0 relative z-10`}
+              style={{
+                backgroundColor: i === CADENA.length - 1 ? VERDE : '#9FB2BF',
+                transitionDelay: `${i * 340 + 220}ms`,
+              }} />
+            <span className="text-[12px] font-medium text-gray-700 flex-1">{q}</span>
+            <span className="text-[10px] text-gray-400 font-mono">{cuando}</span>
+            <span className={`${css.sobre} shrink-0`} style={{ animationDelay: `${i * 340 + 380}ms` }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="2" y="5" width="20" height="14" rx="2.5" stroke={VERDE} strokeWidth="2.2" />
+                <path d="M3 7 L12 13.5 L21 7" stroke={VERDE} strokeWidth="2.2"
+                  strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
-/** El envío no sale incompleto: el sistema no lo permite. */
+/* ── 5 · El bloqueo ──────────────────────────────────────────────────────
+   EL TEMBLOR ES LA TESELA. Alguien intenta enviar, el sistema se niega, y
+   solo entonces llega lo que faltaba. Sin ese rechazo en pantalla, la tarjeta
+   solo enseña una lista que se pone verde — y lo que hay que vender no es que
+   se ponga verde: es que antes dijo que no. */
+const COMPASES_BLOQUEO = [1250, 2450, 2950] as const
+
 export function TeselaBloqueo() {
-  const { ref, clase, armado } = useAlEntrar<HTMLDivElement>(0.4)
+  const { ref, clase, armado, ciclando } = useCiclo<HTMLDivElement>(5200)
+  const paso = usePasos(armado, COMPASES_BLOQUEO)
+  // Sin ciclo, el estado final: un botón trabado para siempre no es la
+  // promesa de la tesela, es su contrario.
+  const completo = !ciclando || paso >= 2
+  const puedeEnviar = !ciclando || paso >= 3
+
   return (
     <div ref={ref} className={`${clase} w-full`}>
       <div className="space-y-1.5">
-        {[['Actividades', true], ['Evidencias', true], ['Planilla de seguridad social', armado]].map(([t, ok]) => (
+        {[['Actividades', true], ['Evidencias', true], ['Planilla de seguridad social', completo]].map(([t, ok]) => (
           <div key={t as string} className="flex items-center gap-2">
-            <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 transition-colors duration-300"
-              style={{ backgroundColor: ok ? VERDE : '#E0574F' }}>
+            <span className={`${css.marcaEstado} w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0`}
+              style={{ backgroundColor: ok ? VERDE : ROJO }}>
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none">
                 {ok
                   ? <path d="M5 12.5 L10 17.5 L19 7" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -395,84 +527,116 @@ export function TeselaBloqueo() {
           </div>
         ))}
       </div>
-      <div className={`${css.botonMuda} mt-3.5 rounded-lg py-2 text-center text-[12px] font-semibold`}
-        style={{ backgroundColor: armado ? VERDE : '#EEF1F4', color: armado ? '#fff' : '#A3AEB8' }}>
-        {armado ? 'Enviar informe' : 'Falta la planilla'}
+      <div className={`${css.botonMuda} ${css.sacude} mt-3.5 rounded-lg py-2 text-center text-[12px] font-semibold`}
+        style={{
+          backgroundColor: puedeEnviar ? VERDE : '#EEF1F4',
+          color: puedeEnviar ? '#fff' : '#A3AEB8',
+        }}>
+        {puedeEnviar ? 'Enviar informe' : 'Falta la planilla'}
       </div>
     </div>
   )
 }
 
-/** Sin instalar nada: el mismo expediente en cualquier pantalla. */
+/* ── 6 · Cualquier dispositivo ───────────────────────────────────────────
+   El contenido SE REACOMODA de verdad: en el celular los renglones se apilan
+   a lo ancho; en el computador se reparten en dos columnas. Antes solo se
+   estiraban, que es cambiar de tamaño, no ser responsivo. */
+const FORMAS = [
+  { w: 50, h: 88, r: 9, rotulo: 'Celular', col: 100 },
+  { w: 82, h: 96, r: 9, rotulo: 'Tableta', col: 100 },
+  { w: 138, h: 84, r: 6, rotulo: 'Computador', col: 46 },
+] as const
+
 export function TeselaDispositivos() {
-  const [paso, setPaso] = useState(0)
+  const [i, setI] = useState(2)
+  const [visible, setVisible] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const nodo = ref.current
     if (!nodo || quieto() || typeof IntersectionObserver === 'undefined') return
-    const obs = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return
-      obs.disconnect()
-      const id = setInterval(() => setPaso(p => (p + 1) % 3), 1500)
-      nodo.dataset.reloj = String(id)
-    }, { threshold: 0.4 })
+    const obs = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.4 })
     obs.observe(nodo)
-    return () => {
-      obs.disconnect()
-      if (nodo.dataset.reloj) clearInterval(Number(nodo.dataset.reloj))
-    }
+    return () => obs.disconnect()
   }, [])
-  const formas = [
-    { w: 46, h: 84, r: 8, rotulo: 'Celular' },
-    { w: 72, h: 96, r: 8, rotulo: 'Tableta' },
-    { w: 132, h: 84, r: 6, rotulo: 'Computador' },
-  ]
-  const f = formas[paso]
+
+  useEffect(() => {
+    if (!visible) return
+    const id = setInterval(() => setI(p => (p + 1) % FORMAS.length), 2200)
+    return () => clearInterval(id)
+  }, [visible])
+
+  const f = FORMAS[i]
   return (
-    <div ref={ref} className="w-full flex flex-col items-center justify-center" style={{ minHeight: 110 }}>
-      <div className={`${css.marco} border-2 flex flex-col gap-1 p-2 overflow-hidden`}
+    <div ref={ref} className="w-full flex flex-col items-center justify-center" style={{ minHeight: 116 }}>
+      <div className={`${css.marco} border-2 flex flex-wrap content-start gap-1.5 p-2.5 overflow-hidden`}
         style={{ width: f.w, height: f.h, borderRadius: f.r, borderColor: '#C6D2DB' }}>
-        {[100, 74, 88, 52].map((w, j) => (
-          <span key={j} className="block h-1 rounded-full shrink-0"
-            style={{ width: `${w}%`, backgroundColor: '#E6EDF2' }} />
+        {[0, 1, 2, 3, 4, 5].map(j => (
+          <span key={j} className={`${css.barraFlex} block h-1.5 rounded-full shrink-0`}
+            style={{ width: `${f.col === 100 ? 100 : 46}%`, backgroundColor: '#E6EDF2' }} />
         ))}
       </div>
-      <span className="mt-2.5 text-[10px] text-gray-400">{f.rotulo}</span>
+      <span className="mt-3 text-[10px] text-gray-400">{f.rotulo}</span>
     </div>
   )
 }
 
-/** El paquete del mes, armado y en orden. */
+/* ── 7 · El paquete ──────────────────────────────────────────────────────
+   Los documentos ya no se desvanecen al llegar: SE APILAN, y el contador sube
+   mientras aterrizan. Lo satisfactorio de esta tesela es la acumulación, y
+   desvaneciéndolos se estaba tirando justo eso a la basura. */
+const SUELTOS = [
+  { x: -62, y: -30, r: -20 }, { x: 58, y: -34, r: 16 }, { x: -52, y: 26, r: 12 },
+  { x: 62, y: 22, r: -14 }, { x: 0, y: -44, r: 6 },
+] as const
+const COMPASES_PAQUETE = [260, 500, 740, 980, 1220] as const
+
 export function TeselaPaquete() {
-  const { ref, clase, armado } = useAlEntrar<HTMLDivElement>(0.4)
-  const sueltos = [
-    { x: -54, y: -24, r: -18 }, { x: 48, y: -30, r: 14 },
-    { x: -42, y: 22, r: 10 }, { x: 52, y: 18, r: -12 },
-  ]
+  const { ref, clase, armado, ciclando } = useCiclo<HTMLDivElement>(4800)
+  const pasos = usePasos(armado, COMPASES_PAQUETE)
+  const llegados = ciclando ? pasos : SUELTOS.length
+
   return (
-    <div ref={ref} className={`${clase} relative w-full flex items-center justify-center`} style={{ height: 116 }}>
-      {sueltos.map((s, i) => (
-        <span key={i} className={`${css.vuela} absolute rounded border bg-white`}
+    <div ref={ref} className={`${clase} relative w-full flex flex-col items-center justify-center`} style={{ height: 126 }}>
+      <div className="relative" style={{ width: 120, height: 84 }}>
+        {SUELTOS.map((s, i) => {
+          const dentro = llegados > i
+          return (
+            <span key={i} className={`${css.vuela} absolute rounded border bg-white`}
+              style={{
+                width: 30, height: 38, left: 45, top: 22, borderColor: '#D9E4EC',
+                transform: dentro
+                  ? `translate(${(i - 2) * 3.5}px, ${-i * 3}px) rotate(${(i - 2) * 2}deg)`
+                  : `translate(${s.x}px, ${s.y}px) rotate(${s.r}deg)`,
+                zIndex: i,
+              }}>
+              <span className="block p-1.5 space-y-1">
+                {[80, 58, 40].map((w, j) => (
+                  <span key={j} className="block h-[2px] rounded-full"
+                    style={{ width: `${w}%`, backgroundColor: '#E6EDF2' }} />
+                ))}
+              </span>
+            </span>
+          )
+        })}
+
+        {/* La banda que cierra el paquete, cuando ya está todo dentro. */}
+        <span className={`${css.banda} absolute flex items-center justify-center rounded`}
           style={{
-            width: 28, height: 36, borderColor: '#D9E4EC',
-            transform: armado ? `translate(0,${-i * 2}px) rotate(0deg)` : `translate(${s.x}px,${s.y}px) rotate(${s.r}deg)`,
-            opacity: armado ? 0 : 1,
-            transitionDelay: `${i * 90}ms`,
-          }} />
-      ))}
-      <span className="relative rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-colors duration-500"
-        style={{ width: 64, height: 52, borderColor: armado ? MARCA : '#D9E4EC',
-                 backgroundColor: armado ? '#F4F7F9' : 'transparent' }}>
-        <span className="text-[9px] font-bold tracking-wide" style={{ color: armado ? MARCA : '#C6D2DB' }}>
-          SECOP II
+            left: 30, top: 36, width: 62, height: 17, zIndex: 10,
+            backgroundColor: MARCA, color: '#fff',
+          }}>
+          <span className="text-[8px] font-bold tracking-wide">SECOP II</span>
         </span>
-        <span className="text-[8px]" style={{ color: '#9CA3AF' }}>{armado ? '5 documentos' : '—'}</span>
+      </div>
+
+      <span className="mt-1 text-[10px] text-gray-400 tabular-nums">
+        {llegados} de {SUELTOS.length} documentos
       </span>
     </div>
   )
 }
-
-export { Tesela }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ACTO 4 · El código que se arma
@@ -498,7 +662,7 @@ function tramaQR(lado: number): boolean[] {
 
 export function CodigoQR() {
   const LADO = 21
-  const { ref, clase } = useAlEntrar<HTMLDivElement>(0.3)
+  const { ref, clase } = useCiclo<HTMLDivElement>(6000, 0.3)
   const celdas = tramaQR(LADO)
   return (
     <div ref={ref} className={`${clase} inline-block p-4 rounded-2xl bg-white`}>

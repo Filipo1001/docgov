@@ -1,143 +1,175 @@
 /* ─────────────────────────────────────────────────────────────────────────
    Folleto general de Contratista Digital.
 
-   Va en módulo y no en globals.css a propósito: son ~250 líneas de animación
-   que sirven a una sola página y que, mientras sea un preview, puede
-   desaparecer entera. Borrar una carpeta es más seguro que extraer doscientas
-   líneas de un archivo compartido.
+   Va en módulo y no en globals.css a propósito: es CSS al servicio de una
+   sola página que, mientras sea preview, puede desaparecer entera. Borrar una
+   carpeta es más seguro que extraer líneas de un archivo compartido.
 
-   REGLA DE LA CASA, HEREDADA: el estado por defecto es el RESULTADO FINAL, no
-   uno intermedio. Todo lo que anima parte de una clase que el servidor ya
-   pinta legible; el movimiento se añade solo cuando el script confirma que
-   puede. Sin JavaScript el folleto se lee entero.
+   ── LAS TESELAS VIVEN EN BUCLE ───────────────────────────────────────────
+
+   Se pidió que no se animaran una sola vez, sino que siguieran moviéndose.
+   El contenedor alterna `dormido` → `armado` y la coreografía entera cuelga
+   de ese único interruptor mediante retardos: React solo cuenta el compás,
+   el CSS hace la música. Cada tesela dura distinto —de 4,2 a 5,4 s— para que
+   no latan a la vez, y sostiene su resultado antes de reiniciar: si el
+   remate no se alcanza a leer, la animación no vende nada.
+
+   El regreso a `dormido` es un corte de 140 ms, deliberadamente más rápido
+   que la ida. Lo que importa es la construcción; el rebobinado tiene que
+   pasar desapercibido.
+
+   REGLA DE LA CASA: el estado por defecto —sin clase— es el RESULTADO FINAL.
+   Sin JavaScript el folleto se lee entero y quieto.
    ───────────────────────────────────────────────────────────────────────── */
 
-/* ── Entrada genérica de escena ──────────────────────────────────────────── */
-.entra { opacity: 1; transform: none; }
-.armado .entra { opacity: 1; transform: none; }
-.dormido .entra {
-  opacity: 0;
-  transform: translateY(14px);
-}
-.entra { transition: opacity 520ms ease, transform 520ms cubic-bezier(.2,.7,.3,1); }
+.entra { opacity: 1; transform: none; transition: opacity 520ms ease, transform 520ms cubic-bezier(.2,.7,.3,1); }
+.dormido .entra { opacity: 0; transform: translateY(14px); }
 
-/* ── ACTO 1 · El expediente que crece ────────────────────────────────────
-   Cinco hojas que se apilan. No es decoración: es la primera vez que el
-   lector ve la promesa —un expediente completo— antes de leer una palabra. */
-.hoja {
-  transform-origin: 50% 100%;
-  opacity: 1;
-}
+/* ── ACTO 1 · El expediente que crece ────────────────────────────────────── */
+.hoja { transform-origin: 50% 100%; opacity: 1; transition: opacity 620ms ease, transform 680ms cubic-bezier(.2,.8,.25,1); }
 .dormido .hoja { opacity: 0; transform: translateY(26px) scale(.94); }
-.hoja { transition: opacity 620ms ease, transform 680ms cubic-bezier(.2,.8,.25,1); }
 
 /* ── El anillo del envío ─────────────────────────────────────────────────
-   Mismos valores que components/EnvioInforme.tsx. Que el folleto y el
-   producto compartan la pieza es el argumento: lo que se ve aquí es lo que
-   verá el contratista. */
+   Valores calcados de components/EnvioInforme.tsx. */
 @keyframes br-cierre { from { stroke-dashoffset: 251.3; } to { stroke-dashoffset: 0; } }
 .anilloCierre { animation: br-cierre 1.1s cubic-bezier(.4,0,.2,1) forwards; }
-
 @keyframes br-sello { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
 .selloEntra { animation: br-sello 320ms cubic-bezier(.2,1.4,.4,1) forwards; }
-
 @keyframes br-check { from { stroke-dashoffset: 34; } to { stroke-dashoffset: 0; } }
 .checkTrazo { animation: br-check 420ms ease-out 180ms forwards; stroke-dashoffset: 34; }
-
-/* ── Los documentos que se escriben solos ────────────────────────────────── */
 .renglon { transition: width 340ms cubic-bezier(.3,.8,.3,1); }
-
-/* El sello no aparece: cae, grande y girado, y se asienta. */
-@keyframes br-estampa {
-  from { opacity: 0; transform: scale(2.1) rotate(-14deg); }
-  to   { opacity: 1; transform: none; }
-}
+@keyframes br-estampa { from { opacity: 0; transform: scale(2.1) rotate(-14deg); } to { opacity: 1; transform: none; } }
 .estampa { animation: br-estampa 420ms cubic-bezier(.2,1.3,.4,1) forwards; }
 
-/* ── TESELA · Evidencias repetidas (pHash) ───────────────────────────────
-   La pieza más difícil de creer y por eso la que más hay que MOSTRAR: la foto
-   de la derecha está recortada, girada y recomprimida, y aun así el sistema
-   la reconoce. */
-.gemela { transition: transform 700ms cubic-bezier(.3,.8,.3,1), filter 700ms ease; }
-.armado .gemela { transform: rotate(-4deg) scale(1.14); filter: contrast(1.25) brightness(.9); }
+/* ═════════════════════════════════════════════════════════════════════════
+   1 · EVIDENCIAS REPETIDAS
+   Cuatro tiempos: las dos fotos idénticas → la de abril se manipula a la
+   vista → un barrido las recorre → el lazo se tensa y cae el aviso. Lo
+   increíble es que la reconozca DEFORMADA, así que la deformación tiene que
+   ocurrir en pantalla, no venir de fábrica.
+   ═════════════════════════════════════════════════════════════════════════ */
+.gemela { transition: transform 1100ms cubic-bezier(.3,.75,.3,1) 600ms, filter 1100ms ease 600ms; transform: rotate(-7deg) scale(1.28); filter: contrast(1.3) brightness(1.16) saturate(.8); }
+.dormido .gemela { transition-delay: 0ms; transition-duration: 140ms; transform: none; filter: none; }
 
-.lazo { stroke-dasharray: 120; stroke-dashoffset: 120; }
-.armado .lazo { animation: br-lazo 560ms ease-out 620ms forwards; }
-@keyframes br-lazo { to { stroke-dashoffset: 0; } }
+.barrido { opacity: 1; }
+.dormido .barrido { opacity: 0; }
+.armado .barrido { animation: br-barrido 900ms cubic-bezier(.4,0,.3,1) 1750ms; }
+@keyframes br-barrido {
+  0%   { opacity: 0; transform: translateX(-56px); }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(56px); }
+}
 
-.alerta { opacity: 0; transform: translateY(6px) scale(.9); }
-.armado .alerta { animation: br-alerta 400ms cubic-bezier(.2,1.3,.4,1) 1.05s forwards; }
-@keyframes br-alerta { to { opacity: 1; transform: none; } }
+.lazo { stroke-dasharray: 120; stroke-dashoffset: 0; }
+.dormido .lazo { stroke-dashoffset: 120; transition: stroke-dashoffset 140ms; }
+.armado .lazo { animation: br-lazo 480ms cubic-bezier(.3,.9,.3,1) 2600ms backwards; }
+@keyframes br-lazo { from { stroke-dashoffset: 120; } to { stroke-dashoffset: 0; } }
 
-/* ── TESELA · La huella SHA-256 ──────────────────────────────────────────
-   Se altera un carácter del documento y la huella entera cambia. El efecto
-   avalancha explicado sin una sola palabra técnica. */
-.cifra { display: inline-block; transition: color 160ms ease; }
-.armado .cifraGira { animation: br-gira 540ms steps(9) 700ms; }
-@keyframes br-gira { 0% { opacity:.35 } 100% { opacity:1 } }
+.alerta { opacity: 1; transform: none; }
+.dormido .alerta { opacity: 0; transform: translateY(6px) scale(.9); transition: all 140ms; }
+.armado .alerta { animation: br-alerta 420ms cubic-bezier(.2,1.35,.4,1) 3050ms backwards; }
+@keyframes br-alerta { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
 
+/* ═════════════════════════════════════════════════════════════════════════
+   2 · LA HUELLA
+   El dígito alterado destella PRIMERO (causa) y la huella entra en remolino
+   DESPUÉS (efecto). El revuelto de caracteres lo lleva React, porque el azar
+   no se escribe en CSS; aquí va solo el destello.
+   ═════════════════════════════════════════════════════════════════════════ */
 .letraMala { transition: color 240ms ease, background-color 240ms ease; }
-.armado .letraMala { color: #fff; background-color: #E0574F; }
+.armado .letraMala { animation: br-destello 900ms ease-out 250ms backwards; }
+@keyframes br-destello {
+  0%, 100% { background-color: #E0574F; color: #fff; }
+  50%      { background-color: #F5A29C; color: #fff; }
+}
+.cifra { display: inline-block; transition: color 300ms ease; }
 
-/* ── TESELA · La infraestructura ─────────────────────────────────────────
-   El escudo se traza y los cuatro sellos aterrizan uno a uno. El peso lo dan
-   los nombres de las normas, que son concretos y verificables — no el dibujo. */
-.escudo { stroke-dasharray: 210; stroke-dashoffset: 0; }
-.dormido .escudo { stroke-dashoffset: 210; }
-.escudo { transition: stroke-dashoffset 900ms cubic-bezier(.3,.7,.3,1); }
+/* ═════════════════════════════════════════════════════════════════════════
+   3 · INFRAESTRUCTURA
+   El contorno se traza, y solo entonces el visto aparece DENTRO de algo que
+   ya existe. Los sellos no se deslizan: se estampan, que es lo que hace un
+   sello.
+   ═════════════════════════════════════════════════════════════════════════ */
+.escudo { stroke-dasharray: 210; stroke-dashoffset: 0; transition: stroke-dashoffset 950ms cubic-bezier(.3,.7,.3,1); }
+.dormido .escudo { stroke-dashoffset: 210; transition-duration: 140ms; }
+
+.visto { stroke-dasharray: 32; stroke-dashoffset: 0; transition: stroke-dashoffset 420ms ease-out 1000ms; }
+.dormido .visto { stroke-dashoffset: 32; transition-delay: 0ms; transition-duration: 140ms; }
 
 .selloNorma { opacity: 1; transform: none; }
-.dormido .selloNorma { opacity: 0; transform: translateY(-8px) scale(.86); }
-.selloNorma { transition: opacity 340ms ease, transform 380ms cubic-bezier(.2,1.3,.4,1); }
+.dormido .selloNorma { opacity: 0; transform: scale(1.9) rotate(-12deg); transition: all 140ms; }
+.armado .selloNorma { animation: br-estampa 380ms cubic-bezier(.2,1.35,.4,1) backwards; }
 
-/* ── TESELA · El sobre que sale solo ─────────────────────────────────────── */
-.sobre { opacity: 1; transform: none; }
-.dormido .sobre { opacity: 0; transform: translateX(-6px); }
-.sobre { transition: opacity 300ms ease, transform 340ms cubic-bezier(.2,.9,.3,1); }
-
-/* ── TESELA · La cadena de trazabilidad ──────────────────────────────────── */
+/* ═════════════════════════════════════════════════════════════════════════
+   4 · TRAZABILIDAD
+   El renglón aterriza → su punto se SELLA (el candado de antes, hecho gesto)
+   → y el sobre SALE VOLANDO. Antes el sobre estaba ahí, que no es lo mismo
+   que haberse enviado.
+   ═════════════════════════════════════════════════════════════════════════ */
 .eslabon { opacity: 1; transform: none; transition: opacity 380ms ease, transform 380ms cubic-bezier(.2,.8,.3,1); }
-.dormido .eslabon { opacity: 0; transform: translateX(-10px); }
+.dormido .eslabon { opacity: 0; transform: translateX(-10px); transition-duration: 140ms; transition-delay: 0ms !important; }
 
-/* ── TESELA · El bloqueo ─────────────────────────────────────────────────── */
-.barraLlena { transition: width 620ms cubic-bezier(.3,.8,.3,1) 300ms; }
+.punto { transform: scale(1); transition: transform 300ms cubic-bezier(.2,1.5,.4,1), background-color 300ms ease; }
+.dormido .punto { transform: scale(.35); transition-duration: 140ms; transition-delay: 0ms !important; }
+
+.cadena { transform: scaleY(1); transform-origin: top; transition: transform 620ms cubic-bezier(.3,.8,.3,1) 200ms; }
+.dormido .cadena { transform: scaleY(0); transition-delay: 0ms; transition-duration: 140ms; }
+
+.sobre { opacity: 0; }
+.armado .sobre { animation: br-vuela-sobre 1100ms cubic-bezier(.3,.5,.4,1) backwards; }
+@keyframes br-vuela-sobre {
+  0%   { opacity: 0; transform: translateX(-4px) scale(.7); }
+  22%  { opacity: 1; transform: translateX(0) scale(1); }
+  55%  { opacity: 1; transform: translateX(2px) scale(1); }
+  100% { opacity: 0; transform: translateX(26px) scale(.8); }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   5 · EL BLOQUEO
+   El temblor ES la tesela. Alguien intenta enviar, el sistema se niega, y
+   solo después llega lo que faltaba. Sin ese rechazo en pantalla, la tarjeta
+   solo enseña una lista que se pone verde.
+   ═════════════════════════════════════════════════════════════════════════ */
+.marcaEstado { transition: background-color 380ms ease; }
 .botonMuda { transition: background-color 420ms ease, color 420ms ease; }
+.armado .sacude { animation: br-sacude 480ms cubic-bezier(.36,.07,.19,.97) 1250ms; }
+@keyframes br-sacude {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+}
 
-/* ── TESELA · Cualquier dispositivo ──────────────────────────────────────── */
-.marco { transition: width 760ms cubic-bezier(.4,.1,.2,1), height 760ms cubic-bezier(.4,.1,.2,1), border-radius 760ms ease; }
+/* ═════════════════════════════════════════════════════════════════════════
+   6 · CUALQUIER DISPOSITIVO
+   ═════════════════════════════════════════════════════════════════════════ */
+.marco { transition: width 900ms cubic-bezier(.4,.1,.2,1), height 900ms cubic-bezier(.4,.1,.2,1), border-radius 900ms ease; }
+.barraFlex { transition: width 900ms cubic-bezier(.4,.1,.2,1); }
 
-/* ── TESELA · El paquete ─────────────────────────────────────────────────── */
-.vuela { transition: transform 720ms cubic-bezier(.3,.8,.25,1), opacity 500ms ease; }
+/* ═════════════════════════════════════════════════════════════════════════
+   7 · EL PAQUETE
+   Los documentos ya no se desvanecen al llegar: se APILAN, y un contador
+   sube mientras aterrizan. Lo satisfactorio es la acumulación, y antes se
+   estaba tirando a la basura.
+   ═════════════════════════════════════════════════════════════════════════ */
+.vuela { transition: transform 620ms cubic-bezier(.25,.9,.3,1), opacity 300ms ease; }
+.banda { opacity: 1; transform: scaleX(1); transform-origin: center; transition: opacity 300ms ease 1850ms, transform 420ms cubic-bezier(.2,1.3,.4,1) 1850ms; }
+.dormido .banda { opacity: 0; transform: scaleX(.2); transition-delay: 0ms; transition-duration: 140ms; }
 
 /* ── El código QR que se arma ────────────────────────────────────────────── */
 .modulo { opacity: 1; transform: none; transition: opacity 400ms ease, transform 460ms cubic-bezier(.2,.9,.3,1); }
 .dormido .modulo { opacity: 0; transform: scale(.3); }
 
-/* ── Cursor del tecleo ───────────────────────────────────────────────────── */
-.cursor::after {
-  content: '';
-  display: inline-block;
-  width: .06em; height: 1em;
-  margin-left: .06em;
-  background: currentColor;
-  vertical-align: -.12em;
-  animation: br-parpadeo 1s steps(2, start) infinite;
-}
-@keyframes br-parpadeo { 50% { opacity: 0; } }
-
-/* ── Quien pidió menos movimiento, no lo recibe por la puerta de atrás ───── */
+/* ── Quien pidió menos movimiento no lo recibe por la puerta de atrás ───── */
 @media (prefers-reduced-motion: reduce) {
-  .entra, .hoja, .renglon, .gemela, .eslabon, .modulo, .marco, .vuela,
-  .barraLlena, .botonMuda, .letraMala, .cifra, .escudo, .selloNorma, .sobre {
+  .entra, .hoja, .renglon, .gemela, .eslabon, .modulo, .marco, .vuela, .punto,
+  .cadena, .banda, .barraFlex, .botonMuda, .marcaEstado, .letraMala, .cifra,
+  .escudo, .visto, .selloNorma, .lazo, .alerta, .barrido, .sobre {
     transition: none !important;
+    animation: none !important;
     opacity: 1 !important;
     transform: none !important;
-  }
-  .anilloCierre, .selloEntra, .checkTrazo, .estampa,
-  .armado .lazo, .armado .alerta, .armado .cifraGira {
-    animation: none !important;
     stroke-dashoffset: 0 !important;
-    opacity: 1 !important;
   }
-  .cursor::after { animation: none; }
 }
