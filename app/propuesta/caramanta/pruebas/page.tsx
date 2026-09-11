@@ -27,9 +27,12 @@ export default function PruebasPage() {
           Cinco documentos, generados solos
         </h1>
         <p className="mt-4 text-gray-600 leading-relaxed max-w-xl">
-          Las tres reproducen el mismo momento del producto. Los textos de fase y
-          el rótulo del botón salen literales de la aplicación. Cada una arranca
-          sola al entrar en pantalla; el botón «Repetir» la vuelve a correr.
+          Las tres parten de la misma pieza real: el anillo con el logotipo que
+          gira al enviar y se cierra en verde al confirmar, con su check — el de
+          <code className="mx-1 rounded bg-gray-100 px-1 py-0.5 text-[13px]">EnvioInforme</code>,
+          con sus mismos valores y sus mismas clases. Lo que cambia entre ellas
+          es cómo aparecen los cinco documentos después del cierre. Cada una
+          arranca sola al entrar en pantalla; «Repetir» la vuelve a correr.
         </p>
 
         {/* Lo que sobrevive de texto si se adopta cualquiera de las tres. */}
