@@ -210,13 +210,51 @@ const SOPORTES = [
   { x: -96, y: -18, giro: 12, w: 24, h: 30, tipo: 'planilla' },
 ] as const
 
-const BORDE_SOPORTE = 'rgba(255,255,255,.34)'
+/**
+ * La escena existe en dos tintas.
+ *
+ * No es un tema ni una preferencia del visitante: es que el folleto puede
+ * asentarse sobre fondo claro, y una escena pintada en blanco sobre claro
+ * simplemente no existe. Todo lo que aquí se dibuja —contornos, renglones,
+ * la carpeta misma— sale de esta tabla, así que invertirla es una línea y no
+ * una revisión de cada elemento.
+ *
+ * El verde NO cambia. Es el color con el que el producto dice «confirmado», y
+ * funciona igual sobre las dos tintas; cambiarlo rompería el único código de
+ * color que la página mantiene de principio a fin.
+ */
+type Tinta = {
+  logo: string; borde: string; relleno: string; renglon: string;
+  orbita: string; halo: string; papel: string; bordePapel: string;
+}
 
-function Soporte({ tipo, w, h }: { tipo: string; w: number; h: number }) {
+const TINTA_OSCURA: Tinta = {
+  logo: '#FFFFFF',
+  borde: 'rgba(255,255,255,.34)',
+  relleno: 'rgba(255,255,255,.13)',
+  renglon: 'rgba(255,255,255,.45)',
+  orbita: 'rgba(255,255,255,.13)',
+  halo: 'rgba(127,203,184,.16)',
+  papel: 'rgba(255,255,255,.14)',
+  bordePapel: 'rgba(255,255,255,.32)',
+}
+
+const TINTA_CLARA: Tinta = {
+  logo: MARCA,
+  borde: 'rgba(25,32,49,.26)',
+  relleno: 'rgba(25,32,49,.05)',
+  renglon: 'rgba(25,32,49,.26)',
+  orbita: 'rgba(25,32,49,.12)',
+  halo: 'rgba(16,185,129,.14)',
+  papel: '#FFFFFF',
+  bordePapel: 'rgba(25,32,49,.16)',
+}
+
+function Soporte({ tipo, w, h, t }: { tipo: string; w: number; h: number; t: Tinta }) {
   if (tipo === 'foto') {
     return (
       <span className="block rounded-[3px] border border-dashed overflow-hidden"
-        style={{ width: w, height: h, borderColor: BORDE_SOPORTE,
+        style={{ width: w, height: h, borderColor: t.borde,
                  background: 'linear-gradient(135deg,#8FB4C9 0%,#4E7A93 55%,#33566B 100%)' }}>
         <span className="block rounded-full"
           style={{ width: Math.round(w * .22), height: Math.round(w * .22), margin: '15% 0 0 12%',
@@ -230,11 +268,11 @@ function Soporte({ tipo, w, h }: { tipo: string; w: number; h: number }) {
     // Angosto y con el pie dentado, como un tirilla de caja.
     return (
       <span className="block border border-dashed p-1"
-        style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(255,255,255,.14)',
+        style={{ width: w, height: h, borderColor: t.borde, backgroundColor: t.relleno,
                  clipPath: 'polygon(0 0,100% 0,100% 88%,88% 100%,75% 88%,62% 100%,50% 88%,38% 100%,25% 88%,12% 100%,0 88%)' }}>
         {[70, 90, 52].map((a, i) => (
           <span key={i} className="block rounded-full mb-[3px]"
-            style={{ width: `${a}%`, height: 2, backgroundColor: 'rgba(255,255,255,.45)' }} />
+            style={{ width: `${a}%`, height: 2, backgroundColor: t.renglon }} />
         ))}
       </span>
     )
@@ -243,11 +281,11 @@ function Soporte({ tipo, w, h }: { tipo: string; w: number; h: number }) {
     // Garabato a mano: dos trazos irregulares. Lee como «escrito a bolígrafo».
     return (
       <span className="block rounded-[3px] border border-dashed"
-        style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(244,232,178,.22)' }}>
+        style={{ width: w, height: h, borderColor: t.borde, backgroundColor: 'rgba(214,180,60,.14)' }}>
         <svg viewBox="0 0 30 34" width={w} height={h} fill="none" aria-hidden="true">
-          <path d="M5 10 q6 -4 10 0 t10 -1" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M5 18 q8 -3 13 1 t6 -1" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M5 26 q5 -3 9 0" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M5 10 q6 -4 10 0 t10 -1" stroke={t.renglon} strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M5 18 q8 -3 13 1 t6 -1" stroke={t.renglon} strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M5 26 q5 -3 9 0" stroke={t.renglon} strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       </span>
     )
@@ -256,21 +294,21 @@ function Soporte({ tipo, w, h }: { tipo: string; w: number; h: number }) {
     // Lleva una cifra: es la cuenta de cobro.
     return (
       <span className="block rounded-[3px] border border-dashed p-1"
-        style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(255,255,255,.14)' }}>
-        <span className="block rounded-full mb-1" style={{ width: '58%', height: 2, backgroundColor: 'rgba(255,255,255,.45)' }} />
-        <span className="block font-bold leading-none" style={{ fontSize: 9, color: 'rgba(255,255,255,.72)' }}>$</span>
-        <span className="block rounded-full mt-1" style={{ width: '78%', height: 2, backgroundColor: 'rgba(255,255,255,.45)' }} />
+        style={{ width: w, height: h, borderColor: t.borde, backgroundColor: t.relleno }}>
+        <span className="block rounded-full mb-1" style={{ width: '58%', height: 2, backgroundColor: t.renglon }} />
+        <span className="block font-bold leading-none" style={{ fontSize: 9, color: t.logo, opacity: .75 }}>$</span>
+        <span className="block rounded-full mt-1" style={{ width: '78%', height: 2, backgroundColor: t.renglon }} />
       </span>
     )
   }
   // Planilla: una retícula, que es como se ve una de verdad.
   return (
     <span className="block rounded-[3px] border border-dashed p-[3px]"
-      style={{ width: w, height: h, borderColor: BORDE_SOPORTE, backgroundColor: 'rgba(255,255,255,.12)' }}>
+      style={{ width: w, height: h, borderColor: t.borde, backgroundColor: t.relleno }}>
       <span className="grid gap-[2px]" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         {Array.from({ length: 9 }).map((_, i) => (
           <span key={i} className="block rounded-[1px]"
-            style={{ height: 3, backgroundColor: i % 4 === 0 ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.3)' }} />
+            style={{ height: 3, backgroundColor: i % 4 === 0 ? t.renglon : t.orbita }} />
         ))}
       </span>
     </span>
@@ -285,8 +323,9 @@ const SALIDAS = [
 
 const LADO_CARPETA = 92
 
-export function ExpedienteVivo() {
+export function ExpedienteVivo({ claro = false }: { claro?: boolean }) {
   const { ref, clase } = useCiclo<HTMLDivElement>(8000, 0.15)
+  const t = claro ? TINTA_CLARA : TINTA_OSCURA
 
   return (
     <div ref={ref} className={`${clase} relative mx-auto`}
@@ -296,14 +335,14 @@ export function ExpedienteVivo() {
       <span className={`${css.aliento} absolute rounded-full pointer-events-none`}
         style={{
           left: '50%', top: 66, width: 300, height: 300, marginLeft: -150, marginTop: -150,
-          background: 'radial-gradient(circle, rgba(127,203,184,.16) 0%, transparent 62%)',
+          background: `radial-gradient(circle, ${t.halo} 0%, transparent 62%)`,
         }} />
 
       {/* ── La órbita, que no para ──────────────────────────────────── */}
       <svg className={`${css.orbita} absolute pointer-events-none`}
         width="216" height="216" viewBox="0 0 216 216"
         style={{ left: '50%', top: 66, marginLeft: -108, marginTop: -108 }} aria-hidden="true">
-        <circle cx="108" cy="108" r="100" fill="none" stroke="rgba(255,255,255,.13)"
+        <circle cx="108" cy="108" r="100" fill="none" stroke={t.orbita}
           strokeWidth="1" strokeDasharray="3 9" />
       </svg>
 
@@ -320,7 +359,7 @@ export function ExpedienteVivo() {
               filter: 'blur(7px)',
             }} />
           <span className={`${css.carpeta} relative block`}>
-            <LogoCD size={LADO_CARPETA} color="#FFFFFF" />
+            <LogoCD size={LADO_CARPETA} color={t.logo} />
           </span>
           <span className={`${css.vistoPestana} absolute flex items-center justify-center rounded-full`}
             style={{ width: 26, height: 26, left: -9, top: -9, backgroundColor: VERDE }}>
@@ -348,7 +387,7 @@ export function ExpedienteVivo() {
             {/* Flotan mientras esperan su turno de viajar. */}
             <span className={`${css.flota} block`}
               style={{ ['--giro' as string]: `${f.giro}deg`, animationDelay: `${i * 420}ms` }}>
-              <Soporte tipo={f.tipo} w={f.w} h={f.h} />
+              <Soporte tipo={f.tipo} w={f.w} h={f.h} t={t} />
             </span>
           </span>
         </span>
@@ -359,8 +398,8 @@ export function ExpedienteVivo() {
         <span key={i} className={`${css.emerge} absolute rounded-[4px] border`}
           style={{
             left: '50%', top: 190, width: 44, height: 58, marginLeft: -22,
-            borderColor: 'rgba(255,255,255,.32)',
-            backgroundColor: 'rgba(255,255,255,.14)',
+            borderColor: t.bordePapel,
+            backgroundColor: t.papel,
             transform: `translateX(${d.x}px) rotate(${d.giro}deg)`,
             transitionDelay: `${3200 + i * 115}ms`,
             backdropFilter: 'blur(2px)',
@@ -368,7 +407,7 @@ export function ExpedienteVivo() {
           <span className="block p-1.5">
             {[84, 62, 74, 48].map((ancho, j) => (
               <span key={j} className="block rounded-full mb-[3px]"
-                style={{ width: `${ancho}%`, height: 2.5, backgroundColor: 'rgba(255,255,255,.44)' }} />
+                style={{ width: `${ancho}%`, height: 2.5, backgroundColor: t.renglon }} />
             ))}
           </span>
           <span className={`${css.selloDoc} absolute`}
