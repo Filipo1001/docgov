@@ -114,10 +114,6 @@ export default function FolletoPage() {
             <LogoHorizontal size={34} color="#FFFFFF" colorNombre="#FFFFFF" />
           </header>
 
-          {/* TEXTO PROVISIONAL. Se pidió lorem ipsum a propósito, para juzgar
-              la animación sin que el titular compita por la atención. El
-              original está en el historial: «Nunca más un expediente
-              incompleto.» más su bajada. Restaurar antes de publicar. */}
           {/* Dos columnas a partir de `lg`, y no antes: la escena mide 340px de
               ancho y en una media columna de tableta quedaría espachurrada
               contra el titular. Por debajo de ese corte se apilan, y el orden
@@ -125,13 +121,23 @@ export default function FolletoPage() {
               leerlo en un teléfono. */}
           <div className="mt-14 sm:mt-20 grid lg:grid-cols-2 gap-14 lg:gap-10 items-center">
             <div>
+              {/* El titular le habla al segundo motivo del lector —el desgaste
+                  que vive cada mes— y no al primero, que es el miedo al
+                  hallazgo. Es una elección: el miedo abre la puerta pero cansa
+                  en una portada, y el alivio invita a seguir bajando.
+
+                  La bajada nombra las tres tareas concretas que desaparecen, en
+                  las palabras del lector, y cierra en SECOP II — que es donde
+                  termina su mes. Dice «listo para CARGAR a SECOP II», no
+                  «integrado con»: el sistema arma el paquete y la carga la
+                  sigue haciendo una persona. Ver PRODUCTO.md. */}
               <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-white">
-                Lorem ipsum dolor sit amet consectetur.
+                El cierre del mes deja de ser un problema.
               </h1>
               <p className="mt-7 text-lg leading-relaxed max-w-xl" style={{ color: 'rgba(255,255,255,.62)' }}>
-                Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
-                enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-                aliquip ex ea commodo.
+                Ni plantillas de Word, ni consecutivos a mano, ni perseguir soportes
+                uno por uno. El contratista reporta desde su celular y el sistema arma
+                el expediente completo de cada contrato, listo para cargar a SECOP&nbsp;II.
               </p>
             </div>
 
