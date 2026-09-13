@@ -3,14 +3,16 @@
 /**
  * Server Actions: revisión por obligación (asesor / supervisor).
  *
- * Asesor y supervisor pueden, para cada obligación de un período:
- *  - aprobar/desmarcar (✓)
- *  - agregar una nota
+ * Para cada obligación de un período, el revisor fija UN estado de tres:
+ * aprobada, observada o devuelta. Ver `fijarRevisionObligacion` más abajo,
+ * que es el único punto de escritura.
  *
- * Esa revisión alimenta el apartado "Aceptación de las actividades realizadas"
- * del Acta de Supervisión. Solo se guarda fila cuando se desvía del default
- * (aprobada=true, sin nota). Mismo patrón que obligaciones.ts: auth con el
- * server client (cookies httpOnly) y escritura con el admin client.
+ * Esa revisión alimenta dos cosas: el apartado "Aceptación de las actividades
+ * realizadas" del Acta de Supervisión, y los correos que recibe la contratista
+ * (las devueltas en el de devolución, las observadas en el de aprobación).
+ * Solo se guarda fila cuando alguien se pronuncia; sin fila, la obligación
+ * está sin revisar. Mismo patrón que obligaciones.ts: auth con el server
+ * client (cookies httpOnly) y escritura con el admin client.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
@@ -84,16 +86,51 @@ async function postRevision(periodoId: string, contratoId: string) {
   revalidatePath(`/dashboard/contratos/${contratoId}/periodo/${periodoId}`)
 }
 
-// ─── Aprobar / desmarcar una obligación ─────────────────────────────────────
+// ─── El veredicto de una obligación ─────────────────────────────────────────
 
-export async function toggleAprobacionObligacion(
+/**
+ * Los tres estados que un revisor puede dar a una obligación.
+ *
+ * Antes eran dos acciones sueltas —un `toggle` de aprobación y un «guardar
+ * nota»— y el significado salía de combinarlas: para decir «no cumple, y esto
+ * es lo que falta» había que quitar el ✓ y además escribir la nota, sin que
+ * nada en la pantalla dijera que esa pareja significaba un hallazgo. Se notaba
+ * en los datos: las 17 obligaciones marcadas «sin aprobar» en producción no
+ * tenían ni una nota, y las 14 con nota estaban todas aprobadas.
+ *
+ * Ahora el revisor elige un estado y el estado lleva su texto dentro:
+ *
+ *   · `aprobada`  → cumple, sin nada que añadir.        (aprobada=true,  nota=null)
+ *   · `observada` → cumple, con una observación que va   (aprobada=true,  nota=texto)
+ *                   al Acta de Supervisión.
+ *   · `devuelta`  → no cumple. El texto viaja a la       (aprobada=false, nota=texto)
+ *                   contratista en el correo de devolución y NO al acta.
+ *
+ * Sobre las columnas de siempre: esto no necesitó migración.
+ */
+export type EstadoRevision = 'aprobada' | 'observada' | 'devuelta'
+
+export async function fijarRevisionObligacion(
   periodoId: string,
   obligacionId: string,
-  aprobada: boolean,
+  estado: EstadoRevision,
+  nota?: string,
 ): Promise<ActionResult> {
   try {
     const ctx = await requireRevisor(periodoId)
     if ('error' in ctx) return { error: ctx.error }
+
+    const limpio = (nota ?? '').trim()
+    if (limpio.length > 2000) return { error: 'El texto no puede superar los 2000 caracteres' }
+
+    // Devolver sin decir por qué no le sirve a nadie: es exactamente lo que
+    // producían las 17 filas «sin aprobar» sin nota que hay en producción.
+    if (estado === 'devuelta' && !limpio) {
+      return { error: 'Explica qué debe corregir la contratista en esta obligación' }
+    }
+    if (estado === 'observada' && !limpio) {
+      return { error: 'Escribe la observación' }
+    }
 
     const admin = createAdminSupabaseClient()
     const { error } = await admin
@@ -102,7 +139,11 @@ export async function toggleAprobacionObligacion(
         {
           periodo_id: periodoId,
           obligacion_id: obligacionId,
-          aprobada,
+          aprobada: estado !== 'devuelta',
+          // `aprobada` borra el texto a propósito: es el estado «cumple y no
+          // hay nada que añadir». Quien lo pulsa teniendo texto escrito recibe
+          // antes una confirmación en la pantalla.
+          nota: estado === 'aprobada' ? null : limpio,
           revisado_por: ctx.userId,
           revisado_at: new Date().toISOString(),
         },
@@ -110,75 +151,6 @@ export async function toggleAprobacionObligacion(
       )
 
     if (error) return { error: `Error al guardar: ${error.message}` }
-
-    await postRevision(periodoId, ctx.contratoId)
-    return {}
-  } catch (e: unknown) {
-    return { error: e instanceof Error ? e.message : 'Error inesperado' }
-  }
-}
-
-// ─── Guardar / borrar la nota de una obligación ─────────────────────────────
-
-export async function guardarNotaObligacion(
-  periodoId: string,
-  obligacionId: string,
-  nota: string,
-): Promise<ActionResult> {
-  try {
-    const ctx = await requireRevisor(periodoId)
-    if ('error' in ctx) return { error: ctx.error }
-
-    const limpio = nota.trim()
-    if (limpio.length > 2000) return { error: 'La nota no puede superar los 2000 caracteres' }
-
-    const admin = createAdminSupabaseClient()
-
-    /**
-     * ESCRIBIR UNA NOTA NO PUEDE APROBAR LA OBLIGACIÓN.
-     *
-     * Esto era un `upsert` que solo mandaba `nota`. Cuando no existía fila
-     * —el caso normal: nadie había tocado esa obligación— el INSERT dejaba
-     * que `aprobada` tomara su DEFAULT en Postgres, que es `true`. Resultado:
-     * quien escribía «falta la evidencia de las visitas» estaba aprobando la
-     * obligación sin saberlo, y la pantalla la pintaba en verde.
-     *
-     * No es una hipótesis. En producción las 14 filas con nota estaban las 14
-     * marcadas como aprobadas, y las 17 marcadas «sin aprobar» no tenían
-     * ninguna nota: los dos conjuntos eran disjuntos, que es tanto como decir
-     * que el sistema impedía que el veredicto y su motivo viajaran juntos.
-     *
-     * Ahora la nota NUNCA toca el veredicto:
-     *  · Si ya hay fila, se conserva el `aprobada` que tuviera.
-     *  · Si no la hay, la nota entra como hallazgo (`aprobada: false`). Es la
-     *    única dirección segura: fabricar una aprobación de una obligación
-     *    contractual es un daño silencioso, mientras que un «sin aprobar» de
-     *    más es visible y se deshace con un clic. Y encaja con el criterio
-     *    acordado: el ✓ es quien decide si la nota es un hallazgo (sin
-     *    aprobar) o una observación para el acta (aprobada).
-     */
-    const { data: previa } = await admin
-      .from('obligacion_revisiones')
-      .select('aprobada')
-      .eq('periodo_id', periodoId)
-      .eq('obligacion_id', obligacionId)
-      .maybeSingle()
-
-    const { error } = await admin
-      .from('obligacion_revisiones')
-      .upsert(
-        {
-          periodo_id: periodoId,
-          obligacion_id: obligacionId,
-          aprobada: previa ? (previa as { aprobada: boolean }).aprobada : false,
-          nota: limpio || null,
-          revisado_por: ctx.userId,
-          revisado_at: new Date().toISOString(),
-        },
-        { onConflict: 'periodo_id,obligacion_id' },
-      )
-
-    if (error) return { error: `Error al guardar la nota: ${error.message}` }
 
     await postRevision(periodoId, ctx.contratoId)
     return {}

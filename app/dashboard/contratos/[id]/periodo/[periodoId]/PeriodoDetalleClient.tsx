@@ -57,7 +57,7 @@ import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia, guardar
 import { comprimirEvidencia } from '@/lib/compress'
 import { computeFileHash, computePerceptualHash, computePerceptualHashFromUrl } from '@/lib/pHash'
 import { actualizarActividad, crearActividad, eliminarActividad } from '@/app/actions/actividades'
-import { toggleAprobacionObligacion, guardarNotaObligacion } from '@/app/actions/obligacion-revisiones'
+import { fijarRevisionObligacion, type EstadoRevision } from '@/app/actions/obligacion-revisiones'
 import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 import MejorarRedaccion from '@/components/MejorarRedaccion'
 import Badge from '@/components/ui/Badge'
@@ -413,81 +413,75 @@ export default function PeriodoDetallePage({
   const [revisiones, setRevisiones] = useState<Record<string, RevisionLocal>>(initialRevisiones)
   // Default sin fila = aprobada, sin nota.
   const getRevision = (oblId: string): RevisionLocal => revisiones[oblId] ?? { aprobada: true, nota: null }
-  const [notaModal, setNotaModal] = useState<{ obligacionId: string; texto: string } | null>(null)
+  // El cuadro de texto sirve a los dos estados que llevan texto. `estado` dice
+  // cuál se está escribiendo, y con él cambia todo: título, ayuda, color y a
+  // dónde acabará el texto (el acta o el correo de devolución).
+  const [notaModal, setNotaModal] = useState<
+    { obligacionId: string; numero: number; texto: string; estado: Extract<EstadoRevision, 'observada' | 'devuelta'> } | null
+  >(null)
+  // Segundo toque para confirmar que se retira una observación al aprobar:
+  // «Aprobar» es el estado «cumple y no hay nada que añadir», así que borra el
+  // texto — y perder lo escrito en silencio sería desagradable.
+  const [confirmarQuitarNota, setConfirmarQuitarNota] = useState<string | null>(null)
   const [guardandoNota, setGuardandoNota] = useState(false)
   const [obligacionProcesando, setObligacionProcesando] = useState<string | null>(null)
 
-  async function handleToggleAprobacion(obligacionId: string, numero: number) {
-    const actual = getRevision(obligacionId)
-    // Una obligación SIN REVISAR (sin fila) se muestra como pendiente aunque el
-    // acta la dé por cumplida: el primer clic debe APROBARLA explícitamente.
-    // Antes se calculaba !actual.aprobada, y como el default es `true`, ese
-    // primer clic la marcaba como NO aprobada — lo contrario de lo que el
-    // usuario creía estar haciendo, y sin ningún aviso.
-    // «Sin revisar» incluye la revisión que quedó del ciclo anterior: sobre el
-    // informe corregido nadie se ha pronunciado todavía, así que el primer clic
-    // vuelve a ser una aprobación explícita.
-    const sinRevisar = !revisionVigente(obligacionId)
-    const nuevoValor = sinRevisar ? true : !actual.aprobada
-    // Optimista
+  /**
+   * Fija el estado de una obligación. Un solo camino para los tres botones.
+   *
+   * `aprobada` se aplica directo; `observada` y `devuelta` llegan aquí desde el
+   * cuadro de texto, porque sin texto no significan nada.
+   */
+  async function aplicarRevision(obligacionId: string, estado: EstadoRevision, texto?: string) {
+    const previaVigente = revisionVigente(obligacionId)
+    const previa = previaVigente ? revisiones[obligacionId] : undefined
+
+    // Optimista. `revisado_at` sella el ciclo actual: sin él, la fila recién
+    // escrita se seguiría comparando con la marca vieja del servidor y la
+    // obligación volvería a leerse como «sin revisar».
     setRevisiones((prev) => ({
       ...prev,
       [obligacionId]: {
-        aprobada: nuevoValor,
-        nota: prev[obligacionId]?.nota ?? actual.nota,
-        // Sella el ciclo actual: sin esto, la fila optimista se seguiría
-        // comparando con la marca vieja del servidor.
+        aprobada: estado !== 'devuelta',
+        nota: estado === 'aprobada' ? null : (texto ?? '').trim() || null,
         revisado_at: new Date().toISOString(),
       },
     }))
     setObligacionProcesando(obligacionId)
-    const res = await toggleAprobacionObligacion(periodoId, obligacionId, nuevoValor)
+
+    const res = await fijarRevisionObligacion(periodoId, obligacionId, estado, texto)
+
     if (res.error) {
-      // Revertir
       setRevisiones((prev) => {
         const copia = { ...prev }
-        if (sinRevisar) delete copia[obligacionId]
-        else copia[obligacionId] = { aprobada: actual.aprobada, nota: prev[obligacionId]?.nota ?? actual.nota }
+        if (previa === undefined) delete copia[obligacionId]
+        else copia[obligacionId] = previa
         return copia
       })
       toast.error(res.error)
-    } else {
-      toast.success(
-        nuevoValor
-          ? `Obligación ${numero} aprobada`
-          : `Obligación ${numero} marcada como no cumplida`,
-      )
     }
     setObligacionProcesando(null)
+    return !res.error
+  }
+
+  async function handleAprobarObligacion(obligacionId: string, numero: number) {
+    const ok = await aplicarRevision(obligacionId, 'aprobada')
+    if (ok) toast.success(`Obligación ${numero} aprobada`)
   }
 
   async function handleGuardarNota() {
     if (!notaModal) return
-    const { obligacionId, texto } = notaModal
-    const previa = getRevision(obligacionId)
-    const limpio = texto.trim()
+    const { obligacionId, texto, estado, numero } = notaModal
     setGuardandoNota(true)
-    const res = await guardarNotaObligacion(periodoId, obligacionId, limpio)
-    if (res.error) {
-      toast.error(res.error)
-      setGuardandoNota(false)
-      return
-    }
-    // Optimista. La nota NO cambia la aprobación de una obligación ya juzgada;
-    // sobre una sin juzgar entra como hallazgo (sin aprobar), que es lo que
-    // hace el servidor en guardarNotaObligacion — antes el DEFAULT de la
-    // columna la daba por aprobada.
-    setRevisiones((prev) => ({
-      ...prev,
-      [obligacionId]: {
-        aprobada: prev[obligacionId] !== undefined ? (prev[obligacionId]?.aprobada ?? previa.aprobada) : false,
-        nota: limpio || null,
-        revisado_at: new Date().toISOString(),
-      },
-    }))
+    const ok = await aplicarRevision(obligacionId, estado, texto)
     setGuardandoNota(false)
+    if (!ok) return
     setNotaModal(null)
-    toast.success(limpio ? 'Nota guardada' : 'Nota eliminada')
+    toast.success(
+      estado === 'devuelta'
+        ? `Obligación ${numero} marcada para devolución`
+        : `Observación guardada en la obligación ${numero}`,
+    )
   }
 
   // Ancla de la sección de obligaciones. Ya no hay ningún botón que lleve
@@ -646,6 +640,19 @@ export default function PeriodoDetallePage({
   // Progreso de revisión por obligación — usado en el panel de secretaria
   const obligacionesConRevision = obligaciones.filter(obl => revisionVigente(obl.id))
   const obligacionesSinRevisar = obligaciones.filter(obl => !revisionVigente(obl.id))
+
+  /**
+   * Obligaciones marcadas para devolución en este ciclo.
+   *
+   * Marcarlas no devuelve nada por sí solo: la devolución ocurre UNA vez,
+   * desde el panel, y ese único correo las lleva todas. Por eso el panel
+   * necesita contarlas —para que el revisor vea que hay algo pendiente de
+   * enviar— y por eso aprobar el informe con marcas puestas tiene que avisar:
+   * al aprobar, esas devoluciones no le llegan a nadie.
+   */
+  const obligacionesDevueltas = obligaciones.filter(
+    obl => revisionVigente(obl.id) && revisiones[obl.id]?.aprobada === false,
+  )
   const todasRevisadas = obligaciones.length > 0 && obligacionesSinRevisar.length === 0
   const progresoRevision = obligaciones.length > 0 ? obligacionesConRevision.length / obligaciones.length : 0
 
@@ -1004,8 +1011,9 @@ export default function PeriodoDetallePage({
 
   async function handleAprobarSecretaria() {
     // Confirmación previa si queda algo sin revisar: obligaciones sin
-    // seguimiento, o la planilla de seguridad social sin verificar.
-    if ((!todasRevisadas && obligaciones.length > 0) || planillaSinRevisar) {
+    // seguimiento, la planilla sin verificar, o —lo más grave— obligaciones
+    // marcadas para devolución que al aprobar no le llegarían a nadie.
+    if ((!todasRevisadas && obligaciones.length > 0) || planillaSinRevisar || obligacionesDevueltas.length > 0) {
       setMostrarConfirmacionAprobacion(true)
       return
     }
@@ -2470,8 +2478,13 @@ export default function PeriodoDetallePage({
           // ciclo anterior no da por bueno un informe que ya cambió.
           const revisada = revisionVigente(obl.id)
           const notaDelCicloAnterior = tieneNota && !revisada
-          const estadoRev: 'aprobada' | 'sin_aprobar' | 'sin_revisar' =
-            !revisada ? 'sin_revisar' : rev.aprobada ? 'aprobada' : 'sin_aprobar'
+          // Los mismos tres nombres que usan los botones y el servidor, para
+          // que el estado que se pinta y el que se guarda no puedan divergir.
+          const estadoRev: EstadoRevision | 'sin_revisar' =
+            !revisada ? 'sin_revisar'
+            : !rev.aprobada ? 'devuelta'
+            : tieneNota ? 'observada'
+            : 'aprobada'
           const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico &&
             !!periodo && ['enviado', 'revision', 'rechazado'].includes(periodo.estado)
 
@@ -2489,18 +2502,11 @@ export default function PeriodoDetallePage({
            * corregir (obligación sin aprobar), azul cielo cuando solo observa.
            * El verde queda reservado para lo que de verdad está cerrado.
            */
-          const acento: 'corregir' | 'observada' | 'aprobada' | 'sin_revisar' =
-            estadoRev === 'sin_aprobar' ? 'corregir'
-            // Una nota que sobrevive del ciclo anterior sigue diciendo qué se
-            // pidió, pero la obligación está sin revisar: el acento gris dice
-            // «nadie se ha pronunciado todavía sobre esta versión».
-            : notaDelCicloAnterior ? 'sin_revisar'
-            : tieneNota ? 'observada'
-            : estadoRev === 'aprobada' ? 'aprobada'
-            : 'sin_revisar'
-
+          // Una revisión que sobrevive del ciclo anterior sigue diciendo qué se
+          // pidió, pero la obligación está sin revisar: el acento gris dice
+          // «nadie se ha pronunciado todavía sobre esta versión».
           const CLASES_ACENTO = {
-            corregir:    'bg-amber-50/40 border-amber-200 border-l-amber-400',
+            devuelta:    'bg-amber-50/40 border-amber-200 border-l-amber-400',
             observada:   'bg-sky-50/40 border-sky-200 border-l-sky-400',
             aprobada:    'bg-green-50/40 border-gray-200 border-l-green-500',
             sin_revisar: 'bg-white border-gray-200 border-l-gray-200',
@@ -2509,7 +2515,7 @@ export default function PeriodoDetallePage({
           return (
             <div
               key={obl.id}
-              className={`rounded-2xl border border-l-4 p-5 sm:p-6 transition-colors ${CLASES_ACENTO[acento]}`}
+              className={`rounded-2xl border border-l-4 p-5 sm:p-6 transition-colors ${CLASES_ACENTO[estadoRev]}`}
             >
               {/* Cabecera — zona clickable (expandir) + acciones de revisión.
                   Colapsada por defecto: las actividades y evidencias (imágenes)
@@ -2535,16 +2541,16 @@ export default function PeriodoDetallePage({
                         no es un indicador accesible (WCAG 1.4.1) y un botón
                         verde se lee como "acción disponible", no como "hecho". */}
                     <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                      {/* Aprobada CON nota no es lo mismo que aprobada a secas:
-                          la primera deja algo escrito que hay que leer. La
-                          etiqueta lo dice en palabras, no solo en color. */}
+                      {/* El estado en palabras, no solo en color: el color por
+                          sí solo no es un indicador accesible (WCAG 1.4.1). */}
                       {estadoRev === 'aprobada' && (
-                        tieneNota
-                          ? <Badge variant="sky" size="xs">Aprobada con observación</Badge>
-                          : <Badge variant="green" size="xs">Aprobada por la supervisión</Badge>
+                        <Badge variant="green" size="xs">Aprobada por la supervisión</Badge>
                       )}
-                      {estadoRev === 'sin_aprobar' && (
-                        <Badge variant="amber" size="xs">Sin aprobar</Badge>
+                      {estadoRev === 'observada' && (
+                        <Badge variant="sky" size="xs">Aprobada con observación</Badge>
+                      )}
+                      {estadoRev === 'devuelta' && (
+                        <Badge variant="amber" size="xs">Marcada para devolución</Badge>
                       )}
                       {estadoRev === 'sin_revisar' && puedeRevisar && (
                         <Badge variant="gray" size="xs">
@@ -2558,9 +2564,9 @@ export default function PeriodoDetallePage({
                       {tieneNota && (
                         <NotaSupervision
                           nota={rev.nota ?? ''}
-                          // Una nota que quedó del ciclo anterior es, por
+                          // Una revisión que quedó del ciclo anterior es, por
                           // definición, lo que se pidió corregir.
-                          esCorreccion={estadoRev === 'sin_aprobar' || notaDelCicloAnterior}
+                          esCorreccion={estadoRev === 'devuelta' || notaDelCicloAnterior}
                         />
                       )}
                       <span className="text-xs text-gray-400">
@@ -2577,53 +2583,84 @@ export default function PeriodoDetallePage({
                   </svg>
                 </div>
 
-                {/* Acciones de revisión — solo asesor/supervisor, período no histórico */}
-                {puedeRevisar && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    {/* Aprobar / desmarcar */}
-                    {/* Botón con ETIQUETA: un icono suelto no dice si el verde
-                        significa "ya está aprobada" o "pulsa para aprobar". El
-                        texto elimina esa ambigüedad y anuncia qué hará el clic. */}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAprobacion(obl.id, oblIndex + 1)}
-                      disabled={obligacionProcesando === obl.id}
-                      aria-pressed={estadoRev === 'aprobada'}
-                      title={
-                        estadoRev === 'aprobada'
-                          ? 'Aprobada — clic para retirar la aprobación'
-                          : 'Marcar esta obligación como cumplida'
-                      }
-                      className={`h-9 px-2.5 sm:px-3 inline-flex items-center gap-1.5 rounded-xl border text-xs font-semibold transition-colors disabled:opacity-40
-                        ${estadoRev === 'aprobada'
-                          ? 'bg-green-600 border-green-600 text-white hover:bg-green-700'
-                          : 'bg-white border-gray-200 text-gray-500 hover:text-green-600 hover:border-green-400'}`}
-                    >
-                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="hidden sm:inline">
-                        {estadoRev === 'aprobada' ? 'Aprobada' : 'Aprobar'}
-                      </span>
-                    </button>
-                    {/* Agregar / editar nota */}
-                    <button
-                      type="button"
-                      onClick={() => setNotaModal({ obligacionId: obl.id, texto: rev.nota ?? '' })}
-                      title={tieneNota ? 'Editar nota de supervisión' : 'Agregar nota de supervisión'}
-                      aria-label="Nota de supervisión"
-                      className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors
-                        ${tieneNota
-                          ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'
-                          : 'bg-white border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-300'}`}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {/* ── El veredicto de la obligación ──────────────────────────
+                  TRES estados excluyentes, no un ✓ más un campo de texto
+                  suelto. Antes, para decir «no cumple, y esto es lo que
+                  falta», había que quitar la aprobación Y además escribir la
+                  nota, y nada decía que esa pareja significara un hallazgo. Se
+                  veía en los datos: las 17 obligaciones marcadas «sin aprobar»
+                  en producción no tenían ni una nota.
+
+                  Con etiqueta visible y en su propia fila. La regla 4 de
+                  lib/iconos.ts —el icono nunca carga el significado solo— pesa
+                  el doble aquí, donde dos de los tres botones son veredictos
+                  opuestos. Y en la cabecera no caben: a 320 px dejarían la
+                  descripción de la obligación en unos 60 px. */}
+              {puedeRevisar && (
+                <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                  {([
+                    {
+                      clave: 'aprobada' as const,
+                      etiqueta: 'Aprobar',
+                      glifo: Iconos.estado.ok,
+                      activo: 'bg-green-600 border-green-600 text-white hover:bg-green-700',
+                      inerte: 'bg-white border-gray-200 text-gray-500 hover:text-green-700 hover:border-green-400',
+                      titulo: 'Cumple, sin nada que añadir',
+                    },
+                    {
+                      clave: 'observada' as const,
+                      etiqueta: 'Observación',
+                      glifo: Iconos.aviso.mensaje,
+                      activo: 'bg-sky-600 border-sky-600 text-white hover:bg-sky-700',
+                      inerte: 'bg-white border-gray-200 text-gray-500 hover:text-sky-700 hover:border-sky-400',
+                      titulo: 'Cumple, pero queda una observación en el Acta de Supervisión',
+                    },
+                    {
+                      clave: 'devuelta' as const,
+                      etiqueta: 'Devolver',
+                      glifo: Iconos.accion.devolver,
+                      activo: 'bg-amber-500 border-amber-500 text-white hover:bg-amber-600',
+                      inerte: 'bg-white border-gray-200 text-gray-500 hover:text-amber-700 hover:border-amber-400',
+                      titulo: 'No cumple — la contratista recibirá esto al devolver el informe',
+                    },
+                  ]).map(({ clave, etiqueta, glifo, activo, inerte, titulo }) => {
+                    const seleccionado = estadoRev === clave
+                    const pidiendoConfirmacion = clave === 'aprobada' && confirmarQuitarNota === obl.id
+                    return (
+                      <button
+                        key={clave}
+                        type="button"
+                        disabled={obligacionProcesando === obl.id}
+                        aria-pressed={seleccionado}
+                        title={titulo}
+                        onClick={() => {
+                          if (clave === 'aprobada') {
+                            // Aprobar retira la observación: es el estado «no hay
+                            // nada que añadir». Un segundo toque lo confirma, para
+                            // no borrar en silencio algo que alguien escribió.
+                            if (tieneNota && !pidiendoConfirmacion) { setConfirmarQuitarNota(obl.id); return }
+                            setConfirmarQuitarNota(null)
+                            void handleAprobarObligacion(obl.id, oblIndex + 1)
+                            return
+                          }
+                          setConfirmarQuitarNota(null)
+                          setNotaModal({ obligacionId: obl.id, numero: oblIndex + 1, texto: rev.nota ?? '', estado: clave })
+                        }}
+                        className={`h-9 px-3 inline-flex items-center gap-1.5 rounded-xl border text-xs font-semibold transition-colors disabled:opacity-40 ${
+                          pidiendoConfirmacion
+                            ? 'bg-gray-900 border-gray-900 text-white'
+                            : seleccionado ? activo : inerte
+                        }`}
+                      >
+                        <Icono glifo={pidiendoConfirmacion ? Iconos.estado.advertencia : glifo} tamano="sm" className="shrink-0" />
+                        {pidiendoConfirmacion ? 'Quitar la observación' : etiqueta}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
               {abierta && (
               <>
@@ -3380,10 +3417,17 @@ export default function PeriodoDetallePage({
             <button
               onClick={() => { setMostrarDevolverModal(true); setDestinoDevolucion(null); setMotivoDevolucion('') }}
               disabled={procesando}
-              className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2 border ${
+                obligacionesDevueltas.length > 0
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 font-semibold'
+                  : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+              }`}
             >
               <Icono glifo={Iconos.accion.devolver} tamano="sm" className="shrink-0" />
-              Devolver
+              {/* El recuento es lo que hace honesta la palabra «Devolver» en
+                  cada obligación: ahí solo se marca, y la devolución —con su
+                  único correo— ocurre aquí. */}
+              {obligacionesDevueltas.length > 0 ? `Devolver informe (${obligacionesDevueltas.length})` : 'Devolver'}
             </button>
           </div>
         </div>
@@ -3903,13 +3947,39 @@ export default function PeriodoDetallePage({
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 flex-shrink-0"><Icono glifo={Iconos.estado.advertencia} tamano="md" /></div>
               <h3 className="text-sm font-semibold text-gray-900">
-                {planillaSinRevisar && obligacionesSinRevisar.length > 0
-                  ? 'Quedan puntos sin revisar'
-                  : planillaSinRevisar
-                    ? 'Planilla sin revisar'
-                    : 'Obligaciones sin revisar'}
+                {obligacionesDevueltas.length > 0
+                  ? 'Hay obligaciones marcadas para devolución'
+                  : planillaSinRevisar && obligacionesSinRevisar.length > 0
+                    ? 'Quedan puntos sin revisar'
+                    : planillaSinRevisar
+                      ? 'Planilla sin revisar'
+                      : 'Obligaciones sin revisar'}
               </h3>
             </div>
+
+            {/* Lo primero, porque es lo que se pierde de forma irreversible:
+                aprobar cierra el periodo y esas devoluciones no salen por
+                ningún correo. El revisor las marcó esperando que llegaran. */}
+            {obligacionesDevueltas.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-3">
+                <p className="text-xs font-semibold text-amber-900 mb-1">
+                  {obligacionesDevueltas.length === 1
+                    ? 'Marcaste 1 obligación para devolución'
+                    : `Marcaste ${obligacionesDevueltas.length} obligaciones para devolución`}
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {obligacionesDevueltas.map(obl => (
+                    <p key={obl.id} className="text-xs text-amber-800 leading-relaxed">
+                      {obligaciones.indexOf(obl) + 1}. {obl.descripcion}
+                    </p>
+                  ))}
+                </div>
+                <p className="text-[11px] text-amber-700/90 leading-relaxed mt-2">
+                  Si apruebas, el informe se cierra y esas observaciones <strong>no le llegarán
+                  a la contratista</strong>. Para que las reciba, usa «Devolver» en vez de aprobar.
+                </p>
+              </div>
+            )}
 
             {/* Planilla de seguridad social — se muestra primero por su peso
                 legal: el art. 23 de la Ley 1150 de 2007 exige verificar los
@@ -4010,6 +4080,16 @@ export default function PeriodoDetallePage({
 
             {destinoDevolucion && (
               <>
+                {/* Que no escriba dos veces lo mismo: si ya marcó obligaciones,
+                    ese texto viaja igualmente y este campo puede ser breve. */}
+                {obligacionesDevueltas.length > 0 && destinoDevolucion === 'contratista' && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3 leading-relaxed">
+                    Se enviarán también las <strong>{obligacionesDevueltas.length === 1
+                      ? '1 obligación marcada'
+                      : `${obligacionesDevueltas.length} obligaciones marcadas`}</strong> con su texto.
+                    Aquí basta un motivo general.
+                  </p>
+                )}
                 <textarea
                   value={motivoDevolucion}
                   onChange={(e) => setMotivoDevolucion(e.target.value)}
@@ -4130,25 +4210,48 @@ export default function PeriodoDetallePage({
           onClick={() => !guardandoNota && setNotaModal(null)}
           role="dialog"
           aria-modal="true"
-          aria-label="Nota de supervisión"
+          aria-label={notaModal.estado === 'devuelta' ? 'Devolver la obligación' : 'Observación sobre la obligación'}
         >
           <div
             className="bg-white rounded-2xl w-full max-w-lg p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold text-gray-900 mb-1">Nota de la supervisión</h3>
-            <p className="text-xs text-gray-500 mb-3">
-              Esta nota reemplaza el texto automático de esta obligación en el Acta de Supervisión.
-              Déjala vacía para volver al texto por defecto.
-            </p>
+            {/* Un solo cuadro para los dos estados que llevan texto, pero
+                diciendo en cada caso a dónde va a parar lo que se escribe. Esa
+                es la diferencia que antes el revisor tenía que adivinar. */}
+            <div className="flex items-start gap-3 mb-3">
+              <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                notaModal.estado === 'devuelta' ? 'bg-amber-50 text-amber-600' : 'bg-sky-50 text-sky-600'
+              }`}>
+                <Icono glifo={notaModal.estado === 'devuelta' ? Iconos.accion.devolver : Iconos.aviso.mensaje} tamano="md" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  {notaModal.estado === 'devuelta'
+                    ? `Devolver la obligación ${notaModal.numero}`
+                    : `Observación sobre la obligación ${notaModal.numero}`}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                  {notaModal.estado === 'devuelta'
+                    ? 'La obligación queda marcada como no cumplida. Este texto le llegará a la contratista por correo cuando devuelvas el informe, junto a esta obligación. No se imprime en el acta.'
+                    : 'La obligación queda aprobada. Este texto se imprime en el Acta de Supervisión bajo «Observación», y le llega a la contratista en el correo de aprobación.'}
+                </p>
+              </div>
+            </div>
             <textarea
               value={notaModal.texto}
               onChange={(e) => setNotaModal({ ...notaModal, texto: e.target.value })}
               rows={5}
               autoFocus
               maxLength={2000}
-              placeholder="Ej: Se verificó el cumplimiento de la obligación conforme a las actividades reportadas durante el periodo."
-              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              placeholder={notaModal.estado === 'devuelta'
+                ? 'Ej: No se adjuntó el registro fotográfico de las visitas reportadas a la vereda Combia.'
+                : 'Ej: Se cumple, pero se hace un llamado de atención por el reporte tardío de las actividades.'}
+              className={`w-full px-3 py-2.5 bg-white border rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none resize-none focus:ring-2 ${
+                notaModal.estado === 'devuelta'
+                  ? 'border-amber-200 focus:ring-amber-400 focus:border-amber-400'
+                  : 'border-sky-200 focus:ring-sky-400 focus:border-sky-400'
+              }`}
             />
             <div className="flex items-center justify-end gap-2 mt-4">
               <button
@@ -4160,10 +4263,18 @@ export default function PeriodoDetallePage({
               </button>
               <button
                 onClick={handleGuardarNota}
-                disabled={guardandoNota}
-                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+                // Sin texto no significan nada: una devolución sin motivo es
+                // justo lo que producían las 17 filas «sin aprobar» vacías.
+                disabled={guardandoNota || !notaModal.texto.trim()}
+                className={`px-4 py-2 text-sm font-semibold text-white rounded-lg transition-colors disabled:opacity-40 ${
+                  notaModal.estado === 'devuelta'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-sky-600 hover:bg-sky-700'
+                }`}
               >
-                {guardandoNota ? 'Guardando...' : 'Guardar nota'}
+                {guardandoNota
+                  ? 'Guardando...'
+                  : notaModal.estado === 'devuelta' ? 'Marcar para devolución' : 'Guardar observación'}
               </button>
             </div>
           </div>
