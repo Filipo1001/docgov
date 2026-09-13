@@ -41,6 +41,22 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 .upload-overlay-enter { animation: overlay-fade-in 0.18s ease-out; }
 .upload-card-enter    { animation: card-scale-in  0.18s ease-out; }
 
+/* Salida simétrica: antes la capa desaparecía de un corte (`return null`)
+   justo cuando, detrás, la sección de documentos empieza a aparecer — el
+   cruce entre las dos es lo que hace que el cierre se sienta continuo y no
+   un salto. Un poco más lenta que la entrada a propósito: lo que importa es
+   la llegada, la salida solo tiene que no ser brusca. */
+@keyframes overlay-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes card-scale-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96); }
+}
+.upload-overlay-exit { animation: overlay-fade-out 0.22s ease-in forwards; }
+.upload-card-exit     { animation: card-scale-out  0.22s ease-in forwards; }
+
 /* ── Confirmación de envío ────────────────────────────────────────────────
    El check se DIBUJA, no aparece. Un icono que se desvanece se lee como un
    estado más; un trazo que se traza se lee como algo que acaba de ocurrir, que
@@ -68,6 +84,7 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 
 @media (prefers-reduced-motion: reduce) {
   .check-trazo, .anillo-cierre, .sello-entra { animation-duration: 1ms; }
+  .upload-overlay-exit, .upload-card-exit { animation-duration: 1ms; }
 }
 
 /* ── Presentaciones comerciales ───────────────────────────────────────────

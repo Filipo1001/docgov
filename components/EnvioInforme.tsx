@@ -21,6 +21,15 @@
  * catálogo —Lucide no permite animar el trazo— y su keyframe vive en
  * globals.css, con el resto del sistema.
  *
+ * LA SALIDA NO ES UN CORTE. Antes, en cuanto `abierto` pasaba a false la capa
+ * desaparecía con un `return null` — justo el instante en que, detrás, la
+ * sección de documentos empieza a aparecer. Las dos cosas a la vez daban un
+ * salto: la capa se esfuma, el expediente ya está ahí. Ahora la capa juega su
+ * propia salida (`upload-overlay-exit`/`upload-card-exit`, 220ms) ANTES de
+ * desmontarse de verdad, así que se cruza con la entrada de los documentos en
+ * vez de cederles el paso de golpe. Por eso `visible` (lo que decide si se
+ * pinta algo) y `abierto` (lo que decide el padre) ya no son la misma cosa.
+ *
  * ── LOS TIEMPOS VIVEN AQUÍ DENTRO ────────────────────────────────────────
  *
  * El componente gestiona su propio ritmo y su propio cierre. Quien lo usa solo
@@ -59,6 +68,9 @@ const MS_AVISO_LENTITUD = 8000
  * pantalla.
  */
 const MS_ESCAPE = 20000
+/** Duración de la salida — calcada de `upload-overlay-exit`/`upload-card-exit`
+ *  en globals.css. Si una cambia, la otra tiene que seguirla. */
+const MS_SALIDA = 220
 
 export default function EnvioInforme({
   abierto,
@@ -77,6 +89,11 @@ export default function EnvioInforme({
   const [sellado, setSellado] = useState(false)
   const [lento, setLento] = useState(false)
   const [escape, setEscape] = useState(false)
+  // `visible` manda sobre el `return null`; `abierto` ya no lo hace
+  // directamente. Al cerrar, la capa sigue montada un instante más para
+  // jugar su propia salida — ver la nota de salida en el encabezado.
+  const [visible, setVisible] = useState(abierto)
+  const [saliendo, setSaliendo] = useState(false)
   const abiertoDesde = useRef(0)
 
   // `onCerrar` llega como función anónima y cambia de identidad en cada render
@@ -94,10 +111,29 @@ export default function EnvioInforme({
   const [previoAbierto, setPrevioAbierto] = useState(abierto)
   if (abierto !== previoAbierto) {
     setPrevioAbierto(abierto)
-    setSellado(false)
-    setLento(false)
-    setEscape(false)
+    if (abierto) {
+      // Reapertura: vuelve a pintarse desde cero, sin arrastrar la salida
+      // de la vez anterior.
+      setSellado(false)
+      setLento(false)
+      setEscape(false)
+      setVisible(true)
+      setSaliendo(false)
+    } else {
+      // El padre ya dio el envío por cerrado; esta capa todavía no —le
+      // falta jugar su salida antes de desaparecer de verdad.
+      setSaliendo(true)
+    }
   }
+
+  // Desmontaje real, al terminar la salida. Separado del efecto de arriba
+  // porque ese ajusta estado DURANTE el render y este necesita un temporizador,
+  // que no puede vivir ahí.
+  useEffect(() => {
+    if (!saliendo) return
+    const t = setTimeout(() => { setVisible(false); setSaliendo(false) }, MS_SALIDA)
+    return () => clearTimeout(t)
+  }, [saliendo])
 
   // Marca de apertura y aviso de lentitud. El reloj se lee aquí y no en el
   // render: leer la hora durante el render es impuro y da un valor distinto en
@@ -134,16 +170,16 @@ export default function EnvioInforme({
     }
   }, [abierto, completado, error])
 
-  if (!abierto) return null
+  if (!visible) return null
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm upload-overlay-enter"
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm ${saliendo ? 'upload-overlay-exit' : 'upload-overlay-enter'}`}
       role="status"
       aria-live="polite"
       aria-label={error ? 'Error al enviar el informe' : sellado ? 'Informe enviado a revisión' : 'Enviando el informe'}
     >
-      <div className="bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs upload-card-enter">
+      <div className={`bg-white rounded-3xl px-10 py-8 flex flex-col items-center gap-5 shadow-2xl mx-6 w-full max-w-xs ${saliendo ? 'upload-card-exit' : 'upload-card-enter'}`}>
 
         <div className="relative w-24 h-24">
           {/* Carril fijo */}

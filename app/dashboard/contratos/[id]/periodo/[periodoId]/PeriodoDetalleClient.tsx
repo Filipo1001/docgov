@@ -21,6 +21,8 @@ import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
 import EnvioInforme from '@/components/EnvioInforme'
+import { LogoCD } from '@/components/Logo'
+import { MARCA } from '@/lib/marca'
 import TarjetaAdjunto from '@/components/TarjetaAdjunto'
 import {
   prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
@@ -211,13 +213,13 @@ export default function PeriodoDetallePage({
   const [procesando, setProcesando] = useState(false)
   const [mostrarRechazo, setMostrarRechazo] = useState(false)
   const [motivoRechazo, setMotivoRechazo] = useState('')
-  // Fases del envío. Una sola variable en vez de un booleano: el botón queda
-  // bloqueado de principio a fin —incluida la recarga del expediente— y a la
-  // vez puede decir en qué va, que es lo que faltaba para no dejar al
-  // contratista mirando un botón mudo sin saber si su informe salió.
-  const [faseEnvio, setFaseEnvio] = useState<null | 'verificando' | 'enviando' | 'actualizando'>(null)
+  // Bloquea el botón de principio a fin —verificación, envío y recarga del
+  // expediente incluidas—. Ya NO distingue fases: quien cuenta en qué va el
+  // envío es la animación de `EnvioInforme`, que se abre en el mismo clic;
+  // el botón solo necesita saber si puede o no aceptar un segundo toque.
+  const [enviando, setEnviando] = useState(false)
 
-  // Confirmación del envío. Se separa de `faseEnvio` a propósito: la capa sigue
+  // Confirmación del envío. Se separa de `enviando` a propósito: la capa sigue
   // en pantalla un instante DESPUÉS de que el envío terminó, para dibujar el
   // check. Atarla a la misma variable la haría desaparecer justo cuando toca
   // mostrar que salió bien.
@@ -770,6 +772,24 @@ export default function PeriodoDetallePage({
     ? periodo.estado !== 'borrador' && !mostrarEnvio
     : false
 
+  // La sección nace en su estado final —visible, en su sitio— y solo se le
+  // resta eso un instante para poder devolvérselo con una transición. Sin el
+  // doble `requestAnimationFrame` React pintaría ya con la clase de «visible»
+  // en el primer cuadro y la entrada no llegaría a jugarse: es el mismo motivo
+  // que en `useEscena` (components/folleto/Escenas.tsx).
+  //
+  // Es lo que hace que el cierre de EnvioInforme y la llegada de esta sección
+  // se crucen en vez de saltar: mientras el modal juega su propia salida
+  // (`upload-overlay-exit`, ver components/EnvioInforme.tsx), el expediente ya
+  // empieza a asentarse detrás.
+  const [documentosVisibles, setDocumentosVisibles] = useState(false)
+  useEffect(() => {
+    if (!puedeVerDocumentos) { setDocumentosVisibles(false); return }
+    let r2 = 0
+    const r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setDocumentosVisibles(true)) })
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2) }
+  }, [puedeVerDocumentos])
+
   function actividadesPorObligacion(obligacionId: string) {
     return actividades.filter((a) => a.obligacion_id === obligacionId)
   }
@@ -788,7 +808,10 @@ export default function PeriodoDetallePage({
   // ── Handlers ────────────────────────────────────────────────
 
   async function doEnviar() {
-    setFaseEnvio('enviando')
+    // Se llama desde dos sitios —justo tras verificar el acta, o después de
+    // aceptar el acta de terminación— así que abre y reinicia su propio
+    // estado: no puede asumir que alguien más lo dejó listo.
+    setEnviando(true)
     setEnvioError(null)
     setEnvioCompletado(false)
     setMostrarEnvio(true)
@@ -816,7 +839,6 @@ export default function PeriodoDetallePage({
       // La recarga es cortesía visual, no parte de la confirmación: refresca
       // el expediente por detrás mientras la capa termina su animación. Si
       // tarda o falla, la pantalla se actualizará igual cuando responda.
-      setFaseEnvio('actualizando')
       router.refresh()
       void cargarDatos()
       invalidarPeriodos(queryClient)
@@ -825,12 +847,12 @@ export default function PeriodoDetallePage({
       // deshabilitado para siempre y solo un F5 lo recuperaría.
       setEnvioError('No se pudo completar el envío. Revisa tu conexión e inténtalo de nuevo.')
     } finally {
-      setFaseEnvio(null)
+      setEnviando(false)
     }
   }
 
   async function handleEnviar() {
-    if (faseEnvio) return
+    if (enviando) return
 
     const faltaPlanilla = !periodo?.planilla_ss_url
     const faltaNumero = !numPlanilla.trim()
@@ -844,28 +866,42 @@ export default function PeriodoDetallePage({
 
     setErroresCampos({ planilla: false, numero: false })
 
+    // LA ANIMACIÓN ARRANCA EN EL MISMO CLIC, no después de verificar el acta
+    // de terminación. Antes el botón decía «Verificando…» mientras esa
+    // consulta viajaba y esta capa solo aparecía al terminar —dos narradores
+    // contando la misma espera por turnos—. Ahora hay uno: el anillo ya gira
+    // en cuanto se sabe que el envío es viable, y la verificación ocurre
+    // detrás de él.
+    setEnviando(true)
+    setEnvioError(null)
+    setEnvioCompletado(false)
+    setMostrarEnvio(true)
+
     // Acta de terminación: obligatoria antes del ÚLTIMO informe del contrato.
-    setFaseEnvio('verificando')
     let acta: Awaited<ReturnType<typeof verificarActaTerminacionRequerida>>
     try {
       acta = await verificarActaTerminacionRequerida(periodoId)
     } catch {
+      // La verificación falló, no el envío: esta capa nunca prometió nada
+      // —`completado` sigue en false—, así que basta con cerrarla.
+      setEnviando(false)
+      setMostrarEnvio(false)
       toast.error('No se pudo verificar el informe. Revisa tu conexión e inténtalo de nuevo.')
-      setFaseEnvio(null)
       return
     }
 
     if (acta.requerida && acta.prefill) {
+      // Caso poco frecuente —solo el último periodo del contrato—: esta capa
+      // cede el paso al acta de terminación en vez de al envío. Es el único
+      // momento en que un modal reemplaza a otro, y ya ocurría así antes.
+      setEnviando(false)
+      setMostrarEnvio(false)
       setActaPrefill(acta.prefill)
       setActaFaltaFirma(acta.faltaFirma)
       setMostrarActa(true)
-      setFaseEnvio(null)
       return
     }
 
-    // Sin soltar la fase entre la verificación y el envío: si se pusiera a
-    // null aquí, el botón parpadearía «Enviar a revisión» un instante y
-    // admitiría un segundo clic.
     await doEnviar()
   }
 
@@ -2915,34 +2951,34 @@ export default function PeriodoDetallePage({
 
           <div className="flex items-center justify-between pt-3 border-t border-gray-100">
             <p className="text-sm text-gray-400" aria-live="polite">
-              {faseEnvio === 'verificando' ? 'Verificando los requisitos del informe…'
-                : faseEnvio === 'enviando' ? 'Enviando el informe. No cierres esta página.'
-                : faseEnvio === 'actualizando' ? 'Listo. Actualizando tu expediente…'
-                : rechazado
-                  ? 'El asesor recibirá el informe corregido para revisión.'
-                  : 'Los asesores y la secretaria recibirán este informe para revisión.'
+              {/* Ya no narra fases del envío: en cuanto hay algo que contar, la
+                  animación de EnvioInforme cubre la pantalla entera y este
+                  párrafo queda tapado detrás — que siguiera cambiando de texto
+                  ahí sería una segunda voz que nadie llega a leer. */}
+              {rechazado
+                ? 'El asesor recibirá el informe corregido para revisión.'
+                : 'Los asesores y la secretaria recibirán este informe para revisión.'
               }
             </p>
+            {/* El botón lleva la marca —el isotipo, la tinta institucional— y
+                no el azul genérico de cualquier acción. Tampoco anuncia nada
+                por su cuenta: ni «Verificando…» ni «Enviando…». En cuanto se
+                pulsa, la animación de EnvioInforme ya está en pantalla
+                contando esa historia; el botón solo se deshabilita para no
+                admitir un segundo envío mientras tanto. */}
             <button
               onClick={handleEnviar}
-              disabled={faseEnvio !== null || actividades.length === 0}
-              aria-busy={faseEnvio !== null}
+              disabled={enviando || actividades.length === 0}
+              aria-busy={enviando}
               className={`text-white px-6 py-3 rounded-xl font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed flex-shrink-0 ml-4 flex items-center gap-2 ${
                 rechazado
                   ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-blue-600 hover:bg-blue-700'
+                  : 'hover:bg-[#242F45]'
               }`}
+              style={rechazado ? undefined : { backgroundColor: MARCA }}
             >
-              {faseEnvio && (
-                <svg className="w-4 h-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-              )}
-              {faseEnvio === 'verificando' ? 'Verificando…'
-                : faseEnvio === 'enviando' ? 'Enviando…'
-                : faseEnvio === 'actualizando' ? 'Actualizando…'
-                : rechazado ? '↩ Reenviar a revisión' : 'Enviar a revisión'}
+              <LogoCD size={16} color="#fff" className="shrink-0" />
+              {rechazado ? '↩ Reenviar a revisión' : 'Enviar a revisión'}
             </button>
           </div>
         </div>
@@ -3146,7 +3182,9 @@ export default function PeriodoDetallePage({
 
       {/* ── Documents section ── */}
       {puedeVerDocumentos && (
-        <div className="bg-white rounded-2xl border p-4 sm:p-6 mt-4">
+        <div className={`bg-white rounded-2xl border p-4 sm:p-6 mt-4 transition-all duration-500 ease-out ${
+          documentosVisibles ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+        }`}>
 
           {/* Header + download buttons — apilado en móvil, en línea en desktop */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-3">
