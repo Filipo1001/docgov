@@ -32,28 +32,33 @@ import { enviarNotificacion, enviarNotificacionMultiple } from '@/lib/notificati
 // ─── Internal helpers ────────────────────────────────────────
 
 /**
- * Los hallazgos por obligación de un periodo, listos para meter en un correo.
+ * Las notas por obligación de un periodo, listas para meter en un correo.
  *
- * QUÉ ES UN HALLAZGO. Una obligación con nota y SIN aprobar. Ese es el
- * criterio acordado y el que ya distingue la pantalla: el ✓ decide el papel
- * de la nota — sin aprobar es algo que hay que corregir, aprobada es una
- * observación que va al Acta de Supervisión y no se le reclama a nadie.
+ * EL ✓ DECIDE EL PAPEL DE LA NOTA, y con él a qué correo pertenece:
  *
- * POR QUÉ EXISTE. La devolución viajaba con un único `motivo` de texto libre,
- * así que quien revisaba escribía la nota sobre la obligación 2 —donde toca,
- * junto a las actividades que la sustentan— y esa nota no salía de la
- * pantalla. A la contratista le llegaba un correo genérico y tenía que
- * adivinar a qué obligación se refería. De 36 periodos devueltos, solo 7
- * tenían notas por obligación; el resto resolvía por el campo libre porque
- * era lo único que llegaba.
+ *   · SIN aprobar → hallazgo. Es algo que hay que corregir, así que viaja en
+ *     el correo de devolución y NO se imprime en el Acta de Supervisión: no
+ *     es una declaración que la supervisión quiera firmar.
+ *   · Aprobada → observación. Un llamado de atención que no llega a motivo de
+ *     devolución, o una constancia neutral. Va al acta —sumándose a la frase
+ *     de cumplimiento, no sustituyéndola— y viaja en el correo de APROBACIÓN.
  *
- * Devuelve HTML ya montado para `detalle`, o `null` si no hay hallazgos —en
- * cuyo caso el correo sale como siempre, solo con el motivo general.
+ * POR QUÉ EXISTE. Ninguna de las dos salía de la pantalla. La devolución
+ * viajaba con un único `motivo` de texto libre, así que la nota escrita sobre
+ * la obligación 2 —donde toca, junto a las actividades que la sustentan— no
+ * llegaba a la contratista, que recibía un correo genérico y tenía que
+ * adivinar a qué obligación se refería. Y la observación sobre una obligación
+ * aprobada no llegaba por NINGÚN canal: ni correo, ni campana, ni WhatsApp.
+ * Un llamado de atención que nadie recibe no es un llamado de atención.
+ *
+ * Devuelve HTML ya montado para `detalle`, o `null` si no hay nada que contar
+ * —en cuyo caso el correo sale como siempre.
  */
-async function hallazgosPorObligacion(
+async function notasPorObligacion(
   admin: ReturnType<typeof createAdminSupabaseClient>,
   periodoId: string,
   contratoId: string,
+  clase: 'hallazgos' | 'observaciones',
 ): Promise<string | null> {
   const [{ data: revisiones }, { data: obligaciones }] = await Promise.all([
     admin
@@ -74,9 +79,10 @@ async function hallazgosPorObligacion(
       .map(r => [r.obligacion_id, r]),
   )
 
+  const quiereAprobadas = clase === 'observaciones'
   const items = (obligaciones as Array<{ id: string; descripcion: string; orden: number }>)
     .map((obl, i) => ({ obl, i, rev: porId.get(obl.id) }))
-    .filter(({ rev }) => rev && !rev.aprobada && !!rev.nota?.trim())
+    .filter(({ rev }) => rev && rev.aprobada === quiereAprobadas && !!rev.nota?.trim())
 
   if (!items.length) return null
 
@@ -85,22 +91,34 @@ async function hallazgosPorObligacion(
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+  // El hallazgo pide acción (ámbar); la observación es para que conste (azul).
+  const filo = quiereAprobadas ? '#0ea5e9' : '#f59e0b'
+  const tinta = quiereAprobadas ? '#075985' : '#92400e'
+
   const filas = items.map(({ obl, i, rev }) => `
-    <div style="margin:0 0 12px 0;padding:0 0 0 12px;border-left:3px solid #f59e0b;">
+    <div style="margin:0 0 12px 0;padding:0 0 0 12px;border-left:3px solid ${filo};">
       <p style="color:#6b7280;font-size:12px;margin:0 0 3px 0;font-weight:bold;">
         Obligación ${i + 1}
       </p>
       <p style="color:#6b7280;font-size:12px;margin:0 0 5px 0;line-height:1.5;">
         ${esc(obl.descripcion)}
       </p>
-      <p style="color:#92400e;font-size:13px;margin:0;line-height:1.6;">
+      <p style="color:${tinta};font-size:13px;margin:0;line-height:1.6;">
         ${esc(rev!.nota!.trim())}
       </p>
     </div>`).join('')
 
+  const encabezado = quiereAprobadas
+    ? (items.length === 1
+        ? 'La supervisión dejó una observación sobre una de tus obligaciones:'
+        : `La supervisión dejó observaciones sobre ${items.length} de tus obligaciones:`)
+    : (items.length === 1
+        ? 'Hay una obligación con observaciones concretas:'
+        : `Hay ${items.length} obligaciones con observaciones concretas:`)
+
   return `
     <p style="color:#333;font-size:14px;line-height:1.6;margin:20px 0 10px 0;">
-      <strong>${items.length === 1 ? 'Hay una obligación' : `Hay ${items.length} obligaciones`} con observaciones concretas:</strong>
+      <strong>${encabezado}</strong>
     </p>
     ${filas}`
 }
@@ -561,8 +579,8 @@ export async function rechazarComoAsesor(
     try {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.contratista_id) {
-        const detalle = await hallazgosPorObligacion(
-          createAdminSupabaseClient(), periodoId, periodo.contrato_id,
+        const detalle = await notasPorObligacion(
+          createAdminSupabaseClient(), periodoId, periodo.contrato_id, 'hallazgos',
         ).catch(() => null)
         await enviarNotificacion({
           destinatarioId: contrato.contratista_id,
@@ -702,6 +720,15 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
         periodos.map(async (p) => {
           const contrato = p.contrato as unknown as { numero: string; contratista_id: string } | null
           if (!contrato?.contratista_id) return
+          // Las observaciones de la supervisión —llamados de atención que no
+          // llegaron a motivo de devolución, constancias— viajan AQUÍ. Es su
+          // único momento: el informe se aprueba, así que no hay correo de
+          // devolución que las lleve, y guardarlas no notifica a nadie. Sin
+          // esto se quedaban esperando a que la contratista volviera a abrir
+          // la pantalla y tocara «Ver nota».
+          const detalle = await notasPorObligacion(
+            createAdminSupabaseClient(), p.id, p.contrato_id, 'observaciones',
+          ).catch(() => null)
           await enviarNotificacion({
             destinatarioId: contrato.contratista_id,
             tipo: 'aprobado',
@@ -711,6 +738,7 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
             mes: p.mes,
             anio: p.anio,
             contrato: contrato.numero || '',
+            detalle: detalle ?? undefined,
             nombreRemitente: usuario.nombre_completo,
           })
         })
@@ -865,8 +893,8 @@ export async function devolverPeriodoAContratista(
     try {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.contratista_id) {
-        const detalle = await hallazgosPorObligacion(
-          createAdminSupabaseClient(), periodoId, periodo.contrato_id,
+        const detalle = await notasPorObligacion(
+          createAdminSupabaseClient(), periodoId, periodo.contrato_id, 'hallazgos',
         ).catch(() => null)
         await enviarNotificacion({
           destinatarioId: contrato.contratista_id,

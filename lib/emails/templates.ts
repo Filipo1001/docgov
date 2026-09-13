@@ -98,6 +98,16 @@ export function emailPeriodoAprobadoAsesor(data: TemplateData) {
   }
 }
 
+/**
+ * `detalle` en este correo son las OBSERVACIONES de la supervisión: notas
+ * sobre obligaciones que SÍ se aprobaron —un llamado de atención que no llegó
+ * a ser motivo de devolución, o una constancia— y que no tenían ningún otro
+ * camino hasta la contratista: guardarlas no notifica a nadie y, al aprobarse
+ * el informe, tampoco hay correo de devolución que las lleve.
+ *
+ * Van después del «aprobado» a propósito: la aprobación es la noticia, la
+ * observación es el matiz. Ver `notasPorObligacion` en app/actions/periodos.ts.
+ */
 export function emailPeriodoAprobado(data: TemplateData) {
   return {
     subject: `Informe aprobado — ${data.mes} ${data.anio}`,
@@ -107,12 +117,22 @@ export function emailPeriodoAprobado(data: TemplateData) {
        <p style="color:#333;font-size:14px;line-height:1.6;">
          Tu informe de <strong>${data.mes} ${data.anio}</strong> del contrato <strong>${data.contrato}</strong>
          ha sido <strong>aprobado</strong>. Ya puedes descargar tus documentos.
-       </p>`,
+       </p>
+       ${data.detalle ?? ''}
+       ${data.detalle ? `<p style="color:#6b7280;font-size:13px;line-height:1.6;">
+         No tienes que hacer nada con estas observaciones para este informe: quedan
+         registradas en el Acta de Supervisión. Tenlas en cuenta para los próximos.
+       </p>` : ''}`,
       '#059669'
     ),
   }
 }
 
+/**
+ * `detalle` en este correo son los HALLAZGOS: notas sobre obligaciones que NO
+ * se aprobaron, es decir lo que hay que corregir, cada una junto a su
+ * obligación. Ver `notasPorObligacion` en app/actions/periodos.ts.
+ */
 export function emailPeriodoRechazado(data: TemplateData) {
   return {
     subject: `Informe requiere correcciones — ${data.mes} ${data.anio}`,

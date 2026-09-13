@@ -687,26 +687,30 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                 obligaciones.map((obl, i) => {
                   const nota = obl.nota?.trim()
                   /**
-                   * Precedencia: el ✓ manda, y solo después la nota.
+                   * LA NOTA SE SUMA, NUNCA SUSTITUYE.
                    *
-                   * Antes la nota ganaba siempre, incluso sobre una obligación
-                   * SIN aprobar. Como una nota casi siempre pide corregir algo
-                   * —«falta la evidencia de las visitas»—, ese texto acababa
-                   * impreso como la declaración oficial de cómo la supervisión
-                   * verificó el cumplimiento, dentro de un acta que se firma y
-                   * se radica en SECOP II.
+                   * Antes la nota ganaba siempre y ocupaba el lugar de la frase
+                   * de cumplimiento. Sobre una obligación CUMPLIDA con un
+                   * llamado de atención, el acta dejaba de decir que se cumplió
+                   * y en su lugar imprimía el llamado — borrando justo la
+                   * constancia que este documento existe para dar. Con una nota
+                   * neutral («se verificó en visita del 12 de septiembre») el
+                   * efecto era el mismo.
                    *
-                   * Con el criterio nuevo la nota tiene dos papeles según el ✓:
-                   * sin aprobar es un hallazgo dirigido a la contratista (viaja
-                   * en el correo de devolución, NO al acta), y aprobada es una
-                   * observación de la supervisión, que sí es lo que el acta
-                   * quiere recoger.
+                   * El patrón correcto ya estaba en esta misma página, unas
+                   * líneas más abajo: `observacion_supervisor` se imprime bajo
+                   * un separador rotulado, sin borrar nada. Dos campos hermanos
+                   * que hacían lo contrario; ahora hacen lo mismo.
+                   *
+                   * Qué nota llega hasta aquí: solo la de una obligación
+                   * APROBADA. La de una sin aprobar es un hallazgo dirigido a
+                   * la contratista —viaja en el correo de devolución— y no es
+                   * una declaración que la supervisión quiera firmar.
                    */
-                  const textoSupervision = !obl.aprobada
-                    ? `La obligación contractual relacionada con "${obl.descripcion}" se encuentra pendiente de verificación por parte de la supervisión.`
-                    : nota
-                      ? nota
-                      : `De acuerdo con la verificación realizada por la supervisión, el contratista dio cumplimiento a la obligación contractual relacionada con "${obl.descripcion}".`
+                  const textoSupervision = obl.aprobada
+                    ? `De acuerdo con la verificación realizada por la supervisión, el contratista dio cumplimiento a la obligación contractual relacionada con "${obl.descripcion}".`
+                    : `La obligación contractual relacionada con "${obl.descripcion}" se encuentra pendiente de verificación por parte de la supervisión.`
+                  const observacion = obl.aprobada ? nota : undefined
                   return (
                     <View
                       key={i}
@@ -718,12 +722,17 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                       </Text>
                       <Text style={{ marginTop: 1, lineHeight: 1.3 }}>
                         <Text style={{ fontFamily: 'Helvetica-Bold' }}>Supervisión: </Text>
-                        {/* La cursiva marca «esto lo redactó la supervisión»,
-                            así que solo aplica cuando la nota es de verdad lo
-                            que se imprime — no cuando se descartó por venir
-                            sobre una obligación sin aprobar. */}
-                        <Text style={obl.aprobada && nota ? { fontStyle: 'italic' } : undefined}>{textoSupervision}</Text>
+                        <Text>{textoSupervision}</Text>
                       </Text>
+                      {/* La observación va aparte y en cursiva: se distingue de
+                          la frase de cumplimiento, que es texto del sistema,
+                          porque esto lo redactó una persona. */}
+                      {observacion ? (
+                        <Text style={{ marginTop: 1, lineHeight: 1.3 }}>
+                          <Text style={{ fontFamily: 'Helvetica-Bold' }}>Observación: </Text>
+                          <Text style={{ fontStyle: 'italic' }}>{observacion}</Text>
+                        </Text>
+                      ) : null}
                     </View>
                   )
                 })
