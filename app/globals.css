@@ -69,21 +69,26 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
   from { stroke-dashoffset: 34; }
   to   { stroke-dashoffset: 0; }
 }
-@keyframes anillo-cierre {
-  from { stroke-dashoffset: 251.33; }
-  to   { stroke-dashoffset: 0; }
-}
 @keyframes sello-entra {
   0%   { opacity: 0; transform: scale(0.4); }
   60%  { opacity: 1; transform: scale(1.12); }
   100% { opacity: 1; transform: scale(1); }
 }
 .check-trazo   { animation: check-trazo 340ms ease-out forwards; }
-.anillo-cierre { animation: anillo-cierre 420ms ease-out forwards; }
 .sello-entra   { animation: sello-entra 380ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
 
+/* NO HAY `.anillo-cierre`. Hasta hace poco el anillo verde de la confirmación
+   de envío se "dibujaba" animando `stroke-dashoffset` sobre un círculo
+   completo (251px de circunferencia) — en Safari/iOS esa propiedad no la
+   compone la GPU, así que en un iPhone real se veía a tirones, no fluida.
+   components/EnvioInforme.tsx y app/propuesta/caramanta/EnvioAnimado.tsx
+   ahora encienden el anillo ya cerrado con una transición de opacidad — un
+   cruce, no un trazo— que sí compone en cualquier teléfono. El check
+   pequeño (`check-trazo`, abajo) NO tiene este problema: es un trazo corto
+   de 18px, no un círculo de 96px, y ahí sí vale la pena que se dibuje.     */
+
 @media (prefers-reduced-motion: reduce) {
-  .check-trazo, .anillo-cierre, .sello-entra { animation-duration: 1ms; }
+  .check-trazo, .sello-entra { animation-duration: 1ms; }
   .upload-overlay-exit, .upload-card-exit { animation-duration: 1ms; }
 }
 
@@ -417,9 +422,9 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 }
 
 /* ── Sección «Cinco documentos» de la propuesta de Caramanta ───────────────
-   Acompañan a EnvioAnimado.tsx. El anillo y el check reutilizan las clases de
-   arriba (`anillo-cierre`, `sello-entra`, `check-trazo`) — son las mismas del
-   envío real, a propósito.                                                 */
+   Acompañan a EnvioAnimado.tsx. El check reutiliza `check-trazo` de arriba y
+   el sello `sello-entra` — son las mismas del envío real, a propósito. El
+   anillo NO tiene clase propia: se cierra por opacidad, directo en el JSX.  */
 .prop-linea { transition: width 320ms cubic-bezier(0.3, 0.8, 0.3, 1), opacity 260ms ease; }
 /* La planilla llega ya escrita: sus líneas no crecen, solo aparecen. */
 .prop-linea--fija { transition: opacity 300ms ease; }

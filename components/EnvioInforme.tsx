@@ -190,31 +190,40 @@ export default function EnvioInforme({
             <circle cx="48" cy="48" r={R} fill="none" stroke="#e5e7eb" strokeWidth="6" />
           </svg>
 
-          {/* Anillo: gira mientras dura; al terminar se cierra en verde. */}
+          {/* Anillo: gira mientras dura; al terminar se cierra en verde.
+              NINGÚN elemento se desmonta al sellar — el arco y el anillo
+              cerrado están montados los dos desde el principio, superpuestos,
+              y solo cambia cuál es visible. Antes el arco se REEMPLAZABA por
+              un <svg> distinto que "dibujaba" el cierre animando
+              `stroke-dashoffset`: en Safari/iOS esa propiedad no la compone
+              la GPU —cada fotograma repinta la geometría del trazo en la
+              CPU—, y encima el cambio de elemento forzaba un recálculo de
+              estilo en el mismo instante. El resultado, en un iPhone real, se
+              veía a tirones y con un salto, no como una animación: como un
+              fallo. Encender un anillo YA CERRADO con una transición de
+              opacidad cuesta lo mismo en cualquier teléfono, porque opacidad
+              sí se compone. */}
           <div className="absolute inset-0 -rotate-90">
-            {sellado ? (
+            <div
+              className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
+                sellado ? 'opacity-0' : 'opacity-100'
+              } ${sellado ? '' : 'animate-spin motion-reduce:animate-none'}`}
+              style={sellado ? undefined : { animationDuration: '1.1s', animationTimingFunction: 'linear' }}
+            >
               <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
                 <circle
                   cx="48" cy="48" r={R}
-                  fill="none" stroke="#10b981" strokeWidth="6" strokeLinecap="round"
-                  strokeDasharray={CIRCUNFERENCIA}
-                  className="anillo-cierre"
+                  fill="none" stroke={error ? '#d1d5db' : MARCA} strokeWidth="6" strokeLinecap="round"
+                  strokeDasharray={`${CIRCUNFERENCIA * 0.28} ${CIRCUNFERENCIA * 0.72}`}
                 />
               </svg>
-            ) : (
-              <div
-                className="w-full h-full animate-spin motion-reduce:animate-none"
-                style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}
-              >
-                <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
-                  <circle
-                    cx="48" cy="48" r={R}
-                    fill="none" stroke={error ? '#d1d5db' : MARCA} strokeWidth="6" strokeLinecap="round"
-                    strokeDasharray={`${CIRCUNFERENCIA * 0.28} ${CIRCUNFERENCIA * 0.72}`}
-                  />
-                </svg>
-              </div>
-            )}
+            </div>
+            <svg
+              className={`absolute inset-0 w-24 h-24 transition-opacity duration-[420ms] ease-out ${sellado ? 'opacity-100' : 'opacity-0'}`}
+              viewBox="0 0 96 96" aria-hidden="true"
+            >
+              <circle cx="48" cy="48" r={R} fill="none" stroke="#10b981" strokeWidth="6" strokeLinecap="round" />
+            </svg>
           </div>
 
           {/* El logotipo se queda: acompaña la confirmación. */}

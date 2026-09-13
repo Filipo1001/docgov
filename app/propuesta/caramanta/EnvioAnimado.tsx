@@ -9,10 +9,10 @@
  *
  * EL ANILLO ES EL DE LA APLICACIÓN, no una imitación. Mismos valores que
  * components/EnvioInforme.tsx —radio 40, grosor 6, arco del 28 %, vuelta de
- * 1,1 s, logotipo de 42— y las mismas clases de globals.css: `anillo-cierre`,
- * `sello-entra`, `check-trazo`. Que la propuesta y el producto compartan la
- * pieza es el punto: el alcalde ve exactamente lo que verá su contratista, y
- * en la demostración no hay nada que desmentir.
+ * 1,1 s, logotipo de 42, cierre por cruce de opacidad— y las mismas clases de
+ * globals.css: `sello-entra`, `check-trazo`. Que la propuesta y el producto
+ * compartan la pieza es el punto: el alcalde ve exactamente lo que verá su
+ * contratista, y en la demostración no hay nada que desmentir.
  *
  * ── LA PLANILLA NO SE GENERA ─────────────────────────────────────────────
  *
@@ -128,30 +128,34 @@ export default function EnvioAnimado() {
             <circle cx="48" cy="48" r={R} fill="none" stroke="#e5e7eb" strokeWidth="6" />
           </svg>
 
+          {/* Ni el arco ni el anillo se desmontan al sellar: los dos están
+              montados desde el principio, superpuestos, y solo cambia cuál
+              es visible. La versión anterior REEMPLAZABA el arco por un
+              <svg> distinto que "dibujaba" el cierre animando
+              `stroke-dashoffset` — en Safari/iOS esa propiedad no la compone
+              la GPU, y se veía a tirones. Ver la nota completa en
+              components/EnvioInforme.tsx, de donde se calca esta pieza. */}
           <div className="absolute inset-0 -rotate-90">
-            {sellado ? (
+            <div
+              className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
+                sellado ? 'opacity-0' : 'opacity-100'
+              } ${sellado ? '' : 'animate-spin motion-reduce:animate-none'}`}
+              style={sellado ? undefined : { animationDuration: '1.1s', animationTimingFunction: 'linear' }}
+            >
               <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
                 <circle
                   cx="48" cy="48" r={R}
-                  fill="none" stroke={VERDE} strokeWidth="6" strokeLinecap="round"
-                  strokeDasharray={CIRCUNFERENCIA}
-                  className="anillo-cierre"
+                  fill="none" stroke={MARCA} strokeWidth="6" strokeLinecap="round"
+                  strokeDasharray={`${CIRCUNFERENCIA * 0.28} ${CIRCUNFERENCIA * 0.72}`}
                 />
               </svg>
-            ) : (
-              <div
-                className="w-full h-full animate-spin motion-reduce:animate-none"
-                style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}
-              >
-                <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
-                  <circle
-                    cx="48" cy="48" r={R}
-                    fill="none" stroke={MARCA} strokeWidth="6" strokeLinecap="round"
-                    strokeDasharray={`${CIRCUNFERENCIA * 0.28} ${CIRCUNFERENCIA * 0.72}`}
-                  />
-                </svg>
-              </div>
-            )}
+            </div>
+            <svg
+              className={`absolute inset-0 w-24 h-24 transition-opacity duration-[420ms] ease-out ${sellado ? 'opacity-100' : 'opacity-0'}`}
+              viewBox="0 0 96 96" aria-hidden="true"
+            >
+              <circle cx="48" cy="48" r={R} fill="none" stroke={VERDE} strokeWidth="6" strokeLinecap="round" />
+            </svg>
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center">
