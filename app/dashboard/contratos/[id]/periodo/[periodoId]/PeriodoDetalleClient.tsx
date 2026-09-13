@@ -2946,7 +2946,12 @@ export default function PeriodoDetallePage({
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+          {/* Apilado en móvil, en línea en desktop — mismo criterio que el
+              encabezado de "Documentos del periodo" un poco más abajo. Sin
+              esto, en un teléfono de 320-414px el párrafo se aplastaba contra
+              el botón: quedaba en una columna de una palabra por línea junto
+              a un botón que nunca cedía ancho, porque la fila nunca envolvía. */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-gray-100">
             <p className="text-sm text-gray-400" aria-live="polite">
               {/* Ya no narra fases del envío: en cuanto hay algo que contar, la
                   animación de EnvioInforme cubre la pantalla entera y este
@@ -2967,7 +2972,7 @@ export default function PeriodoDetallePage({
               onClick={handleEnviar}
               disabled={enviando || actividades.length === 0}
               aria-busy={enviando}
-              className={`text-white px-6 py-3 rounded-xl font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed flex-shrink-0 ml-4 flex items-center gap-2 ${
+              className={`text-white px-6 py-3 rounded-xl font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed shrink-0 w-full sm:w-auto flex items-center justify-center gap-2 ${
                 rechazado
                   ? 'bg-red-600 hover:bg-red-700'
                   : 'hover:bg-[#242F45]'
