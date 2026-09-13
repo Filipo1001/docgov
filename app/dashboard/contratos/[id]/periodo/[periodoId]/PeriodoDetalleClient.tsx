@@ -866,36 +866,33 @@ export default function PeriodoDetallePage({
 
     setErroresCampos({ planilla: false, numero: false })
 
-    // LA ANIMACIÓN ARRANCA EN EL MISMO CLIC, no después de verificar el acta
-    // de terminación. Antes el botón decía «Verificando…» mientras esa
-    // consulta viajaba y esta capa solo aparecía al terminar —dos narradores
-    // contando la misma espera por turnos—. Ahora hay uno: el anillo ya gira
-    // en cuanto se sabe que el envío es viable, y la verificación ocurre
-    // detrás de él.
+    // El botón se bloquea YA —sin esperar la verificación del acta—, pero
+    // `EnvioInforme` todavía no se abre. Se probó a abrirla en este mismo
+    // punto (antes de saber si hace falta el acta) y salió mal: cuando el
+    // periodo resulta ser el ÚLTIMO del contrato, esta capa tenía que
+    // cederle el paso al Acta de Terminación un instante después de
+    // aparecer, y su salida animada (ver EnvioInforme.tsx) se quedaba
+    // flotando 220 ms EN LA MISMA PANTALLA que el acta —z-80 sobre z-70—,
+    // bloqueando cualquier clic y leyéndose como la aplicación colgada. La
+    // animación solo puede abrirse una vez se sabe que de verdad va a
+    // enviar, no antes.
     setEnviando(true)
-    setEnvioError(null)
-    setEnvioCompletado(false)
-    setMostrarEnvio(true)
 
     // Acta de terminación: obligatoria antes del ÚLTIMO informe del contrato.
     let acta: Awaited<ReturnType<typeof verificarActaTerminacionRequerida>>
     try {
       acta = await verificarActaTerminacionRequerida(periodoId)
     } catch {
-      // La verificación falló, no el envío: esta capa nunca prometió nada
-      // —`completado` sigue en false—, así que basta con cerrarla.
       setEnviando(false)
-      setMostrarEnvio(false)
       toast.error('No se pudo verificar el informe. Revisa tu conexión e inténtalo de nuevo.')
       return
     }
 
     if (acta.requerida && acta.prefill) {
-      // Caso poco frecuente —solo el último periodo del contrato—: esta capa
-      // cede el paso al acta de terminación en vez de al envío. Es el único
-      // momento en que un modal reemplaza a otro, y ya ocurría así antes.
+      // Caso poco frecuente —solo el último periodo del contrato—: el acta
+      // de terminación reemplaza al envío. `EnvioInforme` nunca llegó a
+      // abrirse, así que no hay nada que cerrar ni con quién chocar.
       setEnviando(false)
-      setMostrarEnvio(false)
       setActaPrefill(acta.prefill)
       setActaFaltaFirma(acta.faltaFirma)
       setMostrarActa(true)

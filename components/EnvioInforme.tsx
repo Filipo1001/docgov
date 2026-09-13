@@ -174,7 +174,10 @@ export default function EnvioInforme({
 
   return (
     <div
-      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm ${saliendo ? 'upload-overlay-exit' : 'upload-overlay-enter'}`}
+      // `pointer-events-none` mientras sale: si algo más llegara a
+      // renderizarse debajo durante estos 220ms, esta capa que ya se está
+      // yendo no debe poder bloquearle un clic.
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm ${saliendo ? 'upload-overlay-exit pointer-events-none' : 'upload-overlay-enter'}`}
       role="status"
       aria-live="polite"
       aria-label={error ? 'Error al enviar el informe' : sellado ? 'Informe enviado a revisión' : 'Enviando el informe'}
