@@ -1041,8 +1041,11 @@ export default function PeriodoDetallePage({
   }
 
   async function handleDevolverSecretaria(destino: 'asesores' | 'contratista', motivo: string) {
-    if (!motivo.trim()) {
-      toast.error('El motivo es obligatorio')
+    // El motivo general deja de ser obligatorio cuando ya hay obligaciones
+    // marcadas con su texto: eso viaja en el mismo correo y dice qué corregir.
+    // Sin marcas sigue siéndolo, porque entonces sería lo único que llega.
+    if (!motivo.trim() && obligacionesDevueltas.length === 0) {
+      toast.error('Escribe el motivo, o marca en las obligaciones qué debe corregirse')
       return
     }
     setProcesandoDevolucion(true)
@@ -2384,14 +2387,17 @@ export default function PeriodoDetallePage({
               <textarea
                 value={motivoRechazo}
                 onChange={(e) => setMotivoRechazo(e.target.value)}
-                placeholder="Escribe el motivo del rechazo para el contratista..."
+                placeholder={obligacionesDevueltas.length > 0
+                  ? 'Mensaje general (opcional) — ya marcaste obligaciones con su texto…'
+                  : 'Escribe el motivo del rechazo para el contratista…'}
                 rows={3}
                 className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
               />
+              <MejorarRedaccion texto={motivoRechazo} onAceptar={setMotivoRechazo} disabled={procesando} />
               <div className="flex gap-3">
                 <button
                   onClick={handleRechazarAsesor}
-                  disabled={procesando || !motivoRechazo.trim()}
+                  disabled={procesando || (!motivoRechazo.trim() && obligacionesDevueltas.length === 0)}
                   className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
                 >
                   {procesando ? 'Procesando...' : 'Confirmar rechazo'}
@@ -2519,8 +2525,13 @@ export default function PeriodoDetallePage({
             >
               {/* Cabecera — zona clickable (expandir) + acciones de revisión.
                   Colapsada por defecto: las actividades y evidencias (imágenes)
-                  no se montan hasta abrir, evitando descargar fotos innecesarias. */}
-              <div className={`flex items-start gap-3 ${abierta ? 'mb-4' : ''}`}>
+                  no se montan hasta abrir, evitando descargar fotos innecesarias.
+
+                  Un solo `flex-wrap` resuelve las dos ubicaciones sin duplicar
+                  los botones en el DOM: la zona clickable ocupa la fila entera
+                  hasta `md` (`basis-full`), así que los botones caen debajo; de
+                  `md` en adelante comparte fila y quedan a la derecha. */}
+              <div className={`flex flex-wrap items-start gap-3 ${abierta ? 'mb-4' : ''}`}>
                 {/* Zona clickable: expande/colapsa */}
                 <div
                   role="button"
@@ -2530,7 +2541,7 @@ export default function PeriodoDetallePage({
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleObligacion(obl.id) }
                   }}
                   aria-expanded={abierta}
-                  className="flex items-start gap-3 flex-1 min-w-0 text-left cursor-pointer"
+                  className="flex items-start gap-3 flex-1 min-w-0 basis-full md:basis-0 text-left cursor-pointer"
                 >
                   <span className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
                     <span className="text-xs font-bold text-white">{oblIndex + 1}</span>
@@ -2583,8 +2594,6 @@ export default function PeriodoDetallePage({
                   </svg>
                 </div>
 
-              </div>
-
               {/* ── El veredicto de la obligación ──────────────────────────
                   TRES estados excluyentes, no un ✓ más un campo de texto
                   suelto. Antes, para decir «no cumple, y esto es lo que
@@ -2597,9 +2606,13 @@ export default function PeriodoDetallePage({
                   lib/iconos.ts —el icono nunca carga el significado solo— pesa
                   el doble aquí, donde dos de los tres botones son veredictos
                   opuestos. Y en la cabecera no caben: a 320 px dejarían la
-                  descripción de la obligación en unos 60 px. */}
+                  descripción de la obligación en unos 60 px.
+
+                  En escritorio sí hay sitio, así que suben a la derecha de la
+                  cabecera y se leen como parte de la fila de la obligación. El
+                  separador y el margen superior son solo del caso apilado. */}
               {puedeRevisar && (
-                <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:shrink-0 md:justify-end mt-3 pt-3 border-t border-gray-100 md:mt-0 md:pt-0 md:border-t-0">
                   {([
                     {
                       clave: 'aprobada' as const,
@@ -2661,6 +2674,7 @@ export default function PeriodoDetallePage({
                   })}
                 </div>
               )}
+              </div>
 
               {abierta && (
               <>
@@ -3620,6 +3634,13 @@ export default function PeriodoDetallePage({
                         autoFocus
                         className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-400 outline-none resize-none"
                       />
+                      {/* Va impresa en el Acta de Supervisión, bajo
+                          «Conclusiones y recomendaciones del supervisor». */}
+                      <MejorarRedaccion
+                        texto={textoObservacion}
+                        onAceptar={setTextoObservacion}
+                        disabled={guardandoObservacion}
+                      />
                       <div className="flex gap-2 flex-wrap">
                         <button
                           onClick={() => handleGuardarObservacion(textoObservacion)}
@@ -4082,27 +4103,36 @@ export default function PeriodoDetallePage({
               <>
                 {/* Que no escriba dos veces lo mismo: si ya marcó obligaciones,
                     ese texto viaja igualmente y este campo puede ser breve. */}
-                {obligacionesDevueltas.length > 0 && destinoDevolucion === 'contratista' && (
+                {obligacionesDevueltas.length > 0 && (
                   <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3 leading-relaxed">
-                    Se enviarán también las <strong>{obligacionesDevueltas.length === 1
+                    Se enviarán las <strong>{obligacionesDevueltas.length === 1
                       ? '1 obligación marcada'
-                      : `${obligacionesDevueltas.length} obligaciones marcadas`}</strong> con su texto.
-                    Aquí basta un motivo general.
+                      : `${obligacionesDevueltas.length} obligaciones marcadas`}</strong> con su texto,
+                    así que este campo es opcional.
                   </p>
                 )}
                 <textarea
                   value={motivoDevolucion}
                   onChange={(e) => setMotivoDevolucion(e.target.value)}
-                  placeholder="Motivo de la devolución (obligatorio)..."
+                  placeholder={obligacionesDevueltas.length > 0
+                    ? 'Mensaje general (opcional)…'
+                    : 'Motivo de la devolución (obligatorio)…'}
                   rows={3}
                   autoFocus
                   disabled={procesandoDevolucion}
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none resize-none mb-3 disabled:opacity-50"
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none resize-none disabled:opacity-50"
                 />
+                <div className="mb-3">
+                  <MejorarRedaccion
+                    texto={motivoDevolucion}
+                    onAceptar={setMotivoDevolucion}
+                    disabled={procesandoDevolucion}
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={async () => handleDevolverSecretaria(destinoDevolucion, motivoDevolucion)}
-                    disabled={procesandoDevolucion || !motivoDevolucion.trim()}
+                    disabled={procesandoDevolucion || (!motivoDevolucion.trim() && obligacionesDevueltas.length === 0)}
                     className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-40 transition-colors"
                   >
                     {procesandoDevolucion ? 'Procesando...' : 'Confirmar devolución'}
@@ -4252,6 +4282,14 @@ export default function PeriodoDetallePage({
                   ? 'border-amber-200 focus:ring-amber-400 focus:border-amber-400'
                   : 'border-sky-200 focus:ring-sky-400 focus:border-sky-400'
               }`}
+            />
+            {/* La contratista tenía corrección asistida al describir sus
+                actividades y quien revisa no, escribiendo textos que acaban
+                en un acta firmada o en un correo. Mismo componente. */}
+            <MejorarRedaccion
+              texto={notaModal.texto}
+              onAceptar={(t) => setNotaModal(prev => (prev ? { ...prev, texto: t } : prev))}
+              disabled={guardandoNota}
             />
             <div className="flex items-center justify-end gap-2 mt-4">
               <button

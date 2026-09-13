@@ -123,6 +123,34 @@ async function notasPorObligacion(
     ${filas}`
 }
 
+/**
+ * Periodos (de los pedidos) que llevan al menos una obligación marcada para
+ * devolución en este ciclo.
+ *
+ * Sirve para una sola cosa: decidir si el motivo general puede ir vacío. Si el
+ * revisor ya dijo qué corregir obligación por obligación, obligarle a repetirlo
+ * en un campo libre es escribir dos veces lo mismo. Pero si NO marcó nada, ese
+ * campo es lo único que la contratista va a recibir, y una devolución sin una
+ * sola palabra no le sirve a nadie: ahí sigue siendo obligatorio.
+ */
+async function periodosConObligacionesDevueltas(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  periodoIds: string[],
+): Promise<Set<string>> {
+  if (!periodoIds.length) return new Set()
+  const { data } = await admin
+    .from('obligacion_revisiones')
+    .select('periodo_id, aprobada, nota')
+    .in('periodo_id', periodoIds)
+    .eq('aprobada', false)
+
+  const out = new Set<string>()
+  for (const r of (data ?? []) as Array<{ periodo_id: string; nota: string | null }>) {
+    if (r.nota?.trim()) out.add(r.periodo_id)
+  }
+  return out
+}
+
 async function getAuthContext() {
   const supabase = await createServerSupabaseClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -530,8 +558,13 @@ export async function rechazarComoAsesor(
   motivo: string
 ): Promise<ActionResult> {
   try {
+    // El motivo deja de ser obligatorio SI hay obligaciones marcadas con su
+    // texto: ese texto viaja en el mismo correo y ya dice qué corregir.
     if (!motivo?.trim()) {
-      return { error: 'El motivo de rechazo es obligatorio' }
+      const marcadas = await periodosConObligacionesDevueltas(createAdminSupabaseClient(), [periodoId])
+      if (!marcadas.has(periodoId)) {
+        return { error: 'Escribe el motivo, o marca en las obligaciones qué debe corregir la contratista' }
+      }
     }
 
     const { supabase, usuario } = await getAuthContext()
@@ -564,16 +597,22 @@ export async function rechazarComoAsesor(
     }
 
     const estadoAnterior = periodo.estado
+
+    // Con obligaciones marcadas, el motivo general puede ir vacío. El
+    // historial y el aviso necesitan decir algo igualmente.
+    const motivoLimpio = motivo?.trim() ?? ''
+    const motivoHistorial = motivoLimpio || 'Devuelto con observaciones en las obligaciones'
+
     const { data: updated, error } = await supabase
       .from('periodos')
-      .update({ estado: 'rechazado', motivo_rechazo: motivo.trim() })
+      .update({ estado: 'rechazado', motivo_rechazo: motivoLimpio || null })
       .eq('id', periodoId)
       .select('id')
 
     if (error) return { error: `Error al rechazar: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo rechazar el informe. El periodo puede haberse modificado. Recarga e intenta de nuevo.' }
 
-    await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivo.trim())
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivoHistorial)
 
     // Notify contratista (non-blocking)
     try {
@@ -586,12 +625,14 @@ export async function rechazarComoAsesor(
           destinatarioId: contrato.contratista_id,
           tipo: 'rechazado',
           titulo: 'Tu informe requiere correcciones',
-          mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue rechazado. Motivo: ${motivo.trim()}`,
+          mensaje: motivoLimpio
+            ? `Tu informe de ${periodo.mes} ${periodo.anio} fue rechazado. Motivo: ${motivoLimpio}`
+            : `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto con observaciones en las obligaciones.`,
           periodoId,
           mes: periodo.mes,
           anio: periodo.anio,
           contrato: contrato.numero || '',
-          motivo: motivo.trim(),
+          motivo: motivoLimpio || undefined,
           detalle: detalle ?? undefined,
           nombreRemitente: usuario.nombre_completo,
         })
@@ -773,8 +814,17 @@ export async function rechazarPeriodos(
   motivo: string
 ): Promise<ActionResult<{ rechazados: number }>> {
   try {
-    if (!motivo?.trim()) return { error: 'El motivo de rechazo es obligatorio' }
     if (!periodoIds.length) return { data: { rechazados: 0 } }
+    // Igual que en las otras dos devoluciones: sin motivo escrito, cada
+    // periodo tiene que traer al menos una obligación marcada que lo explique.
+    // En lote basta con que a UNO le falte para exigirlo, porque el correo sale
+    // igual para todos.
+    if (!motivo?.trim()) {
+      const marcadas = await periodosConObligacionesDevueltas(createAdminSupabaseClient(), periodoIds)
+      if (periodoIds.some(id => !marcadas.has(id))) {
+        return { error: 'Escribe el motivo, o marca en las obligaciones qué debe corregirse' }
+      }
+    }
 
     const { supabase, usuario } = await getAuthContext()
 
@@ -792,10 +842,16 @@ export async function rechazarPeriodos(
     if (fetchError) return { error: fetchError.message }
     if (!periodos || periodos.length === 0) return { data: { rechazados: 0 } }
 
+
+    // Ver rechazarComoAsesor: con obligaciones marcadas el motivo general
+    // puede ir vacío, pero el historial y el aviso tienen que decir algo.
+    const motivoLimpio = motivo?.trim() ?? ''
+    const motivoHistorial = motivoLimpio || 'Devuelto con observaciones en las obligaciones'
+
     // 1 query: batch update
     const { data: updatedBatch, error: updateError } = await supabase
       .from('periodos')
-      .update({ estado: 'enviado', motivo_rechazo: motivo.trim() })
+      .update({ estado: 'enviado', motivo_rechazo: motivoLimpio || null })
       .in('id', periodos.map(p => p.id))
       .select('id')
 
@@ -804,7 +860,7 @@ export async function rechazarPeriodos(
 
     // Parallel historial inserts
     await Promise.all(
-      periodos.map(p => insertHistorial(supabase, p.id, p.estado as EstadoPeriodo, 'enviado', usuario.id, motivo.trim()))
+      periodos.map(p => insertHistorial(supabase, p.id, p.estado as EstadoPeriodo, 'enviado', usuario.id, motivoHistorial))
     )
 
     // 1 query: fetch all asesores for all affected dependencias at once
@@ -832,12 +888,14 @@ export async function rechazarPeriodos(
             await enviarNotificacionMultiple(asesorIds, {
               tipo: 'rechazado',
               titulo: `Informe devuelto por secretaría — ${p.mes} ${p.anio}`,
-              mensaje: `La secretaría devolvió el informe de ${p.mes} ${p.anio}: ${motivo.trim()}`,
+              mensaje: motivoLimpio
+                ? `La secretaría devolvió el informe de ${p.mes} ${p.anio}: ${motivoLimpio}`
+                : `La secretaría devolvió el informe de ${p.mes} ${p.anio} con observaciones en las obligaciones.`,
               periodoId: p.id,
               mes: p.mes,
               anio: p.anio,
               contrato: contrato.numero || '',
-              motivo: motivo.trim(),
+              motivo: motivoLimpio || undefined,
               nombreRemitente: usuario.nombre_completo,
             })
           })
@@ -863,7 +921,14 @@ export async function devolverPeriodoAContratista(
   motivo: string,
 ): Promise<ActionResult> {
   try {
-    if (!motivo?.trim()) return { error: 'El motivo es obligatorio al devolver al contratista' }
+    // Ver `periodosConObligacionesDevueltas`: el motivo solo es obligatorio
+    // cuando no hay ninguna obligación marcada que explique la devolución.
+    if (!motivo?.trim()) {
+      const marcadas = await periodosConObligacionesDevueltas(createAdminSupabaseClient(), [periodoId])
+      if (!marcadas.has(periodoId)) {
+        return { error: 'Escribe el motivo, o marca en las obligaciones qué debe corregir la contratista' }
+      }
+    }
 
     const { supabase, usuario } = await getAuthContext()
     if (usuario.rol !== 'supervisor' && usuario.rol !== 'admin') {
@@ -879,16 +944,22 @@ export async function devolverPeriodoAContratista(
     }
 
     const estadoAnterior = periodo.estado
+
+    // Ver rechazarComoAsesor: con obligaciones marcadas el motivo general
+    // puede ir vacío, pero el historial y el aviso tienen que decir algo.
+    const motivoLimpio = motivo?.trim() ?? ''
+    const motivoHistorial = motivoLimpio || 'Devuelto con observaciones en las obligaciones'
+
     const { data: updated, error } = await supabase
       .from('periodos')
-      .update({ estado: 'rechazado', motivo_rechazo: motivo.trim() })
+      .update({ estado: 'rechazado', motivo_rechazo: motivoLimpio || null })
       .eq('id', periodoId)
       .select('id')
 
     if (error) return { error: `Error al devolver: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo devolver el informe. Recarga e intenta de nuevo.' }
 
-    await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivo.trim())
+    await insertHistorial(supabase, periodoId, estadoAnterior, 'rechazado', usuario.id, motivoHistorial)
 
     try {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
@@ -900,12 +971,14 @@ export async function devolverPeriodoAContratista(
           destinatarioId: contrato.contratista_id,
           tipo: 'rechazado',
           titulo: 'Tu informe requiere correcciones',
-          mensaje: `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto por la secretaría. Motivo: ${motivo.trim()}`,
+          mensaje: motivoLimpio
+            ? `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto por la secretaría. Motivo: ${motivoLimpio}`
+            : `Tu informe de ${periodo.mes} ${periodo.anio} fue devuelto con observaciones en las obligaciones.`,
           periodoId,
           mes: periodo.mes,
           anio: periodo.anio,
           contrato: contrato.numero || '',
-          motivo: motivo.trim(),
+          motivo: motivoLimpio || undefined,
           detalle: detalle ?? undefined,
           nombreRemitente: usuario.nombre_completo,
         })
