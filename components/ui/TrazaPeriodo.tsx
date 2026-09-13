@@ -75,7 +75,7 @@ const ROL_LABEL: Record<string, string> = {
 
 /** Tonos apagados a propósito: el color fuerte ya lo lleva la etiqueta de estado. */
 function colorDe(estado: EstadoPeriodo | null, esUltimo: boolean): string {
-  if (!esUltimo) return 'bg-gray-300'
+  if (!esUltimo) return 'bg-gray-400'
   switch (estado) {
     case 'aprobado':
     case 'radicado':  return 'bg-emerald-400'
@@ -91,7 +91,25 @@ function fechaConHora(iso: string): string {
     ', ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 }
 
-export default function TrazaPeriodo({ eventos }: { eventos: EventoTraza[] }) {
+/**
+ * Cuántos puntos se dibujan como mucho.
+ *
+ * Lo normal es 1-4 movimientos (media 3,6 en producción), pero hay periodos
+ * con 53: los que más se han devuelto y reenviado. Sin tope, la tira dejaba de
+ * ser una tira y se convertía en una mancha gris de varias líneas. Se muestran
+ * los últimos —los que importan para decidir hoy— y los anteriores se resumen
+ * en un contador que lleva a la trazabilidad completa del final de la página.
+ */
+const MAX_PUNTOS = 8
+
+export default function TrazaPeriodo({
+  eventos,
+  onVerTodo,
+}: {
+  eventos: EventoTraza[]
+  /** Llevar a la trazabilidad completa cuando hay más movimientos de los que caben. */
+  onVerTodo?: () => void
+}) {
   const [abierto, setAbierto] = useState<number | null>(null)
   const [fijado, setFijado] = useState(false)
   const contenedor = useRef<HTMLDivElement>(null)
@@ -120,14 +138,38 @@ export default function TrazaPeriodo({ eventos }: { eventos: EventoTraza[] }) {
   const hayPuntero = () =>
     typeof window !== 'undefined' && window.matchMedia?.('(hover: hover)').matches
 
+  const ocultos = Math.max(0, eventos.length - MAX_PUNTOS)
+  const visibles = ocultos > 0 ? eventos.slice(-MAX_PUNTOS) : eventos
+
   return (
-    <div ref={contenedor} className="relative inline-flex items-center gap-1">
-      {eventos.map((ev, i) => {
-        const esUltimo = i === eventos.length - 1
+    /* `flex-wrap` no es cosmético: con el tope en 8 puntos, el rótulo y el
+       contador, la tira mide unos 380 px, y en un teléfono de 320 px eso
+       arrastraba a TODA la página a scroll horizontal. Envolviendo, el número
+       de movimientos deja de poder romper el ancho de la pantalla. Con los 1-4
+       movimientos habituales sigue cabiendo en una línea. */
+    <div ref={contenedor} className="relative flex flex-wrap items-center gap-y-1 gap-x-2">
+      {/* El rótulo es lo que hace encontrable la tira.
+          Sin él era una fila de puntos de 7 px en gris claro: técnicamente
+          estaba, pero nadie la veía — ni quien la había pedido. */}
+      <span className="text-[11px] text-gray-500 shrink-0">Trazabilidad</span>
+
+      {ocultos > 0 && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onVerTodo?.() }}
+          title={`${ocultos} movimientos anteriores — ver la trazabilidad completa`}
+          className="text-[10px] leading-none text-gray-400 bg-gray-100 hover:bg-gray-200 hover:text-gray-600 border border-gray-200 rounded-full px-1.5 py-1 transition-colors shrink-0"
+        >
+          +{ocultos}
+        </button>
+      )}
+
+      {visibles.map((ev, i) => {
+        const esUltimo = i === visibles.length - 1
         const activo = abierto === i
         return (
           <span key={ev.id} className="inline-flex items-center gap-1">
-            {i > 0 && <span className="w-3 h-px bg-gray-200 shrink-0" aria-hidden="true" />}
+            {i > 0 && <span className="w-2 h-px bg-gray-200 shrink-0" aria-hidden="true" />}
             <button
               type="button"
               aria-expanded={activo}
@@ -157,7 +199,7 @@ export default function TrazaPeriodo({ eventos }: { eventos: EventoTraza[] }) {
         )
       })}
 
-      {abierto !== null && eventos[abierto] && (
+      {abierto !== null && visibles[abierto] && (
         <div
           id={`${idBase}-${abierto}`}
           role="dialog"
@@ -173,20 +215,20 @@ export default function TrazaPeriodo({ eventos }: { eventos: EventoTraza[] }) {
           style={{ backgroundColor: MARCA }}
         >
           <p className="text-[13px] font-semibold text-white leading-snug">
-            {accionDe(eventos[abierto])}
+            {accionDe(visibles[abierto])}
           </p>
-          {eventos[abierto].usuario?.nombre_completo && (
+          {visibles[abierto].usuario?.nombre_completo && (
             <p className="text-xs text-white/90 mt-1.5 break-words">
-              {eventos[abierto].usuario!.nombre_completo}
+              {visibles[abierto].usuario!.nombre_completo}
             </p>
           )}
-          {eventos[abierto].usuario?.rol && (
+          {visibles[abierto].usuario?.rol && (
             <p className="text-[11px] text-white/50 mt-0.5">
-              {ROL_LABEL[eventos[abierto].usuario!.rol!] ?? eventos[abierto].usuario!.rol}
+              {ROL_LABEL[visibles[abierto].usuario!.rol!] ?? visibles[abierto].usuario!.rol}
             </p>
           )}
           <p className="text-[11px] text-white/50 mt-2 pt-2 border-t border-white/10">
-            {fechaConHora(eventos[abierto].created_at)}
+            {fechaConHora(visibles[abierto].created_at)}
           </p>
           <button
             type="button"

@@ -490,6 +490,14 @@ export default function PeriodoDetallePage({
   // conserva porque identifica la sección para cualquier enlace futuro.
   const seccionActividadesRef = useRef<HTMLDivElement>(null)
 
+  // La trazabilidad completa, al final de la página. La tira de puntos de
+  // arriba solo muestra los últimos movimientos; cuando hay más, su contador
+  // «+N» trae hasta aquí en vez de dejar al usuario buscándola.
+  const seccionTrazabilidadRef = useRef<HTMLDivElement>(null)
+  const irATrazabilidad = useCallback(() => {
+    seccionTrazabilidadRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   // Track mount state to prevent setState after unmount (e.g. navigation during upload)
   const mountedRef = useRef(true)
   useEffect(() => {
@@ -2091,7 +2099,7 @@ export default function PeriodoDetallePage({
                   <p className="text-xs text-red-500 mt-0.5 break-words">{porQueVolvio}</p>
                   {eventos.length > 0 && (
                     <div className="mt-2">
-                      <TrazaPeriodo eventos={eventos} />
+                      <TrazaPeriodo eventos={eventos} onVerTodo={irATrazabilidad} />
                     </div>
                   )}
                 </>
@@ -2193,9 +2201,8 @@ export default function PeriodoDetallePage({
             A la contratista no se le muestra: para ella el estado ya lo dicen
             la línea de arriba y su propia tarjeta, y esto sería ruido. */}
         {!esContratista && !rechazado && eventos.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <TrazaPeriodo eventos={eventos} />
-            <span className="text-[11px] text-gray-300">Trazabilidad</span>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <TrazaPeriodo eventos={eventos} onVerTodo={irATrazabilidad} />
           </div>
         )}
 
@@ -3374,7 +3381,7 @@ export default function PeriodoDetallePage({
 
       {/* ── Trazabilidad (historial) ── */}
       {historial.length > 0 && (
-        <div className="bg-white rounded-2xl border p-6 mb-6">
+        <div ref={seccionTrazabilidadRef} className="bg-white rounded-2xl border p-6 mb-6 scroll-mt-4">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Trazabilidad</h3>
           <div className="space-y-0">
             {historial.map((h, i) => {
