@@ -74,6 +74,36 @@ import NotaSupervision from '@/components/ui/NotaSupervision'
  */
 type RevisionLocal = { aprobada: boolean; nota: string | null; revisado_at?: string | null }
 
+/**
+ * «hace 2 días», no «2026-09-13T02:09:22.898Z».
+ *
+ * Quien revisa abre un informe para decidir, y lo primero que necesita saber es
+ * desde cuándo está esperando. Una fecha absoluta obliga a hacer la resta
+ * mentalmente; la fecha exacta sigue estando, en el `title` y en la sección de
+ * trazabilidad del final.
+ */
+function tiempoRelativo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (Number.isNaN(ms)) return ''
+  const min = Math.floor(ms / 60_000)
+  if (min < 1) return 'hace un momento'
+  if (min < 60) return `hace ${min} min`
+  const horas = Math.floor(min / 60)
+  if (horas < 24) return `hace ${horas} h`
+  const dias = Math.floor(horas / 24)
+  if (dias === 1) return 'ayer'
+  if (dias < 30) return `hace ${dias} días`
+  const meses = Math.floor(dias / 30)
+  return meses <= 1 ? 'hace un mes' : `hace ${meses} meses`
+}
+
+function fechaLarga(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+}
+
 /** Periodo "hermano" del mismo contrato — usado para detectar repetición de planilla */
 export interface PeriodoHermano {
   id: string
@@ -653,6 +683,36 @@ export default function PeriodoDetallePage({
   const obligacionesDevueltas = obligaciones.filter(
     obl => revisionVigente(obl.id) && revisiones[obl.id]?.aprobada === false,
   )
+
+  /**
+   * El último movimiento del informe: qué pasó, cuándo y quién.
+   *
+   * Se lee del historial que ya viene cargado. Es UNA línea, no una sección:
+   * quien revisa abre la pantalla para decidir, y lo que necesita de entrada es
+   * desde cuándo está esperando y de quién viene. La trazabilidad completa
+   * sigue al final de la página para quien la necesite entera.
+   */
+  const eventos = periodo?.historial ?? []
+  const ultimoEvento = eventos.length > 0 ? eventos[eventos.length - 1] : null
+  const fechaEstado = ultimoEvento?.created_at ?? periodo?.fecha_envio ?? null
+  const autorEstado = ultimoEvento?.usuario?.nombre_completo ?? null
+
+  /**
+   * Por qué volvió, para quien revisa.
+   *
+   * Antes decía «Sin motivo especificado» y se quedaba ahí. Ahora el motivo
+   * general puede ir legítimamente vacío —cuando el revisor marcó obligaciones
+   * con su texto—, así que ese mensaje pasaría de ser incompleto a ser
+   * directamente falso. Se cuenta lo que hay, sin repetir los textos: las
+   * obligaciones marcadas están justo debajo, en ámbar y con su «Ver qué
+   * corregir». Duplicarlas aquí sería saturar por decir dos veces lo mismo.
+   */
+  const motivoDevolucion_ = periodo?.motivo_rechazo?.trim()
+  const porQueVolvio = motivoDevolucion_
+    ? motivoDevolucion_
+    : obligacionesDevueltas.length > 0
+      ? `${obligacionesDevueltas.length} ${obligacionesDevueltas.length === 1 ? 'obligación marcada' : 'obligaciones marcadas'} con observaciones`
+      : 'Sin motivo registrado'
   const todasRevisadas = obligaciones.length > 0 && obligacionesSinRevisar.length === 0
   const progresoRevision = obligaciones.length > 0 ? obligacionesConRevision.length / obligaciones.length : 0
 
@@ -687,6 +747,28 @@ export default function PeriodoDetallePage({
   })()
 
   const esEditable = !esHistorico && !periodoVencido && (periodo ? ESTADOS_EDITABLES.includes(periodo.estado) : false)
+
+  /**
+   * Quién puede enviar el informe, que NO es lo mismo que «el periodo admite
+   * cambios». Mismo alcance que `enviarPeriodo` en el servidor: la contratista
+   * y el administrador. Un asesor o un supervisor no envían informes de otra
+   * persona, así que tampoco deben ver la tarjeta que los envía.
+   */
+  const puedeEnviar = esContratista || usuario?.rol === 'admin'
+
+  /**
+   * Quién REDACTA el informe: añade, edita o borra actividades y sube
+   * evidencias. Es el mismo alcance que enviar, y por el mismo motivo — el
+   * informe es la declaración de la contratista, no de quien la revisa.
+   *
+   * Sin esta distinción, un supervisor abriendo un borrador o un informe
+   * devuelto se encontraba «+ Agregar actividad», «Adjuntar evidencia»,
+   * «Tomar foto» y los iconos de editar y borrar sobre cada actividad ajena.
+   * Nada de eso es su labor, y el servidor tampoco lo impide: la comprobación
+   * de propiedad en app/actions/actividades.ts solo corre cuando el rol es
+   * `contratista`, así que la única barrera estaba —y ahora está— aquí.
+   */
+  const puedeRedactar = esEditable && puedeEnviar
   /**
    * Quién puede adjuntarla: la contratista mientras el informe sea editable, y
    * el administrador siempre —también sobre informes ya enviados, igual que
@@ -1986,16 +2068,24 @@ export default function PeriodoDetallePage({
              sitio, porque para esos roles esa tarjeta no existe. */
           <div className="flex items-start gap-3">
             <span className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0">
-              <Icono glifo={Iconos.accion.cerrar} tamano="sm" className="w-3.5 h-3.5" />
+              <Icono glifo={Iconos.accion.devolver} tamano="sm" className="w-3.5 h-3.5" />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-red-700">Informe devuelto para corrección</p>
-              {esContratista
-                ? <p className="text-xs text-gray-400 mt-0.5">Vuelve a enviarlo cuando termines de corregir.</p>
-                : periodo.motivo_rechazo
-                  ? <p className="text-xs text-red-500 mt-0.5 break-words">{periodo.motivo_rechazo}</p>
-                  : <p className="text-xs text-gray-400 mt-0.5">Sin motivo especificado</p>
-              }
+              {esContratista ? (
+                <p className="text-xs text-gray-400 mt-0.5">Vuelve a enviarlo cuando termines de corregir.</p>
+              ) : (
+                <>
+                  <p className="text-xs text-red-500 mt-0.5 break-words">{porQueVolvio}</p>
+                  {fechaEstado && (
+                    <p className="text-[11px] text-gray-400 mt-1" title={fechaLarga(fechaEstado)}>
+                      Devuelto {tiempoRelativo(fechaEstado)}
+                      {autorEstado ? ` · ${autorEstado}` : ''}
+                      {periodo.fecha_envio ? ` · se había enviado ${tiempoRelativo(periodo.fecha_envio)}` : ''}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -2080,6 +2170,30 @@ export default function PeriodoDetallePage({
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* ── Dónde está y desde cuándo, para quien revisa ──────────────
+            Una línea gris bajo la línea de estado, no una sección más. Quien
+            revisa abre esta pantalla para decidir, y lo primero que necesita
+            es saber cuánto lleva esperando y de quién viene — que es
+            exactamente lo que la trazabilidad del final ya cuenta, pero
+            veinte pantallas más abajo y en doce filas.
+
+            A la contratista no se le muestra: para ella el estado ya lo dicen
+            la línea de arriba y su propia tarjeta, y esto sería ruido. */}
+        {!esContratista && !rechazado && fechaEstado && (
+          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-gray-400">
+            <Icono glifo={Iconos.estado.enEspera} tamano="sm" className="w-3.5 h-3.5 shrink-0" />
+            <span className="font-medium text-gray-600">{estadoTexto}</span>
+            <span title={fechaLarga(fechaEstado)}>· {tiempoRelativo(fechaEstado)}</span>
+            {autorEstado && <span>· {autorEstado}</span>}
+            {/* La antigüedad del envío solo añade algo cuando el estado actual
+                NO es el envío: en «enviado» diría dos veces lo mismo. En
+                «revisión» o «aprobado» sí cuenta cuánto lleva el ciclo. */}
+            {periodo.estado !== 'enviado' && periodo.fecha_envio && (
+              <span title={fechaLarga(periodo.fecha_envio)}>· enviado {tiempoRelativo(periodo.fecha_envio)}</span>
+            )}
           </div>
         )}
 
@@ -2738,7 +2852,7 @@ export default function PeriodoDetallePage({
                               </div>
                               <p className="text-sm text-gray-700 break-words">{act.descripcion}</p>
                             </div>
-                            {esEditable && (
+                            {puedeRedactar && (
                               <div className="flex items-center gap-0 ml-1 shrink-0">
                                 {/* Editar — 44×44 touch target */}
                                 <button
@@ -2810,7 +2924,7 @@ export default function PeriodoDetallePage({
                                     {/* Thumbnail — abre lightbox (con evId para poder eliminar desde ahí) */}
                                     <button
                                       type="button"
-                                      onClick={() => setLightbox({ url: resolverUrl(ev.url), alt: ev.nombre_archivo, evId: esEditable ? ev.id : undefined })}
+                                      onClick={() => setLightbox({ url: resolverUrl(ev.url), alt: ev.nombre_archivo, evId: puedeRedactar ? ev.id : undefined })}
                                       className="block focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-xl"
                                       aria-label="Ver imagen ampliada"
                                     >
@@ -2827,7 +2941,7 @@ export default function PeriodoDetallePage({
                                         - mobile: siempre visible (opacity-100)
                                         - desktop: visible solo en hover (md:opacity-0 md:group-hover:opacity-100)
                                         Touch target 24×24px + posición exterior al thumb */}
-                                    {esEditable && (
+                                    {puedeRedactar && (
                                       <button
                                         onClick={(e) => { e.stopPropagation(); handleEliminarEvidencia(ev.id) }}
                                         className="absolute -top-1.5 -right-1.5
@@ -2850,7 +2964,7 @@ export default function PeriodoDetallePage({
                                   <TarjetaAdjunto
                                     key={ad.id}
                                     adjunto={ad}
-                                    editable={esEditable}
+                                    editable={puedeRedactar}
                                     onAbrir={() => ad.urlFirmada && setVisorPDF({ url: ad.urlFirmada, nombre: ad.nombre_original })}
                                     onEliminar={() => handleEliminarAdjunto(act.id, ad.id)}
                                   />
@@ -2876,7 +2990,7 @@ export default function PeriodoDetallePage({
                                 proyecto no define ninguno propio, así que era
                                 letra muerta — los dos botones se apilaban en
                                 TODOS los anchos, también en escritorio. */}
-                            {esEditable && subiendoEvidencia[act.id] == null && (
+                            {puedeRedactar && subiendoEvidencia[act.id] == null && (
                               <div className="flex flex-col sm:flex-row gap-2 mt-1">
                                 {/* Gallery — multiple selection (up to 5 at once) */}
                                 <button
@@ -2916,7 +3030,7 @@ export default function PeriodoDetallePage({
               )}
 
               {/* Add activity form */}
-              {esEditable && (
+              {puedeRedactar && (
                 <div className="ml-0 sm:ml-10">
                   {formActivo === obl.id ? (
                     <div className="bg-blue-50 rounded-xl p-4">
@@ -2985,8 +3099,16 @@ export default function PeriodoDetallePage({
           Fondo blanco también cuando el informe viene devuelto: el rojo pleno
           en una tarjeta que solo pide adjuntar la planilla y pulsar un botón
           leía como si algo estuviera fallando AHÍ. El filo lateral basta para
-          decir de qué situación venimos. */}
-      {esEditable && (
+          decir de qué situación venimos.
+
+          `puedeEnviar`, no `esEditable`: esa variable dice que el PERIODO
+          admite cambios, no que ESTE usuario pueda hacerlos. Sin el filtro de
+          rol, un supervisor abriendo un borrador o un informe devuelto se
+          encontraba con «¿Ya corregiste todo?», el campo de la planilla y un
+          botón de enviar que el servidor le habría rechazado de todas formas
+          (enviarPeriodo solo admite contratista y admin). Preguntas dirigidas
+          a otra persona en la pantalla de quien revisa. */}
+      {esEditable && puedeEnviar && (
         <div ref={seccionEnvioRef} className={`rounded-2xl border p-5 sm:p-6 mb-6 bg-white ${rechazado ? 'border-gray-200 border-l-4 border-l-red-500' : ''}`}>
 
           <h3 className="font-medium text-gray-900 mb-1">
