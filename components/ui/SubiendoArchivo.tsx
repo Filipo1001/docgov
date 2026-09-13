@@ -54,7 +54,12 @@ export default function SubiendoArchivo({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm upload-overlay-enter"
+      // SIN `backdrop-blur`, por lo mismo que en components/EnvioInforme.tsx:
+      // con un anillo girando dentro, Safari/iOS vuelve a desenfocar la
+      // pantalla entera en cada fotograma y el giro se ve a tirones. Estos
+      // son los DOCE puntos de carga de la aplicación, así que el ahorro se
+      // nota más aquí que en ningún otro sitio.
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 upload-overlay-enter"
       role="status"
       aria-live="polite"
       aria-label={etiqueta}
@@ -71,7 +76,7 @@ export default function SubiendoArchivo({
           <div className="absolute inset-0 -rotate-90">
             <div
               className="w-full h-full animate-spin motion-reduce:animate-none"
-              style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}
+              style={{ animationDuration: '1.1s', animationTimingFunction: 'linear', willChange: 'transform' }}
             >
               <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
                 <circle

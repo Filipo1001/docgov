@@ -177,7 +177,15 @@ export default function EnvioInforme({
       // `pointer-events-none` mientras sale: si algo más llegara a
       // renderizarse debajo durante estos 220ms, esta capa que ya se está
       // yendo no debe poder bloquearle un clic.
-      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm ${saliendo ? 'upload-overlay-exit pointer-events-none' : 'upload-overlay-enter'}`}
+      // SIN `backdrop-blur`. Desenfocar el fondo cuesta poco cuando la capa
+      // está quieta, pero aquí DENTRO hay un anillo girando sin parar: en
+      // Safari/iOS el desenfoque y el contenido animado comparten contexto,
+      // así que el sistema vuelve a muestrear y desenfocar la pantalla entera
+      // —a 1179×2556 en un 14 Pro, con el expediente completo detrás— en cada
+      // fotograma del giro. Eso es lo que se veía a tirones: no el anillo,
+      // sino el fondo recalculándose debajo de él. Un velo plano un punto más
+      // oscuro consigue lo mismo —que el fondo se retire— y es gratis.
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/70 ${saliendo ? 'upload-overlay-exit pointer-events-none' : 'upload-overlay-enter'}`}
       role="status"
       aria-live="polite"
       aria-label={error ? 'Error al enviar el informe' : sellado ? 'Informe enviado a revisión' : 'Enviando el informe'}
@@ -204,11 +212,18 @@ export default function EnvioInforme({
               opacidad cuesta lo mismo en cualquier teléfono, porque opacidad
               sí se compone. */}
           <div className="absolute inset-0 -rotate-90">
+            {/* El giro NO se detiene al sellar: el arco sigue girando
+                mientras se apaga. Antes se le quitaba `animate-spin` en ese
+                instante y el arco se congelaba de golpe en el ángulo en que
+                fuera — un giro que se traba es justo la señal de que algo se
+                colgó, lo contrario de lo que hay que comunicar. `will-change`
+                va aquí y en ningún otro sitio de esta capa: es lo único que
+                se mueve sin parar. */}
             <div
-              className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
+              className={`absolute inset-0 w-full h-full animate-spin motion-reduce:animate-none transition-opacity duration-300 ${
                 sellado ? 'opacity-0' : 'opacity-100'
-              } ${sellado ? '' : 'animate-spin motion-reduce:animate-none'}`}
-              style={sellado ? undefined : { animationDuration: '1.1s', animationTimingFunction: 'linear' }}
+              }`}
+              style={{ animationDuration: '1.1s', animationTimingFunction: 'linear', willChange: 'transform' }}
             >
               <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
                 <circle
