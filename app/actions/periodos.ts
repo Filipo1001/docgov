@@ -31,6 +31,80 @@ import { enviarNotificacion, enviarNotificacionMultiple } from '@/lib/notificati
 
 // ─── Internal helpers ────────────────────────────────────────
 
+/**
+ * Los hallazgos por obligación de un periodo, listos para meter en un correo.
+ *
+ * QUÉ ES UN HALLAZGO. Una obligación con nota y SIN aprobar. Ese es el
+ * criterio acordado y el que ya distingue la pantalla: el ✓ decide el papel
+ * de la nota — sin aprobar es algo que hay que corregir, aprobada es una
+ * observación que va al Acta de Supervisión y no se le reclama a nadie.
+ *
+ * POR QUÉ EXISTE. La devolución viajaba con un único `motivo` de texto libre,
+ * así que quien revisaba escribía la nota sobre la obligación 2 —donde toca,
+ * junto a las actividades que la sustentan— y esa nota no salía de la
+ * pantalla. A la contratista le llegaba un correo genérico y tenía que
+ * adivinar a qué obligación se refería. De 36 periodos devueltos, solo 7
+ * tenían notas por obligación; el resto resolvía por el campo libre porque
+ * era lo único que llegaba.
+ *
+ * Devuelve HTML ya montado para `detalle`, o `null` si no hay hallazgos —en
+ * cuyo caso el correo sale como siempre, solo con el motivo general.
+ */
+async function hallazgosPorObligacion(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  periodoId: string,
+  contratoId: string,
+): Promise<string | null> {
+  const [{ data: revisiones }, { data: obligaciones }] = await Promise.all([
+    admin
+      .from('obligacion_revisiones')
+      .select('obligacion_id, aprobada, nota')
+      .eq('periodo_id', periodoId),
+    admin
+      .from('obligaciones')
+      .select('id, descripcion, orden')
+      .eq('contrato_id', contratoId)
+      .order('orden'),
+  ])
+
+  if (!revisiones?.length || !obligaciones?.length) return null
+
+  const porId = new Map(
+    (revisiones as Array<{ obligacion_id: string; aprobada: boolean; nota: string | null }>)
+      .map(r => [r.obligacion_id, r]),
+  )
+
+  const items = (obligaciones as Array<{ id: string; descripcion: string; orden: number }>)
+    .map((obl, i) => ({ obl, i, rev: porId.get(obl.id) }))
+    .filter(({ rev }) => rev && !rev.aprobada && !!rev.nota?.trim())
+
+  if (!items.length) return null
+
+  // Escapado manual: la nota la escribe una persona y acaba dentro de un
+  // documento HTML. Sin esto, un «<» en el texto rompe el correo.
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+  const filas = items.map(({ obl, i, rev }) => `
+    <div style="margin:0 0 12px 0;padding:0 0 0 12px;border-left:3px solid #f59e0b;">
+      <p style="color:#6b7280;font-size:12px;margin:0 0 3px 0;font-weight:bold;">
+        Obligación ${i + 1}
+      </p>
+      <p style="color:#6b7280;font-size:12px;margin:0 0 5px 0;line-height:1.5;">
+        ${esc(obl.descripcion)}
+      </p>
+      <p style="color:#92400e;font-size:13px;margin:0;line-height:1.6;">
+        ${esc(rev!.nota!.trim())}
+      </p>
+    </div>`).join('')
+
+  return `
+    <p style="color:#333;font-size:14px;line-height:1.6;margin:20px 0 10px 0;">
+      <strong>${items.length === 1 ? 'Hay una obligación' : `Hay ${items.length} obligaciones`} con observaciones concretas:</strong>
+    </p>
+    ${filas}`
+}
+
 async function getAuthContext() {
   const supabase = await createServerSupabaseClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -356,8 +430,25 @@ export async function aprobarComoAsesor(periodoId: string): Promise<ActionResult
     const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
-    if (periodo.estado !== 'enviado' && periodo.estado !== 'rechazado') {
-      return { error: 'Solo se pueden aprobar periodos en estado "enviado" o "rechazado"' }
+    /**
+     * `rechazado` ya NO se acepta.
+     *
+     * Un periodo devuelto está abierto en manos de la contratista: es editable
+     * justo en ese estado. Aprobarlo desde aquí lo pasaba a `revision`, le
+     * borraba el `motivo_rechazo` —las instrucciones que estaba siguiendo— y
+     * le quitaba la edición mientras escribía. Se aprobaba, además, una
+     * versión del informe que ya no era la que se estaba revisando.
+     *
+     * Si la devolución fue un error, el camino es el panel de administración
+     * («Devolver a Asesores» / «Devolver a Supervisor»), que existe para eso y
+     * deja rastro del motivo en el historial.
+     */
+    if (periodo.estado !== 'enviado') {
+      return {
+        error: periodo.estado === 'rechazado'
+          ? 'Este informe está devuelto y la contratista lo está corrigiendo. Espera a que lo reenvíe.'
+          : 'Solo se pueden aprobar periodos en estado "enviado"',
+      }
     }
 
     // Scope: asesor → su dependencia; supervisor → su contrato
@@ -470,6 +561,9 @@ export async function rechazarComoAsesor(
     try {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.contratista_id) {
+        const detalle = await hallazgosPorObligacion(
+          createAdminSupabaseClient(), periodoId, periodo.contrato_id,
+        ).catch(() => null)
         await enviarNotificacion({
           destinatarioId: contrato.contratista_id,
           tipo: 'rechazado',
@@ -480,6 +574,7 @@ export async function rechazarComoAsesor(
           anio: periodo.anio,
           contrato: contrato.numero || '',
           motivo: motivo.trim(),
+          detalle: detalle ?? undefined,
           nombreRemitente: usuario.nombre_completo,
         })
       }
@@ -770,6 +865,9 @@ export async function devolverPeriodoAContratista(
     try {
       const contrato = await getContratoIds(supabase, periodo.contrato_id)
       if (contrato?.contratista_id) {
+        const detalle = await hallazgosPorObligacion(
+          createAdminSupabaseClient(), periodoId, periodo.contrato_id,
+        ).catch(() => null)
         await enviarNotificacion({
           destinatarioId: contrato.contratista_id,
           tipo: 'rechazado',
@@ -780,6 +878,7 @@ export async function devolverPeriodoAContratista(
           anio: periodo.anio,
           contrato: contrato.numero || '',
           motivo: motivo.trim(),
+          detalle: detalle ?? undefined,
           nombreRemitente: usuario.nombre_completo,
         })
       }

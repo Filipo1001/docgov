@@ -686,12 +686,27 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
               ) : (
                 obligaciones.map((obl, i) => {
                   const nota = obl.nota?.trim()
-                  // Precedencia: nota → aprobada (default) → desmarcada (neutro).
-                  const textoSupervision = nota
-                    ? nota
-                    : obl.aprobada
-                      ? `De acuerdo con la verificación realizada por la supervisión, el contratista dio cumplimiento a la obligación contractual relacionada con "${obl.descripcion}".`
-                      : `La obligación contractual relacionada con "${obl.descripcion}" se encuentra pendiente de verificación por parte de la supervisión.`
+                  /**
+                   * Precedencia: el ✓ manda, y solo después la nota.
+                   *
+                   * Antes la nota ganaba siempre, incluso sobre una obligación
+                   * SIN aprobar. Como una nota casi siempre pide corregir algo
+                   * —«falta la evidencia de las visitas»—, ese texto acababa
+                   * impreso como la declaración oficial de cómo la supervisión
+                   * verificó el cumplimiento, dentro de un acta que se firma y
+                   * se radica en SECOP II.
+                   *
+                   * Con el criterio nuevo la nota tiene dos papeles según el ✓:
+                   * sin aprobar es un hallazgo dirigido a la contratista (viaja
+                   * en el correo de devolución, NO al acta), y aprobada es una
+                   * observación de la supervisión, que sí es lo que el acta
+                   * quiere recoger.
+                   */
+                  const textoSupervision = !obl.aprobada
+                    ? `La obligación contractual relacionada con "${obl.descripcion}" se encuentra pendiente de verificación por parte de la supervisión.`
+                    : nota
+                      ? nota
+                      : `De acuerdo con la verificación realizada por la supervisión, el contratista dio cumplimiento a la obligación contractual relacionada con "${obl.descripcion}".`
                   return (
                     <View
                       key={i}
@@ -703,7 +718,11 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
                       </Text>
                       <Text style={{ marginTop: 1, lineHeight: 1.3 }}>
                         <Text style={{ fontFamily: 'Helvetica-Bold' }}>Supervisión: </Text>
-                        <Text style={nota ? { fontStyle: 'italic' } : undefined}>{textoSupervision}</Text>
+                        {/* La cursiva marca «esto lo redactó la supervisión»,
+                            así que solo aplica cuando la nota es de verdad lo
+                            que se imprime — no cuando se descartó por venir
+                            sobre una obligación sin aprobar. */}
+                        <Text style={obl.aprobada && nota ? { fontStyle: 'italic' } : undefined}>{textoSupervision}</Text>
                       </Text>
                     </View>
                   )

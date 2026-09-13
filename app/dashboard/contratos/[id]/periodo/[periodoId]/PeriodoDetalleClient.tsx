@@ -65,8 +65,14 @@ import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
 
-/** Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto. */
-type RevisionLocal = { aprobada: boolean; nota: string | null }
+/**
+ * Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto.
+ *
+ * `revisado_at` es lo que permite saber si esa revisión pertenece al envío que
+ * se está mirando o si quedó del anterior: las filas de `obligacion_revisiones`
+ * no se borran nunca.
+ */
+type RevisionLocal = { aprobada: boolean; nota: string | null; revisado_at?: string | null }
 
 /** Periodo "hermano" del mismo contrato — usado para detectar repetición de planilla */
 export interface PeriodoHermano {
@@ -418,12 +424,21 @@ export default function PeriodoDetallePage({
     // Antes se calculaba !actual.aprobada, y como el default es `true`, ese
     // primer clic la marcaba como NO aprobada — lo contrario de lo que el
     // usuario creía estar haciendo, y sin ningún aviso.
-    const sinRevisar = revisiones[obligacionId] === undefined
+    // «Sin revisar» incluye la revisión que quedó del ciclo anterior: sobre el
+    // informe corregido nadie se ha pronunciado todavía, así que el primer clic
+    // vuelve a ser una aprobación explícita.
+    const sinRevisar = !revisionVigente(obligacionId)
     const nuevoValor = sinRevisar ? true : !actual.aprobada
     // Optimista
     setRevisiones((prev) => ({
       ...prev,
-      [obligacionId]: { aprobada: nuevoValor, nota: prev[obligacionId]?.nota ?? actual.nota },
+      [obligacionId]: {
+        aprobada: nuevoValor,
+        nota: prev[obligacionId]?.nota ?? actual.nota,
+        // Sella el ciclo actual: sin esto, la fila optimista se seguiría
+        // comparando con la marca vieja del servidor.
+        revisado_at: new Date().toISOString(),
+      },
     }))
     setObligacionProcesando(obligacionId)
     const res = await toggleAprobacionObligacion(periodoId, obligacionId, nuevoValor)
@@ -458,10 +473,17 @@ export default function PeriodoDetallePage({
       setGuardandoNota(false)
       return
     }
-    // Optimista: la nota no cambia la aprobación.
+    // Optimista. La nota NO cambia la aprobación de una obligación ya juzgada;
+    // sobre una sin juzgar entra como hallazgo (sin aprobar), que es lo que
+    // hace el servidor en guardarNotaObligacion — antes el DEFAULT de la
+    // columna la daba por aprobada.
     setRevisiones((prev) => ({
       ...prev,
-      [obligacionId]: { aprobada: prev[obligacionId]?.aprobada ?? previa.aprobada, nota: limpio || null },
+      [obligacionId]: {
+        aprobada: prev[obligacionId] !== undefined ? (prev[obligacionId]?.aprobada ?? previa.aprobada) : false,
+        nota: limpio || null,
+        revisado_at: new Date().toISOString(),
+      },
     }))
     setGuardandoNota(false)
     setNotaModal(null)
@@ -599,9 +621,31 @@ export default function PeriodoDetallePage({
       ?.contratista?.obligado_facturar_electronicamente === true
 
 
+  /**
+   * ¿Esta revisión es de ESTE envío, o sobró del anterior?
+   *
+   * Las filas de `obligacion_revisiones` no se borran jamás. Cuando la
+   * contratista corregía y reenviaba, la segunda revisión abría con las
+   * aprobaciones y notas de la primera intactas: la barra decía «3 de 3
+   * revisadas» sin que nadie hubiera mirado el informe corregido, y el ✓
+   * verde daba por bueno un contenido que ya no era el revisado.
+   *
+   * No hace falta borrar nada ni migrar la tabla: basta comparar la marca de
+   * la revisión con la fecha del envío vigente. Lo anterior al envío actual se
+   * muestra como referencia —la nota se conserva, que es lo que dice qué se
+   * pidió— pero el veredicto vuelve a estar abierto.
+   */
+  const revisionVigente = useCallback((oblId: string): boolean => {
+    const r = revisiones[oblId]
+    if (r === undefined) return false
+    if (!periodo?.fecha_envio) return true       // nunca enviado: no hay ciclo con el que comparar
+    if (!r.revisado_at) return true              // fila antigua sin marca: se respeta
+    return new Date(r.revisado_at) >= new Date(periodo.fecha_envio)
+  }, [revisiones, periodo?.fecha_envio])
+
   // Progreso de revisión por obligación — usado en el panel de secretaria
-  const obligacionesConRevision = obligaciones.filter(obl => revisiones[obl.id] !== undefined)
-  const obligacionesSinRevisar = obligaciones.filter(obl => revisiones[obl.id] === undefined)
+  const obligacionesConRevision = obligaciones.filter(obl => revisionVigente(obl.id))
+  const obligacionesSinRevisar = obligaciones.filter(obl => !revisionVigente(obl.id))
   const todasRevisadas = obligaciones.length > 0 && obligacionesSinRevisar.length === 0
   const progresoRevision = obligaciones.length > 0 ? obligacionesConRevision.length / obligaciones.length : 0
 
@@ -721,12 +765,22 @@ export default function PeriodoDetallePage({
   // El aviso NO bloquea: hay casos legítimos (planilla que llega aparte, mes
   // vencido en trámite) y frenar el flujo por completo dejaría el trabajo
   // detenido. Solo obliga a que la omisión sea consciente, no accidental.
+  //
+  // `rechazada` entra en la cuenta. Quedaba fuera, así que una planilla que un
+  // revisor había devuelto EXPRESAMENTE por incorrecta se trataba igual que
+  // una verificada y correcta: el aviso no salía. En producción hay un informe
+  // aprobado con la planilla en ese estado, y 127 de 202 aprobados o radicados
+  // con la planilla que nadie llegó a revisar.
   const planillaSinRevisar = !!periodo && (
-    !periodo.planilla_ss_url || periodo.planilla_estado === 'pendiente'
+    !periodo.planilla_ss_url ||
+    periodo.planilla_estado === 'pendiente' ||
+    periodo.planilla_estado === 'rechazada'
   )
   const motivoPlanillaSinRevisar = !periodo?.planilla_ss_url
     ? 'El contratista no ha adjuntado la planilla de seguridad social.'
-    : 'La planilla está adjunta pero nadie la ha revisado todavía.'
+    : periodo?.planilla_estado === 'rechazada'
+      ? 'La planilla fue devuelta por incorrecta y el contratista todavía no ha subido una nueva.'
+      : 'La planilla está adjunta pero nadie la ha revisado todavía.'
 
   // Planilla: contratista puede gestionar hasta que esté aprobado o radicado
   const esPlanillaGestionable = !esHistorico && !periodoVencido && esContratista && periodo
@@ -2241,19 +2295,33 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
-      {/* ── Asesor panel (approve / reject) ── */}
-      {(periodo.estado === 'enviado' || periodo.estado === 'revision' || periodo.estado === 'rechazado') && (esAsesor || esSecretaria) && (
+      {/* ── Panel del ASESOR (aprobar / rechazar) ────────────────────
+          Dos condiciones cambiaron, y las dos por el mismo motivo: este panel
+          deja de aparecer donde crea ambigüedad.
+
+          · Ya no lo ve el supervisor. Lo veía por `esSecretaria`, y entonces
+            tenía DOS paneles con un aprobar y un rechazar cada uno —cuatro
+            botones para dos decisiones—, con la trampa de que «Aprobar» aquí
+            solo pre-aprueba (pasa a `revision`) mientras que «Aprobar informe»
+            del panel de supervisión aprueba en firme. Nada en la pantalla lo
+            decía: quien pulsaba el de arriba creía haber aprobado y el informe
+            se quedaba esperando.
+
+          · Ya no aparece con el informe en `rechazado`. Ahí la pelota es de la
+            contratista, que lo está editando en ese momento; el botón
+            «Aprobar ahora» lo movía a `revision` y le borraba el motivo de
+            rechazo a media corrección. El servidor también cierra esa puerta
+            (ver aprobarComoAsesor). */}
+      {(periodo.estado === 'enviado' || periodo.estado === 'revision') && esAsesor && (
         <div className="bg-white rounded-2xl border border-blue-200 p-4 sm:p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"><Icono glifo={Iconos.accion.ver} tamano="sm" /></div>
-            <div>
-              <h3 className="font-medium text-gray-900">Revisión del informe</h3>
+            <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 shrink-0"><Icono glifo={Iconos.accion.ver} tamano="sm" /></div>
+            <div className="min-w-0">
+              <h3 className="font-medium text-gray-900">Revisión del asesor</h3>
               <p className="text-xs text-gray-400">
                 {periodo.estado === 'revision'
                   ? 'Este informe está marcado como revisado. Puedes revocar si detectas un problema.'
-                  : periodo.estado === 'rechazado'
-                    ? 'Este informe fue rechazado. Puedes volver a aprobarlo si el contratista corrigió los problemas.'
-                    : 'Revisa las actividades y evidencias. Aprueba para avanzar a la secretaria.'}
+                  : 'Revisa las actividades y evidencias. Al aprobar, el informe pasa a la secretaría.'}
               </p>
             </div>
           </div>
@@ -2288,7 +2356,10 @@ export default function PeriodoDetallePage({
                   disabled={procesando}
                   className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
                 >
-                  {procesando ? 'Procesando...' : periodo.estado === 'rechazado' ? 'Aprobar ahora' : 'Aprobar'}
+                  {/* Dice a dónde va el informe. «Aprobar» a secas se
+                      confundía con el «Aprobar informe» de la secretaría, que
+                      es el que cierra la revisión de verdad. */}
+                  {procesando ? 'Procesando...' : 'Aprobar y pasar a secretaría'}
                 </button>
               )}
               {(periodo.estado === 'enviado' || periodo.estado === 'revision') && (
@@ -2296,7 +2367,7 @@ export default function PeriodoDetallePage({
                   onClick={() => setMostrarRechazo(true)}
                   className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
                 >
-                  Rechazar
+                  Devolver a la contratista
                 </button>
               )}
             </div>
@@ -2394,7 +2465,11 @@ export default function PeriodoDetallePage({
           // justo lo que la barra de progreso de arriba ya cuenta. Antes ambos
           // se pintaban con el mismo check verde, así que aprobar no producía
           // ningún cambio visible.
-          const revisada = revisiones[obl.id] !== undefined
+          //
+          // «Revisada» significa revisada EN ESTE ENVÍO: una aprobación del
+          // ciclo anterior no da por bueno un informe que ya cambió.
+          const revisada = revisionVigente(obl.id)
+          const notaDelCicloAnterior = tieneNota && !revisada
           const estadoRev: 'aprobada' | 'sin_aprobar' | 'sin_revisar' =
             !revisada ? 'sin_revisar' : rev.aprobada ? 'aprobada' : 'sin_aprobar'
           const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico &&
@@ -2416,6 +2491,10 @@ export default function PeriodoDetallePage({
            */
           const acento: 'corregir' | 'observada' | 'aprobada' | 'sin_revisar' =
             estadoRev === 'sin_aprobar' ? 'corregir'
+            // Una nota que sobrevive del ciclo anterior sigue diciendo qué se
+            // pidió, pero la obligación está sin revisar: el acento gris dice
+            // «nadie se ha pronunciado todavía sobre esta versión».
+            : notaDelCicloAnterior ? 'sin_revisar'
             : tieneNota ? 'observada'
             : estadoRev === 'aprobada' ? 'aprobada'
             : 'sin_revisar'
@@ -2468,7 +2547,9 @@ export default function PeriodoDetallePage({
                         <Badge variant="amber" size="xs">Sin aprobar</Badge>
                       )}
                       {estadoRev === 'sin_revisar' && puedeRevisar && (
-                        <Badge variant="gray" size="xs">Sin revisar</Badge>
+                        <Badge variant="gray" size="xs">
+                          {notaDelCicloAnterior ? 'Sin revisar tras la corrección' : 'Sin revisar'}
+                        </Badge>
                       )}
                       {/* La etiqueta pasa a ser el disparador de la nota: con
                           ratón se abre al pasar por encima, y al tocar queda
@@ -2477,7 +2558,9 @@ export default function PeriodoDetallePage({
                       {tieneNota && (
                         <NotaSupervision
                           nota={rev.nota ?? ''}
-                          esCorreccion={estadoRev === 'sin_aprobar'}
+                          // Una nota que quedó del ciclo anterior es, por
+                          // definición, lo que se pidió corregir.
+                          esCorreccion={estadoRev === 'sin_aprobar' || notaDelCicloAnterior}
                         />
                       )}
                       <span className="text-xs text-gray-400">
@@ -3183,7 +3266,16 @@ export default function PeriodoDetallePage({
                   </div>
                   <div className={`pb-4 flex-1 min-w-0 ${esUltimo ? '' : ''}`}>
                     <p className="text-sm text-gray-800">
-                      <span className="font-medium">{h.estado_nuevo ? (h.estado_nuevo.replace('_', ' ')) : 'Actualizado'}</span>
+                      {/* El rótulo del diccionario, no el valor crudo de la
+                          columna: la trazabilidad decía «revision» y «enviado»
+                          mientras el resto de la pantalla —y la línea de
+                          estado de arriba— dicen «En revisión» y «Enviado».
+                          ESTADO_LABEL ya estaba importado en este archivo. */}
+                      <span className="font-medium">
+                        {h.estado_nuevo
+                          ? (ESTADO_LABEL[h.estado_nuevo as EstadoPeriodo] ?? h.estado_nuevo.replace('_', ' '))
+                          : 'Actualizado'}
+                      </span>
                       {h.usuario?.nombre_completo && (
                         <span className="text-gray-500"> por {h.usuario.nombre_completo}</span>
                       )}
@@ -3244,6 +3336,31 @@ export default function PeriodoDetallePage({
                   Usa el botón <strong>Aprobar</strong> en cada obligación del acordeón de arriba para registrar tu seguimiento.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Revocar la pre-aprobación del asesor.
+              Vivía en el panel del asesor, que el supervisor ya no ve. Es una
+              acción secundaria —deshace el paso de otro— así que va como
+              enlace discreto y solo cuando hay algo que deshacer.
+
+              `!esAsesor` evita reponer la duplicación por otra puerta: el
+              admin sigue viendo el panel del asesor, con su propio «Revocar
+              aprobación», y tener los dos a la vez sería el mismo problema que
+              se vino a quitar. Esta línea es, en la práctica, para el
+              supervisor. */}
+          {periodo.estado === 'revision' && !esAsesor && (
+            <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-gray-100">
+              <p className="text-xs text-gray-400 min-w-0">
+                Un asesor ya revisó este informe.
+              </p>
+              <button
+                onClick={handleRevocarPreaprobacion}
+                disabled={procesando}
+                className="text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2 disabled:opacity-50 shrink-0"
+              >
+                Revocar esa revisión
+              </button>
             </div>
           )}
 

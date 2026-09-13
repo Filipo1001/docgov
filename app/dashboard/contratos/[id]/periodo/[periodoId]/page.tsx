@@ -81,9 +81,13 @@ export default async function PeriodoDetallePage({
         .select('id, fecha_inicio')
         .eq('contrato_id', id),
 
+      // `revisado_at` importa: comparado con `periodos.fecha_envio` distingue
+      // una revisión de ESTE envío de una que quedó del ciclo anterior. Las
+      // filas no se borran nunca, así que sin esa marca la segunda revisión
+      // abría con las aprobaciones de la primera ya puestas.
       supabase
         .from('obligacion_revisiones')
-        .select('obligacion_id, aprobada, nota')
+        .select('obligacion_id, aprobada, nota, revisado_at')
         .eq('periodo_id', periodoId),
     ]),
     buscarDuplicados(periodoId, id, supabase),
@@ -119,9 +123,9 @@ export default async function PeriodoDetallePage({
   })
 
   // Revisión por obligación (✓ + nota). Sin fila → aprobada por defecto, sin nota.
-  const initialRevisiones: Record<string, { aprobada: boolean; nota: string | null }> = {}
-  for (const r of (revisionesRaw ?? []) as Array<{ obligacion_id: string; aprobada: boolean; nota: string | null }>) {
-    initialRevisiones[r.obligacion_id] = { aprobada: r.aprobada, nota: r.nota }
+  const initialRevisiones: Record<string, { aprobada: boolean; nota: string | null; revisado_at: string | null }> = {}
+  for (const r of (revisionesRaw ?? []) as Array<{ obligacion_id: string; aprobada: boolean; nota: string | null; revisado_at: string | null }>) {
+    initialRevisiones[r.obligacion_id] = { aprobada: r.aprobada, nota: r.nota, revisado_at: r.revisado_at }
   }
 
   // Adjuntos PDF agrupados por actividad — se muestran junto a las imágenes en

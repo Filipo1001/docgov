@@ -133,12 +133,44 @@ export async function guardarNotaObligacion(
     if (limpio.length > 2000) return { error: 'La nota no puede superar los 2000 caracteres' }
 
     const admin = createAdminSupabaseClient()
+
+    /**
+     * ESCRIBIR UNA NOTA NO PUEDE APROBAR LA OBLIGACIÓN.
+     *
+     * Esto era un `upsert` que solo mandaba `nota`. Cuando no existía fila
+     * —el caso normal: nadie había tocado esa obligación— el INSERT dejaba
+     * que `aprobada` tomara su DEFAULT en Postgres, que es `true`. Resultado:
+     * quien escribía «falta la evidencia de las visitas» estaba aprobando la
+     * obligación sin saberlo, y la pantalla la pintaba en verde.
+     *
+     * No es una hipótesis. En producción las 14 filas con nota estaban las 14
+     * marcadas como aprobadas, y las 17 marcadas «sin aprobar» no tenían
+     * ninguna nota: los dos conjuntos eran disjuntos, que es tanto como decir
+     * que el sistema impedía que el veredicto y su motivo viajaran juntos.
+     *
+     * Ahora la nota NUNCA toca el veredicto:
+     *  · Si ya hay fila, se conserva el `aprobada` que tuviera.
+     *  · Si no la hay, la nota entra como hallazgo (`aprobada: false`). Es la
+     *    única dirección segura: fabricar una aprobación de una obligación
+     *    contractual es un daño silencioso, mientras que un «sin aprobar» de
+     *    más es visible y se deshace con un clic. Y encaja con el criterio
+     *    acordado: el ✓ es quien decide si la nota es un hallazgo (sin
+     *    aprobar) o una observación para el acta (aprobada).
+     */
+    const { data: previa } = await admin
+      .from('obligacion_revisiones')
+      .select('aprobada')
+      .eq('periodo_id', periodoId)
+      .eq('obligacion_id', obligacionId)
+      .maybeSingle()
+
     const { error } = await admin
       .from('obligacion_revisiones')
       .upsert(
         {
           periodo_id: periodoId,
           obligacion_id: obligacionId,
+          aprobada: previa ? (previa as { aprobada: boolean }).aprobada : false,
           nota: limpio || null,
           revisado_por: ctx.userId,
           revisado_at: new Date().toISOString(),

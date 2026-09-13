@@ -126,6 +126,13 @@ export function emailPeriodoRechazado(data: TemplateData) {
        ${data.motivo ? `<div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;">
          <p style="color:#991b1b;font-size:13px;margin:0;"><strong>Motivo:</strong> ${data.motivo}</p>
        </div>` : ''}
+       ${/* Los hallazgos por obligación, cada uno junto a la obligación a la
+            que pertenece. Antes este correo solo llevaba el motivo general y
+            la contratista tenía que adivinar a cuál de sus obligaciones se
+            refería: las notas que el revisor escribía sobre cada una no
+            salían nunca de la pantalla. Lo arma
+            `hallazgosPorObligacion` en app/actions/periodos.ts. */ ''}
+       ${data.detalle ?? ''}
        <p style="color:#333;font-size:14px;line-height:1.6;">
          Por favor revisa las observaciones y vuelve a enviar tu informe.
        </p>`,
