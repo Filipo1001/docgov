@@ -45,7 +45,7 @@ import {
   Lock, Unlock, ShieldCheck, Ban,
   // Acciones
   Plus, Pencil, Trash2, Search, X, ChevronRight, ChevronDown, RefreshCw,
-  Eye, Send, MoreHorizontal, ExternalLink, Copy, Filter,
+  Eye, Send, MoreHorizontal, ExternalLink, Copy, Filter, Undo2,
   // Personas y avisos
   Bell, Mail, MessageSquare, UserPlus, Building,
   // Dominio
@@ -120,6 +120,17 @@ export const Iconos = {
     abrirFuera: ExternalLink,
     copiar: Copy,
     filtrar: Filter,
+    /**
+     * Devolver algo a quien lo mandó — el informe al contratista, la planilla
+     * a corregir, la aprobación revocada.
+     *
+     * Existía como el carácter «↩» escrito a mano en cinco botones distintos.
+     * Un carácter no es un icono: no comparte rejilla ni grosor con la familia,
+     * cada sistema operativo lo dibuja a su manera y algunos lo convierten en
+     * emoji a todo color. Es exactamente lo que la regla 1 de este archivo
+     * prohíbe, y llevaba tiempo ahí.
+     */
+    devolver: Undo2,
   },
 
   aviso: {

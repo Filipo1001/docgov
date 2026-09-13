@@ -2,7 +2,7 @@
 
 interface BadgeProps {
   children: React.ReactNode
-  variant?: 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'indigo' | 'emerald'
+  variant?: 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'indigo' | 'emerald' | 'sky'
   size?: 'xs' | 'sm'
 }
 
@@ -14,6 +14,9 @@ const variantClasses: Record<string, string> = {
   amber: 'bg-amber-100 text-amber-700',
   indigo: 'bg-indigo-100 text-indigo-700',
   emerald: 'bg-emerald-100 text-emerald-800',
+  // Observación: hay algo que leer, pero no es un error. Mismo tono que usa
+  // components/ui/NotaSupervision.tsx para una nota que no pide corregir.
+  sky: 'bg-sky-100 text-sky-800',
 }
 
 const sizeClasses = {

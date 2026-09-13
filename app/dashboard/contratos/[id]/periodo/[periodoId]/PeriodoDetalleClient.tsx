@@ -468,7 +468,9 @@ export default function PeriodoDetallePage({
     toast.success(limpio ? 'Nota guardada' : 'Nota eliminada')
   }
 
-  // Scroll anchors for rejection guidance
+  // Ancla de la sección de obligaciones. Ya no hay ningún botón que lleve
+  // hasta aquí —el de «Ir a mis actividades» se retiró—, pero el ancla se
+  // conserva porque identifica la sección para cualquier enlace futuro.
   const seccionActividadesRef = useRef<HTMLDivElement>(null)
 
   // Track mount state to prevent setState after unmount (e.g. navigation during upload)
@@ -660,7 +662,14 @@ export default function PeriodoDetallePage({
       out.push(MESES[cursor.getMonth()])
       cursor.setMonth(cursor.getMonth() + 1)
     }
-    return out.length ? out : [...MESES]
+    // `out` guarda NOMBRES de mes, y con el mes de holgura a cada lado el
+    // recorrido puede pasar de doce: un contrato de enero a diciembre —26 de
+    // los 153 activos— recorría catorce meses y listaba «Diciembre» y «Enero»
+    // DOS VECES. Además de la advertencia de React por claves repetidas, el
+    // revisor veía dos opciones idénticas y sin forma de distinguirlas: el
+    // campo guarda solo el nombre, así que las dos significan lo mismo.
+    const unicos = [...new Set(out)]
+    return unicos.length ? unicos : [...MESES]
   })()
 
   // Detección de "mes vencido": el mes de cotización confirmado/sugerido difiere
@@ -1801,16 +1810,16 @@ export default function PeriodoDetallePage({
 
       {/* ── Firma suggestion banner (contratista, editable, no firma) ── */}
       {esEditable && esContratista && !usuario?.firma_url && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Icono glifo={Iconos.navegacion.firmas} tamano="sm" className="shrink-0 text-gray-400" />
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+          <div className="flex items-start gap-2 min-w-0">
+            <Icono glifo={Iconos.navegacion.firmas} tamano="sm" className="shrink-0 text-gray-400 mt-0.5" />
             <p className="text-xs text-amber-700">
               <strong>Recomendado:</strong> Registra tu firma para completar correctamente tus informes.
             </p>
           </div>
           <Link
             href="/dashboard/perfil"
-            className="text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900 shrink-0"
+            className="text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900 shrink-0 self-start sm:self-auto"
           >
             Ir a mi perfil
           </Link>
@@ -1833,9 +1842,9 @@ export default function PeriodoDetallePage({
 
       {/* ── Past-month supervisor control panel ───────────────── */}
       {esPeriodoPasado && esSecretaria && !esAsesor && (
-        <div className={`border rounded-2xl px-5 py-4 mb-6 flex items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
+        <div className={`border rounded-2xl px-5 py-4 mb-6 flex flex-wrap items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
           <Icono glifo={periodo.habilitado_tardio ? Iconos.estado.desbloqueado : Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-[12rem]">
             <p className={`text-sm font-semibold ${periodo.habilitado_tardio ? 'text-emerald-800' : 'text-blue-800'}`}>
               {periodo.habilitado_tardio ? 'Envío tardío activo' : 'Periodo vencido'}
             </p>
@@ -1896,20 +1905,31 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
-      {/* ── Approval timeline ───────────────────────────────── */}
+      {/* ── Approval timeline ─────────────────────────────────
+          A la contratista con el informe devuelto esta tarjeta no se le
+          muestra: cuando hay rechazo la línea de estado se sustituye por un
+          aviso rojo que decía «Informe devuelto para corrección», y justo
+          debajo la tarjeta de corrección abre con «Tu informe volvió para
+          corrección». Dos titulares seguidos para el mismo hecho. Quien
+          revisa sí la conserva — esa segunda tarjeta es solo para ella. */}
+      {!(rechazado && esContratista) && (
       <div className="bg-white rounded-2xl border p-5 mb-6">
         {rechazado ? (
-          <div className="flex items-center gap-3">
-            <span className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 shrink-0">
-              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+          /* A la contratista el motivo se lo cuenta —entero y con qué hacer—
+             la tarjeta de arriba. Repetirlo aquí era decir lo mismo dos veces
+             seguidas en la misma pantalla. Quien revisa sí lo necesita en este
+             sitio, porque para esos roles esa tarjeta no existe. */
+          <div className="flex items-start gap-3">
+            <span className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0">
+              <Icono glifo={Iconos.accion.cerrar} tamano="sm" className="w-3.5 h-3.5" />
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-red-700">Informe devuelto para corrección</p>
-              {periodo.motivo_rechazo
-                ? <p className="text-xs text-red-500 mt-0.5">{periodo.motivo_rechazo}</p>
-                : <p className="text-xs text-gray-400 mt-0.5">Sin motivo especificado</p>
+              {esContratista
+                ? <p className="text-xs text-gray-400 mt-0.5">Vuelve a enviarlo cuando termines de corregir.</p>
+                : periodo.motivo_rechazo
+                  ? <p className="text-xs text-red-500 mt-0.5 break-words">{periodo.motivo_rechazo}</p>
+                  : <p className="text-xs text-gray-400 mt-0.5">Sin motivo especificado</p>
               }
             </div>
           </div>
@@ -2010,80 +2030,83 @@ export default function PeriodoDetallePage({
           </div>
         )}
       </div>
+      )}
 
-      {/* ── Rejection guidance card (contratista only) ─────────── */}
-      {/* ── Unified "Acción requerida" banner (contratista only) ── */}
+      {/* ── Lo que pidió la revisión (contratista) ────────────────
+          Esto era un bloque rojo entero con un emoji «↩️», dos tarjetas
+          numeradas «1 Corrige / 2 Reenvía» y un botón «Ir a mis actividades»
+          que solo hacía scroll. Tres problemas:
+
+          · El emoji contradice la regla 1 de lib/iconos.ts, y además cada
+            sistema operativo lo dibujaba distinto.
+          · Los pasos numerados se repetían TRES veces en la misma pantalla
+            (aquí, sobre el acordeón y en la tarjeta de envío) para decir algo
+            que la página ya cuenta por sí sola.
+          · El botón de scroll resolvía un problema que no existe: con el
+            informe devuelto el acordeón ya se abre desplegado, así que las
+            actividades están a la vista nada más bajar.
+
+          Lo que de verdad importa —lo que escribió quien revisó— quedaba
+          encajonado entre toda esa decoración. Ahora es el contenido, y el
+          rojo se reduce a un filo lateral: el mismo lenguaje de acento que
+          usan las obligaciones. */}
       {esContratista && (rechazado || periodo.planilla_estado === 'rechazada') && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6 space-y-4">
+        <div className="bg-white border border-gray-200 border-l-4 border-l-red-500 rounded-2xl p-5 mb-6 divide-y divide-gray-100">
 
-          {/* ── Informe rechazado ──────────────────────────────── */}
           {rechazado && (
-            <div>
+            <div className={periodo.planilla_estado === 'rechazada' ? 'pb-4' : ''}>
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">↩️</div>
+                <span className="w-9 h-9 bg-red-50 text-red-600 rounded-xl flex items-center justify-center shrink-0">
+                  <Icono glifo={Iconos.accion.devolver} tamano="md" />
+                </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-red-800">Tu informe fue devuelto — necesita corrección</p>
+                  <p className="text-sm font-semibold text-gray-900">Tu informe volvió para corrección</p>
                   {periodo.motivo_rechazo ? (
-                    <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
-                      <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
-                      <p className="text-sm text-red-700 italic break-words">"{periodo.motivo_rechazo}"</p>
-                    </div>
+                    <>
+                      <p className="text-xs text-gray-500 mt-2">Esto fue lo que indicó la revisión:</p>
+                      <blockquote className="mt-1.5 border-l-2 border-red-200 pl-3 text-sm text-gray-700 leading-relaxed break-words">
+                        {periodo.motivo_rechazo}
+                      </blockquote>
+                    </>
                   ) : (
-                    <p className="text-xs text-red-600 mt-1">Revisa tus actividades y vuelve a enviar el informe.</p>
+                    <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">
+                      No se dejó un motivo escrito. Revisa tus actividades y vuelve a enviarlo.
+                    </p>
                   )}
+                  <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+                    Tus obligaciones están abiertas más abajo. Cuando termines de corregir,
+                    reenvía el informe desde el final de la página.
+                  </p>
                 </div>
               </div>
-              {/* Steps */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
-                  <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-800">Corrige tus actividades</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Edita, elimina o agrega actividades según el motivo.</p>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl border border-red-100 px-4 py-3 flex items-start gap-3">
-                  <span className="w-6 h-6 bg-gray-300 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-800">Reenvía el informe</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Usa el botón al final de la página cuando termines.</p>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => seccionActividadesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="mt-3 w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-sm font-medium min-h-[44px] rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-                Ir a mis actividades
-              </button>
             </div>
           )}
 
-          {/* Divider when both issues are present */}
-          {rechazado && periodo.planilla_estado === 'rechazada' && (
-            <hr className="border-red-200" />
-          )}
-
-          {/* ── Planilla rechazada ─────────────────────────────── */}
           {periodo.planilla_estado === 'rechazada' && (
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 bg-red-50 rounded-xl flex items-center justify-center flex-shrink-0 text-red-600"><Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" /></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-red-800">Tu planilla de seguridad social fue rechazada</p>
-                {periodo.planilla_comentario ? (
-                  <div className="mt-1.5 bg-white border border-red-200 rounded-xl px-3 py-2">
-                    <p className="text-xs text-gray-500 font-medium mb-0.5">El asesor indicó:</p>
-                    <p className="text-sm text-red-700 italic break-words">"{periodo.planilla_comentario}"</p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-red-600 mt-1">Sube una nueva planilla correcta para continuar.</p>
-                )}
-                <p className="text-xs text-gray-500 mt-2">
-                  Ve a <strong>Documentos del periodo</strong> → <em>Planilla SS</em> → <em>Reemplazar planilla</em>.
-                </p>
+            <div className={rechazado ? 'pt-4' : ''}>
+              <div className="flex items-start gap-3">
+                <span className="w-9 h-9 bg-red-50 text-red-600 rounded-xl flex items-center justify-center shrink-0">
+                  <Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">Tu planilla de seguridad social volvió para corrección</p>
+                  {periodo.planilla_comentario ? (
+                    <>
+                      <p className="text-xs text-gray-500 mt-2">Esto fue lo que indicó la revisión:</p>
+                      <blockquote className="mt-1.5 border-l-2 border-red-200 pl-3 text-sm text-gray-700 leading-relaxed break-words">
+                        {periodo.planilla_comentario}
+                      </blockquote>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">
+                      No se dejó un motivo escrito. Adjunta la planilla correcta para continuar.
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+                    Puedes reemplazarla desde el campo <strong className="font-medium text-gray-500">Planilla Seguridad Social</strong>,
+                    en la tarjeta de envío al final de la página.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -2092,22 +2115,27 @@ export default function PeriodoDetallePage({
       )}
 
       {/* Period header */}
-      <div className="bg-white rounded-2xl border p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div>
+      <div className="bg-white rounded-2xl border p-5 sm:p-6 mb-6">
+        {/* En un teléfono el estado y el valor no caben en una columna a la
+            derecha del título sin estrangular ambas: el nombre completo de la
+            contratista se parte en una palabra por línea. Debajo y en fila
+            —estado a la izquierda, valor a la derecha— es la misma información
+            sin pelear por el ancho. */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-xl font-bold text-gray-900">{periodo.mes} {periodo.anio}</h2>
             <p className="text-sm text-gray-500 mt-1">
               Periodo {periodo.numero_periodo} — Del {periodo.fecha_inicio} al {periodo.fecha_fin}
             </p>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-gray-400 mt-1 break-words">
               Contrato N.° {contrato.numero} — {contrato.contratista?.nombre_completo}
             </p>
           </div>
-          <div className="text-right">
-            <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium ${estadoClass}`}>
+          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start sm:text-right shrink-0">
+            <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${estadoClass}`}>
               {estadoTexto}
             </span>
-            <p className="text-lg font-bold text-gray-900 mt-2">
+            <p className="text-lg font-bold text-gray-900 sm:mt-2 whitespace-nowrap">
               ${periodo.valor_cobro?.toLocaleString('es-CO')}
             </p>
           </div>
@@ -2245,9 +2273,14 @@ export default function PeriodoDetallePage({
                 <button
                   onClick={handleRevocarPreaprobacion}
                   disabled={procesando}
-                  className="flex-1 bg-amber-50 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors disabled:opacity-50"
+                  className="flex-1 bg-amber-50 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
                 >
-                  {procesando ? 'Procesando...' : '↩ Revocar aprobación'}
+                  {procesando ? 'Procesando...' : (
+                    <>
+                      <Icono glifo={Iconos.accion.devolver} tamano="sm" className="shrink-0" />
+                      Revocar aprobación
+                    </>
+                  )}
                 </button>
               ) : (
                 <button
@@ -2311,7 +2344,7 @@ export default function PeriodoDetallePage({
               value={numRadicado}
               onChange={e => setNumRadicado(e.target.value)}
               placeholder="No. de radicado (opcional)"
-              className="flex-1 min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-emerald-300"
+              className="flex-1 min-w-0 sm:min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-emerald-300"
             />
             <button
               onClick={handleRadicado}
@@ -2328,13 +2361,11 @@ export default function PeriodoDetallePage({
       {/* Obligations and activities */}
       <div ref={seccionActividadesRef} className="space-y-4 mb-6">
 
-        {/* Paso 1 header — only when contractor is in rejected state */}
-        {rechazado && esContratista && (
-          <div className="flex items-center gap-3 pt-1">
-            <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-            <p className="text-sm font-semibold text-gray-800">Corrige tus actividades</p>
-          </div>
-        )}
+        {/* Aquí vivía un «1 Corrige tus actividades» con su círculo rojo, y en
+            la tarjeta de envío un «2 Reenvía tu informe». Numerar dos pasos
+            obvios, con los mismos círculos que usa la línea de estado de
+            arriba, competía con ella y no añadía nada: la tarjeta de arriba ya
+            dice qué corregir y el botón de abajo ya dice qué hacer después. */}
 
         {/* Control global expandir/colapsar — solo si hay obligaciones */}
         {obligaciones.length > 0 && (
@@ -2368,16 +2399,38 @@ export default function PeriodoDetallePage({
             !revisada ? 'sin_revisar' : rev.aprobada ? 'aprobada' : 'sin_aprobar'
           const puedeRevisar = (esAsesor || esSecretaria) && !esHistorico &&
             !!periodo && ['enviado', 'revision', 'rechazado'].includes(periodo.estado)
+
+          /**
+           * El acento de la tarjeta: CUATRO casos, no tres.
+           *
+           * Antes una obligación aprobada se pintaba de verde aunque la
+           * supervisión hubiera dejado una nota. Y el verde, en esta interfaz,
+           * significa «aquí no tienes nada que hacer» — justo lo contrario de
+           * lo que es una nota, que casi siempre pide corregir algo. La
+           * contratista pasaba de largo precisamente por donde debía detenerse.
+           *
+           * Ahora una nota siempre cambia el acento, y adopta el MISMO color
+           * que su propia etiqueta en `NotaSupervision`: ámbar cuando pide
+           * corregir (obligación sin aprobar), azul cielo cuando solo observa.
+           * El verde queda reservado para lo que de verdad está cerrado.
+           */
+          const acento: 'corregir' | 'observada' | 'aprobada' | 'sin_revisar' =
+            estadoRev === 'sin_aprobar' ? 'corregir'
+            : tieneNota ? 'observada'
+            : estadoRev === 'aprobada' ? 'aprobada'
+            : 'sin_revisar'
+
+          const CLASES_ACENTO = {
+            corregir:    'bg-amber-50/40 border-amber-200 border-l-amber-400',
+            observada:   'bg-sky-50/40 border-sky-200 border-l-sky-400',
+            aprobada:    'bg-green-50/40 border-gray-200 border-l-green-500',
+            sin_revisar: 'bg-white border-gray-200 border-l-gray-200',
+          } as const
+
           return (
             <div
               key={obl.id}
-              className={`rounded-2xl border border-l-4 p-6 transition-colors ${
-                estadoRev === 'aprobada'
-                  ? 'bg-green-50/40 border-gray-200 border-l-green-500'
-                  : estadoRev === 'sin_aprobar'
-                    ? 'bg-amber-50/40 border-amber-200 border-l-amber-400'
-                    : 'bg-white border-gray-200 border-l-gray-200'
-              }`}
+              className={`rounded-2xl border border-l-4 p-5 sm:p-6 transition-colors ${CLASES_ACENTO[acento]}`}
             >
               {/* Cabecera — zona clickable (expandir) + acciones de revisión.
                   Colapsada por defecto: las actividades y evidencias (imágenes)
@@ -2403,8 +2456,13 @@ export default function PeriodoDetallePage({
                         no es un indicador accesible (WCAG 1.4.1) y un botón
                         verde se lee como "acción disponible", no como "hecho". */}
                     <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                      {/* Aprobada CON nota no es lo mismo que aprobada a secas:
+                          la primera deja algo escrito que hay que leer. La
+                          etiqueta lo dice en palabras, no solo en color. */}
                       {estadoRev === 'aprobada' && (
-                        <Badge variant="green" size="xs">Aprobada por la supervisión</Badge>
+                        tieneNota
+                          ? <Badge variant="sky" size="xs">Aprobada con observación</Badge>
+                          : <Badge variant="green" size="xs">Aprobada por la supervisión</Badge>
                       )}
                       {estadoRev === 'sin_aprobar' && (
                         <Badge variant="amber" size="xs">Sin aprobar</Badge>
@@ -2557,9 +2615,9 @@ export default function PeriodoDetallePage({
                                              hover:bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-30"
                                   aria-label="Editar actividad"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
+                                  {/* Del catálogo, no dibujado aquí: es la
+                                      regla 1 de lib/iconos.ts. */}
+                                  <Icono glifo={Iconos.accion.editar} tamano="sm" />
                                 </button>
                                 {/* Eliminar — 44×44 touch target, inline confirm on first tap */}
                                 <button
@@ -2582,9 +2640,7 @@ export default function PeriodoDetallePage({
                                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                                     </svg>
                                   ) : (
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
+                                    <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
                                   )}
                                 </button>
                               </div>
@@ -2681,8 +2737,13 @@ export default function PeriodoDetallePage({
                               </div>
                             )}
 
+                            {/* La fila de abajo llevaba `xs:flex-row`, y `xs:` NO
+                                EXISTE: Tailwind v4 trae sm/md/lg/xl/2xl y este
+                                proyecto no define ninguno propio, así que era
+                                letra muerta — los dos botones se apilaban en
+                                TODOS los anchos, también en escritorio. */}
                             {esEditable && subiendoEvidencia[act.id] == null && (
-                              <div className="flex flex-col xs:flex-row gap-2 mt-1">
+                              <div className="flex flex-col sm:flex-row gap-2 mt-1">
                                 {/* Gallery — multiple selection (up to 5 at once) */}
                                 <button
                                   type="button"
@@ -2693,9 +2754,7 @@ export default function PeriodoDetallePage({
                                   className="flex-1 inline-flex flex-col items-center justify-center gap-0.5 text-sm font-medium text-blue-600 hover:text-blue-700 active:text-blue-800 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 min-h-[44px] px-4 py-2 rounded-xl transition-colors"
                                 >
                                   <span className="inline-flex items-center gap-1.5">
-                                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-                                    </svg>
+                                    <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0" />
                                     Adjuntar evidencia
                                   </span>
                                   <span className="text-[10px] font-normal text-blue-400 leading-tight">imágenes o PDF</span>
@@ -2709,10 +2768,7 @@ export default function PeriodoDetallePage({
                                   }}
                                   className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-800 active:text-gray-900 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 min-h-[44px] px-4 rounded-xl transition-colors"
                                 >
-                                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  </svg>
+                                  <Icono glifo={Iconos.dominio.evidencia} tamano="sm" className="shrink-0" />
                                   Tomar foto
                                 </button>
                               </div>
@@ -2742,7 +2798,13 @@ export default function PeriodoDetallePage({
                       {/* ── Redacción asistida (LanguageTool) ── */}
                       <MejorarRedaccion texto={nuevaActividad} onAceptar={setNuevaActividad} />
 
-                      <div className="flex items-center justify-between mt-3">
+                      {/* `flex-wrap` NO es decorativo: sin él esta fila era la
+                          causa del scroll horizontal de toda la pantalla. A
+                          320 px la fila mide 203 px y su contenido 295 px, así
+                          que «Guardar» terminaba 35 px fuera del viewport —
+                          medido, no supuesto. El modo edición de más arriba ya
+                          envolvía; este formulario se había quedado atrás. */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
                         <div className="flex items-center gap-2">
                           <label className="text-xs text-gray-500">Cantidad:</label>
                           <input
@@ -2751,7 +2813,7 @@ export default function PeriodoDetallePage({
                             className="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 text-center"
                           />
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 ml-auto">
                           <button
                             onClick={() => { setFormActivo(null); setNuevaActividad(''); setNuevaCantidad(1) }}
                             className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5"
@@ -2785,17 +2847,13 @@ export default function PeriodoDetallePage({
         })}
       </div>
 
-      {/* Submit section (contratista) */}
+      {/* Submit section (contratista).
+          Fondo blanco también cuando el informe viene devuelto: el rojo pleno
+          en una tarjeta que solo pide adjuntar la planilla y pulsar un botón
+          leía como si algo estuviera fallando AHÍ. El filo lateral basta para
+          decir de qué situación venimos. */}
       {esEditable && (
-        <div ref={seccionEnvioRef} className={`rounded-2xl border p-6 mb-6 ${rechazado ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
-
-          {/* Step 2 indicator — only for rejected */}
-          {rechazado && (
-            <div className="flex items-center gap-3 mb-3">
-              <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-              <p className="text-sm font-semibold text-gray-800">Reenvía tu informe</p>
-            </div>
-          )}
+        <div ref={seccionEnvioRef} className={`rounded-2xl border p-5 sm:p-6 mb-6 bg-white ${rechazado ? 'border-gray-200 border-l-4 border-l-red-500' : ''}`}>
 
           <h3 className="font-medium text-gray-900 mb-1">
             {rechazado ? '¿Ya corregiste todo?' : '¿Listo para enviar?'}
@@ -2827,13 +2885,13 @@ export default function PeriodoDetallePage({
                     puedeAdjuntarFactura ? 'cursor-pointer hover:opacity-75' : ''
                   }`}>
                     <p className="text-sm font-medium text-gray-900">Factura electrónica</p>
-                    <p className={`text-xs truncate ${
+                    <p className={`text-xs ${
                       periodo.factura_electronica_url ? 'text-gray-400' : 'text-amber-700 font-medium'
                     }`}>
                       {subiendoFactura
                         ? 'Subiendo...'
                         : periodo.factura_electronica_url
-                          ? 'Adjuntada — clic para reemplazar'
+                          ? 'Adjuntada — reemplazar'
                           : 'Requerida — sustituye a la Cuenta de Cobro'}
                     </p>
                     {puedeAdjuntarFactura && (
@@ -2902,11 +2960,15 @@ export default function PeriodoDetallePage({
                 {/* Clickable label area */}
                 <label className="flex-1 min-w-0 cursor-pointer hover:opacity-75 transition-opacity">
                   <p className="text-sm font-medium text-gray-900">Planilla Seguridad Social</p>
-                  <p className={`text-xs truncate ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                  {/* Sin `truncate`: a 320 px este rótulo se cortaba en
+                      «Cargada — clic para reem…», justo donde estaba la
+                      instrucción. Y «clic» no es la palabra en un teléfono,
+                      que es desde donde se usa esto. */}
+                  <p className={`text-xs ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
                     {subiendoPlanilla
                       ? 'Subiendo...'
                       : periodo.planilla_ss_url
-                        ? 'Cargada — clic para reemplazar'
+                        ? 'Cargada — reemplazar'
                         : erroresCampos.planilla
                           ? 'Requerida — adjunta el archivo'
                           : 'Subir PDF'}
@@ -3007,7 +3069,7 @@ export default function PeriodoDetallePage({
               style={rechazado ? undefined : { backgroundColor: MARCA }}
             >
               <LogoCD size={16} color="#fff" className="shrink-0" />
-              {rechazado ? '↩ Reenviar a revisión' : 'Enviar a revisión'}
+              {rechazado ? 'Reenviar a revisión' : 'Enviar a revisión'}
             </button>
           </div>
         </div>
@@ -3055,13 +3117,13 @@ export default function PeriodoDetallePage({
           </div>
 
           {editandoRadicado ? (
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex flex-wrap items-center gap-2 mt-2">
               <input
                 type="text"
                 value={numRadicadoEdit}
                 onChange={e => setNumRadicadoEdit(e.target.value)}
                 placeholder="Número de radicado"
-                className="flex-1 px-3 py-2 border border-emerald-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="flex-1 min-w-0 basis-full sm:basis-auto px-3 py-2 border border-emerald-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 autoFocus
               />
               <button
@@ -3201,9 +3263,10 @@ export default function PeriodoDetallePage({
             <button
               onClick={() => { setMostrarDevolverModal(true); setDestinoDevolucion(null); setMotivoDevolucion('') }}
               disabled={procesando}
-              className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
-              ↩ Devolver
+              <Icono glifo={Iconos.accion.devolver} tamano="sm" className="shrink-0" />
+              Devolver
             </button>
           </div>
         </div>
@@ -3580,14 +3643,21 @@ export default function PeriodoDetallePage({
                     {/* N.° planilla (contratista, hasta aprobado) */}
                     {esPlanillaGestionable && (
                       <div className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Icono glifo={Iconos.dominio.numero} tamano="sm" />
+                        {/* `min-w-0` en el input y `flex-wrap` en la fila: un
+                            <input> es un elemento de reemplazo, así que su
+                            `min-width:auto` vale su ancho intrínseco (~172 px)
+                            y `flex-1` no lograba encogerlo. A 320 px eso
+                            empujaba «Guardar» 36 px fuera de su fila, donde el
+                            `overflow-hidden` del desplegable lo recortaba a la
+                            mitad. Es el botón cortado que se veía en móvil. */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Icono glifo={Iconos.dominio.numero} tamano="sm" className="shrink-0" />
                           <input
                             value={numPlanilla}
                             onChange={(e) => { setNumPlanilla(e.target.value); setErrorFormatoPlanilla(null) }}
                             placeholder="Ej. 6016087440"
                             inputMode="text"
-                            className={`flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400 ${errorFormatoPlanilla ? 'bg-red-50 border-red-400' : 'bg-gray-50 border-gray-200'}`}
+                            className={`flex-1 min-w-0 px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400 ${errorFormatoPlanilla ? 'bg-red-50 border-red-400' : 'bg-gray-50 border-gray-200'}`}
                           />
                           <button
                             onClick={handleGuardarNumeroPlanilla}
@@ -3813,7 +3883,7 @@ export default function PeriodoDetallePage({
                     : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                <span className="text-lg flex-shrink-0">↩</span>
+                <Icono glifo={Iconos.accion.devolver} tamano="md" className="flex-shrink-0 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium">Devolver a contratista</p>
                   <p className="text-xs text-gray-400 mt-0.5">El contratista corregirá y volverá a enviar</p>
