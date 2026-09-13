@@ -74,8 +74,13 @@ export default function SubiendoArchivo({
 
           {/* Arco que gira, igual en los doce puntos. */}
           <div className="absolute inset-0 -rotate-90">
+            {/* Sin `motion-reduce:animate-none` — ver la nota larga en
+                components/EnvioInforme.tsx. Con «reducir movimiento» puesto
+                este anillo se quedaba congelado, y un indicador de espera
+                que no se mueve parece la aplicación colgada. Son los doce
+                puntos de carga: es donde más se notaba. */}
             <div
-              className="w-full h-full animate-spin motion-reduce:animate-none"
+              className="w-full h-full animate-spin"
               style={{ animationDuration: '1.1s', animationTimingFunction: 'linear', willChange: 'transform' }}
             >
               <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">

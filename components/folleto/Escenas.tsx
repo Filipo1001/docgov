@@ -497,6 +497,11 @@ export function ElMomento() {
           <svg className="absolute inset-0 w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
             <circle cx="48" cy="48" r={R} fill="none" stroke="#e5e7eb" strokeWidth="6" />
           </svg>
+          {/* El arco NO lleva `motion-reduce:animate-none`: con «reducir
+              movimiento» puesto se quedaba congelado — justo el error que
+              este archivo ya documenta arriba y que aquí se había colado. Un
+              anillo de espera trabado parece una página rota, y esta es la
+              portada que ve un alcalde. */}
           <div className="absolute inset-0 -rotate-90">
             {sellado ? (
               <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
@@ -504,7 +509,7 @@ export function ElMomento() {
                   strokeLinecap="round" strokeDasharray={CIRC} className={css.anilloCierre} />
               </svg>
             ) : (
-              <div className="w-full h-full animate-spin motion-reduce:animate-none"
+              <div className="w-full h-full animate-spin"
                 style={{ animationDuration: '1.1s', animationTimingFunction: 'linear' }}>
                 <svg className="w-24 h-24" viewBox="0 0 96 96" aria-hidden="true">
                   <circle cx="48" cy="48" r={R} fill="none" stroke={MARCA} strokeWidth="6"

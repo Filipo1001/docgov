@@ -327,7 +327,7 @@ export default function PeriodoDetallePage({
   const [guardandoBase, setGuardandoBase] = useState(false)
 
   // Admin: devoluciones forzadas
-  const [destinoDevolver, setDestinoDevolver] = useState<'asesores' | 'supervisor' | 'contratista' | null>(null)
+  const [destinoDevolver, setDestinoDevolver] = useState<'asesores' | 'supervisor' | 'contratista' | 'borrador' | null>(null)
   const [motivoDevolver, setMotivoDevolver] = useState('')
   const [procesandoDevolver, setProcesandoDevolver] = useState(false)
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
@@ -1054,12 +1054,20 @@ export default function PeriodoDetallePage({
       toast.error('El motivo es obligatorio al devolver al contratista')
       return
     }
+    if (destinoDevolver === 'borrador' && !motivoDevolver.trim()) {
+      toast.error('El motivo es obligatorio al devolver a borrador')
+      return
+    }
     setProcesandoDevolver(true)
     const result = await adminDevolverPeriodo(periodoId, destinoDevolver, motivoDevolver.trim() || undefined)
     if (result.error) {
       toast.error(result.error)
     } else {
-      const label = destinoDevolver === 'asesores' ? 'asesores' : destinoDevolver === 'supervisor' ? 'supervisor' : 'contratista'
+      const label =
+        destinoDevolver === 'asesores'   ? 'asesores' :
+        destinoDevolver === 'supervisor' ? 'supervisor' :
+        destinoDevolver === 'borrador'   ? 'borrador' :
+        'contratista'
       toast.success(`Periodo devuelto a ${label}`)
       setDestinoDevolver(null)
       setMotivoDevolver('')
@@ -2137,6 +2145,10 @@ export default function PeriodoDetallePage({
               { key: 'asesores',    label: 'Devolver a Asesores',    color: destinoDevolver === 'asesores'    ? 'bg-blue-600 text-white'    : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' },
               { key: 'supervisor',  label: 'Devolver a Supervisor',  color: destinoDevolver === 'supervisor'  ? 'bg-purple-600 text-white'  : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100' },
               { key: 'contratista', label: 'Devolver a Contratista', color: destinoDevolver === 'contratista' ? 'bg-orange-600 text-white'  : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100' },
+              // Fuera del circuito de revisión, y por eso en gris y al final:
+              // los otros tres mueven el periodo entre revisores; este lo
+              // devuelve a como si nunca se hubiera enviado.
+              { key: 'borrador',    label: 'Devolver a Borrador',    color: destinoDevolver === 'borrador'    ? 'bg-gray-900 text-white'    : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100' },
             ] as const).map(({ key, label, color }) => (
               <button
                 key={key}
@@ -2155,13 +2167,28 @@ export default function PeriodoDetallePage({
           {/* Formulario de confirmación */}
           {destinoDevolver && (
             <div className="space-y-2 pt-2 border-t border-gray-100">
+              {/* El único destino que saca el periodo del circuito merece
+                  decir qué implica: si ya hay documentos emitidos, sus
+                  códigos QR están repartidos y lo que los sustenta vuelve a
+                  ser editable. */}
+              {destinoDevolver === 'borrador' && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 leading-relaxed">
+                  El informe volverá a quedar <strong>sin enviar</strong>, editable por la contratista.
+                  Si este periodo ya tiene documentos emitidos, sus códigos de verificación siguen
+                  siendo válidos y no se reescriben — pero la información que los sustenta vuelve a
+                  ser editable. Úsalo para deshacer un envío por error, no para corregir un informe
+                  ya revisado (para eso está «Devolver a Contratista»).
+                </p>
+              )}
               <textarea
                 value={motivoDevolver}
                 onChange={e => setMotivoDevolver(e.target.value)}
                 placeholder={
                   destinoDevolver === 'contratista'
                     ? 'Motivo del rechazo (obligatorio)…'
-                    : 'Motivo o comentario (opcional)…'
+                    : destinoDevolver === 'borrador'
+                      ? 'Por qué se deshace el envío (obligatorio)…'
+                      : 'Motivo o comentario (opcional)…'
                 }
                 rows={2}
                 className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
@@ -2169,7 +2196,7 @@ export default function PeriodoDetallePage({
               <div className="flex gap-2">
                 <button
                   onClick={handleAdminDevolver}
-                  disabled={procesandoDevolver || (destinoDevolver === 'contratista' && !motivoDevolver.trim())}
+                  disabled={procesandoDevolver || ((destinoDevolver === 'contratista' || destinoDevolver === 'borrador') && !motivoDevolver.trim())}
                   className="text-xs px-4 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-40 font-medium transition-colors"
                 >
                   {procesandoDevolver ? 'Procesando...' : 'Confirmar devolución'}

@@ -212,15 +212,31 @@ export default function EnvioInforme({
               opacidad cuesta lo mismo en cualquier teléfono, porque opacidad
               sí se compone. */}
           <div className="absolute inset-0 -rotate-90">
-            {/* El giro NO se detiene al sellar: el arco sigue girando
-                mientras se apaga. Antes se le quitaba `animate-spin` en ese
-                instante y el arco se congelaba de golpe en el ángulo en que
-                fuera — un giro que se traba es justo la señal de que algo se
-                colgó, lo contrario de lo que hay que comunicar. `will-change`
-                va aquí y en ningún otro sitio de esta capa: es lo único que
-                se mueve sin parar. */}
+            {/* ESTE GIRO NO SE DETIENE NUNCA, y menos con «reducir
+                movimiento» puesto.
+
+                Llevaba `motion-reduce:animate-none`, y eso dejaba el anillo
+                CONGELADO en todo iPhone con el ajuste activado — que son
+                muchísimos, porque la gente lo activa para quitarle el zoom a
+                iOS, no para desactivar páginas (es la misma lección que ya
+                está escrita en components/folleto/Escenas.tsx, y que aquí no
+                se había aplicado). Un indicador de espera que no se mueve no
+                es una concesión de accesibilidad: es la señal universal de
+                que algo se colgó, justo lo contrario de lo que tiene que
+                comunicar. El propio iOS mantiene girando sus indicadores de
+                actividad con el ajuste puesto.
+
+                `prefers-reduced-motion` apunta al movimiento vestibular —
+                desplazamientos grandes, paralaje, escalas de pantalla
+                completa—, no a un anillo de 96px que informa. Ver la capa y
+                la tarjeta, abajo: esas sí siguen acortándose, porque esas sí
+                son de pantalla completa.
+
+                Tampoco se detiene al sellar: sigue girando mientras se apaga.
+                `will-change` va aquí y en ningún otro sitio de esta capa: es
+                lo único que se mueve sin parar. */}
             <div
-              className={`absolute inset-0 w-full h-full animate-spin motion-reduce:animate-none transition-opacity duration-300 ${
+              className={`absolute inset-0 w-full h-full animate-spin transition-opacity duration-300 ${
                 sellado ? 'opacity-0' : 'opacity-100'
               }`}
               style={{ animationDuration: '1.1s', animationTimingFunction: 'linear', willChange: 'transform' }}

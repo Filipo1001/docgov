@@ -1679,10 +1679,31 @@ export async function marcarComoHistorico(
  *   'asesores'   → enviado  (asesor reviews again)
  *   'supervisor' → revision (secretary approves directly)
  *   'contratista'→ rechazado (contractor must fix and resubmit)
+ *   'borrador'   → borrador (como si nunca se hubiera enviado)
+ *
+ * ── POR QUÉ 'borrador' ES DISTINTO A LOS DEMÁS ───────────────────────────
+ *
+ * Los otros tres destinos mueven el periodo dentro del circuito de revisión.
+ * Este lo saca del circuito por completo: lo devuelve al estado editable de
+ * quien todavía no ha enviado nada.
+ *
+ * Es el que rompe la separación que el resto del sistema mantiene a
+ * propósito —estados cacheables (enviado, revision, aprobado, radicado) vs.
+ * editables (borrador, rechazado)—, así que conviene saber lo que implica:
+ * si el periodo ya tiene documentos en `documentos_emitidos`, sus códigos de
+ * verificación y sus QR ya están repartidos, y volver a borrador deja
+ * editable la información que los sustenta. Los códigos son idempotentes y
+ * no se reescriben, pero el contenido que se regenere bajo ellos sí puede
+ * cambiar. Ver la regla 3 de CLAUDE.md.
+ *
+ * Existe porque hacía falta de verdad: deshacer un envío de prueba obligaba
+ * a entrar a la base de datos a mano. Por eso exige motivo —queda en el
+ * historial del periodo, que es donde alguien lo va a buscar después— y por
+ * eso es solo para admin.
  */
 export async function adminDevolverPeriodo(
   periodoId: string,
-  destino: 'asesores' | 'supervisor' | 'contratista',
+  destino: 'asesores' | 'supervisor' | 'contratista' | 'borrador',
   motivo?: string
 ): Promise<ActionResult> {
   try {
@@ -1704,9 +1725,17 @@ export async function adminDevolverPeriodo(
       return { error: 'El motivo es obligatorio al devolver al contratista' }
     }
 
+    // El motivo también es obligatorio al sacar el periodo del circuito:
+    // es lo único que quedará explicando por qué un informe ya enviado
+    // volvió a estar en blanco.
+    if (destino === 'borrador' && !motivo?.trim()) {
+      return { error: 'El motivo es obligatorio al devolver a borrador' }
+    }
+
     const estadoNuevo: EstadoPeriodo =
       destino === 'asesores'    ? 'enviado'   :
       destino === 'supervisor'  ? 'revision'  :
+      destino === 'borrador'    ? 'borrador'  :
       /* contratista */           'rechazado'
 
     const adminClient = createAdminSupabaseClient()
@@ -1723,7 +1752,12 @@ export async function adminDevolverPeriodo(
     if (!updated?.length) return { error: 'No se pudo devolver el periodo. El periodo no fue encontrado.' }
 
     const comentario = [
-      `Admin devolvió a ${destino === 'asesores' ? 'asesores' : destino === 'supervisor' ? 'supervisor/secretaria' : 'contratista'}`,
+      `Admin devolvió a ${
+        destino === 'asesores'   ? 'asesores' :
+        destino === 'supervisor' ? 'supervisor/secretaria' :
+        destino === 'borrador'   ? 'borrador (el informe vuelve a quedar sin enviar)' :
+        'contratista'
+      }`,
       motivo?.trim() ? `Motivo: ${motivo.trim()}` : null,
     ].filter(Boolean).join(' — ')
 

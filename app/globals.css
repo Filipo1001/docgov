@@ -87,8 +87,22 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
    pequeño (`check-trazo`, abajo) NO tiene este problema: es un trazo corto
    de 18px, no un círculo de 96px, y ahí sí vale la pena que se dibuje.     */
 
+/* ── «Reducir movimiento»: se acorta lo GRANDE, no lo que informa ─────────
+   El bloque anterior anulaba a 1ms TODO lo de esta sección, incluidos el
+   trazo del check y el sello. Sumado al anillo —que además tenía
+   `motion-reduce:animate-none` y se quedaba congelado— el resultado en un
+   iPhone con el ajuste puesto era una confirmación completamente inmóvil:
+   un anillo trabado y un visto que aparecía de la nada. Se leía como una
+   pantalla colgada, no como un envío confirmado.
+
+   Es la misma lección que ya está escrita en components/folleto/Escenas.tsx:
+   el ajuste se activa muchísimo para quitarle el zoom a iOS, no para
+   desactivar páginas, y apunta al movimiento VESTIBULAR — desplazamientos
+   grandes, paralaje, escalas a pantalla completa—, no a un visto de 18px.
+
+   Así que se acorta solo lo que de verdad ocupa la pantalla entera (la capa
+   y la tarjeta al salir); el check y el sello siguen contando lo que pasó. */
 @media (prefers-reduced-motion: reduce) {
-  .check-trazo, .sello-entra { animation-duration: 1ms; }
   .upload-overlay-exit, .upload-card-exit { animation-duration: 1ms; }
 }
 
