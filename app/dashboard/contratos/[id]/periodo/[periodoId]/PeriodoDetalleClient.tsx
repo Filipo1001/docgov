@@ -64,6 +64,7 @@ import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
+import TrazaPeriodo from '@/components/ui/TrazaPeriodo'
 
 /**
  * Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto.
@@ -73,36 +74,6 @@ import NotaSupervision from '@/components/ui/NotaSupervision'
  * no se borran nunca.
  */
 type RevisionLocal = { aprobada: boolean; nota: string | null; revisado_at?: string | null }
-
-/**
- * «hace 2 días», no «2026-09-13T02:09:22.898Z».
- *
- * Quien revisa abre un informe para decidir, y lo primero que necesita saber es
- * desde cuándo está esperando. Una fecha absoluta obliga a hacer la resta
- * mentalmente; la fecha exacta sigue estando, en el `title` y en la sección de
- * trazabilidad del final.
- */
-function tiempoRelativo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (Number.isNaN(ms)) return ''
-  const min = Math.floor(ms / 60_000)
-  if (min < 1) return 'hace un momento'
-  if (min < 60) return `hace ${min} min`
-  const horas = Math.floor(min / 60)
-  if (horas < 24) return `hace ${horas} h`
-  const dias = Math.floor(horas / 24)
-  if (dias === 1) return 'ayer'
-  if (dias < 30) return `hace ${dias} días`
-  const meses = Math.floor(dias / 30)
-  return meses <= 1 ? 'hace un mes' : `hace ${meses} meses`
-}
-
-function fechaLarga(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) +
-    ' · ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-}
 
 /** Periodo "hermano" del mismo contrato — usado para detectar repetición de planilla */
 export interface PeriodoHermano {
@@ -693,9 +664,6 @@ export default function PeriodoDetallePage({
    * sigue al final de la página para quien la necesite entera.
    */
   const eventos = periodo?.historial ?? []
-  const ultimoEvento = eventos.length > 0 ? eventos[eventos.length - 1] : null
-  const fechaEstado = ultimoEvento?.created_at ?? periodo?.fecha_envio ?? null
-  const autorEstado = ultimoEvento?.usuario?.nombre_completo ?? null
 
   /**
    * Por qué volvió, para quien revisa.
@@ -2052,6 +2020,50 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
+      {/* Period header */}
+      <div className="bg-white rounded-2xl border p-5 sm:p-6 mb-6">
+        {/* En un teléfono el estado y el valor no caben en una columna a la
+            derecha del título sin estrangular ambas: el nombre completo de la
+            contratista se parte en una palabra por línea. Debajo y en fila
+            —estado a la izquierda, valor a la derecha— es la misma información
+            sin pelear por el ancho. */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-gray-900">{periodo.mes} {periodo.anio}</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Periodo {periodo.numero_periodo} — Del {periodo.fecha_inicio} al {periodo.fecha_fin}
+            </p>
+            <p className="text-sm text-gray-400 mt-1 break-words">
+              Contrato N.° {contrato.numero} — {contrato.contratista?.nombre_completo}
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start sm:text-right shrink-0">
+            <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${estadoClass}`}>
+              {estadoTexto}
+            </span>
+            <p className="text-lg font-bold text-gray-900 sm:mt-2 whitespace-nowrap">
+              ${periodo.valor_cobro?.toLocaleString('es-CO')}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2 text-xs flex-wrap">
+          <span className="text-gray-400">Actividades registradas:</span>
+          <span className="font-medium text-gray-900">{actividades.length}</span>
+          <span className="text-gray-300">|</span>
+          <span className="text-gray-400">Total acciones:</span>
+          <span className="font-medium text-gray-900">{totalAcciones()}</span>
+          {periodo.numero_radicado && periodo.estado === 'radicado' && (
+            <>
+              <span className="text-gray-300">|</span>
+              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
+                Radicado No. {periodo.numero_radicado}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* ── Approval timeline ─────────────────────────────────
           A la contratista con el informe devuelto esta tarjeta no se le
           muestra: cuando hay rechazo la línea de estado se sustituye por un
@@ -2077,12 +2089,10 @@ export default function PeriodoDetallePage({
               ) : (
                 <>
                   <p className="text-xs text-red-500 mt-0.5 break-words">{porQueVolvio}</p>
-                  {fechaEstado && (
-                    <p className="text-[11px] text-gray-400 mt-1" title={fechaLarga(fechaEstado)}>
-                      Devuelto {tiempoRelativo(fechaEstado)}
-                      {autorEstado ? ` · ${autorEstado}` : ''}
-                      {periodo.fecha_envio ? ` · se había enviado ${tiempoRelativo(periodo.fecha_envio)}` : ''}
-                    </p>
+                  {eventos.length > 0 && (
+                    <div className="mt-2">
+                      <TrazaPeriodo eventos={eventos} />
+                    </div>
                   )}
                 </>
               )}
@@ -2182,18 +2192,10 @@ export default function PeriodoDetallePage({
 
             A la contratista no se le muestra: para ella el estado ya lo dicen
             la línea de arriba y su propia tarjeta, y esto sería ruido. */}
-        {!esContratista && !rechazado && fechaEstado && (
-          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-gray-400">
-            <Icono glifo={Iconos.estado.enEspera} tamano="sm" className="w-3.5 h-3.5 shrink-0" />
-            <span className="font-medium text-gray-600">{estadoTexto}</span>
-            <span title={fechaLarga(fechaEstado)}>· {tiempoRelativo(fechaEstado)}</span>
-            {autorEstado && <span>· {autorEstado}</span>}
-            {/* La antigüedad del envío solo añade algo cuando el estado actual
-                NO es el envío: en «enviado» diría dos veces lo mismo. En
-                «revisión» o «aprobado» sí cuenta cuánto lleva el ciclo. */}
-            {periodo.estado !== 'enviado' && periodo.fecha_envio && (
-              <span title={fechaLarga(periodo.fecha_envio)}>· enviado {tiempoRelativo(periodo.fecha_envio)}</span>
-            )}
+        {!esContratista && !rechazado && eventos.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <TrazaPeriodo eventos={eventos} />
+            <span className="text-[11px] text-gray-300">Trazabilidad</span>
           </div>
         )}
 
@@ -2292,50 +2294,6 @@ export default function PeriodoDetallePage({
 
         </div>
       )}
-
-      {/* Period header */}
-      <div className="bg-white rounded-2xl border p-5 sm:p-6 mb-6">
-        {/* En un teléfono el estado y el valor no caben en una columna a la
-            derecha del título sin estrangular ambas: el nombre completo de la
-            contratista se parte en una palabra por línea. Debajo y en fila
-            —estado a la izquierda, valor a la derecha— es la misma información
-            sin pelear por el ancho. */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold text-gray-900">{periodo.mes} {periodo.anio}</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Periodo {periodo.numero_periodo} — Del {periodo.fecha_inicio} al {periodo.fecha_fin}
-            </p>
-            <p className="text-sm text-gray-400 mt-1 break-words">
-              Contrato N.° {contrato.numero} — {contrato.contratista?.nombre_completo}
-            </p>
-          </div>
-          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start sm:text-right shrink-0">
-            <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${estadoClass}`}>
-              {estadoTexto}
-            </span>
-            <p className="text-lg font-bold text-gray-900 sm:mt-2 whitespace-nowrap">
-              ${periodo.valor_cobro?.toLocaleString('es-CO')}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2 text-xs flex-wrap">
-          <span className="text-gray-400">Actividades registradas:</span>
-          <span className="font-medium text-gray-900">{actividades.length}</span>
-          <span className="text-gray-300">|</span>
-          <span className="text-gray-400">Total acciones:</span>
-          <span className="font-medium text-gray-900">{totalAcciones()}</span>
-          {periodo.numero_radicado && periodo.estado === 'radicado' && (
-            <>
-              <span className="text-gray-300">|</span>
-              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
-                Radicado No. {periodo.numero_radicado}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
 
       {/* ── Admin: Devoluciones forzadas ── */}
       {usuario?.rol === 'admin' && periodo.estado !== 'borrador' && (
