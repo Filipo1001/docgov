@@ -7,6 +7,15 @@ interface AvatarProps {
   nombre: string
   foto?: string | null
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  /**
+   * Reemplaza —no acompaña— a las clases de `size`.
+   *
+   * Existe porque `size` no puede expresar un tamaño que cambia por
+   * breakpoint, y mezclar `w-16` con `sm:w-24` en la misma cadena dejaría el
+   * resultado a merced del orden del CSS compilado. Quien necesita un retrato
+   * responsivo pasa la cadena entera y no hay ambigüedad posible.
+   */
+  clases?: string
 }
 
 const sizeClasses = {
@@ -16,7 +25,8 @@ const sizeClasses = {
   xl:  'w-20 h-20 text-2xl',
 }
 
-export default function Avatar({ nombre, foto, size = 'md' }: AvatarProps) {
+export default function Avatar({ nombre, foto, size = 'md', clases }: AvatarProps) {
+  const dim = clases ?? sizeClasses[size]
   const initials = nombre
     .split(' ')
     .slice(0, 2)
@@ -31,7 +41,7 @@ export default function Avatar({ nombre, foto, size = 'md' }: AvatarProps) {
         alt={nombre}
         loading="lazy"
         decoding="async"
-        className={`${sizeClasses[size]} rounded-full object-cover flex-shrink-0`}
+        className={`${dim} rounded-full object-cover flex-shrink-0`}
       />
     )
   }
@@ -40,7 +50,7 @@ export default function Avatar({ nombre, foto, size = 'md' }: AvatarProps) {
     <div
       /* Sólido en la tinta de marca. El degradado azul venía de antes de que
          existiera una identidad y era el color más visible de la aplicación. */
-      className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`}
+      className={`${dim} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`}
       style={{ backgroundColor: MARCA }}
     >
       {initials}

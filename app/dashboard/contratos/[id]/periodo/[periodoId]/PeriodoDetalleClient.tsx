@@ -525,8 +525,24 @@ export default function PeriodoDetallePage({
   const cargarDatos = useCallback(async (silencioso = false) => {
     try {
       const datos = await getPeriodoConContrato(periodoId, contratoId)
-      setContrato(datos.contrato)
-      setPeriodo(datos.periodo)
+      /**
+       * Nunca cambiar datos buenos por vacío.
+       *
+       * Las consultas de `getPeriodoConContrato` descartan el error y
+       * devuelven `{ data: null }`, así que un hipo de sesión del cliente del
+       * navegador —que esta misma pantalla ya documenta más arriba: tras
+       * reanudar en iOS puede no tener sesión aunque las cookies del servidor
+       * sigan vivas— no lanza: simplemente trae null. Y este sondeo corre cada
+       * 90 s y en cada vuelta a la pestaña.
+       *
+       * El resultado era que la pantalla se sustituía por «Periodo no
+       * encontrado» sobre un informe que existe perfectamente. Ambas son
+       * consultas `.single()` por id conocido: un null ahí es siempre un
+       * fallo, nunca un vacío legítimo, así que se ignora y se conserva lo
+       * que ya estaba. El siguiente ciclo reintenta.
+       */
+      if (datos.contrato) setContrato(datos.contrato)
+      if (datos.periodo) setPeriodo(datos.periodo)
       setObligaciones(datos.obligaciones)
       setActividades(datos.actividades)
       if (datos.periodo?.numero_planilla) setNumPlanilla(datos.periodo.numero_planilla)
@@ -2048,54 +2064,73 @@ export default function PeriodoDetallePage({
           El estado y el valor SÍ se quedan: son lo primero que mira cualquier
           rol, y esconderlos tras un clic habría sido cambiar ruido por una
           ausencia. */}
-      <div className="bg-white rounded-2xl border p-5 sm:p-6 mb-6">
-        <div className="flex items-start gap-4">
-          {/* La foto ayuda a reconocer de quién es el informe cuando se revisan
-              muchos seguidos; el nombre sigue ahí porque una cara no identifica
-              a quien no la conoce. 85 de 119 contratistas tienen foto — el
-              resto cae a iniciales. */}
-          <Avatar
-            nombre={contrato.contratista?.nombre_completo ?? ''}
-            foto={(contrato.contratista as { foto_url?: string | null } | undefined)?.foto_url}
-            size="lg"
-          />
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 mb-6">
+        {/* Dos zonas arriba —identidad a la izquierda, retrato a la derecha— y
+            una franja de cifras abajo, separada por un filo. El reparto no es
+            capricho: la columna de la izquierda crece y la del retrato no, así
+            que un nombre largo nunca empuja la foto ni la parte en dos. */}
+        <div className="flex items-start justify-between gap-4 sm:gap-6">
 
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-400">Contrato N.° {contrato.numero}</p>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
-              {periodo.mes} {periodo.anio}
+            {/* Antetítulo · título · subtítulo. El mes es el titular porque es
+                lo que distingue esta pantalla de las otras once del contrato;
+                el año va en gris para que no le robe peso. */}
+            <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
+              Contrato N.° {contrato.numero}
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight mt-1">
+              {periodo.mes}{' '}
+              <span className="font-semibold text-gray-400">{periodo.anio}</span>
             </h2>
-            <p className="text-sm text-gray-500 mt-0.5 break-words">
+            <p className="text-sm text-gray-500 mt-1.5 break-words">
               {contrato.contratista?.nombre_completo}
             </p>
-
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mt-3">
-              <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${estadoClass}`}>
-                {estadoTexto}
-              </span>
-              <span className="text-lg font-bold text-gray-900 whitespace-nowrap">
-                ${periodo.valor_cobro?.toLocaleString('es-CO')}
-              </span>
-              {periodo.numero_radicado && periodo.estado === 'radicado' && (
-                <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
-                  Radicado No. {periodo.numero_radicado}
-                </span>
-              )}
-              {/* Solo para quien revisa: el detalle está redactado para decidir
-                  sobre un informe ajeno («3 obligaciones sin evidencia»,
-                  «devuelto 2 veces») y esa lectura no es la de la contratista. */}
-              {!esContratista && (
-                <button
-                  type="button"
-                  onClick={() => setMostrarDetalle(true)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors"
-                >
-                  <Icono glifo={Iconos.estado.informacion} tamano="sm" className="shrink-0" />
-                  Detalle
-                </button>
-              )}
-            </div>
           </div>
+
+          {/* El retrato y, justo debajo, la puerta al detalle. La foto ayuda a
+              reconocer de quién es el informe cuando se revisan muchos
+              seguidos; el nombre sigue a la izquierda porque una cara no
+              identifica a quien no la conoce. 85 de 119 contratistas tienen
+              foto — el resto cae a iniciales sobre la tinta de marca. */}
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <Avatar
+              nombre={contrato.contratista?.nombre_completo ?? ''}
+              foto={(contrato.contratista as { foto_url?: string | null } | undefined)?.foto_url}
+              clases="w-16 h-16 text-xl sm:w-24 sm:h-24 sm:text-3xl ring-1 ring-gray-200"
+            />
+            {/* Solo para quien revisa: el detalle está redactado para decidir
+                sobre un informe ajeno («3 obligaciones sin evidencia»,
+                «devuelto 2 veces») y esa lectura no es la de la contratista. */}
+            {!esContratista && (
+              <button
+                type="button"
+                onClick={() => setMostrarDetalle(true)}
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2 py-1 transition-colors whitespace-nowrap"
+              >
+                <Icono glifo={Iconos.estado.informacion} tamano="sm" className="shrink-0 w-3.5 h-3.5" />
+                Detalle
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Las cifras, en su propia franja: el estado a la izquierda y el valor
+            a la derecha, que es donde el ojo busca un número. `tabular-nums`
+            para que los dígitos no bailen entre un periodo y otro. */}
+        <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-2 mt-4 pt-4 border-t border-gray-100">
+          <div className="flex items-center flex-wrap gap-2">
+            <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${estadoClass}`}>
+              {estadoTexto}
+            </span>
+            {periodo.numero_radicado && periodo.estado === 'radicado' && (
+              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
+                Radicado No. {periodo.numero_radicado}
+              </span>
+            )}
+          </div>
+          <p className="text-xl sm:text-2xl font-bold text-gray-900 tabular-nums whitespace-nowrap ml-auto">
+            ${periodo.valor_cobro?.toLocaleString('es-CO')}
+          </p>
         </div>
       </div>
 
