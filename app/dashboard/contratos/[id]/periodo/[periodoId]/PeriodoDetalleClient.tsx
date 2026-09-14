@@ -64,7 +64,6 @@ import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
-import TrazaPeriodo from '@/components/ui/TrazaPeriodo'
 import Avatar from '@/components/ui/Avatar'
 import DetallePeriodo from './DetallePeriodo'
 
@@ -500,14 +499,6 @@ export default function PeriodoDetallePage({
   // hasta aquí —el de «Ir a mis actividades» se retiró—, pero el ancla se
   // conserva porque identifica la sección para cualquier enlace futuro.
   const seccionActividadesRef = useRef<HTMLDivElement>(null)
-
-  // La trazabilidad completa, al final de la página. La tira de puntos de
-  // arriba solo muestra los últimos movimientos; cuando hay más, su contador
-  // «+N» trae hasta aquí en vez de dejar al usuario buscándola.
-  const seccionTrazabilidadRef = useRef<HTMLDivElement>(null)
-  const irATrazabilidad = useCallback(() => {
-    seccionTrazabilidadRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
 
   // Track mount state to prevent setState after unmount (e.g. navigation during upload)
   const mountedRef = useRef(true)
@@ -2170,11 +2161,6 @@ export default function PeriodoDetallePage({
               ) : (
                 <>
                   <p className="text-xs text-red-500 mt-0.5 break-words">{porQueVolvio}</p>
-                  {eventos.length > 0 && (
-                    <div className="mt-2">
-                      <TrazaPeriodo eventos={eventos} onVerTodo={irATrazabilidad} />
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -2264,20 +2250,10 @@ export default function PeriodoDetallePage({
           </div>
         )}
 
-        {/* ── Dónde está y desde cuándo, para quien revisa ──────────────
-            Una línea gris bajo la línea de estado, no una sección más. Quien
-            revisa abre esta pantalla para decidir, y lo primero que necesita
-            es saber cuánto lleva esperando y de quién viene — que es
-            exactamente lo que la trazabilidad del final ya cuenta, pero
-            veinte pantallas más abajo y en doce filas.
-
-            A la contratista no se le muestra: para ella el estado ya lo dicen
-            la línea de arriba y su propia tarjeta, y esto sería ruido. */}
-        {!esContratista && !rechazado && eventos.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <TrazaPeriodo eventos={eventos} onVerTodo={irATrazabilidad} />
-          </div>
-        )}
+        {/* La tira de puntos vivía aquí. Se retiró: la trazabilidad tiene un
+            único sitio, el detalle del periodo, donde cabe entera y con la
+            ficha completa de cada movimiento. Repartida en dos pantallas
+            obligaba a recordar cuál de las dos daba qué. */}
 
         {/* Pre-approval badges */}
         {periodo.estado === 'enviado' && tienePreaprobaciones && (

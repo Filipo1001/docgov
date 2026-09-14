@@ -41,6 +41,26 @@ const ROL_LABEL: Record<string, string> = {
 
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
+/**
+ * Un color por estado, los mismos que ya distinguen los chips de la
+ * aplicación (`ESTADO_COLOR` en lib/constants). Antes la línea solo separaba
+ * «acabó bien / acabó mal / lo demás», así que un envío, una revisión del
+ * asesor y una vuelta a borrador se pintaban iguales — que es justo lo que una
+ * trazabilidad no debe hacer.
+ *
+ * Van como valores y no como clases de Tailwind porque el punto es un `span`
+ * que también se reutiliza en el panel de abajo, y una sola fuente evita que
+ * un día el punto y su ficha digan colores distintos.
+ */
+const COLOR_NODO: Record<string, string> = {
+  borrador:  '#d1d5db', // gris — todavía en manos de la contratista
+  enviado:   '#60a5fa', // azul — salió a revisión
+  revision:  '#818cf8', // índigo — el asesor ya lo miró
+  aprobado:  '#22c55e', // verde
+  radicado:  MARCA,     // tinta de marca — el final del recorrido
+  rechazado: '#f87171', // rojo — volvió para corrección
+}
+
 function accionDe(anterior: EstadoPeriodo | null, nuevo: EstadoPeriodo | null): string {
   switch (nuevo) {
     case 'borrador':  return 'Devuelto a borrador'
@@ -399,61 +419,77 @@ export default function DetallePeriodo({
               /* Línea de tiempo horizontal. Con scroll propio cuando hay muchos
                  movimientos —hay periodos con 53— en vez de apretar los nodos
                  hasta que dejen de poder tocarse. */
-              <div className="overflow-x-auto -mx-1 px-1 pb-2">
-                <div className="flex items-start min-w-max pt-16">
-                  {historial.map((h, i) => (
-                    <div key={h.id} className="flex items-start">
-                      {i > 0 && <span className="w-10 sm:w-14 h-px bg-gray-200 mt-[7px]" aria-hidden="true" />}
-                      <div className="relative flex flex-col items-center">
-                        <button
-                          type="button"
-                          onMouseEnter={() => setNodoAbierto(i)}
-                          onMouseLeave={() => setNodoAbierto(null)}
-                          onClick={() => setNodoAbierto(n => (n === i ? null : i))}
-                          aria-label={`${accionDe(h.estado_anterior, h.estado_nuevo)} — ${fechaHora(h.created_at)}`}
-                          className="w-4 h-4 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
-                        >
-                          <span className={`block rounded-full transition-all ${
-                            nodoAbierto === i ? 'w-3.5 h-3.5' : 'w-2.5 h-2.5'
-                          } ${
-                            h.estado_nuevo === 'aprobado' || h.estado_nuevo === 'radicado' ? 'bg-emerald-400'
-                            : h.estado_nuevo === 'rechazado' ? 'bg-red-300'
-                            : 'bg-gray-300'
-                          }`} />
-                        </button>
-                        <span className="text-[10px] text-gray-400 mt-1.5 whitespace-nowrap">
-                          {fechaCorta(h.created_at)}
-                        </span>
-                        {nodoAbierto === i && (
-                          <Ficha className="bottom-full left-1/2 -translate-x-1/2 mb-2">
-                            <p className="text-[12px] font-semibold text-white leading-snug">
-                              {accionDe(h.estado_anterior, h.estado_nuevo)}
-                            </p>
-                            {h.usuario?.nombre_completo && (
-                              <p className="text-[11px] text-white/90 mt-1 break-words whitespace-normal">
-                                {h.usuario.nombre_completo}
-                              </p>
-                            )}
-                            {h.usuario?.rol && (
-                              <p className="text-[10px] text-white/50">
-                                {ROL_LABEL[h.usuario.rol] ?? h.usuario.rol}
-                              </p>
-                            )}
-                            <p className="text-[10px] text-white/50 mt-1.5 pt-1.5 border-t border-white/10">
-                              {fechaHora(h.created_at)}
-                            </p>
-                            {h.comentario && (
-                              <p className="text-[11px] text-white/80 mt-1.5 italic break-words whitespace-normal">
-                                {h.comentario}
-                              </p>
-                            )}
-                          </Ficha>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+              <>
+                {/* La línea. Con scroll propio cuando hay muchos movimientos
+                    —hay periodos con 53— en vez de apretar los nodos hasta que
+                    dejen de poder tocarse. */}
+                <div className="overflow-x-auto -mx-1 px-1 pb-1">
+                  <div className="flex items-start min-w-max">
+                    {historial.map((h, i) => {
+                      const sel = nodoAbierto === i
+                      return (
+                        <div key={h.id} className="flex items-start">
+                          {i > 0 && <span className="w-10 sm:w-14 h-px bg-gray-200 mt-[9px]" aria-hidden="true" />}
+                          <div className="flex flex-col items-center">
+                            <button
+                              type="button"
+                              onMouseEnter={() => setNodoAbierto(i)}
+                              onClick={() => setNodoAbierto(i)}
+                              aria-label={`${accionDe(h.estado_anterior, h.estado_nuevo)} — ${fechaHora(h.created_at)}`}
+                              aria-pressed={sel}
+                              className="w-5 h-5 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                            >
+                              <span
+                                className={`block rounded-full transition-all ${sel ? 'w-3.5 h-3.5 ring-2 ring-offset-1 ring-gray-300' : 'w-2.5 h-2.5'}`}
+                                style={{ backgroundColor: COLOR_NODO[h.estado_nuevo ?? 'borrador'] ?? '#d1d5db' }}
+                              />
+                            </button>
+                            <span className={`text-[10px] mt-1.5 whitespace-nowrap ${sel ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+                              {fechaCorta(h.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+
+                {/* El detalle, en un panel bajo la línea y NO en una ficha
+                    flotante. La ficha se recortaba: vivía dentro del scroll
+                    horizontal de la línea y del scroll vertical del modal, y
+                    cualquier ancestro con `overflow` distinto de `visible`
+                    corta un elemento posicionado. Aquí no hay nada que cortar,
+                    y cabe el comentario entero. */}
+                {(() => {
+                  const h = historial[nodoAbierto ?? historial.length - 1]
+                  if (!h) return null
+                  return (
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: COLOR_NODO[h.estado_nuevo ?? 'borrador'] ?? '#d1d5db' }}
+                        />
+                        <p className="text-xs font-semibold text-gray-900">
+                          {accionDe(h.estado_anterior, h.estado_nuevo)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 break-words">
+                        {h.usuario?.nombre_completo ?? 'Sistema'}
+                        {h.usuario?.rol && (
+                          <span className="text-gray-400"> · {ROL_LABEL[h.usuario.rol] ?? h.usuario.rol}</span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">{fechaHora(h.created_at)}</p>
+                      {h.comentario && (
+                        <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-200 italic break-words leading-relaxed">
+                          {h.comentario}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
+              </>
             )}
           </Seccion>
 
