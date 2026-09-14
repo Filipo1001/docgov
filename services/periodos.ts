@@ -44,10 +44,10 @@ export async function getPeriodoConContrato(
       .select(`
         *,
         preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo)),
-        historial_periodos(id, estado_anterior, estado_nuevo, usuario_id, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(id, nombre_completo, rol))
+        historial:historial_periodos(id, estado_anterior, estado_nuevo, usuario_id, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(id, nombre_completo, rol))
       `)
       .eq('id', periodoId)
-      .order('created_at', { referencedTable: 'historial_periodos', ascending: true })
+      .order('created_at', { referencedTable: 'historial', ascending: true })
       .single(),
 
     supabase

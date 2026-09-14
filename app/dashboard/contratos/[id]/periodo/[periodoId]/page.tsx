@@ -45,15 +45,23 @@ export default async function PeriodoDetallePage({
         .eq('id', id)
         .single(),
 
+      // `historial:` NO es decorativo. PostgREST nombra el recurso incrustado
+      // como la TABLA, así que sin el alias esto llegaba como
+      // `periodo.historial_periodos` mientras todo el código —y el tipo
+      // `Periodo`— lee `periodo.historial`. Resultado: `undefined` siempre.
+      // La trazabilidad del final de la página, la tira de puntos de la
+      // cabecera y la historia del detalle estaban las tres en blanco sobre
+      // periodos con 53 movimientos registrados, y sin ningún error a la
+      // vista: simplemente una clave que nadie leía.
       supabase
         .from('periodos')
         .select(`
           *,
           preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo)),
-          historial_periodos(id, estado_anterior, estado_nuevo, usuario_id, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(id, nombre_completo, rol))
+          historial:historial_periodos(id, estado_anterior, estado_nuevo, usuario_id, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(id, nombre_completo, rol))
         `)
         .eq('id', periodoId)
-        .order('created_at', { referencedTable: 'historial_periodos', ascending: true })
+        .order('created_at', { referencedTable: 'historial', ascending: true })
         .single(),
 
       supabase
