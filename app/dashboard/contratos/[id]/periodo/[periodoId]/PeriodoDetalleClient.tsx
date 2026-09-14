@@ -109,6 +109,8 @@ interface InitialData {
   initialUrlsMiniatura?: Record<string, string>
   /** Adjuntos PDF agrupados por actividad, con su URL ya firmada. */
   initialAdjuntos?: Record<string, AdjuntoDTO[]>
+  /** Adiciones por otrosí — para que la ejecución case con el Acta de Pago. */
+  adicionesTotal?: number
 }
 
 export default function PeriodoDetallePage({
@@ -125,6 +127,7 @@ export default function PeriodoDetallePage({
   initialUrlsFirmadas = {},
   initialUrlsMiniatura = {},
   initialAdjuntos = {},
+  adicionesTotal = 0,
 }: InitialData) {
   const { id: contratoId, periodoId } = useParams<{ id: string; periodoId: string }>()
   const { usuario } = useUsuario()
@@ -525,24 +528,32 @@ export default function PeriodoDetallePage({
   const cargarDatos = useCallback(async (silencioso = false) => {
     try {
       const datos = await getPeriodoConContrato(periodoId, contratoId)
+
       /**
-       * Nunca cambiar datos buenos por vacío.
+       * TODO O NADA. Nunca cambiar datos buenos por vacío.
        *
-       * Las consultas de `getPeriodoConContrato` descartan el error y
-       * devuelven `{ data: null }`, así que un hipo de sesión del cliente del
+       * Las cinco consultas de `getPeriodoConContrato` descartan el error y
+       * devuelven `{ data: null }`. Un hipo de sesión del cliente del
        * navegador —que esta misma pantalla ya documenta más arriba: tras
        * reanudar en iOS puede no tener sesión aunque las cookies del servidor
-       * sigan vivas— no lanza: simplemente trae null. Y este sondeo corre cada
-       * 90 s y en cada vuelta a la pestaña.
+       * sigan vivas— no lanza nada: simplemente trae todo vacío. Y este sondeo
+       * corre cada 90 s y en cada vuelta a la pestaña.
        *
-       * El resultado era que la pantalla se sustituía por «Periodo no
-       * encontrado» sobre un informe que existe perfectamente. Ambas son
-       * consultas `.single()` por id conocido: un null ahí es siempre un
-       * fallo, nunca un vacío legítimo, así que se ignora y se conserva lo
-       * que ya estaba. El siguiente ciclo reintenta.
+       * El daño no era solo el «Periodo no encontrado» que aparecía sobre un
+       * informe que existe. Las actividades y las obligaciones se vaciaban
+       * igual, y con ellas el detalle del periodo pasaba a acusar de «4
+       * obligaciones sin ninguna actividad» a un informe completo.
+       *
+       * `periodo` y `contrato` son `.single()` por id conocido: si vuelven
+       * nulos, la consulta falló, y entonces las otras cuatro tampoco son de
+       * fiar. Se descarta la tanda entera y el siguiente ciclo reintenta —un
+       * vacío legítimo (un periodo sin actividades) siempre llega acompañado
+       * de su periodo, así que no se pierde.
        */
-      if (datos.contrato) setContrato(datos.contrato)
-      if (datos.periodo) setPeriodo(datos.periodo)
+      if (!datos.periodo || !datos.contrato) return
+
+      setContrato(datos.contrato)
+      setPeriodo(datos.periodo)
       setObligaciones(datos.obligaciones)
       setActividades(datos.actividades)
       if (datos.periodo?.numero_planilla) setNumPlanilla(datos.periodo.numero_planilla)
@@ -4605,6 +4616,8 @@ export default function PeriodoDetallePage({
         obligaciones={obligaciones}
         actividades={actividades}
         hermanos={periodosHermanos}
+        adicionesTotal={adicionesTotal}
+        duplicados={duplicados}
       />
 
       {/* Confirmación del envío */}

@@ -78,9 +78,13 @@ export default async function PeriodoDetallePage({
         .eq('contrato_id', id)
         .order('numero_periodo'),
 
+      // `valor_adicion`: la tabla de ejecución del detalle suma las adiciones
+      // al valor del contrato, igual que hace lib/pdf/data.ts para el Acta de
+      // Pago. Solo 4 de 153 contratos tienen otrosí, pero discrepar con un
+      // documento ya firmado no es una opción.
       supabase
         .from('otrosies')
-        .select('id, fecha_inicio')
+        .select('id, fecha_inicio, valor_adicion')
         .eq('contrato_id', id),
 
       // `revisado_at` importa: comparado con `periodos.fecha_envio` distingue
@@ -123,6 +127,13 @@ export default async function PeriodoDetallePage({
     const fechaOtrosi = otrosiDateMap.get(obl.otrosi_id)
     return !fechaOtrosi || fechaOtrosi <= fechaFinPeriodo
   })
+
+  // Valor efectivo del contrato = inicial + adiciones. Mismo cálculo que
+  // lib/pdf/data.ts, para que la tabla de ejecución del detalle y la del Acta
+  // de Pago digan la misma cifra.
+  const adicionesTotal = (otrosies ?? []).reduce(
+    (acc: number, o: { valor_adicion?: number | null }) => acc + (o.valor_adicion ?? 0), 0,
+  )
 
   // Revisión por obligación (✓ + nota). Sin fila → aprobada por defecto, sin nota.
   const initialRevisiones: Record<string, { aprobada: boolean; nota: string | null; revisado_at: string | null }> = {}
@@ -220,6 +231,7 @@ export default async function PeriodoDetallePage({
       certDisponible={certDisponible}
       actaTerminacionDisponible={actaTerminacionDisponible}
       periodosHermanos={(periodosHermanos ?? []) as PeriodoHermano[]}
+      adicionesTotal={adicionesTotal}
       initialDuplicados={duplicadosResult.matches ?? {}}
       initialParaBackfill={duplicadosResult.paraBackfill ?? []}
       initialUrlsFirmadas={initialUrlsFirmadas}
