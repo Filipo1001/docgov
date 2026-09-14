@@ -65,6 +65,8 @@ import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
 import TrazaPeriodo from '@/components/ui/TrazaPeriodo'
+import Avatar from '@/components/ui/Avatar'
+import DetallePeriodo from './DetallePeriodo'
 
 /**
  * Revisión local por obligación (✓ + nota). Sin entrada → aprobada por defecto.
@@ -82,6 +84,9 @@ export interface PeriodoHermano {
   mes: string
   numero_planilla: string | null
   cotizacion_mes: string | null
+  /** Para situar este periodo dentro del contrato en el detalle. */
+  estado?: EstadoPeriodo
+  valor_cobro?: number | null
 }
 
 interface InitialData {
@@ -340,6 +345,9 @@ export default function PeriodoDetallePage({
   const seccionEnvioRef = useRef<HTMLDivElement>(null)
 
   // Secretaria: modal de devolución con elección de destino
+  // Detalle del periodo — solo asesor/supervisor/admin (ver DetallePeriodo.tsx)
+  const [mostrarDetalle, setMostrarDetalle] = useState(false)
+
   const [mostrarDevolverModal, setMostrarDevolverModal] = useState(false)
   const [destinoDevolucion, setDestinoDevolucion] = useState<'asesores' | 'contratista' | null>(null)
   const [motivoDevolucion, setMotivoDevolucion] = useState('')
@@ -852,8 +860,9 @@ export default function PeriodoDetallePage({
     ? !['aprobado', 'radicado'].includes(periodo.estado)
     : false
 
-  // Historial
-  const historial = periodo?.historial ?? []
+  // El historial se lee como `eventos`, más arriba: lo consumen la tira de
+  // puntos de la cabecera y el detalle del periodo. Aquí había una segunda
+  // lectura idéntica que alimentaba la sección del final, ya retirada.
 
   // Pre-approval info (legacy compat)
   const preaprobaciones = periodo?.preaprobaciones ?? []
@@ -929,9 +938,10 @@ export default function PeriodoDetallePage({
     )
   }
 
-  function totalAcciones() {
-    return actividades.reduce((sum, a) => sum + (a.cantidad || 1), 0)
-  }
+  // `totalAcciones` alimentaba el «Total acciones: 11» de la cabecera. Se
+  // retiró junto a él: en el 79 % de los periodos coincidía con el número de
+  // actividades, así que la cabecera decía dos veces lo mismo. El detalle lo
+  // calcula por su cuenta y solo lo enseña cuando difiere.
 
   // ── Handlers ────────────────────────────────────────────────
 
@@ -2028,47 +2038,64 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
-      {/* Period header */}
-      <div className="bg-white rounded-2xl border p-5 sm:p-6 mb-6">
-        {/* En un teléfono el estado y el valor no caben en una columna a la
-            derecha del título sin estrangular ambas: el nombre completo de la
-            contratista se parte en una palabra por línea. Debajo y en fila
-            —estado a la izquierda, valor a la derecha— es la misma información
-            sin pelear por el ancho. */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold text-gray-900">{periodo.mes} {periodo.anio}</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Periodo {periodo.numero_periodo} — Del {periodo.fecha_inicio} al {periodo.fecha_fin}
-            </p>
-            <p className="text-sm text-gray-400 mt-1 break-words">
-              Contrato N.° {contrato.numero} — {contrato.contratista?.nombre_completo}
-            </p>
-          </div>
-          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start sm:text-right shrink-0">
-            <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${estadoClass}`}>
-              {estadoTexto}
-            </span>
-            <p className="text-lg font-bold text-gray-900 sm:mt-2 whitespace-nowrap">
-              ${periodo.valor_cobro?.toLocaleString('es-CO')}
-            </p>
-          </div>
-        </div>
+      {/* ── Cabecera del periodo ─────────────────────────────────────────
+          Identifica y poco más: contrato, mes y quién. Lo que se acumulaba
+          aquí por no tener otro sitio —el rango de fechas, «Actividades
+          registradas: 11 | Total acciones: 11», que en el 79 % de los periodos
+          son el MISMO número dicho dos veces— se fue al detalle, junto con lo
+          que de verdad decide una revisión y antes no estaba en ninguna parte.
 
-        <div className="mt-4 flex items-center gap-2 text-xs flex-wrap">
-          <span className="text-gray-400">Actividades registradas:</span>
-          <span className="font-medium text-gray-900">{actividades.length}</span>
-          <span className="text-gray-300">|</span>
-          <span className="text-gray-400">Total acciones:</span>
-          <span className="font-medium text-gray-900">{totalAcciones()}</span>
-          {periodo.numero_radicado && periodo.estado === 'radicado' && (
-            <>
-              <span className="text-gray-300">|</span>
-              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
-                Radicado No. {periodo.numero_radicado}
+          El estado y el valor SÍ se quedan: son lo primero que mira cualquier
+          rol, y esconderlos tras un clic habría sido cambiar ruido por una
+          ausencia. */}
+      <div className="bg-white rounded-2xl border p-5 sm:p-6 mb-6">
+        <div className="flex items-start gap-4">
+          {/* La foto ayuda a reconocer de quién es el informe cuando se revisan
+              muchos seguidos; el nombre sigue ahí porque una cara no identifica
+              a quien no la conoce. 85 de 119 contratistas tienen foto — el
+              resto cae a iniciales. */}
+          <Avatar
+            nombre={contrato.contratista?.nombre_completo ?? ''}
+            foto={(contrato.contratista as { foto_url?: string | null } | undefined)?.foto_url}
+            size="lg"
+          />
+
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-400">Contrato N.° {contrato.numero}</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+              {periodo.mes} {periodo.anio}
+            </h2>
+            <p className="text-sm text-gray-500 mt-0.5 break-words">
+              {contrato.contratista?.nombre_completo}
+            </p>
+
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mt-3">
+              <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${estadoClass}`}>
+                {estadoTexto}
               </span>
-            </>
-          )}
+              <span className="text-lg font-bold text-gray-900 whitespace-nowrap">
+                ${periodo.valor_cobro?.toLocaleString('es-CO')}
+              </span>
+              {periodo.numero_radicado && periodo.estado === 'radicado' && (
+                <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold text-xs">
+                  Radicado No. {periodo.numero_radicado}
+                </span>
+              )}
+              {/* Solo para quien revisa: el detalle está redactado para decidir
+                  sobre un informe ajeno («3 obligaciones sin evidencia»,
+                  «devuelto 2 veces») y esa lectura no es la de la contratista. */}
+              {!esContratista && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarDetalle(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors"
+                >
+                  <Icono glifo={Iconos.estado.informacion} tamano="sm" className="shrink-0" />
+                  Detalle
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3379,58 +3406,11 @@ export default function PeriodoDetallePage({
       )}
 
 
-      {/* ── Trazabilidad (historial) ── */}
-      {historial.length > 0 && (
-        <div ref={seccionTrazabilidadRef} className="bg-white rounded-2xl border p-6 mb-6 scroll-mt-4">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Trazabilidad</h3>
-          <div className="space-y-0">
-            {historial.map((h, i) => {
-              const esUltimo = i === historial.length - 1
-              const icono = h.estado_nuevo === 'aprobado' ? Iconos.estado.aprobado :
-                            h.estado_nuevo === 'revision' ? Iconos.accion.ver :
-                            h.estado_nuevo === 'rechazado' ? Iconos.estado.rechazado :
-                            h.estado_nuevo === 'enviado' ? Iconos.accion.enviar :
-                            h.estado_nuevo === 'radicado' ? Iconos.estado.verificado : Iconos.estado.pendiente
-              const fecha = new Date(h.created_at)
-              const fechaLabel = fecha.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) +
-                ' · ' + fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-              return (
-                <div key={h.id} className="flex gap-3">
-                  <div className="flex flex-col items-center">
-                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 flex-shrink-0">
-                      <Icono glifo={icono} tamano="sm" />
-                    </div>
-                    {!esUltimo && <div className="w-0.5 bg-gray-100 flex-1 my-1" />}
-                  </div>
-                  <div className={`pb-4 flex-1 min-w-0 ${esUltimo ? '' : ''}`}>
-                    <p className="text-sm text-gray-800">
-                      {/* El rótulo del diccionario, no el valor crudo de la
-                          columna: la trazabilidad decía «revision» y «enviado»
-                          mientras el resto de la pantalla —y la línea de
-                          estado de arriba— dicen «En revisión» y «Enviado».
-                          ESTADO_LABEL ya estaba importado en este archivo. */}
-                      <span className="font-medium">
-                        {h.estado_nuevo
-                          ? (ESTADO_LABEL[h.estado_nuevo as EstadoPeriodo] ?? h.estado_nuevo.replace('_', ' '))
-                          : 'Actualizado'}
-                      </span>
-                      {h.usuario?.nombre_completo && (
-                        <span className="text-gray-500"> por {h.usuario.nombre_completo}</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{fechaLabel}</p>
-                    {h.comentario && (
-                      <p className="text-xs text-gray-500 mt-1 italic bg-gray-50 px-2 py-1 rounded-lg">
-                        {h.comentario}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      {/* La sección «Trazabilidad» vivía aquí, al final de la página, en una
+          fila por movimiento. Se mudó al detalle del periodo: tenerla en los
+          dos sitios era justo la duplicación que se venía quitando, y al final
+          de la página nadie bajaba a consultarla. La tira de puntos de la
+          cabecera da el resumen; el detalle, la lista entera. */}
 
       {/* ── Panel de revisión de secretaria ── */}
       {(periodo.estado === 'revision' || periodo.estado === 'enviado') && (esSecretaria || usuario?.rol === 'admin') && usuario?.rol !== 'asesor' && (
@@ -4580,6 +4560,17 @@ export default function PeriodoDetallePage({
           onClose={() => setVisorPDF(null)}
         />
       )}
+
+      {/* Detalle del periodo — lo que ya no cabe (ni debe caber) en la cabecera */}
+      <DetallePeriodo
+        abierto={mostrarDetalle}
+        onCerrar={() => setMostrarDetalle(false)}
+        contrato={contrato}
+        periodo={periodo}
+        obligaciones={obligaciones}
+        actividades={actividades}
+        hermanos={periodosHermanos}
+      />
 
       {/* Confirmación del envío */}
       <EnvioInforme

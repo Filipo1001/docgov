@@ -38,7 +38,7 @@ export default async function PeriodoDetallePage({
         .from('contratos')
         .select(`
           *,
-          contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, telefono, cargo, direccion, firma_url, obligado_facturar_electronicamente),
+          contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, email, telefono, cargo, direccion, firma_url, foto_url, obligado_facturar_electronicamente),
           supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo, cedula, cargo, firma_url),
           dependencia:dependencias(nombre, abreviatura)
         `)
@@ -69,10 +69,12 @@ export default async function PeriodoDetallePage({
         .order('orden'),
 
       // Todos los periodos del contrato — para detectar repetición de número de
-      // planilla (alertas de mes vencido / cotización faltante) en la tarjeta.
+      // planilla (alertas de mes vencido / cotización faltante) en la tarjeta,
+      // y para situar este periodo dentro del contrato en el detalle: cuántos
+      // van aprobados o radicados y cuánto se lleva ejecutado.
       supabase
         .from('periodos')
-        .select('id, numero_periodo, mes, numero_planilla, cotizacion_mes')
+        .select('id, numero_periodo, mes, numero_planilla, cotizacion_mes, estado, valor_cobro')
         .eq('contrato_id', id)
         .order('numero_periodo'),
 
