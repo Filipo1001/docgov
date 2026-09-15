@@ -134,37 +134,67 @@ interface Correccion {
 function ListaCorrecciones({
   correcciones,
   observadas,
+  onIr,
   className = '',
 }: {
   correcciones: Correccion[]
   observadas: number
+  /** Despliega esa obligación en el acordeón y baja hasta ella. */
+  onIr?: (oblId: string) => void
   className?: string
 }) {
   if (correcciones.length === 0) return null
   return (
-    <ul className={`space-y-3 ${className}`}>
-      {correcciones.map(c => (
-        <li key={c.id} className="flex items-start gap-2.5">
-          <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums">
-            {c.numero}
-          </span>
-          <div className="min-w-0 flex-1">
-            {/* La obligación, recortada a una línea: está para ubicar cuál es,
-                no para volver a leerla entera. */}
-            <p className="text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</p>
-            {c.nota ? (
-              <p className="text-xs text-gray-700 leading-relaxed break-words mt-0.5">{c.nota}</p>
-            ) : (
-              <p className="text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</p>
-            )}
-          </div>
-        </li>
-      ))}
+    <ul className={`space-y-1 ${className}`}>
+      {correcciones.map(c => {
+        const cuerpo = (
+          <>
+            <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums transition-colors group-hover:bg-amber-100">
+              {c.numero}
+            </span>
+            <span className="min-w-0 flex-1 block">
+              {/* La obligación, recortada a una línea: está para ubicar cuál es,
+                  no para volver a leerla entera. */}
+              <span className="block text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</span>
+              {c.nota ? (
+                <span className="block text-xs text-gray-700 leading-relaxed break-words mt-0.5">{c.nota}</span>
+              ) : (
+                <span className="block text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</span>
+              )}
+            </span>
+          </>
+        )
+        // Sin `onIr` la fila es texto y nada más: el componente no promete un
+        // destino que nadie le dio.
+        if (!onIr) {
+          return <li key={c.id} className="flex items-start gap-2.5 py-1.5">{cuerpo}</li>
+        }
+        return (
+          <li key={c.id}>
+            <button
+              type="button"
+              onClick={() => onIr(c.id)}
+              /* El chevron va SIEMPRE visible, no solo en hover: en un móvil
+                 no hay puntero, y una fila que solo se delata al pasar por
+                 encima es una fila que en el teléfono nadie descubre. */
+              className="group w-full flex items-start gap-2.5 text-left -mx-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+              aria-label={`Ir a la obligación ${c.numero} y corregirla`}
+            >
+              {cuerpo}
+              <Icono
+                glifo={Iconos.accion.desplegar}
+                tamano="sm"
+                className="w-4 h-4 shrink-0 mt-0.5 text-gray-300 transition-colors group-hover:text-gray-500"
+              />
+            </button>
+          </li>
+        )
+      })}
       {/* Las observadas no piden corrección —la obligación cumple y su nota va
           al acta—, pero se cuentan: quien las vio en azul cielo en el acordeón
           necesita saber que no están en esta lista por algo, no por olvido. */}
       {observadas > 0 && (
-        <li className="text-[11px] text-gray-400 leading-relaxed pl-[30px]">
+        <li className="text-[11px] text-gray-400 leading-relaxed pl-[30px] pt-1.5">
           {observadas === 1
             ? '1 obligación más lleva observación, que no pide corrección.'
             : `${observadas} obligaciones más llevan observación, que no piden corrección.`}
@@ -444,6 +474,71 @@ export default function PeriodoDetallePage({
   const toggleTodas = () => {
     setObligacionesAbiertas(todasAbiertas ? new Set() : new Set(obligaciones.map((o) => o.id)))
   }
+
+  /**
+   * Del listado de correcciones a la obligación que hay que corregir.
+   *
+   * Dos estados y no uno: abrir el acordeón es un `setState`, y el elemento no
+   * tiene su altura definitiva hasta que React ha pintado. Guardar el destino
+   * y hacer el salto en un efecto evita medir una tarjeta todavía colapsada y
+   * aterrizar a media pantalla de distancia.
+   *
+   * El resalte no es decoración: para la contratista el acordeón ya viene
+   * desplegado cuando el informe está devuelto, así que sin él pulsar una fila
+   * no produciría ningún cambio visible y parecería que no hizo nada.
+   */
+  const [obligacionDestino, setObligacionDestino] = useState<{ id: string; n: number } | null>(null)
+  const [obligacionResaltada, setObligacionResaltada] = useState<string | null>(null)
+  // El contador hace que pulsar DOS VECES la misma fila vuelva a saltar: sin
+  // él el estado no cambiaría y el efecto no se volvería a disparar.
+  const saltoRef = useRef(0)
+
+  const irAObligacion = useCallback((oblId: string) => {
+    setObligacionesAbiertas(prev => (prev.has(oblId) ? prev : new Set(prev).add(oblId)))
+    saltoRef.current += 1
+    setObligacionDestino({ id: oblId, n: saltoRef.current })
+  }, [])
+
+  useEffect(() => {
+    if (!obligacionDestino) return
+    const el = document.getElementById(`obligacion-${obligacionDestino.id}`)
+    if (!el) return
+
+    // El resalte se pone ANTES del salto, a propósito. Chrome aborta un scroll
+    // suave en curso si el documento se recompone mientras la animación corre,
+    // y eso es justo lo que hacía un `setState` posterior: la llamada salía
+    // con el destino correcto y la página no se movía ni un píxel.
+    setObligacionResaltada(obligacionDestino.id)
+
+    // El hueco bajo la cabecera lo pone `scroll-mt-20` en la propia tarjeta, no
+    // una cuenta aquí: medir un `header.sticky` obligaba a que este archivo
+    // supiera cómo está construido el layout, y a que el salto se estropeara
+    // en silencio el día que esa clase cambie.
+    const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    // Un fotograma de margen: el acordeón acaba de desplegarse y la posición
+    // se resuelve sobre la altura ya pintada.
+    //
+    // Este fotograma NO se cancela en la limpieza, y no es un descuido. Al
+    // pulsar una segunda corrección antes de que se apague el resalte de la
+    // primera, el temporizador pendiente cambiaba el estado, el efecto se
+    // reejecutaba, y su limpieza mataba el fotograma del salto nuevo: la fila
+    // se quedaba muerta. Dejarlo correr como mucho lleva a un destino que ya
+    // se pidió; cancelarlo rompe el caso normal de revisar dos seguidas.
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'start' })
+    })
+
+    // El destino se limpia AQUÍ y no al entrar: hacerlo al entrar volvía a
+    // disparar el efecto, cuya limpieza mataba este mismo temporizador y
+    // dejaba el anillo encendido para siempre.
+    const t = setTimeout(() => {
+      setObligacionResaltada(prev => (prev === obligacionDestino.id ? null : prev))
+      setObligacionDestino(prev => (prev && prev.n === obligacionDestino.n ? null : prev))
+    }, 1600)
+
+    return () => clearTimeout(t)
+  }, [obligacionDestino])
 
   // ── Duplicate-evidence detection (asesor/supervisor only) ─────────────────
   const [duplicados, setDuplicados] = useState<Record<string, DuplicadoMatch[]>>(initialDuplicados)
@@ -2268,6 +2363,7 @@ export default function PeriodoDetallePage({
             <ListaCorrecciones
               correcciones={correcciones}
               observadas={observadasConNota}
+              onIr={irAObligacion}
               className="mt-4 pt-4 border-t border-gray-100"
             />
           </div>
@@ -2435,6 +2531,7 @@ export default function PeriodoDetallePage({
                   <ListaCorrecciones
                     correcciones={correcciones}
                     observadas={observadasConNota}
+                    onIr={irAObligacion}
                     className="mt-2"
                   />
 
@@ -2712,7 +2809,10 @@ export default function PeriodoDetallePage({
         {obligaciones.length > 0 && (
           <div className="flex items-center justify-between px-1">
             <p className="text-xs text-gray-400">
-              {obligaciones.length} obligación{obligaciones.length !== 1 ? 'es' : ''}
+              {/* La palabra entera, no un sufijo pegado: «obligación» + «es»
+                  daba «obligaciónes», que además de sobrar la tilde llevaba
+                  meses a la vista de todo el mundo. */}
+              {obligaciones.length} {obligaciones.length === 1 ? 'obligación' : 'obligaciones'}
             </p>
             <button
               type="button"
@@ -2777,7 +2877,13 @@ export default function PeriodoDetallePage({
           return (
             <div
               key={obl.id}
-              className={`rounded-2xl border border-l-4 p-5 sm:p-6 transition-colors ${CLASES_ACENTO[estadoRev]}`}
+              id={`obligacion-${obl.id}`}
+              /* `scroll-mt` para que un salto por ancla no la pegue al borde;
+                 el anillo dura lo que el efecto, y es lo único que confirma la
+                 llegada cuando la obligación ya estaba desplegada. */
+              className={`rounded-2xl border border-l-4 p-5 sm:p-6 scroll-mt-20 transition-all ${CLASES_ACENTO[estadoRev]} ${
+                obligacionResaltada === obl.id ? 'ring-2 ring-amber-300 ring-offset-2' : ''
+              }`}
             >
               {/* Cabecera — zona clickable (expandir) + acciones de revisión.
                   Colapsada por defecto: las actividades y evidencias (imágenes)
