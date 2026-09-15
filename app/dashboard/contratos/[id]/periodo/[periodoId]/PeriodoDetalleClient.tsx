@@ -702,19 +702,49 @@ export default function PeriodoDetallePage({
   /**
    * Por qué volvió, para quien revisa.
    *
-   * Antes decía «Sin motivo especificado» y se quedaba ahí. Ahora el motivo
-   * general puede ir legítimamente vacío —cuando el revisor marcó obligaciones
-   * con su texto—, así que ese mensaje pasaría de ser incompleto a ser
-   * directamente falso. Se cuenta lo que hay, sin repetir los textos: las
-   * obligaciones marcadas están justo debajo, en ámbar y con su «Ver qué
-   * corregir». Duplicarlas aquí sería saturar por decir dos veces lo mismo.
+   * Aquí había un contador —«5 obligaciones marcadas con observaciones»— que
+   * decía cuántas pero no cuáles ni qué corregir, y obligaba a bajar al
+   * acordeón a buscarlas una por una. Ahora se listan.
+   *
+   * También dejan de excluirse el motivo general y las marcas por obligación.
+   * Eran excluyentes por una simplificación mía, y el efecto era el peor
+   * posible: escribir un motivo general escondía las obligaciones marcadas.
+   * Son dos cosas distintas —el porqué del informe y el qué de cada
+   * obligación— y se muestran las dos.
    */
   const motivoDevolucion_ = periodo?.motivo_rechazo?.trim()
-  const porQueVolvio = motivoDevolucion_
-    ? motivoDevolucion_
-    : obligacionesDevueltas.length > 0
-      ? `${obligacionesDevueltas.length} ${obligacionesDevueltas.length === 1 ? 'obligación marcada' : 'obligaciones marcadas'} con observaciones`
-      : 'Sin motivo registrado'
+
+  /**
+   * Lo que hay que corregir, obligación por obligación.
+   *
+   * El número es la posición en el acordeón de abajo, la misma que ya usa el
+   * aviso previo a aprobar: el listado sirve de índice, no estrena una
+   * nomenclatura paralela.
+   *
+   * La nota puede venir vacía. El servidor la exige desde que existen los tres
+   * veredictos, pero en producción quedaron filas anteriores a esa regla —sin
+   * aprobar y sin texto—. Esas se dicen tal cual, sin inventarle a nadie un
+   * motivo que no escribió.
+   */
+  const correcciones = obligacionesDevueltas.map(obl => ({
+    id: obl.id,
+    numero: obligaciones.indexOf(obl) + 1,
+    descripcion: obl.descripcion,
+    nota: revisiones[obl.id]?.nota?.trim() ?? '',
+  }))
+
+  /**
+   * Las observadas no son motivo de corrección: la obligación cumple y la nota
+   * viaja al acta de supervisión. Se cuentan —para que quien revisa sepa que
+   * existen— pero no se listan, que este bloque responde a «qué hay que
+   * corregir» y meterlas dentro volvería a mezclar lo que los tres veredictos
+   * separaron.
+   */
+  const observadasConNota = obligaciones.filter(
+    obl => revisionVigente(obl.id) &&
+           revisiones[obl.id]?.aprobada === true &&
+           !!revisiones[obl.id]?.nota?.trim(),
+  ).length
   const todasRevisadas = obligaciones.length > 0 && obligacionesSinRevisar.length === 0
   const progresoRevision = obligaciones.length > 0 ? obligacionesConRevision.length / obligaciones.length : 0
 
@@ -2150,20 +2180,57 @@ export default function PeriodoDetallePage({
              la tarjeta de arriba. Repetirlo aquí era decir lo mismo dos veces
              seguidas en la misma pantalla. Quien revisa sí lo necesita en este
              sitio, porque para esos roles esa tarjeta no existe. */
-          <div className="flex items-start gap-3">
-            <span className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0">
-              <Icono glifo={Iconos.accion.devolver} tamano="sm" className="w-3.5 h-3.5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-red-700">Informe devuelto para corrección</p>
-              {esContratista ? (
-                <p className="text-xs text-gray-400 mt-0.5">Vuelve a enviarlo cuando termines de corregir.</p>
-              ) : (
-                <>
-                  <p className="text-xs text-red-500 mt-0.5 break-words">{porQueVolvio}</p>
-                </>
-              )}
+          <div>
+            <div className="flex items-start gap-3">
+              <span className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0">
+                <Icono glifo={Iconos.accion.devolver} tamano="sm" className="w-3.5 h-3.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-red-700">Informe devuelto para corrección</p>
+                {/* El motivo general, cuando lo hay. Ya no compite con el
+                    listado: responde otra pregunta. */}
+                {motivoDevolucion_ ? (
+                  <p className="text-xs text-gray-600 mt-1 leading-relaxed break-words">{motivoDevolucion_}</p>
+                ) : correcciones.length === 0 ? (
+                  <p className="text-xs text-gray-400 mt-0.5">Sin motivo registrado.</p>
+                ) : null}
+              </div>
             </div>
+
+            {/* Qué hay que corregir. En ámbar, que es el color que estas mismas
+                obligaciones llevan en el acordeón y en el aviso previo a
+                aprobar: el rojo dice que el informe volvió, el ámbar dice dónde
+                hay que meter mano. Sin recortar la lista — es la razón por la
+                que el informe está aquí, y esconder la mitad detrás de un «+3
+                más» sería repetir el problema que este bloque viene a resolver. */}
+            {correcciones.length > 0 && (
+              <ul className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                {correcciones.map(c => (
+                  <li key={c.id} className="flex items-start gap-2.5">
+                    <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums">
+                      {c.numero}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {/* La obligación, recortada a una línea: está para ubicar
+                          cuál es, no para volver a leerla entera. */}
+                      <p className="text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</p>
+                      {c.nota ? (
+                        <p className="text-xs text-gray-700 leading-relaxed break-words mt-0.5">{c.nota}</p>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+                {observadasConNota > 0 && (
+                  <li className="text-[11px] text-gray-400 leading-relaxed pl-[30px]">
+                    {observadasConNota === 1
+                      ? '1 obligación más lleva observación, que no pide corrección.'
+                      : `${observadasConNota} obligaciones más llevan observación, que no piden corrección.`}
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-0">
