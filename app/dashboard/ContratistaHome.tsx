@@ -6,7 +6,10 @@ import ErrorState from '@/components/ui/ErrorState'
 import { type DashboardContratista } from '@/services/contratista'
 import { getPanelContratista } from '@/app/actions/dashboard'
 import { conLimite } from '@/lib/con-limite'
-import { ESTADO_LABEL, ESTADO_COLOR, HISTORICO_COLOR, HISTORICO_LABEL, MESES } from '@/lib/constants'
+import { ESTADO_LABEL, ESTADO_COLOR, HISTORICO_COLOR, HISTORICO_LABEL, MESES, ROL_LABEL } from '@/lib/constants'
+import { tiempoRelativo } from '@/lib/format'
+import Icono from '@/components/ui/Icono'
+import { Iconos } from '@/lib/iconos'
 import type { EstadoPeriodo } from '@/lib/types'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
@@ -49,9 +52,11 @@ function estadoBadgeColor(estado: string): string {
 
 function PanelAccion({
   periodoActual,
+  devolucion,
   contratoId,
 }: {
   periodoActual: DashboardContratista['periodoActual']
+  devolucion: DashboardContratista['devolucion']
   contratoId: string
 }) {
   const mes = mesActualNombre()
@@ -121,26 +126,110 @@ function PanelAccion({
     )
   }
 
-  // Rechazado
+  // Devuelto para corrección
+  //
+  // Esta tarjeta decía «Informe rechazado» con la insignia «Devuelto» pegada
+  // al lado —el renombrado de ESTADO_LABEL no llegó hasta aquí— y enseñaba el
+  // motivo general o, si no lo había, absolutamente nada. Que no lo haya es
+  // hoy el caso normal: desde que la devolución se hace marcando obligaciones,
+  // el motivo general es opcional. El resultado era un recuadro rojo sin una
+  // sola palabra sobre qué corregir, que es lo único que ella necesita saber.
   if (estado === 'rechazado') {
+    const visibles = devolucion?.correcciones.slice(0, 2) ?? []
+    const restantes = (devolucion?.correcciones.length ?? 0) - visibles.length
+    // El rol se calla cuando el nombre ya lo dice: la cuenta de sistema se
+    // llama «ADMINISTRADOR», y «ADMINISTRADOR · Administrador» parece un fallo.
+    const rolLegible = devolucion?.porRol ? ROL_LABEL[devolucion.porRol] ?? devolucion.porRol : null
+    const rolRedundante = !!rolLegible &&
+      (devolucion?.porNombre ?? '').toLowerCase().includes(rolLegible.toLowerCase())
+    const firma = [
+      devolucion?.porNombre,
+      rolRedundante ? null : rolLegible,
+      devolucion?.fecha ? tiempoRelativo(devolucion.fecha) : null,
+    ].filter(Boolean).join(' · ')
+
     return (
       <Link href={base} className="block group">
-        <div className="rounded-2xl border border-red-200 bg-red-50 hover:bg-red-50/70 transition-all p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-red-100 flex items-center justify-center">
-              <svg className="w-4.5 h-4.5 w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-              </svg>
+        {/* Filo rojo sobre blanco, no un bloque rojo entero: el mismo
+            tratamiento que la página del periodo. Un recuadro en rojo grita;
+            el filo señala, y deja que se lea lo que hay dentro. */}
+        <div className="rounded-2xl border border-gray-200 border-l-4 border-l-red-500 bg-white hover:border-gray-300 hover:shadow-sm transition-all p-5">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+              <Icono glifo={Iconos.accion.devolver} tamano="md" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-red-900">Informe rechazado</p>
-                <StatusChip estado={estado} />
-              </div>
-              {periodoActual.motivo_rechazo && (
-                <p className="text-xs text-red-700 mt-1 line-clamp-2">{periodoActual.motivo_rechazo}</p>
+              <p className="text-sm font-semibold text-gray-900">
+                Tu informe de {periodoActual.mes} volvió para corrección
+              </p>
+              {/* Quién y cuándo. Que no sea un reproche anónimo: la fecha sale
+                  del historial porque `periodos.fecha_rechazo` está vacía en
+                  los 739 periodos — nunca se escribió. */}
+              {firma && <p className="text-xs text-gray-400 mt-0.5">{firma}</p>}
+
+              {devolucion?.motivoGeneral && (
+                <blockquote className="mt-2.5 border-l-2 border-red-200 pl-3 text-xs text-gray-600 leading-relaxed line-clamp-3">
+                  {devolucion.motivoGeneral}
+                </blockquote>
               )}
-              <p className="text-xs text-red-500 mt-2 font-medium group-hover:underline">Corregir y reenviar →</p>
+
+              {/* Dos correcciones y el resto contadas: lo justo para entrar
+                  sabiendo qué la espera, sin traerse el acordeón entero al
+                  panel. Los números son los del acordeón de la página. */}
+              {visibles.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {visibles.map(c => (
+                    <li key={c.obligacionId} className="flex items-start gap-2.5">
+                      <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums">
+                        {c.numero}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</p>
+                        {c.nota ? (
+                          <p className="text-xs text-gray-700 leading-relaxed line-clamp-2 mt-0.5">{c.nota}</p>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                  {restantes > 0 && (
+                    <li className="text-[11px] text-gray-400 pl-[30px]">
+                      {restantes === 1 ? '+1 corrección más' : `+${restantes} correcciones más`}
+                    </li>
+                  )}
+                </ul>
+              )}
+
+              {/* La planilla vuelve por su cuenta y con su propio motivo: si
+                  también volvió, callarlo es mandarla a reenviar con el mismo
+                  archivo que ya le rechazaron. */}
+              {devolucion?.planillaDevuelta && (
+                <div className="mt-3 flex items-start gap-2.5">
+                  <span className="mt-px w-5 h-5 rounded-md bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                    <Icono glifo={Iconos.dominio.seguridadSocial} tamano="sm" className="w-3 h-3" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] text-gray-400 leading-snug">Planilla de seguridad social</p>
+                    <p className="text-xs text-gray-700 leading-relaxed line-clamp-2 mt-0.5">
+                      {devolucion.planillaComentario ?? 'Devuelta para corrección.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Nada de lo anterior existe: se dice, en vez de dejar la
+                  tarjeta muda como hasta ahora. */}
+              {!devolucion?.motivoGeneral && visibles.length === 0 && !devolucion?.planillaDevuelta && (
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                  No se dejó un motivo escrito. Revisa tus actividades y vuelve a enviarlo.
+                </p>
+              )}
+
+              <span className="inline-flex items-center gap-1.5 mt-4 text-xs font-semibold text-white bg-red-600 group-hover:bg-red-700 transition-colors rounded-lg px-3 py-2">
+                Corregir y reenviar
+                <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </span>
             </div>
           </div>
         </div>
@@ -312,7 +401,7 @@ export default function ContratistaHome({
   }
   if (isLoading || !data) return <Skeleton />
 
-  const { contrato, periodos, periodoActual, progreso, stats } = data
+  const { contrato, periodos, periodoActual, devolucion, progreso, stats } = data
   const mes = mesActualNombre()
 
   const fechaHoy = new Date().toLocaleDateString('es-CO', {
@@ -369,7 +458,7 @@ export default function ContratistaHome({
       {contrato && (
         <>
           {/* ── Action panel ── */}
-          <PanelAccion periodoActual={periodoActual} contratoId={contrato.id} />
+          <PanelAccion periodoActual={periodoActual} devolucion={devolucion} contratoId={contrato.id} />
 
           {/* ── Stats row ── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">

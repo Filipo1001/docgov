@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { MARCA } from '@/lib/marca'
+import { ROL_LABEL } from '@/lib/constants'
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch } from '@/lib/types'
 
 export interface HermanoResumen {
@@ -32,11 +33,6 @@ export interface HermanoResumen {
   estado?: EstadoPeriodo
   valor_cobro?: number | null
   numero_planilla?: string | null
-}
-
-const ROL_LABEL: Record<string, string> = {
-  admin: 'Administrador', supervisor: 'Supervisor', asesor: 'Asesor',
-  contratista: 'Contratista', contratacion: 'Contratación',
 }
 
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']

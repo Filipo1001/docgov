@@ -192,3 +192,20 @@ export function formatDateMedium(isoDate: string | null | undefined): string {
   const date = new Date(y, m - 1, d)
   return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+/**
+ * «hace 5 min», «hace 3 h», «hace 2 días» — y a partir de una semana, la
+ * fecha. Un «hace 153 días» no le dice nada a nadie; «28 abr» sí.
+ *
+ * Vivía copiado dentro de NotificacionesBell. Sube aquí al necesitarlo la
+ * tarjeta de devolución del panel: dos copias de un formateador de fechas es
+ * como se acaba teniendo dos formas distintas de decir lo mismo.
+ */
+export function tiempoRelativo(fechaISO: string): string {
+  const diff = Math.floor((Date.now() - new Date(fechaISO).getTime()) / 1000)
+  if (diff < 60) return 'hace un momento'
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`
+  if (diff < 604800) return `hace ${Math.floor(diff / 86400)} días`
+  return new Date(fechaISO).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+}

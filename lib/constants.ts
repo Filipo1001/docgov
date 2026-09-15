@@ -335,3 +335,17 @@ export const ESTADO_COLA_POR_ROL: Partial<Record<Rol, EstadoPeriodo | EstadoPeri
   supervisor: 'enviado',
   admin: 'enviado',
 }
+
+/**
+ * El rol en palabras, para cuando se muestra junto al nombre de quien hizo
+ * algo. Estaba dentro de DetallePeriodo; sube aquí al pedirlo también la
+ * tarjeta de devolución del panel.
+ */
+export const ROL_LABEL: Record<string, string> = {
+  admin: 'Administrador',
+  supervisor: 'Supervisor',
+  asesor: 'Asesor',
+  contratista: 'Contratista',
+  contratacion: 'Contratación',
+  alcalde: 'Alcalde',
+}

@@ -8,20 +8,9 @@ import { getNotificaciones, getConteoNoLeidas, marcarLeida, marcarTodasLeidas } 
 import type { Notificacion } from '@/lib/types'
 import Icono from '@/components/ui/Icono'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
+import { tiempoRelativo } from '@/lib/format'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function tiempoRelativo(fechaISO: string): string {
-  const ahora = Date.now()
-  const fecha = new Date(fechaISO).getTime()
-  const diff = Math.floor((ahora - fecha) / 1000)
-
-  if (diff < 60) return 'hace un momento'
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`
-  if (diff < 604800) return `hace ${Math.floor(diff / 86400)} días`
-  return new Date(fechaISO).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
-}
 
 function iconoPorTipo(tipo: string): LucideIcon {
   switch (tipo) {
