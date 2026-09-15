@@ -112,6 +112,68 @@ interface InitialData {
   adicionesTotal?: number
 }
 
+interface Correccion {
+  id: string
+  numero: number
+  descripcion: string
+  nota: string
+}
+
+/**
+ * Lo que hay que corregir, obligación por obligación.
+ *
+ * Vive aquí —y no copiado en las dos tarjetas— porque quien revisa y quien
+ * corrige leen exactamente la misma información. Duplicar el marcado abriría
+ * la puerta a que un día cambie en una vista y no en la otra, que es justo
+ * como se llega a que la supervisión y la contratista discutan sobre lo que
+ * «decía» la pantalla.
+ *
+ * El número es la posición de la obligación en el acordeón de abajo: el
+ * listado sirve de índice, no estrena una nomenclatura paralela.
+ */
+function ListaCorrecciones({
+  correcciones,
+  observadas,
+  className = '',
+}: {
+  correcciones: Correccion[]
+  observadas: number
+  className?: string
+}) {
+  if (correcciones.length === 0) return null
+  return (
+    <ul className={`space-y-3 ${className}`}>
+      {correcciones.map(c => (
+        <li key={c.id} className="flex items-start gap-2.5">
+          <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums">
+            {c.numero}
+          </span>
+          <div className="min-w-0 flex-1">
+            {/* La obligación, recortada a una línea: está para ubicar cuál es,
+                no para volver a leerla entera. */}
+            <p className="text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</p>
+            {c.nota ? (
+              <p className="text-xs text-gray-700 leading-relaxed break-words mt-0.5">{c.nota}</p>
+            ) : (
+              <p className="text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</p>
+            )}
+          </div>
+        </li>
+      ))}
+      {/* Las observadas no piden corrección —la obligación cumple y su nota va
+          al acta—, pero se cuentan: quien las vio en azul cielo en el acordeón
+          necesita saber que no están en esta lista por algo, no por olvido. */}
+      {observadas > 0 && (
+        <li className="text-[11px] text-gray-400 leading-relaxed pl-[30px]">
+          {observadas === 1
+            ? '1 obligación más lleva observación, que no pide corrección.'
+            : `${observadas} obligaciones más llevan observación, que no piden corrección.`}
+        </li>
+      )}
+    </ul>
+  )
+}
+
 export default function PeriodoDetallePage({
   initialContrato,
   initialPeriodo,
@@ -2203,34 +2265,11 @@ export default function PeriodoDetallePage({
                 hay que meter mano. Sin recortar la lista — es la razón por la
                 que el informe está aquí, y esconder la mitad detrás de un «+3
                 más» sería repetir el problema que este bloque viene a resolver. */}
-            {correcciones.length > 0 && (
-              <ul className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                {correcciones.map(c => (
-                  <li key={c.id} className="flex items-start gap-2.5">
-                    <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums">
-                      {c.numero}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      {/* La obligación, recortada a una línea: está para ubicar
-                          cuál es, no para volver a leerla entera. */}
-                      <p className="text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</p>
-                      {c.nota ? (
-                        <p className="text-xs text-gray-700 leading-relaxed break-words mt-0.5">{c.nota}</p>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-                {observadasConNota > 0 && (
-                  <li className="text-[11px] text-gray-400 leading-relaxed pl-[30px]">
-                    {observadasConNota === 1
-                      ? '1 obligación más lleva observación, que no pide corrección.'
-                      : `${observadasConNota} obligaciones más llevan observación, que no piden corrección.`}
-                  </li>
-                )}
-              </ul>
-            )}
+            <ListaCorrecciones
+              correcciones={correcciones}
+              observadas={observadasConNota}
+              className="mt-4 pt-4 border-t border-gray-100"
+            />
           </div>
         ) : (
           <div className="flex items-center gap-0">
@@ -2372,11 +2411,33 @@ export default function PeriodoDetallePage({
                         {periodo.motivo_rechazo}
                       </blockquote>
                     </>
-                  ) : (
+                  ) : correcciones.length === 0 ? (
+                    /* Solo cuando de verdad no hay NADA escrito. Antes este
+                       texto salía también con obligaciones marcadas: le decía
+                       «no se dejó un motivo» a quien tenía media docena de
+                       correcciones esperándola en el acordeón. */
                     <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">
                       No se dejó un motivo escrito. Revisa tus actividades y vuelve a enviarlo.
                     </p>
+                  ) : null}
+
+                  {/* Qué corregir, el mismo listado que ve quien revisó. La
+                      única persona obligada a corregir era la única que no lo
+                      veía: tenía que ir destapando obligación por obligación
+                      en el acordeón para reunir lo que aquí cabe de un vistazo. */}
+                  {correcciones.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-3">
+                      {correcciones.length === 1
+                        ? 'Hay 1 obligación por corregir:'
+                        : `Hay ${correcciones.length} obligaciones por corregir:`}
+                    </p>
                   )}
+                  <ListaCorrecciones
+                    correcciones={correcciones}
+                    observadas={observadasConNota}
+                    className="mt-2"
+                  />
+
                   <p className="text-xs text-gray-400 mt-3 leading-relaxed">
                     Tus obligaciones están abiertas más abajo. Cuando termines de corregir,
                     reenvía el informe desde el final de la página.
