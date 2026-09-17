@@ -14,6 +14,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { firmarUrls } from '@/lib/storage-firmado'
 import { headers } from 'next/headers'
 import { createHash } from 'crypto'
 import type { ActionResult } from '@/lib/types'
@@ -216,10 +217,22 @@ export async function aceptarCertificacion(
       municipio: ctx.municipioNombre,
     }
 
+    // La firma vive en un bucket PRIVADO desde la migración 026, así que la URL
+    // canónica que guarda la base de datos no se puede leer directamente: hay
+    // que cambiarla por una firmada y de vida corta.
+    //
+    // Sin esto el `<Image>` del PDF pedía una URL privada, recibía un 400 y
+    // react-pdf lo dejaba pasar sin pintar nada ni fallar: la carta salía
+    // completa, con su código de verificación, y con el espacio de la firma en
+    // blanco. Es el mismo paso que da lib/pdf/data.ts para el resto de los
+    // documentos — a esta plantilla nunca se le añadió.
+    const firmadas = await firmarUrls('documentos', [ctx.firmaUrl], 600)
+    const firmaFirmada = ctx.firmaUrl ? (firmadas[ctx.firmaUrl] ?? ctx.firmaUrl) : undefined
+
     // ── Generación del PDF (mismo motor react-pdf) ─────────────────────────
     const certData: CertificacionData = {
       municipio: { nombre: ctx.municipioNombre, departamento: ctx.municipioDepto ?? undefined },
-      contratista: { nombre_completo: ctx.nombre, cedula: ctx.cedula, firma_url: ctx.firmaUrl },
+      contratista: { nombre_completo: ctx.nombre, cedula: ctx.cedula, firma_url: firmaFirmada },
       contrato: { numero: ctx.contratoNumero, anio: ctx.contratoAnio },
       lugarExpedicion,
       vinculoMasTrabajador,
