@@ -1,12 +1,11 @@
 import 'server-only'
 import { createAdminSupabaseClient } from './supabase-admin'
 
-// Desactivada a petición del usuario: la certificación deja de ser
-// obligatoria en el primer informe. La tarjeta y la generación del PDF
-// siguen disponibles para quien quiera subirla por su cuenta — este
-// interruptor solo apaga la exigencia. Volver a `true` reactiva la regla
-// tal como estaba.
-const RETENCION_OBLIGATORIA = false
+// Reactivada en septiembre de 2026, con el municipio entero entrando al
+// sistema: la carta debe acompañar la primera cuenta de cobro por norma, y
+// hasta ahora se firmaba en papel y quedaba imposible de encontrar. Con esto
+// el sistema la emite, la verifica y la guarda en el expediente.
+const RETENCION_OBLIGATORIA = true
 
 /**
  * ¿Debe exigirse la Certificación de Retención en la Fuente antes de este envío?
