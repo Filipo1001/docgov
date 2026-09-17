@@ -538,6 +538,39 @@ export function emailExpedienteIncompleto(data: TemplateData) {
   }
 }
 
+/**
+ * Contratistas que nunca han enviado su primer informe, para el supervisor.
+ *
+ * Sustituye al «tu informe venció» que esas personas habrían recibido. Al
+ * medirlo, de los 95 avisos que iba a mandar el día 2 había 39 dirigidos a
+ * gente que no había enviado un solo informe en su vida, 36 de ella contratada
+ * en agosto o septiembre —la tanda que entró sin capacitación—. Habría sido su
+ * primer contacto con el sistema: un correo rojo diciéndoles que fallaron en
+ * algo que nadie les enseñó y que, además, ya no pueden hacer.
+ *
+ * Va al supervisor porque es quien tiene la llave: el periodo vencido está
+ * bloqueado y solo él levanta el envío tardío.
+ */
+export function emailPrimerInformePendiente(data: TemplateData) {
+  return {
+    subject: `Contratistas sin su primer informe — ${data.mes}`,
+    html: baseHtml(
+      'Primer informe sin enviar',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         ${data.detalle ?? 'Hay contratistas que aún no han enviado su primer informe.'}
+       </p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         No les hemos escrito a ellos: el periodo ya está cerrado y no podrían enviarlo
+         aunque quisieran. Para que puedan hacerlo tienes que <strong>habilitarles el envío
+         tardío</strong> desde la página de su informe. Si es gente que entró hace poco,
+         conviene acompañar la habilitación de una explicación de cómo se usa.
+       </p>`,
+      '#0ea5e9'
+    ),
+  }
+}
+
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
   enviado_confirmacion: emailEnvioConfirmacion,
@@ -555,6 +588,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   devuelto_sin_corregir: emailDevueltoSinCorregir,
   devuelto_estancado: emailDevueltoEstancado,
   expediente_incompleto: emailExpedienteIncompleto,
+  primer_informe_pendiente: emailPrimerInformePendiente,
   contrato_vencimiento: emailContratoVencimiento,
   bienvenida: emailBienvenida,
   envio_tardio_habilitado: emailEnvioTardioHabilitado,

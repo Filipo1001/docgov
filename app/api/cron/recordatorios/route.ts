@@ -10,6 +10,9 @@
  *       trabajo se cargó entre el 24 y el 28, así que avisar el 25 llegaba
  *       cuando la avalancha ya había empezado. Los tres llevan el avance real
  *       de la persona, no solo la fecha — que la fecha ya se la saben.
+ *       El aviso de VENCIDO nunca va a quien no ha enviado un informe en su
+ *       vida: para esa persona sería su primer contacto con el sistema, y no
+ *       puede arreglarlo. Va a su supervisor, que es quien tiene la llave.
  *  R2 — Supervisor + asesores de la dependencia: resumen de informes enviados
  *       sin revisar. Sustituye al correo que salía en CADA envío
  *  R3 — Contratista con informe DEVUELTO sin corregir (≥3 días), con las
@@ -22,6 +25,7 @@
  *
  * Anti-spam:
  *  - R1: guard de 20 h por (tipo, periodo) — un retry del cron no duplica
+ *  - R1: el aviso al supervisor sobre primerizos, 20 h (la regla corre 1 vez/mes)
  *  - R2: solo si llegó algo en 24 h o algo lleva ≥5 días; máximo 1 cada 3 días
  *  - R3: máximo uno por semana y por periodo; el escalado, uno por semana
  *  - R4: semanal por destinatario — son huecos que no cambian a diario
@@ -59,8 +63,8 @@ function fechaMasDias(isoHoy: string, dias: number): string {
 }
 
 type PeriodoBorrador = {
-  id: string; mes: string; anio: number
-  contrato: { numero: string; contratista_id: string | null } | null
+  id: string; mes: string; anio: number; contrato_id: string
+  contrato: { numero: string; contratista_id: string | null; supervisor_id: string | null } | null
 }
 
 export async function GET(req: NextRequest) {
@@ -73,7 +77,7 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminSupabaseClient()
   const { anio, mesIdx, dia, iso } = hoyBogota()
-  const resumen: Record<string, number> = { r1_recordatorios: 0, r2_revision: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r5_radicacion: 0, r7_vencimientos: 0 }
+  const resumen: Record<string, number> = { r1_recordatorios: 0, r1_primerizos: 0, r2_revision: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r5_radicacion: 0, r7_vencimientos: 0 }
 
   // ══ R1 — Informes en borrador (días 22, 28 y 2) ═══════════════
   if (dia === 22 || dia === 28 || dia === 2) {
@@ -84,17 +88,56 @@ export async function GET(req: NextRequest) {
     const mesNombre = MESES[mesObjetivoIdx]
 
     const tipo = esVencido ? 'recordatorio_vencido' : dia === 28 ? 'recordatorio_urgente' : 'recordatorio'
-    const { data: borradores } = await admin
+    let consulta = admin
       .from('periodos')
-      .select('id, mes, anio, contrato:contratos(numero, contratista_id)')
+      .select('id, mes, anio, contrato_id, contrato:contratos(numero, contratista_id, supervisor_id)')
       .eq('mes', mesNombre)
       .eq('anio', anioObjetivo)
       .eq('estado', 'borrador')
       .eq('es_historico', false)
-      .eq('habilitado_tardio', false)
 
-    const candidatos = ((borradores ?? []) as unknown as PeriodoBorrador[])
+    // El envío tardío habilitado solo silencia el aviso de VENCIDO, y con
+    // razón: a esa persona no se le venció nada, tiene la puerta abierta.
+    //
+    // Antes silenciaba también los recordatorios del 22 y el 28, que es justo
+    // al revés: quien tiene un plazo abierto y una fecha encima es a quien más
+    // le sirve el empujón. Abrirle la puerta a alguien no puede tener como
+    // efecto que el sistema deje de hablarle.
+    if (esVencido) consulta = consulta.eq('habilitado_tardio', false)
+
+    const { data: borradores } = await consulta
+
+    const todos = ((borradores ?? []) as unknown as PeriodoBorrador[])
       .filter(p => p.contrato?.contratista_id)
+
+    // ¿Quién ha enviado alguna vez un informe por el sistema?
+    //
+    // Divide a la gente en dos situaciones que no se parecen en nada: la que
+    // conoce la herramienta y se retrasó, y la que nunca la ha usado.
+    const conHistoria = new Set<string>()
+    if (todos.length) {
+      const { data: enviadosAlguna } = await admin
+        .from('periodos')
+        .select('contrato_id')
+        .in('contrato_id', [...new Set(todos.map(p => p.contrato_id))])
+        .not('fecha_envio', 'is', null)
+      for (const p of enviadosAlguna ?? []) conHistoria.add(p.contrato_id as string)
+    }
+
+    // «Tu informe venció» NO puede ser el primer contacto de nadie.
+    //
+    // Al medir esto, de los 95 que recibirían el aviso del día 2 había 39 que
+    // no habían enviado un solo informe en su vida, y 36 de ellos entraron en
+    // agosto o septiembre —la tanda que no alcanzó capacitación—. Para esas
+    // personas el estreno del sistema habría sido un correo rojo diciendo que
+    // fracasaron en algo que nadie les enseñó, y que además no pueden arreglar:
+    // su periodo está bloqueado y solo el supervisor lo abre.
+    //
+    // Se les saca de aquí y se avisa a quien sí tiene la llave.
+    const primerizos = esVencido ? todos.filter(p => !conHistoria.has(p.contrato_id)) : []
+    const candidatos = esVencido
+      ? todos.filter(p => conHistoria.has(p.contrato_id))
+      : todos
 
     // Guard anti-duplicado: mismo tipo+periodo en las últimas 20 h (retry del cron)
     const enviadas = new Set<string>()
@@ -157,6 +200,58 @@ export async function GET(req: NextRequest) {
         resumen.r1_recordatorios++
       }),
     )
+
+    // Los primerizos: en vez de regañarlos, se avisa a su supervisor.
+    //
+    // Es el único mensaje del sistema que va sobre alguien y no a alguien, y
+    // va donde está la capacidad de resolverlo: el periodo vencido está
+    // bloqueado y `habilitado_tardio` solo lo levanta el supervisor. Pedirle
+    // a la contratista que envíe algo que la pantalla no la deja enviar es
+    // mandarla contra una puerta cerrada.
+    if (primerizos.length) {
+      const porSupervisor = new Map<string, PeriodoBorrador[]>()
+      for (const p of primerizos) {
+        const sup = p.contrato?.supervisor_id
+        if (!sup) continue
+        porSupervisor.set(sup, [...(porSupervisor.get(sup) ?? []), p])
+      }
+
+      // Una vez al mes basta: esta regla solo corre el día 2.
+      const { data: yaSup } = await admin
+        .from('notificaciones')
+        .select('usuario_id')
+        .eq('tipo', 'primer_informe_pendiente')
+        .gte('created_at', new Date(Date.now() - 20 * 3600_000).toISOString())
+      const supYaAvisados = new Set((yaSup ?? []).map(n => n.usuario_id as string))
+
+      const { data: nombres } = await admin
+        .from('contratos')
+        .select('id, numero, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
+        .in('id', primerizos.map(p => p.contrato_id))
+      const etiqueta = new Map<string, string>()
+      for (const c of (nombres ?? []) as any[]) {
+        etiqueta.set(c.id as string, `${c.contratista?.nombre_completo ?? '?'} (contrato ${c.numero})`)
+      }
+
+      await Promise.allSettled(
+        [...porSupervisor.entries()]
+          .filter(([sup]) => !supYaAvisados.has(sup))
+          .map(async ([sup, lista]) => {
+            const quienes = lista.map(p => etiqueta.get(p.contrato_id) ?? '?')
+            const detalle = `${lista.length} persona${lista.length === 1 ? '' : 's'} a tu cargo no ha${lista.length === 1 ? '' : 'n'} enviado todavía su primer informe por Contratista Digital, y el periodo de ${mesNombre} ya se les cerró: ${quienes.slice(0, 10).join(' · ')}${quienes.length > 10 ? ` · y ${quienes.length - 10} más` : ''}.`
+            await enviarNotificacion({
+              destinatarioId: sup,
+              tipo: 'primer_informe_pendiente',
+              titulo: `${lista.length} contratista(s) sin su primer informe`,
+              mensaje: detalle,
+              mes: mesNombre,
+              anio: anioObjetivo,
+              detalle,
+            })
+            resumen.r1_primerizos++
+          }),
+      )
+    }
   }
 
   // ══ R2 — Informes esperando revisión (resumen diario) ═════════
