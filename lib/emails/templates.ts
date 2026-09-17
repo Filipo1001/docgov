@@ -511,6 +511,33 @@ export function emailDevueltoEstancado(data: TemplateData) {
   }
 }
 
+/**
+ * Documentación que falta antes de que salga un acta.
+ *
+ * Es la única alerta del sistema que PREVIENE en vez de perseguir. Un acta de
+ * supervisión imprime una fila por cada periodo del contrato con su número de
+ * planilla, y donde no hay número imprime «—». Cuando se detecta ya es tarde:
+ * por la regla 3 del proyecto, un documento emitido no se reescribe. Había 4
+ * contratos con actas ya emitidas arrastrando un hueco dentro.
+ */
+export function emailExpedienteIncompleto(data: TemplateData) {
+  return {
+    subject: 'Documentación pendiente antes de emitir actas',
+    html: baseHtml(
+      'Expediente incompleto',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         ${data.detalle ?? 'Hay contratos con documentación pendiente.'}
+       </p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Conviene resolverlo antes de que se emitan las actas del mes: un documento
+         ya emitido no se reescribe, así que lo que falte hoy queda impreso.
+       </p>`,
+      '#f59e0b'
+    ),
+  }
+}
+
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
   enviado_confirmacion: emailEnvioConfirmacion,
@@ -527,6 +554,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   revision_pendiente: emailRevisionPendiente,
   devuelto_sin_corregir: emailDevueltoSinCorregir,
   devuelto_estancado: emailDevueltoEstancado,
+  expediente_incompleto: emailExpedienteIncompleto,
   contrato_vencimiento: emailContratoVencimiento,
   bienvenida: emailBienvenida,
   envio_tardio_habilitado: emailEnvioTardioHabilitado,

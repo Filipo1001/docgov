@@ -2,7 +2,7 @@
  * GET /api/cron/recordatorios — cron diario de alertas automáticas.
  *
  * Invocado por Vercel Cron (vercel.json) todos los días a las 12:00 UTC
- * (7:00 AM Bogotá). Evalúa cinco reglas y dispara solo las que aplican hoy:
+ * (7:00 AM Bogotá). Evalúa seis reglas y dispara solo las que aplican hoy:
  *
  *  R1 — Contratistas con informe en borrador (escalonado por día del mes):
  *       día 22: recordatorio suave · día 28: urgente · día 2: venció (mes anterior)
@@ -14,6 +14,8 @@
  *       sin revisar. Sustituye al correo que salía en CADA envío
  *  R3 — Contratista con informe DEVUELTO sin corregir (≥3 días), con las
  *       correcciones dentro; a las 2 semanas escala al supervisor
+ *  R4 — Contratación/admin: contratos sin CDP, CRP o contrato firmado.
+ *       Supervisor: meses cerrados sin planilla, que el acta imprime como «—»
  *  R5 — Secretaria/admin: cuentas aprobadas hace ≥5 días sin radicar
  *       (agrupado: UNA notificación por destinatario, no una por cuenta)
  *  R7 — Admin + supervisor del contrato: contratos que vencen en 60 o 30 días
@@ -22,6 +24,7 @@
  *  - R1: guard de 20 h por (tipo, periodo) — un retry del cron no duplica
  *  - R2: solo si llegó algo en 24 h o algo lleva ≥5 días; máximo 1 cada 3 días
  *  - R3: máximo uno por semana y por periodo; el escalado, uno por semana
+ *  - R4: semanal por destinatario — son huecos que no cambian a diario
  *  - R5: máximo una alerta cada 4 días por destinatario
  *  - R7: dedup natural (solo dispara el día exacto de -60/-30)
  *
@@ -70,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminSupabaseClient()
   const { anio, mesIdx, dia, iso } = hoyBogota()
-  const resumen: Record<string, number> = { r1_recordatorios: 0, r2_revision: 0, r3_devueltos: 0, r3_escalados: 0, r5_radicacion: 0, r7_vencimientos: 0 }
+  const resumen: Record<string, number> = { r1_recordatorios: 0, r2_revision: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r5_radicacion: 0, r7_vencimientos: 0 }
 
   // ══ R1 — Informes en borrador (días 22, 28 y 2) ═══════════════
   if (dia === 22 || dia === 28 || dia === 2) {
@@ -389,6 +392,136 @@ export async function GET(req: NextRequest) {
                 detalle,
               })
               resumen.r3_escalados++
+            }),
+        )
+      }
+    }
+  }
+
+  // ══ R4 — Expediente incompleto antes de emitir actas ══════════
+  //
+  // La única alerta que PREVIENE en vez de perseguir. El acta de supervisión
+  // imprime una fila por periodo con su número de planilla, y donde no hay
+  // número imprime «—». Cuando alguien lo nota ya es tarde: por la regla 3 del
+  // proyecto un documento emitido no se reescribe. Al escribir esto había 4
+  // contratos con actas ya emitidas arrastrando un hueco dentro.
+  //
+  // Se reparte por quien PUEDE arreglarlo, que no es la misma persona:
+  //   · Contratación: CDP, CRP y el contrato firmado del expediente.
+  //   · Supervisor: los meses sin planilla — solo él habilita el envío tardío
+  //     que permite subirla, así que avisar a otro no sirve de nada.
+  //
+  // Semanal, no diaria: son huecos administrativos que no cambian de un día
+  // para otro, y repetirlos cada mañana es la forma más rápida de que dejen
+  // de leerse.
+  {
+    const hace7dExp = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
+    const { data: avisadosExp } = await admin
+      .from('notificaciones')
+      .select('usuario_id')
+      .eq('tipo', 'expediente_incompleto')
+      .gte('created_at', hace7dExp)
+    const yaAvisadosExp = new Set((avisadosExp ?? []).map(n => n.usuario_id as string))
+
+    const { data: vigentesRaw } = await admin
+      .from('contratos')
+      .select('id, numero, cdp, crp, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
+      .eq('activo', true)
+      .gte('fecha_fin', iso)
+
+    type Vig = {
+      id: string; numero: string; cdp: string | null; crp: string | null
+      supervisor_id: string | null
+      contratista: { nombre_completo: string } | null
+    }
+    const vigentes = ((vigentesRaw ?? []) as unknown as Vig[])
+
+    if (vigentes.length) {
+      const ids = vigentes.map(c => c.id)
+      const [{ data: adjuntos }, { data: periodosVig }] = await Promise.all([
+        admin.from('documentos_adjuntos')
+          .select('entidad_id')
+          .eq('entidad_tipo', 'contrato')
+          .is('eliminado_at', null)
+          .in('entidad_id', ids),
+        admin.from('periodos')
+          .select('contrato_id, mes, numero_planilla, fecha_fin, fecha_envio')
+          .in('contrato_id', ids)
+          .eq('es_historico', false),
+      ])
+
+      const conAdjunto = new Set((adjuntos ?? []).map(a => a.entidad_id as string))
+      const cursados = new Set(
+        ((periodosVig ?? []) as { contrato_id: string; fecha_envio: string | null }[])
+          .filter(p => p.fecha_envio).map(p => p.contrato_id),
+      )
+
+      // Meses ya cerrados sin número de planilla: son los que imprimirán «—».
+      const sinPlanilla = new Map<string, string[]>()
+      for (const p of (periodosVig ?? []) as { contrato_id: string; mes: string; numero_planilla: string | null; fecha_fin: string | null }[]) {
+        if ((p.numero_planilla ?? '').trim()) continue
+        if (!p.fecha_fin || p.fecha_fin >= iso) continue   // el mes en curso todavía da tiempo
+        sinPlanilla.set(p.contrato_id, [...(sinPlanilla.get(p.contrato_id) ?? []), p.mes])
+      }
+
+      // ── Contratación + admin: presupuesto y contrato firmado ──
+      const faltaCdpCrp = vigentes.filter(c => !(c.cdp ?? '').trim() || !(c.crp ?? '').trim())
+      // El contrato firmado solo se exige a quien va a pasar su PRIMERA cuenta:
+      // la ley pide que la primera vaya acompañada del contrato completo.
+      const faltaContrato = vigentes.filter(c => !cursados.has(c.id) && !conAdjunto.has(c.id))
+
+      if (faltaCdpCrp.length || faltaContrato.length) {
+        const linea = (c: Vig) => `${c.numero} (${c.contratista?.nombre_completo ?? '?'})`
+        const partes: string[] = []
+        if (faltaCdpCrp.length) {
+          partes.push(`${faltaCdpCrp.length} sin CDP o CRP: ${faltaCdpCrp.slice(0, 8).map(linea).join(', ')}${faltaCdpCrp.length > 8 ? ` y ${faltaCdpCrp.length - 8} más` : ''}.`)
+        }
+        if (faltaContrato.length) {
+          partes.push(`${faltaContrato.length} van a pasar su primera cuenta sin el contrato en el expediente: ${faltaContrato.slice(0, 8).map(linea).join(', ')}${faltaContrato.length > 8 ? ` y ${faltaContrato.length - 8} más` : ''}.`)
+        }
+        const detalle = partes.join(' ')
+
+        const { data: gestores } = await admin
+          .from('usuarios').select('id').in('rol', ['contratacion', 'admin']).eq('activo', true)
+
+        await Promise.allSettled(
+          (gestores ?? []).filter(u => !yaAvisadosExp.has(u.id as string)).map(async (u) => {
+            await enviarNotificacion({
+              destinatarioId: u.id as string,
+              tipo: 'expediente_incompleto',
+              titulo: 'Documentación pendiente en contratos vigentes',
+              mensaje: detalle,
+              detalle,
+            })
+            resumen.r4_expediente++
+          }),
+        )
+      }
+
+      // ── Supervisor: los meses que van a imprimir «—» ──
+      if (sinPlanilla.size) {
+        const porSup = new Map<string, string[]>()
+        for (const c of vigentes) {
+          const meses = sinPlanilla.get(c.id)
+          if (!meses || !c.supervisor_id) continue
+          porSup.set(c.supervisor_id, [
+            ...(porSup.get(c.supervisor_id) ?? []),
+            `${c.numero} (${c.contratista?.nombre_completo ?? '?'}) — ${meses.join(', ')}`,
+          ])
+        }
+        await Promise.allSettled(
+          [...porSup.entries()]
+            .filter(([sup]) => !yaAvisadosExp.has(sup))
+            .map(async ([sup, lineas]) => {
+              const detalle = `${lineas.length} contrato${lineas.length === 1 ? '' : 's'} a tu cargo tiene${lineas.length === 1 ? '' : 'n'} meses cerrados sin número de planilla, y el acta los imprimirá como «—»: ${lineas.slice(0, 8).join(' · ')}${lineas.length > 8 ? ` · y ${lineas.length - 8} más` : ''}. Para que puedan subirla tienes que habilitarles el envío tardío en ese periodo.`
+              await enviarNotificacion({
+                destinatarioId: sup,
+                tipo: 'expediente_incompleto',
+                titulo: 'Actas que saldrán sin número de planilla',
+                mensaje: detalle,
+                detalle,
+              })
+              resumen.r4_expediente++
             }),
         )
       }
