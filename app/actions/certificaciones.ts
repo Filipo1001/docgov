@@ -39,6 +39,15 @@ interface Contexto {
   nombre: string
   cedula: string
   firmaUrl: string | null
+  /**
+   * Lugar de expedición de la cédula, del perfil de la persona.
+   *
+   * Null mientras no lo haya aportado. Antes este dato NO se guardaba: la
+   * certificación rellenaba la frase jurada con el municipio del contrato, así
+   * que las 14 cartas emitidas afirman «expedida en FREDONIA» fuera cierto o
+   * no. Un documento bajo juramento no puede afirmar lo que nadie comprobó.
+   */
+  lugarExpedicionCedula: string | null
   municipioNombre: string
   municipioDepto: string | null
 }
@@ -52,7 +61,7 @@ async function cargarContexto(periodoId: string): Promise<Contexto | null> {
       id, anio, contrato_id,
       contrato:contratos(
         id, numero, anio, contratista_id,
-        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, firma_url),
+        contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, firma_url, lugar_expedicion_cedula),
         municipio:municipios(nombre, departamento)
       )
     `)
@@ -73,6 +82,7 @@ async function cargarContexto(periodoId: string): Promise<Contexto | null> {
     nombre: c.contratista.nombre_completo,
     cedula: c.contratista.cedula,
     firmaUrl: c.contratista.firma_url ?? null,
+    lugarExpedicionCedula: (c.contratista.lugar_expedicion_cedula as string | null)?.trim() || null,
     municipioNombre: c.municipio?.nombre ?? 'Municipio',
     municipioDepto: c.municipio?.departamento ?? null,
   }
@@ -103,6 +113,8 @@ export async function verificarCertificacionRequerida(periodoId: string): Promis
      * confirmación en vez de un formulario.
      */
     respuestaPrevia: { vinculoMasTrabajador: boolean; fecha: string; contrato: string } | null
+    /** Lo que ya tenga guardado; si es null, el modal lo pide. */
+    lugarExpedicionCedula: string | null
   } | null
   error?: string
 }> {
@@ -142,6 +154,7 @@ export async function verificarCertificacionRequerida(periodoId: string): Promis
         cedula: ctx.cedula,
         anioGravable: ctx.anioGravable,
         municipio: ctx.municipioNombre,
+        lugarExpedicionCedula: ctx.lugarExpedicionCedula,
         respuestaPrevia: previa
           ? {
               vinculoMasTrabajador: (previa as any).vinculo_mas_trabajador as boolean,
@@ -164,6 +177,15 @@ export async function verificarCertificacionRequerida(periodoId: string): Promis
 export async function aceptarCertificacion(
   periodoId: string,
   vinculoMasTrabajador: boolean,
+  /**
+   * Municipio de expedición de la cédula, tal como aparece en el documento.
+   *
+   * Solo hace falta la PRIMERA vez: se guarda en el perfil de la persona y a
+   * partir de ahí se reutiliza. Si ya está guardado, este parámetro se ignora
+   * —lo que viene del perfil manda— para que un cliente manipulado no pueda
+   * reescribir de refilón un dato de identidad.
+   */
+  lugarExpedicionCedula?: string,
 ): Promise<ActionResult> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -186,7 +208,23 @@ export async function aceptarCertificacion(
       .maybeSingle()
     if (existente) return {}
 
-    const lugarExpedicion = ctx.municipioNombre
+    // El lugar de expedición sale del perfil; si es la primera vez, de lo que
+    // la persona acaba de escribir. NUNCA del municipio del contrato, que es
+    // lo que hacía antes y es la razón de que las 14 cartas emitidas digan
+    // «FREDONIA» fuera cierto o no.
+    const lugarExpedicion = ctx.lugarExpedicionCedula ?? (lugarExpedicionCedula ?? '').trim().toUpperCase()
+    if (!lugarExpedicion) {
+      return { error: 'Indica el municipio donde fue expedida tu cédula para poder firmar la certificación.' }
+    }
+
+    // Se guarda en el perfil la primera vez, para no volver a preguntarlo ni
+    // en otro contrato ni el año que viene.
+    if (!ctx.lugarExpedicionCedula) {
+      await admin
+        .from('usuarios')
+        .update({ lugar_expedicion_cedula: lugarExpedicion })
+        .eq('id', ctx.contratistaId)
+    }
     const fechaAceptacion = new Date().toISOString()
 
     // ── Verificación (código + QR), compartida con /verificar ──────────────
@@ -337,7 +375,7 @@ export async function regenerarCertificaciones(): Promise<{
         id, codigo, pdf_path, anio_gravable, lugar_expedicion, fecha_aceptacion,
         vinculo_mas_trabajador, datos_snapshot,
         contrato:contratos(numero, anio, municipio_id),
-        contratista:usuarios!certificaciones_retencion_contratista_id_fkey(nombre_completo, cedula, firma_url)
+        contratista:usuarios!certificaciones_retencion_contratista_id_fkey(nombre_completo, cedula, firma_url, lugar_expedicion_cedula)
       `)
       .order('fecha_aceptacion')
     if (errFilas) return { ...vacio, error: errFilas.message }
@@ -377,6 +415,16 @@ export async function regenerarCertificaciones(): Promise<{
       if (!firmaCruda) { problemas.push(`${etiqueta}: la persona no tiene firma registrada`); continue }
       if (!f.pdf_path) { problemas.push(`${etiqueta}: sin ruta de PDF`); continue }
 
+      // El lugar de expedición guardado en estas filas es el municipio del
+      // contrato —«FREDONIA»— porque así lo rellenaba la versión anterior. Si
+      // la persona ya aportó el suyo, se repinta con el verdadero; si no, se
+      // conserva lo que había y se reporta, porque corregirlo requiere que
+      // ella lo diga, no que nosotros lo adivinemos.
+      const lugarReal = (f.contratista?.lugar_expedicion_cedula as string | null)?.trim() || null
+      if (!lugarReal) {
+        problemas.push(`${etiqueta}: sigue diciendo «${f.lugar_expedicion}» — falta que aporte el lugar de expedición de su cédula`)
+      }
+
       const muni = muniPorId.get(f.contrato?.municipio_id)
       const snap = (f.datos_snapshot ?? {}) as Record<string, unknown>
 
@@ -392,7 +440,7 @@ export async function regenerarCertificaciones(): Promise<{
           firma_url: firmadas[firmaCruda] ?? firmaCruda,
         },
         contrato: { numero: f.contrato?.numero ?? '', anio: f.contrato?.anio ?? f.anio_gravable },
-        lugarExpedicion: f.lugar_expedicion ?? '',
+        lugarExpedicion: lugarReal ?? f.lugar_expedicion ?? '',
         vinculoMasTrabajador: !!f.vinculo_mas_trabajador,
         fechaAceptacion: f.fecha_aceptacion,
         verificacion: {
@@ -414,7 +462,10 @@ export async function regenerarCertificaciones(): Promise<{
         .upload(f.pdf_path, buffer, { contentType: 'application/pdf', upsert: true })
       if (errUp) { problemas.push(`${etiqueta}: ${errUp.message}`); continue }
 
-      await admin.from('certificaciones_retencion').update({ hash_sha256: hash }).eq('id', f.id)
+      await admin
+        .from('certificaciones_retencion')
+        .update({ hash_sha256: hash, ...(lugarReal ? { lugar_expedicion: lugarReal } : {}) })
+        .eq('id', f.id)
       await actualizarHashDocumento(f.codigo, hash)
       regeneradas++
     }

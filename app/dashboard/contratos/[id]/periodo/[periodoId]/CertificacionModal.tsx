@@ -19,6 +19,8 @@ export interface CertPrefill {
   municipio: string
   /** Lo que ya juró este año gravable en otro contrato, si lo hizo. */
   respuestaPrevia: { vinculoMasTrabajador: boolean; fecha: string; contrato: string } | null
+  /** Municipio de expedición guardado en su perfil; null si aún no lo dio. */
+  lugarExpedicionCedula: string | null
 }
 
 /**
@@ -50,15 +52,22 @@ export default function CertificacionModal({
   // escuchado la primera vez. Sigue necesitando confirmar —el documento
   // lleva su firma— pero le cuesta un clic, no un formulario.
   const [vinculo, setVinculo] = useState(prefill?.respuestaPrevia?.vinculoMasTrabajador ?? false)
+  // Municipio de expedición de la cédula. Se pide UNA vez en la vida: la
+  // frase jurada lo afirma —«...cédula No. X expedida en LUGAR...»— y hasta
+  // ahora se rellenaba con el municipio del contrato, así que las cartas
+  // emitidas dicen «FREDONIA» fuera cierto o no. Una vez dado, se guarda en el
+  // perfil y no se vuelve a preguntar ni en otro contrato ni el año siguiente.
+  const [lugar, setLugar] = useState(prefill?.lugarExpedicionCedula ?? '')
+  const debePedirLugar = !prefill?.lugarExpedicionCedula
   const [juramento, setJuramento] = useState(false)
   const [procesando, setProcesando] = useState(false)
 
   if (!abierto || !prefill) return null
 
   async function aceptar() {
-    if (!juramento || procesando) return
+    if (!juramento || procesando || !lugar.trim()) return
     setProcesando(true)
-    const result = await aceptarCertificacion(periodoId, vinculo)
+    const result = await aceptarCertificacion(periodoId, vinculo, lugar.trim())
     if (result.error) {
       toast.error(result.error)
       setProcesando(false)
@@ -108,7 +117,28 @@ export default function CertificacionModal({
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">A nombre de</p>
             <div className="rounded-xl border border-gray-100 p-4 text-[13px] text-gray-700 space-y-0.5">
               <p className="font-semibold text-gray-900">{prefill.nombre}</p>
-              <p>C.C. {formatCedula(prefill.cedula)} · expedida en {prefill.municipio}</p>
+              {debePedirLugar ? (
+                <div className="pt-1">
+                  <label htmlFor="cert-lugar" className="block">
+                    C.C. {formatCedula(prefill.cedula)} · expedida en
+                  </label>
+                  <input
+                    id="cert-lugar"
+                    type="text"
+                    value={lugar}
+                    onChange={(e) => setLugar(e.target.value)}
+                    placeholder="Municipio que aparece en tu cédula"
+                    autoComplete="off"
+                    className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] uppercase placeholder:normal-case placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                  <p className="mt-1.5 text-[11px] text-gray-400 leading-relaxed">
+                    Solo te lo pedimos esta vez: queda guardado en tu perfil para las
+                    próximas certificaciones.
+                  </p>
+                </div>
+              ) : (
+                <p>C.C. {formatCedula(prefill.cedula)} · expedida en {prefill.lugarExpedicionCedula}</p>
+              )}
             </div>
           </div>
 
@@ -207,7 +237,7 @@ export default function CertificacionModal({
           <button
             type="button"
             onClick={aceptar}
-            disabled={!juramento || procesando || faltaFirma}
+            disabled={!juramento || procesando || faltaFirma || !lugar.trim()}
             className="text-sm font-semibold text-white bg-blue-600 px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {procesando ? 'Generando…' : 'Aceptar y firmar'}
