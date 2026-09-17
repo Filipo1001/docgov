@@ -29,6 +29,18 @@ export interface NotificationPayload {
   nombreRemitente?: string
   /** Texto libre para plantillas de alertas agregadas */
   detalle?: string
+  /**
+   * Solo campana, sin correo.
+   *
+   * Existe para el aviso de informe enviado. Un envío notifica al supervisor
+   * y a todos los asesores de la dependencia, así que 97 informes al mes son
+   * ~380 correos, y el 82% caen en ocho días: la supervisora de la secretaría
+   * grande recibía sesenta en una semana y los archivaba en bloque. Lo que
+   * sirve no es un correo por informe, sino el resumen diario que manda el
+   * cron (R2). La notificación en la app se conserva: quitar el correo no es
+   * quitar el aviso.
+   */
+  sinCorreo?: boolean
 }
 
 /**
@@ -129,7 +141,11 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   // contratistas del municipio y no hace falta para diagnosticar nada. El id
   // de usuario permite rastrear el mismo caso sin exponerlo.
   const emailReal = usuario.email && !usuario.email.endsWith('@pendiente.local') ? usuario.email : null
-  if (!emailEnabled || !emailReal) {
+  if (payload.sinCorreo) {
+    // 'omitido' y no 'fallido': no salió por decisión, no por error. La
+    // distinción importa — 'fallido' es lo que se revisa cuando algo va mal.
+    await anotarCorreo('omitido', { error: 'solo_en_app' })
+  } else if (!emailEnabled || !emailReal) {
     const motivo = !emailEnabled ? 'canal_desactivado' : 'sin_correo_real'
     console.log(`[Notif] correo omitido tipo=${payload.tipo} usuario=${payload.destinatarioId} motivo=${motivo}`)
     await anotarCorreo('omitido', { error: motivo })

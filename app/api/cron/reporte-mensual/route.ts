@@ -45,6 +45,8 @@ type ContratoRow = {
   id: string
   numero: string
   supervisor_id: string | null
+  /** Para llevarle el mismo consolidado a los asesores de esa secretaría. */
+  dependencia_id: string | null
   contratista: { nombre_completo: string } | null
 }
 
@@ -72,7 +74,7 @@ export async function GET(req: NextRequest) {
   const hoyISO = new Date().toISOString().slice(0, 10)
   const { data: contratosRaw, error: eC } = await admin
     .from('contratos')
-    .select('id, numero, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
+    .select('id, numero, supervisor_id, dependencia_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
     .gte('fecha_fin', hoyISO)
   if (eC) return NextResponse.json({ error: eC.message }, { status: 500 })
 
@@ -86,6 +88,22 @@ export async function GET(req: NextRequest) {
   }
   if (porSupervisor.size === 0) {
     return NextResponse.json({ enviados: 0, motivo: 'sin supervisores con contratos vigentes' })
+  }
+
+  // 1b. Asesores por secretaría.
+  //
+  // El consolidado se pensó para el supervisor, pero el asesor revisa los
+  // mismos informes y hasta ahora terminaba el mes sin ninguna foto de cómo
+  // había ido. Cada secretaría tiene un solo supervisor, así que un asesor
+  // recibe exactamente un consolidado: el de la suya.
+  const dependencias = [...new Set(contratos.map(c => c.dependencia_id).filter(Boolean))] as string[]
+  const { data: asesoresRaw } = dependencias.length
+    ? await admin.from('usuarios').select('id, dependencia_id').eq('rol', 'asesor').eq('activo', true).in('dependencia_id', dependencias)
+    : { data: [] as { id: string; dependencia_id: string | null }[] }
+  const asesoresPorDep = new Map<string, string[]>()
+  for (const a of asesoresRaw ?? []) {
+    if (!a.dependencia_id) continue
+    asesoresPorDep.set(a.dependencia_id, [...(asesoresPorDep.get(a.dependencia_id) ?? []), a.id])
   }
 
   // 2. Periodos de los dos meses, en UNA consulta.
@@ -123,7 +141,7 @@ export async function GET(req: NextRequest) {
   let omitidos = 0
 
   for (const [supervisorId, sus] of porSupervisor) {
-    if (yaRecibieron.has(supervisorId) || sus.length === 0) { omitidos++; continue }
+    if (sus.length === 0) { omitidos++; continue }
 
     const total = sus.length
     const completados = sus.filter(c => cerrado(estadoDe(c.id, mesReporte, anioReporte))).length
@@ -160,19 +178,31 @@ export async function GET(req: NextRequest) {
         (abiertos.length > 15 ? ` · y ${abiertos.length - 15} más` : '')
       : 'Todos los contratos a tu cargo completaron el ciclo.'
 
-    await enviarNotificacion({
-      destinatarioId: supervisorId,
-      tipo: 'reporte_mensual',
-      titulo: `Consolidado de ${mesReporte} ${anioReporte}`,
-      mensaje: resumen,
-      mes: mesReporte,
-      anio: anioReporte,
-      // `motivo` es el campo que la plantilla de correo sabe pintar; `mensaje`
-      // solo alimenta la campana dentro de la aplicación.
-      motivo: resumen,
-      detalle,
-    }).catch(() => {})
-    enviados++
+    // El supervisor y los asesores de las secretarías que cubre. El guard de
+    // 48 h se evalúa por persona, no por grupo: si a uno ya le llegó, los
+    // demás no se quedan sin el suyo.
+    const depsDelGrupo = [...new Set(sus.map(c => c.dependencia_id).filter(Boolean))] as string[]
+    const destinatarios = [...new Set([
+      supervisorId,
+      ...depsDelGrupo.flatMap(d => asesoresPorDep.get(d) ?? []),
+    ])]
+
+    for (const destinatarioId of destinatarios) {
+      if (yaRecibieron.has(destinatarioId)) { omitidos++; continue }
+      await enviarNotificacion({
+        destinatarioId,
+        tipo: 'reporte_mensual',
+        titulo: `Consolidado de ${mesReporte} ${anioReporte}`,
+        mensaje: resumen,
+        mes: mesReporte,
+        anio: anioReporte,
+        // `motivo` es el campo que la plantilla de correo sabe pintar; `mensaje`
+        // solo alimenta la campana dentro de la aplicación.
+        motivo: resumen,
+        detalle,
+      }).catch(() => {})
+      enviados++
+    }
   }
 
   return NextResponse.json({

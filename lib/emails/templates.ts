@@ -434,6 +434,83 @@ export function emailReporteMensual(data: TemplateData) {
   }
 }
 
+/**
+ * Resumen diario para quien revisa.
+ *
+ * Sustituye al correo por informe. Antes, cada envío avisaba al supervisor y a
+ * todos los asesores de la dependencia: ~380 correos al mes con el 82%
+ * concentrado en ocho días. Sesenta correos en una semana no se leen, se
+ * archivan, y arrastran con ellos los avisos que sí piden una acción.
+ *
+ * Este llega como mucho una vez al día, y solo cuando hay algo que hacer.
+ */
+export function emailRevisionPendiente(data: TemplateData) {
+  return {
+    subject: 'Informes esperando tu revisión',
+    html: baseHtml(
+      'Informes por revisar',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         ${data.detalle ?? 'Tienes informes esperando revisión.'}
+       </p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Los encuentras en <strong>Informes</strong>, pestaña Enviados.
+       </p>`,
+      '#4f46e5'
+    ),
+  }
+}
+
+/**
+ * Recordatorio de informe devuelto que sigue sin corregirse.
+ *
+ * Existe porque era el único punto del circuito donde algo podía quedarse
+ * quieto para siempre: el cron de recordatorios filtra por estado `borrador`,
+ * y un informe devuelto está en `rechazado`, así que no entraba en ninguna
+ * regla. En producción había uno devuelto desde abril — cinco meses sin que
+ * sonara una sola alarma, y sin que el panel se lo dijera tampoco.
+ */
+export function emailDevueltoSinCorregir(data: TemplateData) {
+  return {
+    subject: `Tu informe de ${data.mes} sigue esperando corrección`,
+    html: baseHtml(
+      'Pendiente de corregir',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         ${data.motivo ?? `Tu informe de ${data.mes} ${data.anio} fue devuelto y todavía no se ha corregido.`}
+       </p>
+       ${data.detalle ?? ''}
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Corrige lo señalado y vuelve a enviarlo desde Contratista Digital. Mientras
+         siga devuelto, tu cuenta de ese mes no puede tramitarse.
+       </p>`,
+      '#dc2626'
+    ),
+  }
+}
+
+/**
+ * El mismo caso, pero para quien supervisa: a partir de dos semanas deja de
+ * ser un despiste de la contratista y pasa a ser un contrato atascado.
+ */
+export function emailDevueltoEstancado(data: TemplateData) {
+  return {
+    subject: 'Informes devueltos que llevan semanas sin corregir',
+    html: baseHtml(
+      'Devoluciones sin movimiento',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         ${data.detalle ?? 'Hay informes devueltos que llevan más de dos semanas sin corregirse.'}
+       </p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Un informe devuelto no avanza solo. Si la persona no puede corregirlo —por
+         ejemplo, porque el periodo ya venció— tendrás que habilitarle el envío tardío.
+       </p>`,
+      '#dc2626'
+    ),
+  }
+}
+
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
   enviado_confirmacion: emailEnvioConfirmacion,
@@ -447,6 +524,9 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   recordatorio_urgente: emailRecordatorioUrgente,
   recordatorio_vencido: emailRecordatorioVencido,
   radicacion_pendiente: emailRadicacionPendiente,
+  revision_pendiente: emailRevisionPendiente,
+  devuelto_sin_corregir: emailDevueltoSinCorregir,
+  devuelto_estancado: emailDevueltoEstancado,
   contrato_vencimiento: emailContratoVencimiento,
   bienvenida: emailBienvenida,
   envio_tardio_habilitado: emailEnvioTardioHabilitado,
