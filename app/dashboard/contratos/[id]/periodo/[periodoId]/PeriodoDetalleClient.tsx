@@ -17,6 +17,7 @@ import {
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
+import CertificacionModal, { type CertPrefill } from './CertificacionModal'
 import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
@@ -28,6 +29,7 @@ import {
   prepararUploadAdjunto, registrarAdjunto, eliminarAdjunto, listarAdjuntos,
   type AdjuntoDTO,
 } from '@/app/actions/adjuntos'
+import { verificarCertificacionRequerida } from '@/app/actions/certificaciones'
 import { verificarActaTerminacionRequerida } from '@/app/actions/actas-terminacion'
 import {
   enviarPeriodo,
@@ -341,6 +343,10 @@ export default function PeriodoDetallePage({
   const [mostrarActa, setMostrarActa] = useState(false)
   const [actaPrefill, setActaPrefill] = useState<ActaPrefill | null>(null)
   const [actaFaltaFirma, setActaFaltaFirma] = useState(false)
+  // Certificación de retención — juramento obligatorio previo al PRIMER envío
+  const [mostrarCert, setMostrarCert] = useState(false)
+  const [certPrefill, setCertPrefill] = useState<CertPrefill | null>(null)
+  const [certFaltaFirma, setCertFaltaFirma] = useState(false)
 
   // Activity form state
   const [formActivo, setFormActivo] = useState<string | null>(null)
@@ -1220,6 +1226,29 @@ export default function PeriodoDetallePage({
     // animación solo puede abrirse una vez se sabe que de verdad va a
     // enviar, no antes.
     setEnviando(true)
+
+    // Certificación de retención (Ley 1819 de 2016, parágrafo 2 del art. 383
+    // E.T.): se jura antes del PRIMER informe. Va ANTES que el acta de
+    // terminación —que es del último— para que un contrato de un solo periodo
+    // las pida en orden y no las dos encima.
+    let cert: Awaited<ReturnType<typeof verificarCertificacionRequerida>>
+    try {
+      cert = await verificarCertificacionRequerida(periodoId)
+    } catch {
+      setEnviando(false)
+      toast.error('No se pudo verificar el informe. Revisa tu conexión e inténtalo de nuevo.')
+      return
+    }
+
+    if (cert.requerida && cert.prefill) {
+      // Igual que el acta: el modal sustituye al envío. `EnvioInforme` todavía
+      // no se abrió, así que no hay animación con la que chocar.
+      setEnviando(false)
+      setCertPrefill(cert.prefill)
+      setCertFaltaFirma(cert.faltaFirma)
+      setMostrarCert(true)
+      return
+    }
 
     // Acta de terminación: obligatoria antes del ÚLTIMO informe del contrato.
     let acta: Awaited<ReturnType<typeof verificarActaTerminacionRequerida>>
@@ -4836,6 +4865,16 @@ export default function PeriodoDetallePage({
         completado={envioCompletado}
         error={envioError}
         onCerrar={() => { setMostrarEnvio(false); setEnvioError(null) }}
+      />
+
+      {/* Certificación de retención — juramento previo al primer envío */}
+      <CertificacionModal
+        abierto={mostrarCert}
+        periodoId={periodoId}
+        prefill={certPrefill}
+        faltaFirma={certFaltaFirma}
+        onCerrar={() => setMostrarCert(false)}
+        onAceptada={() => { setMostrarCert(false); doEnviar() }}
       />
 
       {/* Acta de terminación — modal obligatorio previo al último envío */}
