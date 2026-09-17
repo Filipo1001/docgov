@@ -11,7 +11,7 @@ import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import type { PDFData, PDFPagoHistorial } from './types'
 import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
-import { formatCedula } from '@/lib/format'
+import { formatCedula, numeroALetras } from '@/lib/format'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
 
@@ -341,9 +341,32 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
       ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
       : formatCOP(contrato.valor_total)
 
-  const valorMensualTexto = contrato.valor_letras_mensual
-    ? `${sinSufijoMoneda(contrato.valor_letras_mensual.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_mensual)})`
-    : formatCOP(contrato.valor_mensual)
+  /**
+   * La suma que esta acta ordena pagar: la del PERIODO que certifica, derivada
+   * del número, no leída de la cabecera del contrato.
+   *
+   * Antes salía de `contrato.valor_letras_mensual` + `contrato.valor_mensual`,
+   * y eso abría tres agujeros a la vez, todos con documentos ya emitidos:
+   *
+   *  · Si el campo de letras está vacío —diez contratos vigentes lo están—
+   *    caía a `formatCOP(contrato.valor_mensual)`, y esos mismos diez tienen
+   *    el mensual en 0. El acta ordenaba «pagar la suma de $ 0» mientras su
+   *    propia tabla liquidaba cinco millones.
+   *  · Un otrosí cambia lo que se paga pero no reescribe la cabecera: el acta
+   *    de julio del contrato 023 dice «TRES MILLONES ($ 3.000.000)» y liquida
+   *    $ 5.800.000 en la fila de al lado. Está radicada así.
+   *  · Un mes prorrateado —el primero y el último de cada contrato— nunca
+   *    coincide con el mensual genérico.
+   *
+   * El dato correcto ya estaba en este mismo archivo: `pagosHistorial` arma la
+   * tabla con `valor_acta: p.valor_cobro`. El documento sabía cuánto paga; la
+   * frase le preguntaba a otro sitio.
+   *
+   * Derivarlo también mata la clase de error entera: no hay campo que llenar
+   * al crear el contrato ni que acordarse de actualizar tras un otrosí.
+   */
+  const valorMensualTexto =
+    `${numeroALetras(periodo.valor_cobro).toUpperCase()} DE PESOS M/L (${formatCOP(periodo.valor_cobro)})`
 
   let plazoTexto = '—'
   if (contrato.fecha_inicio_contrato && contrato.fecha_fin_contrato) {
