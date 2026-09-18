@@ -50,3 +50,6 @@ Brochure-*.pdf
 # Respaldo de los avatares originales antes de normalizarlos
 # (scripts/normalizar-avatares.mjs). Son datos personales: no se versionan.
 .respaldo-avatares/
+
+# Artefactos del CLI de Supabase
+supabase/.temp/

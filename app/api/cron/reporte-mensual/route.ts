@@ -29,6 +29,16 @@
  * Anti-duplicado: guard por (tipo, destinatario) en 48 h, así un reintento del
  * cron no manda dos consolidados.
  *
+ * ── Ensayo: ver el correo sin mandarlo ───────────────────────────────────
+ *
+ * `?ensayo=1` calcula todo y devuelve las cifras y los destinatarios SIN
+ * escribir una notificación ni enviar un correo. Existe porque el consolidado
+ * sale una vez al mes: si hay algo que no cuadra, esperar al día 6 para
+ * descubrirlo cuesta un mes entero. Con `&mes=9&anio=2026` se puede pedir
+ * cualquier mes, no solo el que tocaría hoy.
+ *
+ * Sigue exigiendo el CRON_SECRET: las cifras llevan nombres de contratistas.
+ *
  * Auth: Vercel envía `Authorization: Bearer ${CRON_SECRET}`. Sin secret → 401.
  */
 
@@ -69,15 +79,60 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminSupabaseClient()
   const hoy = hoyBogota()
+  const q = req.nextUrl.searchParams
 
-  // El mes que se reporta es el anterior al de hoy.
-  const mesIdx = (hoy.mesIdx + 11) % 12
-  const anio = hoy.mesIdx === 0 ? hoy.anio - 1 : hoy.anio
+  // Ensayo: nada se escribe y nada se envía. Ver la cabecera del archivo.
+  const ensayo = q.get('ensayo') === '1'
+
+  // El mes que se reporta es el anterior al de hoy. En ensayo se puede pedir
+  // otro: es justo para lo que sirve, mirar un mes concreto.
+  const mesPedido = Number(q.get('mes'))
+  const anioPedido = Number(q.get('anio'))
+  const mesIdx = ensayo && mesPedido >= 1 && mesPedido <= 12
+    ? mesPedido - 1
+    : (hoy.mesIdx + 11) % 12
+  const anio = ensayo && anioPedido >= 2020 && anioPedido <= 2100
+    ? anioPedido
+    : (hoy.mesIdx === 0 ? hoy.anio - 1 : hoy.anio)
 
   const c = await calcularConsolidado(admin, mesIdx, anio)
 
   if (c.dependencias.length === 0) {
     return NextResponse.json({ mes: `${c.mes} ${anio}`, enviados: 0, motivo: 'ningún contrato vigente ese mes' })
+  }
+
+  if (ensayo) {
+    const ambitosEnsayo = await cargarAmbitos(admin)
+    const { data: personas } = await admin.from('usuarios').select('id, nombre_completo, rol')
+    const quien = new Map((personas ?? []).map(u => [u.id as string, u]))
+    const nombra = (ids: string[]) =>
+      ids.map(id => `${quien.get(id)?.nombre_completo ?? id} (${quien.get(id)?.rol ?? '?'})`)
+
+    return NextResponse.json({
+      ensayo: true,
+      aviso: 'No se envió ni se registró nada.',
+      mes: `${c.mes} ${c.anio}`,
+      municipio: {
+        informes: c.municipio.informes,
+        contratistas: c.municipio.contratistas,
+        valor: c.municipio.valor,
+        destinatarios: nombra(await destinatariosDelMunicipio(admin, ambitosEnsayo)),
+      },
+      dependencias: c.dependencias.map(b => ({
+        dependencia: b.ambito.nombre,
+        asunto: `${b.ambito.nombre} — consolidado de ${c.mes} ${c.anio}`,
+        destinatarios: nombra(destinatariosDe(ambitosEnsayo.get(b.ambito.dependenciaId))),
+        contratos: b.fila.contratos,
+        enviaronInforme: b.fila.enviados,
+        completaronTramite: b.fila.cerrados,
+        contratistas: b.fila.contratistas,
+        valor: b.fila.valor,
+        mesAnterior: b.previo ?? b.notaPrevio,
+        diasDeTramite: b.tramiteDias,
+        tramitadosFueraDelSistema: b.historicos,
+        reparos: b.reparos.map(r => `${r.nombre} (contrato ${r.contrato}): ${r.motivo}`),
+      })),
+    })
   }
 
   // ── Guard anti-duplicado: 48 h por destinatario y tipo ─────────────────
