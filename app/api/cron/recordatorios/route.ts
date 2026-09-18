@@ -2,7 +2,22 @@
  * GET /api/cron/recordatorios — cron diario de alertas automáticas.
  *
  * Invocado por Vercel Cron (vercel.json) todos los días a las 12:00 UTC
- * (7:00 AM Bogotá). Evalúa seis reglas y dispara solo las que aplican hoy:
+ * (7:00 AM Bogotá). Evalúa cinco reglas y dispara solo las que aplican hoy.
+ *
+ * ── Qué queda aquí y qué se fue al consolidado mensual ───────────────────
+ *
+ * Este cron ya no le manda recordatorios operativos a los secretarios. Lo que
+ * les llega es el cierre del mes (`/api/cron/reporte-mensual`, día 6). Aquí
+ * solo sobrevive lo que de verdad se puede quedar quieto y bloquear a alguien:
+ * la bandeja de quien revisa (R2), el contratista que no corrige (R1, R3), el
+ * expediente que impide emitir actas (R4) y un contrato a punto de vencer (R7).
+ *
+ * Se fueron:
+ *   · R5 «cuentas aprobadas sin radicar» — ERA LA FUGA. Mandaba la misma lista
+ *     a todos los supervisores sin filtrar por dependencia. Ahora vive dentro
+ *     de R2, segmentada, porque quien radica es el mismo que revisa.
+ *   · La rama de R4 sobre meses sin planilla — es un hueco administrativo que
+ *     no cambia de un día para otro; va en el consolidado del día 6.
  *
  *  R1 — Contratistas con informe en borrador (escalonado por día del mes):
  *       día 22: recordatorio suave · día 28: urgente · día 2: venció (mes anterior)
@@ -13,23 +28,20 @@
  *       El aviso de VENCIDO nunca va a quien no ha enviado un informe en su
  *       vida: para esa persona sería su primer contacto con el sistema, y no
  *       puede arreglarlo. Va a su supervisor, que es quien tiene la llave.
- *  R2 — Supervisor + asesores de la dependencia: resumen de informes enviados
- *       sin revisar. Sustituye al correo que salía en CADA envío
+ *  R2 — Supervisor + asesores DE SU DEPENDENCIA: el estado de su bandeja —
+ *       lo que espera revisión y lo que ya aprobaron y sigue sin radicar
  *  R3 — Contratista con informe DEVUELTO sin corregir (≥3 días), con las
  *       correcciones dentro; a las 2 semanas escala al supervisor
- *  R4 — Contratación/admin: contratos sin CDP, CRP o contrato firmado.
- *       Supervisor: meses cerrados sin planilla, que el acta imprime como «—»
- *  R5 — Secretaria/admin: cuentas aprobadas hace ≥5 días sin radicar
- *       (agrupado: UNA notificación por destinatario, no una por cuenta)
+ *  R4 — Contratación/admin: contratos sin CDP, CRP o contrato firmado
  *  R7 — Admin + supervisor del contrato: contratos que vencen en 60 o 30 días
  *
  * Anti-spam:
  *  - R1: guard de 20 h por (tipo, periodo) — un retry del cron no duplica
  *  - R1: el aviso al supervisor sobre primerizos, 20 h (la regla corre 1 vez/mes)
  *  - R2: solo si llegó algo en 24 h o algo lleva ≥5 días; máximo 1 cada 3 días
+ *        (el guard se evalúa por persona, no por dependencia)
  *  - R3: máximo uno por semana y por periodo; el escalado, uno por semana
  *  - R4: semanal por destinatario — son huecos que no cambian a diario
- *  - R5: máximo una alerta cada 4 días por destinatario
  *  - R7: dedup natural (solo dispara el día exacto de -60/-30)
  *
  * Auth: Vercel envía `Authorization: Bearer ${CRON_SECRET}` automáticamente
@@ -40,6 +52,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { enviarNotificacion } from '@/lib/notifications'
 import { notasPorObligacion } from '@/lib/notas-obligaciones'
+import { cargarAmbitos, destinatariosDe } from '@/lib/alcance'
 import { MESES } from '@/lib/constants'
 
 export const runtime = 'nodejs'
@@ -77,7 +90,7 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminSupabaseClient()
   const { anio, mesIdx, dia, iso } = hoyBogota()
-  const resumen: Record<string, number> = { r1_recordatorios: 0, r1_primerizos: 0, r2_revision: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r5_radicacion: 0, r7_vencimientos: 0 }
+  const resumen: Record<string, number> = { r1_recordatorios: 0, r1_primerizos: 0, r2_bandeja: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r7_vencimientos: 0 }
 
   // ══ R1 — Informes en borrador (días 22, 28 y 2) ═══════════════
   if (dia === 22 || dia === 28 || dia === 2) {
@@ -254,62 +267,70 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ══ R2 — Informes esperando revisión (resumen diario) ═════════
+  // ══ R2 — El estado de tu bandeja (resumen diario, por dependencia) ═════
   //
-  // Sustituye al correo por informe que salía en cada envío. Aquel avisaba al
-  // supervisor y a TODOS los asesores de la dependencia: con 97 informes al
-  // mes son ~380 correos, y el 82% caen en ocho días. Sesenta correos en una
-  // semana no se leen; se archivan en bloque, y se llevan por delante los
-  // avisos que sí piden una acción.
+  // Un solo correo a quien revisa, con las dos cosas que pueden quedarse
+  // quietas en sus manos: lo que espera revisión y lo que ya aprobó y sigue
+  // sin radicar.
   //
-  // Y tapa un agujero de control: R5 vigila las aprobadas sin radicar, pero
-  // hasta ahora NADIE vigilaba las enviadas sin revisar. Si quien revisa se
-  // ausenta, los informes se apilan y la contratista espera a ciegas.
+  // ── Por qué las dos cosas van juntas ──────────────────────────────────
   //
-  // Solo escribe cuando hay algo que hacer: o llegó algo nuevo en las últimas
-  // 24 h, o algo lleva demasiado esperando. En los días tranquilos calla.
+  // Eran dos reglas. La de radicación (R5) mandaba la MISMA lista a todos los
+  // supervisores y al admin: el 17 de septiembre salieron tres nombres —dos de
+  // Gobierno y uno de Hacienda— a cinco personas, y para Desarrollo Territorial
+  // y Bienestar Social el contenido era íntegramente ajeno, cero de tres.
+  //
+  // No bastaba con filtrarla: en 209 radicaciones hechas por alguien que no es
+  // el admin, las 209 las hizo el supervisor de esa misma dependencia. O sea
+  // que quien radica es exactamente la misma persona a la que esta regla ya
+  // escribía. Dos correos al mismo destinatario sobre su propia bandeja son
+  // uno. Y así el secretario deja de recibir alarmas sueltas: lo que le llega
+  // es el estado de su trabajo.
+  //
+  // Solo escribe cuando hay algo que hacer: o llegó algo nuevo en 24 h, o algo
+  // lleva demasiado esperando. En los días tranquilos calla.
   {
-    const { data: pendientes } = await admin
-      .from('periodos')
-      .select('id, mes, anio, fecha_envio, contrato:contratos(numero, dependencia_id, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
-      .in('estado', ['enviado', 'revision'])
-      .eq('es_historico', false)
+    const ambitos = await cargarAmbitos(admin)
 
-    type Pendiente = {
-      id: string; mes: string; anio: number; fecha_envio: string | null
+    const [{ data: pendientes }, { data: aprobados }] = await Promise.all([
+      admin
+        .from('periodos')
+        .select('id, mes, anio, fecha_envio, contrato:contratos(numero, dependencia_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
+        .in('estado', ['enviado', 'revision'])
+        .eq('es_historico', false),
+      admin
+        .from('periodos')
+        .select('id, mes, anio, contrato:contratos(numero, dependencia_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
+        .eq('estado', 'aprobado')
+        .eq('es_historico', false),
+    ])
+
+    type Fila = {
+      id: string; mes: string; anio: number; fecha_envio?: string | null
       contrato: {
-        numero: string; dependencia_id: string | null; supervisor_id: string | null
+        numero: string; dependencia_id: string | null
         contratista: { nombre_completo: string } | null
       } | null
     }
-    const filas = ((pendientes ?? []) as unknown as Pendiente[]).filter(p => p.contrato)
+    const porRevisar = ((pendientes ?? []) as unknown as Fila[]).filter(p => p.contrato?.dependencia_id)
+    const porRadicar = ((aprobados ?? []) as unknown as Fila[]).filter(p => p.contrato?.dependencia_id)
 
-    if (filas.length) {
-      // Asesores por dependencia, en una sola consulta.
-      const deps = [...new Set(filas.map(f => f.contrato!.dependencia_id).filter(Boolean))] as string[]
-      const { data: asesores } = deps.length
-        ? await admin.from('usuarios').select('id, dependencia_id').eq('rol', 'asesor').in('dependencia_id', deps)
-        : { data: [] as { id: string; dependencia_id: string | null }[] }
-
-      const asesoresPorDep = new Map<string, string[]>()
-      for (const a of asesores ?? []) {
-        if (!a.dependencia_id) continue
-        asesoresPorDep.set(a.dependencia_id, [...(asesoresPorDep.get(a.dependencia_id) ?? []), a.id])
+    // Cuándo se aprobó cada una: `periodos.fecha_aprobacion` no es fiable, la
+    // buena es la última transición → 'aprobado' del historial.
+    const aprobadoEn = new Map<string, string>()
+    if (porRadicar.length) {
+      const { data: hist } = await admin
+        .from('historial_periodos')
+        .select('periodo_id, created_at')
+        .eq('estado_nuevo', 'aprobado')
+        .in('periodo_id', porRadicar.map(p => p.id))
+        .order('created_at', { ascending: false })
+      for (const h of hist ?? []) {
+        if (!aprobadoEn.has(h.periodo_id as string)) aprobadoEn.set(h.periodo_id as string, h.created_at as string)
       }
+    }
 
-      // Cada informe cuenta para su supervisor y para los asesores de su
-      // dependencia — los mismos que antes recibían el correo suelto.
-      const porRevisor = new Map<string, Pendiente[]>()
-      for (const f of filas) {
-        const destinos = [
-          ...(f.contrato!.supervisor_id ? [f.contrato!.supervisor_id] : []),
-          ...(f.contrato!.dependencia_id ? asesoresPorDep.get(f.contrato!.dependencia_id) ?? [] : []),
-        ]
-        for (const id of new Set(destinos)) {
-          porRevisor.set(id, [...(porRevisor.get(id) ?? []), f])
-        }
-      }
-
+    if (porRevisar.length || porRadicar.length) {
       const hace24h = Date.now() - 24 * 3600_000
       const hace5d = Date.now() - 5 * 24 * 3600_000
 
@@ -324,44 +345,71 @@ export async function GET(req: NextRequest) {
       const ultimoAviso = new Map<string, number>()
       for (const n of recientes ?? []) {
         const t = new Date(n.created_at as string).getTime()
-        ultimoAviso.set(n.usuario_id as string, Math.max(ultimoAviso.get(n.usuario_id as string) ?? 0, t))
+        const k = n.usuario_id as string
+        ultimoAviso.set(k, Math.max(ultimoAviso.get(k) ?? 0, t))
       }
 
+      const etiqueta = (p: Fila) =>
+        `${p.contrato?.contratista?.nombre_completo ?? '?'} (${p.mes})`
+
+      // El reparto sale de lib/alcance.ts: cada dependencia, su gente. Ninguna
+      // consulta por rol suelta — así es como se coló la lista global.
       await Promise.allSettled(
-        [...porRevisor.entries()].map(async ([revisorId, lista]) => {
-          const ultimo = ultimoAviso.get(revisorId) ?? 0
-          if (Date.now() - ultimo < 20 * 3600_000) return   // retry del cron
+        [...ambitos.values()].map(async (ambito) => {
+          const revisar = porRevisar.filter(p => p.contrato!.dependencia_id === ambito.dependenciaId)
+          const radicar = porRadicar.filter(p => p.contrato!.dependencia_id === ambito.dependenciaId)
+          if (revisar.length === 0 && radicar.length === 0) return
 
-          const nuevos = lista.filter(p => p.fecha_envio && new Date(p.fecha_envio).getTime() >= hace24h)
-          const viejos = lista.filter(p => p.fecha_envio && new Date(p.fecha_envio).getTime() <= hace5d)
+          const nuevos = revisar.filter(p => p.fecha_envio && new Date(p.fecha_envio).getTime() >= hace24h)
+          const viejos = revisar.filter(p => p.fecha_envio && new Date(p.fecha_envio).getTime() <= hace5d)
+          const estancadas = radicar.filter(p => {
+            const f = aprobadoEn.get(p.id)
+            return f && new Date(f).getTime() <= hace5d
+          })
 
-          // Nada nuevo y nada envejeciendo → silencio. Y si solo hay viejos,
-          // no se insiste más de una vez cada 3 días.
-          if (nuevos.length === 0 && viejos.length === 0) return
-          if (nuevos.length === 0 && ultimo > 0) return
-
-          const nombres = viejos
-            .slice(0, 5)
-            .map(p => `${p.contrato?.contratista?.nombre_completo ?? '?'} (${p.mes})`)
-            .join(', ')
+          // Nada nuevo y nada envejeciendo → silencio.
+          if (nuevos.length === 0 && viejos.length === 0 && estancadas.length === 0) return
 
           const partes = [
-            `Tienes ${lista.length} informe${lista.length === 1 ? '' : 's'} esperando revisión.`,
+            revisar.length
+              ? `Tienes ${revisar.length} informe${revisar.length === 1 ? '' : 's'} esperando revisión.`
+              : '',
             nuevos.length ? `${nuevos.length} lleg${nuevos.length === 1 ? 'ó' : 'aron'} en las últimas 24 horas.` : '',
             viejos.length
-              ? `${viejos.length} llev${viejos.length === 1 ? 'a' : 'an'} más de 5 días sin revisar: ${nombres}${viejos.length > 5 ? ` y ${viejos.length - 5} más` : ''}.`
+              ? `${viejos.length} llev${viejos.length === 1 ? 'a' : 'an'} más de 5 días sin revisar: ${viejos.slice(0, 5).map(etiqueta).join(', ')}${viejos.length > 5 ? ` y ${viejos.length - 5} más` : ''}.`
+              : '',
+            estancadas.length
+              ? `Y ${estancadas.length} cuenta${estancadas.length === 1 ? '' : 's'} que ya aprobaste llev${estancadas.length === 1 ? 'a' : 'an'} 5 días o más sin radicar: ${estancadas.slice(0, 5).map(etiqueta).join(', ')}${estancadas.length > 5 ? ` y ${estancadas.length - 5} más` : ''}.`
               : '',
           ].filter(Boolean)
           const detalle = partes.join(' ')
 
-          await enviarNotificacion({
-            destinatarioId: revisorId,
-            tipo: 'revision_pendiente',
-            titulo: `${lista.length} informe(s) esperando revisión`,
-            mensaje: detalle,
-            detalle,
-          })
-          resumen.r2_revision++
+          const titulo = revisar.length && estancadas.length
+            ? `${revisar.length} por revisar y ${estancadas.length} por radicar`
+            : estancadas.length
+              ? `${estancadas.length} cuenta(s) esperando radicación`
+              : `${revisar.length} informe(s) esperando revisión`
+
+          await Promise.allSettled(
+            destinatariosDe(ambito).map(async (revisorId) => {
+              const ultimo = ultimoAviso.get(revisorId) ?? 0
+              if (Date.now() - ultimo < 20 * 3600_000) return          // retry del cron
+              // Si no hay nada nuevo, no se insiste más de una vez cada 3 días.
+              if (nuevos.length === 0 && ultimo > 0) return
+
+              await enviarNotificacion({
+                destinatarioId: revisorId,
+                tipo: 'revision_pendiente',
+                titulo,
+                mensaje: detalle,
+                // `motivo` es lo que la plantilla usa de asunto; `titulo` va a
+                // la campana. Los dos dicen lo mismo a propósito.
+                motivo: titulo,
+                detalle,
+              })
+              resumen.r2_bandeja++
+            }),
+          )
         }),
       )
     }
@@ -520,13 +568,12 @@ export async function GET(req: NextRequest) {
 
     const { data: vigentesRaw } = await admin
       .from('contratos')
-      .select('id, numero, cdp, crp, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
+      .select('id, numero, cdp, crp, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
       .eq('activo', true)
       .gte('fecha_fin', iso)
 
     type Vig = {
       id: string; numero: string; cdp: string | null; crp: string | null
-      supervisor_id: string | null
       contratista: { nombre_completo: string } | null
     }
     const vigentes = ((vigentesRaw ?? []) as unknown as Vig[])
@@ -540,7 +587,7 @@ export async function GET(req: NextRequest) {
           .is('eliminado_at', null)
           .in('entidad_id', ids),
         admin.from('periodos')
-          .select('contrato_id, mes, numero_planilla, fecha_fin, fecha_envio')
+          .select('contrato_id, fecha_envio')
           .in('contrato_id', ids)
           .eq('es_historico', false),
       ])
@@ -550,14 +597,6 @@ export async function GET(req: NextRequest) {
         ((periodosVig ?? []) as { contrato_id: string; fecha_envio: string | null }[])
           .filter(p => p.fecha_envio).map(p => p.contrato_id),
       )
-
-      // Meses ya cerrados sin número de planilla: son los que imprimirán «—».
-      const sinPlanilla = new Map<string, string[]>()
-      for (const p of (periodosVig ?? []) as { contrato_id: string; mes: string; numero_planilla: string | null; fecha_fin: string | null }[]) {
-        if ((p.numero_planilla ?? '').trim()) continue
-        if (!p.fecha_fin || p.fecha_fin >= iso) continue   // el mes en curso todavía da tiempo
-        sinPlanilla.set(p.contrato_id, [...(sinPlanilla.get(p.contrato_id) ?? []), p.mes])
-      }
 
       // ── Contratación + admin: presupuesto y contrato firmado ──
       const faltaCdpCrp = vigentes.filter(c => !(c.cdp ?? '').trim() || !(c.crp ?? '').trim())
@@ -589,104 +628,6 @@ export async function GET(req: NextRequest) {
               detalle,
             })
             resumen.r4_expediente++
-          }),
-        )
-      }
-
-      // ── Supervisor: los meses que van a imprimir «—» ──
-      if (sinPlanilla.size) {
-        const porSup = new Map<string, string[]>()
-        for (const c of vigentes) {
-          const meses = sinPlanilla.get(c.id)
-          if (!meses || !c.supervisor_id) continue
-          porSup.set(c.supervisor_id, [
-            ...(porSup.get(c.supervisor_id) ?? []),
-            `${c.numero} (${c.contratista?.nombre_completo ?? '?'}) — ${meses.join(', ')}`,
-          ])
-        }
-        await Promise.allSettled(
-          [...porSup.entries()]
-            .filter(([sup]) => !yaAvisadosExp.has(sup))
-            .map(async ([sup, lineas]) => {
-              const detalle = `${lineas.length} contrato${lineas.length === 1 ? '' : 's'} a tu cargo tiene${lineas.length === 1 ? '' : 'n'} meses cerrados sin número de planilla, y el acta los imprimirá como «—»: ${lineas.slice(0, 8).join(' · ')}${lineas.length > 8 ? ` · y ${lineas.length - 8} más` : ''}. Para que puedan subirla tienes que habilitarles el envío tardío en ese periodo.`
-              await enviarNotificacion({
-                destinatarioId: sup,
-                tipo: 'expediente_incompleto',
-                titulo: 'Actas que saldrán sin número de planilla',
-                mensaje: detalle,
-                detalle,
-              })
-              resumen.r4_expediente++
-            }),
-        )
-      }
-    }
-  }
-
-  // ══ R5 — Aprobadas sin radicar hace ≥5 días ═══════════════════
-  {
-    const { data: aprobados } = await admin
-      .from('periodos')
-      .select('id, mes, anio, contrato:contratos(numero, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
-      .eq('estado', 'aprobado')
-      .eq('es_historico', false)
-
-    type Aprobado = {
-      id: string; mes: string; anio: number
-      contrato: { numero: string; contratista: { nombre_completo: string } | null } | null
-    }
-    const rows = ((aprobados ?? []) as unknown as Aprobado[])
-
-    if (rows.length) {
-      // Fecha de aprobación = última transición → 'aprobado' en el historial
-      const { data: hist } = await admin
-        .from('historial_periodos')
-        .select('periodo_id, created_at')
-        .eq('estado_nuevo', 'aprobado')
-        .in('periodo_id', rows.map(r => r.id))
-        .order('created_at', { ascending: false })
-      const aprobadoEn = new Map<string, string>()
-      for (const h of hist ?? []) {
-        if (!aprobadoEn.has(h.periodo_id)) aprobadoEn.set(h.periodo_id, h.created_at)
-      }
-
-      const hace5d = Date.now() - 5 * 24 * 3600_000
-      const estancados = rows.filter(r => {
-        const f = aprobadoEn.get(r.id)
-        return f && new Date(f).getTime() <= hace5d
-      })
-
-      if (estancados.length) {
-        const nombres = estancados
-          .slice(0, 5)
-          .map(r => `${r.contrato?.contratista?.nombre_completo ?? '?'} (${r.mes})`)
-          .join(', ')
-        const detalle = `Hay ${estancados.length} cuenta${estancados.length === 1 ? '' : 's'} aprobada${estancados.length === 1 ? '' : 's'} hace 5 o más días sin radicar: ${nombres}${estancados.length > 5 ? ` y ${estancados.length - 5} más` : ''}.`
-
-        const { data: receptores } = await admin
-          .from('usuarios')
-          .select('id')
-          .in('rol', ['supervisor', 'admin'])
-
-        // Anti-spam: máximo una alerta de este tipo cada 4 días por destinatario
-        const hace4d = new Date(Date.now() - 4 * 24 * 3600_000).toISOString()
-        const { data: recientes } = await admin
-          .from('notificaciones')
-          .select('usuario_id')
-          .eq('tipo', 'radicacion_pendiente')
-          .gte('created_at', hace4d)
-        const yaAvisados = new Set((recientes ?? []).map(n => n.usuario_id))
-
-        await Promise.allSettled(
-          (receptores ?? []).filter(u => !yaAvisados.has(u.id)).map(async (u) => {
-            await enviarNotificacion({
-              destinatarioId: u.id,
-              tipo: 'radicacion_pendiente',
-              titulo: `${estancados.length} cuenta(s) esperando radicación`,
-              mensaje: detalle,
-              detalle,
-            })
-            resumen.r5_radicacion++
           }),
         )
       }

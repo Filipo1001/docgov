@@ -1,24 +1,33 @@
 /**
- * GET /api/cron/reporte-mensual — consolidado mensual para cada secretaría.
+ * GET /api/cron/reporte-mensual — el cierre del mes, segmentado.
  *
- * Se envía el día 5 de cada mes (7:00 AM Bogotá) y resume el MES ANTERIOR:
- * para entonces el ciclo ya cerró —los informes se radican en los primeros
- * días— y el consolidado refleja el resultado real, no una foto a medias.
+ * Corre el día 6 a las 7:00 de Bogotá y reporta el MES ANTERIOR: para entonces
+ * el ciclo ya cerró —los informes se radican en los primeros días— y la foto
+ * es el resultado real, no una a medias.
  *
- * Qué contiene y por qué:
- *  · Cumplimiento del mes: cuántos de sus contratos completaron el ciclo. Es
- *    el número que responde «¿cómo me fue?» de un vistazo.
- *  · Lo que quedó sin cerrar, con nombre y contrato. Un consolidado que solo
- *    felicita no sirve; lo accionable es la lista de lo que sigue abierto.
- *  · Comparación con el mes anterior, para ver la tendencia sin abrir el panel.
+ * ── Dos correos distintos, y la diferencia es la regla del sistema ───────
  *
- * Complementa, no duplica: el cron diario ya avisa de cuentas aprobadas sin
- * radicar (R5) y de contratos por vencer (R7). Aquí no se repite ninguna
- * alerta operativa — esto es el cierre del ciclo.
+ *   · A cada SECRETARÍA (su supervisor y sus asesores): sus cifras, sus
+ *     contratos abiertos CON NOMBRE, y el reparto agregado del municipio para
+ *     situarse. Nombres, solo los suyos.
+ *   · A quien responde por el MUNICIPIO (alcalde, admin, contratación): las
+ *     cuatro secretarías comparadas, sin un solo nombre propio. Quien necesite
+ *     saber a quién llamar lo tiene en el correo de su secretaría.
  *
- * Anti-duplicado: guard por (tipo, destinatario) en las últimas 48 h, así un
- * reintento del cron no manda dos consolidados. Se apoya en `notificaciones`,
- * igual que el cron diario.
+ * Esa línea —cifras agregadas se comparten, nombres no salen de su
+ * dependencia— es lo que faltaba. La alerta de cuentas sin radicar mandaba la
+ * MISMA lista de tres nombres a los cuatro secretarios; para Desarrollo
+ * Territorial y Bienestar Social no había nada suyo dentro. El reparto ya no
+ * se escribe a mano en cada regla: sale de `lib/alcance.ts`.
+ *
+ * El cálculo vive en `lib/reportes/consolidado.ts`, aparte, para poder correr
+ * un mes real y mirarlo antes de mandárselo a nadie. Ahí están documentados
+ * los tres errores de la versión anterior (denominador con la fecha de hoy,
+ * comparación que ignoraba `es_historico`, y «pagado» donde el sistema solo
+ * sabe «radicado»).
+ *
+ * Anti-duplicado: guard por (tipo, destinatario) en 48 h, así un reintento del
+ * cron no manda dos consolidados.
  *
  * Auth: Vercel envía `Authorization: Bearer ${CRON_SECRET}`. Sin secret → 401.
  */
@@ -26,31 +35,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { enviarNotificacion } from '@/lib/notifications'
-import { MESES } from '@/lib/constants'
+import { destinatariosDe, usuariosTransversales } from '@/lib/alcance'
+import { calcularConsolidado } from '@/lib/reportes/consolidado'
+import type {
+  DatosConsolidadoDependencia,
+  DatosConsolidadoMunicipio,
+} from '@/lib/emails/templates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-/** Fecha actual en Bogotá (el server corre en UTC). */
-function hoyBogota(): { anio: number; mesIdx: number } {
-  const partes = new Intl.DateTimeFormat('en-CA', {
+/** Por debajo de esto la secretaría sale nombrada en el aviso del municipio. */
+const UMBRAL_REZAGO = 70
+
+function hoyBogota(): { anio: number; mesIdx: number; iso: string } {
+  const iso = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
-  const [anio, mes] = partes.split('-').map(Number)
-  return { anio, mesIdx: mes - 1 }
+  const [anio, mes] = iso.split('-').map(Number)
+  return { anio, mesIdx: mes - 1, iso }
 }
 
-type ContratoRow = {
-  id: string
-  numero: string
-  supervisor_id: string | null
-  /** Para llevarle el mismo consolidado a los asesores de esa secretaría. */
-  dependencia_id: string | null
-  contratista: { nombre_completo: string } | null
-}
-
-type PeriodoRow = { contrato_id: string; estado: string; mes: string; anio: number }
+const cop = (n: number) => '$' + Math.round(n).toLocaleString('es-CO')
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -62,153 +69,145 @@ export async function GET(req: NextRequest) {
   const admin = createAdminSupabaseClient()
   const hoy = hoyBogota()
 
-  // Mes que se reporta: el anterior al actual. Y el previo a ese, para comparar.
-  const idxReporte = (hoy.mesIdx + 11) % 12
-  const anioReporte = hoy.mesIdx === 0 ? hoy.anio - 1 : hoy.anio
-  const mesReporte = MESES[idxReporte]
-  const idxPrevio = (idxReporte + 11) % 12
-  const anioPrevio = idxReporte === 0 ? anioReporte - 1 : anioReporte
-  const mesPrevio = MESES[idxPrevio]
+  // El mes que se reporta es el anterior al de hoy.
+  const mesIdx = (hoy.mesIdx + 11) % 12
+  const anio = hoy.mesIdx === 0 ? hoy.anio - 1 : hoy.anio
 
-  // 1. Contratos vigentes, agrupados por secretaría
-  const hoyISO = new Date().toISOString().slice(0, 10)
-  const { data: contratosRaw, error: eC } = await admin
-    .from('contratos')
-    .select('id, numero, supervisor_id, dependencia_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
-    .gte('fecha_fin', hoyISO)
-  if (eC) return NextResponse.json({ error: eC.message }, { status: 500 })
+  const c = await calcularConsolidado(admin, mesIdx, anio, hoy.iso)
 
-  const contratos = (contratosRaw ?? []) as unknown as ContratoRow[]
-  const porSupervisor = new Map<string, ContratoRow[]>()
-  for (const c of contratos) {
-    if (!c.supervisor_id) continue
-    const lista = porSupervisor.get(c.supervisor_id) ?? []
-    lista.push(c)
-    porSupervisor.set(c.supervisor_id, lista)
-  }
-  if (porSupervisor.size === 0) {
-    return NextResponse.json({ enviados: 0, motivo: 'sin supervisores con contratos vigentes' })
+  if (c.dependencias.length === 0) {
+    return NextResponse.json({ mes: `${c.mes} ${anio}`, enviados: 0, motivo: 'ningún contrato vigente ese mes' })
   }
 
-  // 1b. Asesores por secretaría.
-  //
-  // El consolidado se pensó para el supervisor, pero el asesor revisa los
-  // mismos informes y hasta ahora terminaba el mes sin ninguna foto de cómo
-  // había ido. Cada secretaría tiene un solo supervisor, así que un asesor
-  // recibe exactamente un consolidado: el de la suya.
-  const dependencias = [...new Set(contratos.map(c => c.dependencia_id).filter(Boolean))] as string[]
-  const { data: asesoresRaw } = dependencias.length
-    ? await admin.from('usuarios').select('id, dependencia_id').eq('rol', 'asesor').eq('activo', true).in('dependencia_id', dependencias)
-    : { data: [] as { id: string; dependencia_id: string | null }[] }
-  const asesoresPorDep = new Map<string, string[]>()
-  for (const a of asesoresRaw ?? []) {
-    if (!a.dependencia_id) continue
-    asesoresPorDep.set(a.dependencia_id, [...(asesoresPorDep.get(a.dependencia_id) ?? []), a.id])
-  }
-
-  // 2. Periodos de los dos meses, en UNA consulta.
-  //
-  // Los dos .in() forman un producto cruzado: en el salto de año traería
-  // también pares que no existen (p. ej. Diciembre-2027). No importa —
-  // `estadoDe` empareja mes Y año exactos, así que las filas de más se
-  // ignoran. Se prefiere esto a dos consultas o a un .or() encadenado, que
-  // es más frágil de leer.
-  const todosIds = contratos.map(c => c.id)
-  const { data: periodosRaw, error: eP } = await admin
-    .from('periodos')
-    .select('contrato_id, estado, mes, anio')
-    .in('contrato_id', todosIds)
-    .eq('es_historico', false)
-    .in('mes', [mesReporte, mesPrevio])
-    .in('anio', [...new Set([anioReporte, anioPrevio])])
-  if (eP) return NextResponse.json({ error: eP.message }, { status: 500 })
-  const periodos = (periodosRaw ?? []) as PeriodoRow[]
-
-  const estadoDe = (contratoId: string, mes: string, anio: number) =>
-    periodos.find(p => p.contrato_id === contratoId && p.mes === mes && p.anio === anio)?.estado
-
-  // 3. Guard anti-duplicado: 48 h por destinatario
+  // ── Guard anti-duplicado: 48 h por destinatario y tipo ─────────────────
   const hace48h = new Date(Date.now() - 48 * 3600_000).toISOString()
   const { data: yaEnviadas } = await admin
     .from('notificaciones')
-    .select('usuario_id')
-    .eq('tipo', 'reporte_mensual')
+    .select('usuario_id, tipo')
+    .in('tipo', ['reporte_mensual', 'consolidado_municipio'])
     .gte('created_at', hace48h)
-  const yaRecibieron = new Set((yaEnviadas ?? []).map(n => n.usuario_id))
+  const yaRecibieron = new Set((yaEnviadas ?? []).map(n => `${n.tipo}:${n.usuario_id}`))
 
-  const cerrado = (e?: string) => e === 'aprobado' || e === 'radicado'
   let enviados = 0
   let omitidos = 0
+  const sinDestinatario: string[] = []
 
-  for (const [supervisorId, sus] of porSupervisor) {
-    if (sus.length === 0) { omitidos++; continue }
+  // ══ Consolidado de cada secretaría ═══════════════════════════════════
+  for (const b of c.dependencias) {
+    const destinatarios = destinatariosDe(b.ambito)
+    if (destinatarios.length === 0) {
+      // Hacienda, Bienestar Social y Desarrollo Territorial no tienen asesor:
+      // si además faltara el supervisor, el consolidado no tiene a quién ir y
+      // conviene que se vea en la respuesta del cron, no que desaparezca.
+      sinDestinatario.push(b.ambito.nombre)
+      continue
+    }
 
-    const total = sus.length
-    const completados = sus.filter(c => cerrado(estadoDe(c.id, mesReporte, anioReporte))).length
-    const pct = Math.round((completados / total) * 100)
+    const datos: DatosConsolidadoDependencia = {
+      mes: c.mes,
+      anio: c.anio,
+      mesPrevio: c.mesPrevio,
+      dependencia: b.ambito.nombre,
+      dependenciaId: b.ambito.dependenciaId,
+      fila: {
+        contratos: b.fila.contratos,
+        cerrados: b.fila.cerrados,
+        pct: b.fila.pct,
+        contratistas: b.fila.contratistas,
+        valor: b.fila.valor,
+      },
+      previo: b.previo,
+      notaPrevio: b.notaPrevio,
+      cambioPoblacion: b.cambioPoblacion,
+      tramiteDias: b.tramiteDias,
+      abiertos: b.abiertos,
+      sinPlanilla: b.sinPlanilla,
+      reparos: b.reparos,
+      municipio: {
+        valor: c.municipio.valor,
+        informes: c.municipio.informes,
+        filas: c.municipio.filas.map(f => ({
+          dependenciaId: f.dependenciaId,
+          nombre: f.nombre,
+          valor: f.valor,
+          cerrados: f.cerrados,
+          contratos: f.contratos,
+        })),
+      },
+    }
 
-    const previoCompletados = sus.filter(c => cerrado(estadoDe(c.id, mesPrevio, anioPrevio))).length
-    const pctPrevio = Math.round((previoCompletados / total) * 100)
-
-    const tendencia = pct === pctPrevio
-      ? `igual que en ${mesPrevio}`
-      : pct > pctPrevio
-        ? `${pct - pctPrevio} puntos más que en ${mesPrevio}`
-        : `${pctPrevio - pct} puntos menos que en ${mesPrevio}`
-
-    // Lo que quedó abierto, con nombres — la parte accionable del consolidado.
-    const abiertos = sus
-      .map(c => ({ c, e: estadoDe(c.id, mesReporte, anioReporte) }))
-      .filter(({ e }) => !cerrado(e))
-      .map(({ c, e }) => {
-        const etiqueta =
-          !e || e === 'borrador' ? 'sin enviar'
-          : e === 'rechazado' ? 'devuelto al contratista'
-          : e === 'enviado' ? 'esperando tu aprobación'
-          : e === 'revision' ? 'en revisión'
-          : e
-        return `${c.contratista?.nombre_completo ?? 'Sin nombre'} (contrato ${c.numero}) — ${etiqueta}`
-      })
-
-    const resumen = `${completados} de ${total} contratos completaron el ciclo (${pct}%), ${tendencia}.`
-
-    const detalle = abiertos.length
-      ? `Quedaron ${abiertos.length} sin cerrar: ` +
-        abiertos.slice(0, 15).join(' · ') +
-        (abiertos.length > 15 ? ` · y ${abiertos.length - 15} más` : '')
-      : 'Todos los contratos a tu cargo completaron el ciclo.'
-
-    // El supervisor y los asesores de las secretarías que cubre. El guard de
-    // 48 h se evalúa por persona, no por grupo: si a uno ya le llegó, los
-    // demás no se quedan sin el suyo.
-    const depsDelGrupo = [...new Set(sus.map(c => c.dependencia_id).filter(Boolean))] as string[]
-    const destinatarios = [...new Set([
-      supervisorId,
-      ...depsDelGrupo.flatMap(d => asesoresPorDep.get(d) ?? []),
-    ])]
+    // La campana guarda texto plano: tiene que leerse sola, sin el correo.
+    const mensaje =
+      `${b.fila.cerrados} de ${b.fila.contratos} contratos cerraron el ciclo de ${c.mes}. ` +
+      `${b.fila.contratistas} contratistas, ${cop(b.fila.valor)} radicados.` +
+      (b.abiertos.length ? ` Quedaron ${b.abiertos.length} sin cerrar.` : '')
 
     for (const destinatarioId of destinatarios) {
-      if (yaRecibieron.has(destinatarioId)) { omitidos++; continue }
+      if (yaRecibieron.has(`reporte_mensual:${destinatarioId}`)) { omitidos++; continue }
       await enviarNotificacion({
         destinatarioId,
         tipo: 'reporte_mensual',
-        titulo: `Consolidado de ${mesReporte} ${anioReporte}`,
-        mensaje: resumen,
-        mes: mesReporte,
-        anio: anioReporte,
-        // `motivo` es el campo que la plantilla de correo sabe pintar; `mensaje`
-        // solo alimenta la campana dentro de la aplicación.
-        motivo: resumen,
-        detalle,
+        titulo: `Consolidado de ${c.mes} ${c.anio}`,
+        mensaje,
+        mes: c.mes,
+        anio: c.anio,
+        datos,
+      }).catch(() => {})
+      enviados++
+    }
+  }
+
+  // ══ Consolidado del municipio ════════════════════════════════════════
+  const transversales = await usuariosTransversales(admin)
+  if (transversales.length) {
+    const filas = c.dependencias.map(b => ({
+      nombre: b.ambito.nombre,
+      valor: b.fila.valor,
+      cerrados: b.fila.cerrados,
+      contratos: b.fila.contratos,
+      pct: b.fila.pct,
+      contratistas: b.fila.contratistas,
+    }))
+
+    const datos: DatosConsolidadoMunicipio = {
+      mes: c.mes,
+      anio: c.anio,
+      informes: c.municipio.informes,
+      contratistas: c.municipio.contratistas,
+      valor: c.municipio.valor,
+      filas,
+      rezagadas: filas
+        .filter(f => f.pct < UMBRAL_REZAGO)
+        .map(f => ({ nombre: f.nombre, cerrados: f.cerrados, contratos: f.contratos })),
+    }
+
+    const mensaje =
+      `${c.municipio.informes} informes cerraron el ciclo de ${c.mes} en ${filas.length} secretarías. ` +
+      `${c.municipio.contratistas} contratistas, ${cop(c.municipio.valor)} radicados.`
+
+    for (const destinatarioId of transversales) {
+      if (yaRecibieron.has(`consolidado_municipio:${destinatarioId}`)) { omitidos++; continue }
+      await enviarNotificacion({
+        destinatarioId,
+        tipo: 'consolidado_municipio',
+        titulo: `Consolidado del municipio — ${c.mes} ${c.anio}`,
+        mensaje,
+        mes: c.mes,
+        anio: c.anio,
+        datos,
       }).catch(() => {})
       enviados++
     }
   }
 
   return NextResponse.json({
-    mes: `${mesReporte} ${anioReporte}`,
-    supervisores: porSupervisor.size,
+    ok: true,
+    mes: `${c.mes} ${c.anio}`,
+    dependencias: c.dependencias.length,
+    informes: c.municipio.informes,
+    valor: c.municipio.valor,
     enviados,
     omitidos,
+    ...(sinDestinatario.length ? { sinDestinatario } : {}),
   })
 }

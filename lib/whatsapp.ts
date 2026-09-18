@@ -148,8 +148,9 @@ const PLANTILLAS: Record<string, Constructor> = {
   // ── Sin plantilla registrada, a propósito ───────────────────────────────
   //
   // No están `enviado` (aviso al supervisor), los tres recordatorios del cron,
-  // `radicacion_pendiente` ni `contrato_vencimiento`: sus plantillas nunca se
-  // registraron en Meta.
+  // los dos consolidados mensuales ni `contrato_vencimiento`: sus plantillas
+  // nunca se registraron en Meta. (Los consolidados además no cabrían: una
+  // plantilla de WhatsApp no pinta una tabla.)
   //
   // La ausencia es deliberada y no es lo mismo que un olvido: un tipo que no
   // figura en este mapa se omite en silencio y sigue saliendo por correo,

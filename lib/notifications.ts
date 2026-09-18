@@ -30,6 +30,23 @@ export interface NotificationPayload {
   /** Texto libre para plantillas de alertas agregadas */
   detalle?: string
   /**
+   * Datos estructurados para las plantillas que arman una tabla o un gráfico.
+   *
+   * El resto del payload son cadenas sueltas, y con eso basta para un aviso:
+   * «tu informe de Agosto venció». Un consolidado no cabe ahí. La versión
+   * anterior lo intentó concatenando la lista de contratos abiertos dentro de
+   * `detalle` separada por « · », y el resultado era un párrafo que nadie
+   * podía ordenar, alinear ni recortar.
+   *
+   * Va como `unknown` a propósito: quien lo emite y quien lo pinta comparten
+   * un tipo concreto (ver `lib/reportes/consolidado.ts`), y esta capa no tiene
+   * por qué conocerlo. Solo lo transporta.
+   *
+   * NO viaja a WhatsApp ni a la campana: la campana guarda `mensaje`, que
+   * sigue siendo texto plano y legible por sí solo.
+   */
+  datos?: unknown
+  /**
    * Solo campana, sin correo.
    *
    * Existe para el aviso de informe enviado. Un envío notifica al supervisor
@@ -130,6 +147,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
     numeroRadicado: payload.numeroRadicado,
     nombreRemitente: payload.nombreRemitente,
     detalle: payload.detalle,
+    datos: payload.datos,
     email: usuario.email,
   }
 

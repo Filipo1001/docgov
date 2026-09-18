@@ -16,6 +16,12 @@ interface TemplateData {
   nombreRemitente?: string
   /** Texto libre para alertas agregadas (lista de cuentas, días restantes, etc.) */
   detalle?: string
+  /**
+   * Datos estructurados. Solo lo usan los consolidados, que necesitan pintar
+   * una tabla y unas barras: el resto de plantillas se apañan con cadenas.
+   * Llega como `unknown` desde el despachador y cada plantilla lo estrecha.
+   */
+  datos?: unknown
   /** Correo de acceso — solo lo usa la bienvenida, para mostrarlo como usuario. */
   email?: string
 }
@@ -261,23 +267,6 @@ export function emailRecordatorioVencido(data: TemplateData) {
   }
 }
 
-export function emailRadicacionPendiente(data: TemplateData) {
-  return {
-    subject: `Cuentas aprobadas esperando radicación`,
-    html: baseHtml(
-      'Cuentas pendientes de radicar',
-      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
-       <p style="color:#333;font-size:14px;line-height:1.6;">
-         ${data.detalle ?? 'Hay cuentas aprobadas que llevan varios días esperando radicación.'}
-       </p>
-       <p style="color:#555;font-size:13px;line-height:1.6;">
-         Puedes radicarlas todas de una vez con <strong>Radicación rápida</strong> en la
-         pestaña Aprobados de Informes.
-       </p>`,
-      '#4f46e5'
-    ),
-  }
-}
 
 export function emailBienvenida(data: TemplateData) {
   return {
@@ -411,29 +400,6 @@ export function emailPlanillaRechazada(data: TemplateData) {
   }
 }
 
-export function emailReporteMensual(data: TemplateData) {
-  return {
-    subject: `Consolidado de ${data.mes} ${data.anio} — tus contratos`,
-    html: baseHtml(
-      `Consolidado de ${data.mes} ${data.anio}`,
-      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
-       <p style="color:#333;font-size:14px;line-height:1.6;">
-         Cerró el ciclo de <strong>${data.mes} ${data.anio}</strong> en los contratos que supervisas.
-       </p>
-       <div style="background:#f8fafc;border-left:4px solid #192031;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;">
-         <p style="color:#192031;font-size:14px;margin:0;font-weight:600;">Resultado del mes</p>
-         <p style="color:#334155;font-size:13px;margin:6px 0 0;">${data.motivo ?? ''}</p>
-       </div>
-       ${data.detalle ? `<p style="color:#333;font-size:13px;line-height:1.7;">${data.detalle}</p>` : ''}
-       <p style="color:#666;font-size:12px;line-height:1.6;margin-top:20px;">
-         Este consolidado llega una vez al mes. Las alertas de lo que necesita
-         acción inmediata siguen llegando por separado.
-       </p>`,
-      '#192031'
-    ),
-  }
-}
-
 /**
  * Resumen diario para quien revisa.
  *
@@ -445,16 +411,24 @@ export function emailReporteMensual(data: TemplateData) {
  * Este llega como mucho una vez al día, y solo cuando hay algo que hacer.
  */
 export function emailRevisionPendiente(data: TemplateData) {
+  // El correo cubre las dos cosas que pueden quedarse quietas en sus manos, y
+  // el asunto tiene que decir cuál de ellas es: `titulo` lo trae ya resuelto
+  // desde la regla, que es la única que sabe si hay una, la otra o ambas.
+  // «Informes esperando tu revisión» encima de un correo que solo habla de
+  // cuentas sin radicar es una promesa que el cuerpo no cumple.
+  const asunto = data.motivo?.trim() || 'Informes esperando tu revisión'
   return {
-    subject: 'Informes esperando tu revisión',
+    subject: asunto,
     html: baseHtml(
-      'Informes por revisar',
+      'El estado de tu bandeja',
       `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
        <p style="color:#333;font-size:14px;line-height:1.6;">
          ${data.detalle ?? 'Tienes informes esperando revisión.'}
        </p>
        <p style="color:#555;font-size:13px;line-height:1.6;">
-         Los encuentras en <strong>Informes</strong>, pestaña Enviados.
+         Los informes por revisar están en <strong>Informes</strong>, pestaña
+         Enviados. Las cuentas aprobadas se radican desde la pestaña Aprobados,
+         y ahí puedes hacerlo en bloque con Radicación rápida.
        </p>`,
       '#4f46e5'
     ),
@@ -571,6 +545,312 @@ export function emailPrimerInformePendiente(data: TemplateData) {
   }
 }
 
+
+// ════════════════════════════════════════════════════════════════════════
+//  Consolidados mensuales
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Los nombres salen de la base de datos y van dentro de HTML. Ninguno lleva
+ * hoy un carácter conflictivo, pero un apellido con «&» basta para romper la
+ * maqueta, y quien escribe ese nombre es el municipio, no nosotros.
+ */
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** Pesos colombianos sin decimales: en las cuentas de cobro no existen. */
+function cop(n: number): string {
+  return '$' + Math.round(n).toLocaleString('es-CO')
+}
+
+interface FilaBarra {
+  nombre: string
+  valor: number
+  /** Cifra a la derecha, ya formateada. */
+  etiqueta: string
+  /** Resaltar la fila propia del destinatario. */
+  propia?: boolean
+}
+
+/**
+ * La distribución, en barras de tabla.
+ *
+ * ── Por qué no es una torta ──────────────────────────────────────────────
+ *
+ * Gmail y Outlook eliminan `<svg>` de los correos, así que una torta real solo
+ * puede entrar como PNG servido desde una URL pública sin autenticación —y
+ * serviría cifras de dinero del municipio desde un endpoint abierto, que
+ * además Google cachea en su proxy—. Las barras se arman con tablas anidadas,
+ * que es lo único que renderiza igual en todos los clientes desde hace veinte
+ * años, y llevan la cifra escrita al lado: se leen aunque el cliente ignore
+ * los colores de fondo, cosa que una torta no hace.
+ *
+ * El ancho va como atributo `width` Y como estilo: Outlook ignora el estilo.
+ */
+function barras(filas: FilaBarra[]): string {
+  const total = filas.reduce((s, f) => s + f.valor, 0)
+  if (total <= 0) return ''
+  return filas.map(f => {
+    const pct = Math.round((100 * f.valor) / total)
+    // Una franja de 0% no se ve y parece un error de maqueta; 2% se lee como
+    // «casi nada», que es la verdad.
+    const ancho = Math.max(2, pct)
+    const tinta = f.propia ? '#192031' : '#94a3b8'
+    const peso = f.propia ? '700' : '400'
+    return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;margin:0 0 10px;">
+        <tr>
+          <td style="font-size:13px;color:#334155;font-weight:${peso};padding:0 0 4px;">${esc(f.nombre)}</td>
+          <td align="right" style="font-size:13px;color:#64748b;font-weight:${peso};padding:0 0 4px;white-space:nowrap;">${esc(f.etiqueta)} &middot; ${pct}%</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="padding:0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;background:#eef2f7;border-radius:5px;">
+              <tr>
+                <td width="${ancho}%" style="width:${ancho}%;background:${tinta};height:9px;line-height:9px;font-size:1px;border-radius:5px;">&nbsp;</td>
+                <td style="font-size:1px;line-height:9px;">&nbsp;</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>`
+  }).join('')
+}
+
+/** Rótulo de sección: la misma jerarquía en los dos consolidados. */
+function seccion(titulo: string, cuerpo: string): string {
+  return `
+    <p style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;margin:26px 0 10px;">${esc(titulo)}</p>
+    ${cuerpo}`
+}
+
+/** Una cifra grande con su explicación debajo. */
+function cifra(valor: string, pie: string): string {
+  return `
+    <td style="padding:0 8px 0 0;vertical-align:top;">
+      <p style="color:#192031;font-size:22px;font-weight:700;margin:0;line-height:1.2;">${esc(valor)}</p>
+      <p style="color:#64748b;font-size:12px;margin:3px 0 0;line-height:1.4;">${esc(pie)}</p>
+    </td>`
+}
+
+function lista(items: string[], vacio: string): string {
+  if (!items.length) {
+    return `<p style="color:#64748b;font-size:13px;margin:0;">${esc(vacio)}</p>`
+  }
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;">
+    ${items.map((t, i) => `<tr><td style="font-size:13px;color:#334155;padding:7px 0;${i ? 'border-top:1px solid #f1f5f9;' : ''}line-height:1.5;">${t}</td></tr>`).join('')}
+  </table>`
+}
+
+/** Lo que el correo de una dependencia necesita saber. Ver lib/reportes/consolidado.ts */
+export interface DatosConsolidadoDependencia {
+  mes: string
+  anio: number
+  mesPrevio: string
+  dependencia: string
+  fila: { contratos: number; cerrados: number; pct: number; contratistas: number; valor: number }
+  previo: { cerrados: number; contratos: number; pct: number } | null
+  notaPrevio: string | null
+  cambioPoblacion: boolean
+  tramiteDias: number | null
+  abiertos: { contrato: string; nombre: string; estado: string }[]
+  sinPlanilla: { contrato: string; nombre: string; meses: string[] }[]
+  reparos: { contrato: string; nombre: string; motivo: string }[]
+  municipio: {
+    valor: number
+    informes: number
+    filas: { dependenciaId: string; nombre: string; valor: number; cerrados: number; contratos: number }[]
+  }
+  dependenciaId: string
+}
+
+/**
+ * Consolidado mensual de UNA dependencia.
+ *
+ * Sustituye a la alerta de cuentas sin radicar que salía global: el 17 de
+ * septiembre la misma lista de tres nombres —dos de Gobierno, uno de
+ * Hacienda— llegó a los cuatro secretarios, y para dos de ellos no había
+ * nada suyo dentro.
+ *
+ * La regla de este correo: los NOMBRES son solo de su dependencia; las CIFRAS
+ * agregadas del municipio sí se comparten, porque son ejecución presupuestal
+ * pública y sitúan lo propio en contexto.
+ *
+ * Y nunca dice «pagado». El sistema llega hasta `radicado` —la cuenta salió
+ * hacia Hacienda—; si tesorería giró, no lo sabe.
+ */
+export function emailConsolidadoDependencia(data: TemplateData) {
+  const d = data.datos as DatosConsolidadoDependencia | undefined
+  if (!d) {
+    return {
+      subject: `Consolidado de ${data.mes} ${data.anio}`,
+      html: baseHtml('Consolidado mensual', `<p style="color:#333;font-size:14px;">${esc(data.detalle ?? '')}</p>`, '#192031'),
+    }
+  }
+
+  const tendencia = d.previo
+    ? `En ${esc(d.mesPrevio)} fueron <strong>${d.previo.cerrados} de ${d.previo.contratos}</strong>.` +
+      (d.cambioPoblacion
+        ? ` <span style="color:#92400e;">El número de contratos cambió bastante entre los dos meses, así que no son equipos comparables.</span>`
+        : '')
+    : `<span style="color:#64748b;">${esc(d.notaPrevio ?? '')}</span>`
+
+  const abiertos = lista(
+    d.abiertos.map(a =>
+      `<strong>${esc(a.nombre)}</strong> &middot; contrato ${esc(a.contrato)} <span style="color:#64748b;">— ${esc(a.estado)}</span>`),
+    'Todos los contratos de la dependencia cerraron su ciclo.',
+  )
+
+  const planillas = d.sinPlanilla.length
+    ? seccion('Actas que saldrán sin número de planilla', `
+        <p style="color:#334155;font-size:13px;line-height:1.6;margin:0 0 10px;">
+          Estos meses ya cerraron sin planilla de seguridad social, y el acta de
+          supervisión los imprime como «—». Para que puedan subirla hay que
+          habilitarles el envío tardío en ese periodo.
+        </p>
+        ${lista(d.sinPlanilla.map(s =>
+          `<strong>${esc(s.nombre)}</strong> &middot; contrato ${esc(s.contrato)} <span style="color:#64748b;">— ${esc(s.meses.join(', '))}</span>`), '')}`)
+    : ''
+
+  const reparos = d.reparos.length
+    ? seccion('Datos que impiden cuadrar la cifra', lista(d.reparos.map(r =>
+        `<strong>${esc(r.nombre)}</strong> &middot; contrato ${esc(r.contrato)} <span style="color:#64748b;">— ${esc(r.motivo)}</span>`), ''))
+    : ''
+
+  const distribucion = barras(d.municipio.filas.map(f => ({
+    nombre: f.nombre,
+    valor: f.valor,
+    etiqueta: cop(f.valor),
+    propia: f.dependenciaId === d.dependenciaId,
+  })))
+
+  return {
+    subject: `${esc(d.dependencia)} — consolidado de ${esc(d.mes)} ${d.anio}`,
+    html: baseHtml(
+      `Consolidado de ${esc(d.mes)} ${d.anio}`,
+      `<p style="color:#333;font-size:14px;line-height:1.6;margin:0 0 4px;">Hola ${esc(data.nombreDestinatario)},</p>
+       <p style="color:#334155;font-size:14px;line-height:1.6;margin:0;">
+         Así cerró <strong>${esc(d.mes)}</strong> en ${esc(d.dependencia)}.
+       </p>
+
+       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;margin:22px 0 0;">
+         <tr>
+           ${cifra(`${d.fila.cerrados} de ${d.fila.contratos}`, 'contratos cerraron el ciclo')}
+           ${cifra(String(d.fila.contratistas), d.fila.contratistas === 1 ? 'contratista presentó' : 'contratistas presentaron')}
+           ${cifra(cop(d.fila.valor), 'radicado hacia Hacienda')}
+         </tr>
+       </table>
+
+       <p style="color:#475569;font-size:13px;line-height:1.6;margin:16px 0 0;">${tendencia}</p>
+       ${d.tramiteDias !== null ? `<p style="color:#475569;font-size:13px;line-height:1.6;margin:6px 0 0;">
+         Entre el envío del contratista y la radicación pasaron <strong>${d.tramiteDias} días</strong> de media.
+       </p>` : ''}
+
+       ${seccion(`Lo que quedó abierto (${d.abiertos.length})`, abiertos)}
+       ${planillas}
+       ${reparos}
+
+       ${seccion(`Reparto en el municipio · ${cop(d.municipio.valor)} en ${d.municipio.informes} informes`, distribucion)}
+       <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:2px 0 0;">
+         Las cifras del municipio son agregadas. Los nombres y contratos de este
+         correo son únicamente de ${esc(d.dependencia)}.
+       </p>`,
+      '#192031',
+    ),
+  }
+}
+
+/** Lo que ve quien responde por el municipio entero. */
+export interface DatosConsolidadoMunicipio {
+  mes: string
+  anio: number
+  informes: number
+  contratistas: number
+  valor: number
+  filas: { nombre: string; valor: number; cerrados: number; contratos: number; pct: number; contratistas: number }[]
+  /** Dependencias cuyo cumplimiento quedó por debajo del umbral. */
+  rezagadas: { nombre: string; cerrados: number; contratos: number }[]
+}
+
+/**
+ * Consolidado del municipio: alcalde, admin y contratación.
+ *
+ * Es el único correo que compara dependencias entre sí, y por eso no lleva un
+ * solo nombre propio: quien necesite saber QUIÉN no presentó lo tiene en el
+ * consolidado de su secretaría. Aquí se responde «cómo va el municipio», no
+ * «a quién hay que llamar».
+ */
+export function emailConsolidadoMunicipio(data: TemplateData) {
+  const d = data.datos as DatosConsolidadoMunicipio | undefined
+  if (!d) {
+    return {
+      subject: `Consolidado del municipio — ${data.mes} ${data.anio}`,
+      html: baseHtml('Consolidado del municipio', `<p style="color:#333;font-size:14px;">${esc(data.detalle ?? '')}</p>`, '#192031'),
+    }
+  }
+
+  const porValor = barras(d.filas.map(f => ({ nombre: f.nombre, valor: f.valor, etiqueta: cop(f.valor) })))
+  const porGente = barras(d.filas.map(f => ({
+    nombre: f.nombre, valor: f.contratistas,
+    etiqueta: `${f.contratistas} ${f.contratistas === 1 ? 'contratista' : 'contratistas'}`,
+  })))
+
+  const cumplimiento = lista(
+    d.filas.map(f => {
+      const color = f.pct >= 90 ? '#15803d' : f.pct >= 70 ? '#b45309' : '#b91c1c'
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="font-size:13px;color:#334155;">${esc(f.nombre)}</td>
+          <td align="right" style="font-size:13px;color:${color};font-weight:700;white-space:nowrap;">${f.cerrados} de ${f.contratos}</td>
+        </tr>
+      </table>`
+    }),
+    '',
+  )
+
+  const alerta = d.rezagadas.length
+    ? `<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;margin:22px 0 0;border-radius:0 8px 8px 0;">
+         <p style="color:#92400e;font-size:13px;margin:0;line-height:1.6;">
+           ${d.rezagadas.map(r => `<strong>${esc(r.nombre)}</strong> cerró ${r.cerrados} de ${r.contratos}`).join('. ')}.
+         </p>
+       </div>`
+    : ''
+
+  return {
+    subject: `Municipio de Fredonia — consolidado de ${esc(d.mes)} ${d.anio}`,
+    html: baseHtml(
+      `Consolidado de ${esc(d.mes)} ${d.anio}`,
+      `<p style="color:#333;font-size:14px;line-height:1.6;margin:0 0 4px;">Hola ${esc(data.nombreDestinatario)},</p>
+       <p style="color:#334155;font-size:14px;line-height:1.6;margin:0;">
+         Resumen de <strong>${esc(d.mes)}</strong> en las secretarías del municipio.
+       </p>
+
+       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;margin:22px 0 0;">
+         <tr>
+           ${cifra(String(d.informes), d.informes === 1 ? 'informe cerró el ciclo' : 'informes cerraron el ciclo')}
+           ${cifra(String(d.contratistas), 'contratistas')}
+           ${cifra(cop(d.valor), 'radicado hacia Hacienda')}
+         </tr>
+       </table>
+       ${alerta}
+
+       ${seccion('Reparto del valor radicado', porValor)}
+       ${seccion('Reparto de los contratistas', porGente)}
+       ${seccion('Cumplimiento del ciclo', cumplimiento)}
+
+       <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:20px 0 0;">
+         «Radicado» significa que la cuenta salió hacia Hacienda. Contratista
+         Digital no registra el giro de tesorería, así que esta cifra no es lo
+         pagado. Cada secretaría recibe hoy el detalle de sus propios contratos.
+       </p>`,
+      '#192031',
+    ),
+  }
+}
+
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,
   enviado_confirmacion: emailEnvioConfirmacion,
@@ -578,12 +858,12 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   aprobado: emailPeriodoAprobado,
   rechazado: emailPeriodoRechazado,
   planilla_rechazada: emailPlanillaRechazada,
-  reporte_mensual: emailReporteMensual,
+  reporte_mensual: emailConsolidadoDependencia,
+  consolidado_municipio: emailConsolidadoMunicipio,
   radicado: emailPeriodoRadicado,
   recordatorio: emailRecordatorioInforme,
   recordatorio_urgente: emailRecordatorioUrgente,
   recordatorio_vencido: emailRecordatorioVencido,
-  radicacion_pendiente: emailRadicacionPendiente,
   revision_pendiente: emailRevisionPendiente,
   devuelto_sin_corregir: emailDevueltoSinCorregir,
   devuelto_estancado: emailDevueltoEstancado,
