@@ -566,6 +566,11 @@ function cop(n: number): string {
   return '$' + Math.round(n).toLocaleString('es-CO')
 }
 
+/** «3,5» y no «3.5»: en castellano el separador decimal es la coma. */
+function decimal(n: number): string {
+  return String(n).replace('.', ',')
+}
+
 interface FilaBarra {
   nombre: string
   valor: number
@@ -656,19 +661,7 @@ export interface DatosConsolidadoDependencia {
   notaPrevio: string | null
   cambioPoblacion: boolean
   tramiteDias: number | null
-  sinPlanilla: { contrato: string; nombre: string; meses: string[] }[]
   reparos: { contrato: string; nombre: string; motivo: string }[]
-  /**
-   * El reparto del municipio, solo para quien tiene competencia sobre el
-   * presupuesto entero. Llega `null` para el resto: a Desarrollo Territorial
-   * no le incumbe cuánto está ejecutando Gobierno. Ver la migración 047.
-   */
-  municipio: {
-    valor: number
-    informes: number
-    filas: { dependenciaId: string; nombre: string; valor: number; cerrados: number; contratos: number }[]
-  } | null
-  dependenciaId: string
   /** URL absoluta del PNG de la torta; `null` si no se pudo firmar. */
   urlTorta: string | null
 }
@@ -698,9 +691,9 @@ export function emailConsolidadoDependencia(data: TemplateData) {
   }
 
   const tendencia = d.previo
-    ? `En ${esc(d.mesPrevio)} fueron <strong>${d.previo.cerrados} de ${d.previo.contratos}</strong>.` +
+    ? `En ${esc(d.mesPrevio)} completaron todo el trámite <strong>${d.previo.cerrados} de ${d.previo.contratos}</strong>.` +
       (d.cambioPoblacion
-        ? ` <span style="color:#92400e;">El número de contratos cambió bastante entre los dos meses, así que no son equipos comparables.</span>`
+        ? ` <span style="color:#92400e;">Ojo al comparar: el número de contratos cambió bastante entre los dos meses, así que no son los mismos equipos.</span>`
         : '')
     : `<span style="color:#64748b;">${esc(d.notaPrevio ?? '')}</span>`
 
@@ -712,38 +705,10 @@ export function emailConsolidadoDependencia(data: TemplateData) {
     ? `<img src="${esc(d.urlTorta)}" width="420" height="190" alt="De ${d.fila.contratos} contratos activos, ${d.fila.enviados} enviaron su informe." style="display:block;width:100%;max-width:420px;height:auto;border:0;margin:0 auto;" />`
     : `<p style="color:#64748b;font-size:13px;margin:0;">${d.fila.enviados} de ${d.fila.contratos} contratos activos enviaron su informe.</p>`
 
-  const planillas = d.sinPlanilla.length
-    ? seccion('Actas que saldrán sin número de planilla', `
-        <p style="color:#334155;font-size:13px;line-height:1.6;margin:0 0 10px;">
-          Estos meses ya cerraron sin planilla de seguridad social, y el acta de
-          supervisión los imprime como «—». Para que puedan subirla hay que
-          habilitarles el envío tardío en ese periodo.
-        </p>
-        ${lista(d.sinPlanilla.map(s =>
-          `<strong>${esc(s.nombre)}</strong> &middot; contrato ${esc(s.contrato)} <span style="color:#64748b;">— ${esc(s.meses.join(', '))}</span>`), '')}`)
-    : ''
-
   const reparos = d.reparos.length
-    ? seccion('Datos que impiden cuadrar la cifra', lista(d.reparos.map(r =>
+    ? seccion('Contratos cuyo valor no se pudo sumar', lista(d.reparos.map(r =>
         `<strong>${esc(r.nombre)}</strong> &middot; contrato ${esc(r.contrato)} <span style="color:#64748b;">— ${esc(r.motivo)}</span>`), ''))
     : ''
-
-  const reparto = d.municipio
-    ? seccion(
-        `Reparto en el municipio · ${cop(d.municipio.valor)} en ${d.municipio.informes} informes`,
-        barras(d.municipio.filas.map(f => ({
-          nombre: f.nombre,
-          valor: f.valor,
-          etiqueta: cop(f.valor),
-          propia: f.dependenciaId === d.dependenciaId,
-        }))) +
-        `<p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:2px 0 0;">
-           Cifras agregadas, sin nombres. Te llega porque Hacienda tramita las
-           cuentas de todas las secretarías.
-         </p>`,
-      )
-    : ''
-
 
   return {
     subject: `${esc(d.dependencia)} — consolidado de ${esc(d.mes)} ${d.anio}`,
@@ -756,21 +721,26 @@ export function emailConsolidadoDependencia(data: TemplateData) {
 
        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;margin:22px 0 0;">
          <tr>
-           ${cifra(`${d.fila.cerrados} de ${d.fila.contratos}`, 'contratos cerraron el ciclo')}
-           ${cifra(String(d.fila.contratistas), d.fila.contratistas === 1 ? 'contratista presentó' : 'contratistas presentaron')}
-           ${cifra(cop(d.fila.valor), 'radicado hacia Hacienda')}
+           ${cifra(`${d.fila.cerrados} de ${d.fila.contratos}`, 'contratos completaron todo el trámite del mes')}
+           ${cifra(String(d.fila.contratistas), d.fila.contratistas === 1 ? 'contratista presentó su informe' : 'contratistas presentaron su informe')}
+           ${cifra(cop(d.fila.valor), 'sumaron sus cuentas de cobro')}
          </tr>
        </table>
 
        <p style="color:#475569;font-size:13px;line-height:1.6;margin:16px 0 0;">${tendencia}</p>
        ${d.tramiteDias !== null ? `<p style="color:#475569;font-size:13px;line-height:1.6;margin:6px 0 0;">
-         Entre el envío del contratista y la radicación pasaron <strong>${d.tramiteDias} días</strong> de media.
+         Desde que el contratista envió su informe hasta que su cuenta de cobro
+         quedó radicada pasaron <strong>${decimal(d.tramiteDias)} días</strong> de media.
        </p>` : ''}
 
-       ${seccion('Contratos activos y envío de informes', torta)}
-       ${planillas}
+       ${seccion('Cuántos contratistas enviaron su informe', torta)}
        ${reparos}
-       ${reparto}`,
+
+       <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:24px 0 0;">
+         «Radicada» significa que la cuenta de cobro ya salió hacia la Secretaría
+         de Hacienda. Contratista Digital no registra el giro de tesorería, así
+         que esta cifra no es lo que se ha pagado.
+       </p>`,
       '#192031',
     ),
   }
@@ -808,7 +778,7 @@ export function emailConsolidadoMunicipio(data: TemplateData) {
   const porValor = barras(d.filas.map(f => ({ nombre: f.nombre, valor: f.valor, etiqueta: cop(f.valor) })))
   const porGente = barras(d.filas.map(f => ({
     nombre: f.nombre, valor: f.contratistas,
-    etiqueta: `${f.contratistas} ${f.contratistas === 1 ? 'contratista' : 'contratistas'}`,
+    etiqueta: `${f.contratistas} ${f.contratistas === 1 ? 'persona' : 'personas'}`,
   })))
 
   const cumplimiento = lista(
@@ -827,7 +797,7 @@ export function emailConsolidadoMunicipio(data: TemplateData) {
   const alerta = d.rezagadas.length
     ? `<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;margin:22px 0 0;border-radius:0 8px 8px 0;">
          <p style="color:#92400e;font-size:13px;margin:0;line-height:1.6;">
-           ${d.rezagadas.map(r => `<strong>${esc(r.nombre)}</strong> cerró ${r.cerrados} de ${r.contratos}`).join('. ')}.
+           ${d.rezagadas.map(r => `En <strong>${esc(r.nombre)}</strong> solo ${r.cerrados} de ${r.contratos} contratos completaron el trámite`).join('. ')}.
          </p>
        </div>`
     : ''
@@ -838,31 +808,33 @@ export function emailConsolidadoMunicipio(data: TemplateData) {
       `Consolidado de ${esc(d.mes)} ${d.anio}`,
       `<p style="color:#333;font-size:14px;line-height:1.6;margin:0 0 4px;">Hola ${esc(data.nombreDestinatario)},</p>
        <p style="color:#334155;font-size:14px;line-height:1.6;margin:0;">
-         Resumen de <strong>${esc(d.mes)}</strong> en las secretarías del municipio.
+         Así cerró <strong>${esc(d.mes)}</strong> en las secretarías del municipio.
        </p>
 
        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;margin:22px 0 0;">
          <tr>
-           ${cifra(String(d.informes), d.informes === 1 ? 'informe cerró el ciclo' : 'informes cerraron el ciclo')}
-           ${cifra(String(d.contratistas), 'contratistas')}
-           ${cifra(cop(d.valor), 'radicado hacia Hacienda')}
+           ${cifra(String(d.informes), d.informes === 1 ? 'informe completó todo el trámite' : 'informes completaron todo el trámite')}
+           ${cifra(String(d.contratistas), 'contratistas presentaron su informe')}
+           ${cifra(cop(d.valor), 'sumaron sus cuentas de cobro')}
          </tr>
        </table>
        ${alerta}
 
-       ${seccion('Reparto del valor radicado', porValor)}
-       ${seccion('Reparto de los contratistas', porGente)}
-       ${seccion('Cumplimiento del ciclo', cumplimiento)}
+       ${seccion('Cuánto sumaron las cuentas de cobro de cada secretaría', porValor)}
+       ${seccion('Cuántos contratistas presentaron informe en cada secretaría', porGente)}
+       ${seccion('Contratos que completaron todo el trámite del mes', cumplimiento)}
 
        <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:20px 0 0;">
-         «Radicado» significa que la cuenta salió hacia Hacienda. Contratista
-         Digital no registra el giro de tesorería, así que esta cifra no es lo
-         pagado. Cada secretaría recibe hoy el detalle de sus propios contratos.
+         Son las cuentas de cobro que ya salieron hacia la Secretaría de
+         Hacienda. Contratista Digital no registra el giro de tesorería, así que
+         esta cifra no es lo que se ha pagado. Cada secretaría recibe hoy, por
+         separado, el detalle de sus propios contratos.
        </p>`,
       '#192031',
     ),
   }
 }
+
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   enviado: emailPeriodoEnviado,

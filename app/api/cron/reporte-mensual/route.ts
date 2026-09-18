@@ -35,7 +35,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { enviarNotificacion } from '@/lib/notifications'
-import { destinatariosDe, usuariosTransversales } from '@/lib/alcance'
+import { cargarAmbitos, destinatariosDe, destinatariosDelMunicipio } from '@/lib/alcance'
 import { calcularConsolidado } from '@/lib/reportes/consolidado'
 import { urlTorta } from '@/lib/graficos/torta'
 import type {
@@ -50,12 +50,12 @@ export const maxDuration = 300
 /** Por debajo de esto la secretaría sale nombrada en el aviso del municipio. */
 const UMBRAL_REZAGO = 70
 
-function hoyBogota(): { anio: number; mesIdx: number; iso: string } {
+function hoyBogota(): { anio: number; mesIdx: number } {
   const iso = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
   const [anio, mes] = iso.split('-').map(Number)
-  return { anio, mesIdx: mes - 1, iso }
+  return { anio, mesIdx: mes - 1 }
 }
 
 const cop = (n: number) => '$' + Math.round(n).toLocaleString('es-CO')
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
   const mesIdx = (hoy.mesIdx + 11) % 12
   const anio = hoy.mesIdx === 0 ? hoy.anio - 1 : hoy.anio
 
-  const c = await calcularConsolidado(admin, mesIdx, anio, hoy.iso)
+  const c = await calcularConsolidado(admin, mesIdx, anio)
 
   if (c.dependencias.length === 0) {
     return NextResponse.json({ mes: `${c.mes} ${anio}`, enviados: 0, motivo: 'ningún contrato vigente ese mes' })
@@ -109,7 +109,6 @@ export async function GET(req: NextRequest) {
       anio: c.anio,
       mesPrevio: c.mesPrevio,
       dependencia: b.ambito.nombre,
-      dependenciaId: b.ambito.dependenciaId,
       fila: {
         contratos: b.fila.contratos,
         cerrados: b.fila.cerrados,
@@ -118,28 +117,12 @@ export async function GET(req: NextRequest) {
         valor: b.fila.valor,
         enviados: b.fila.enviados,
       },
-      urlTorta: urlTorta({ enviados: b.fila.enviados, total: b.fila.contratos }),
       previo: b.previo,
       notaPrevio: b.notaPrevio,
       cambioPoblacion: b.cambioPoblacion,
       tramiteDias: b.tramiteDias,
-      sinPlanilla: b.sinPlanilla,
       reparos: b.reparos,
-      // El reparto del municipio solo viaja a quien tiene competencia sobre el
-      // presupuesto entero. Para el resto va `null` y el bloque no se pinta.
-      municipio: b.ambito.veMunicipio
-        ? {
-            valor: c.municipio.valor,
-            informes: c.municipio.informes,
-            filas: c.municipio.filas.map(f => ({
-              dependenciaId: f.dependenciaId,
-              nombre: f.nombre,
-              valor: f.valor,
-              cerrados: f.cerrados,
-              contratos: f.contratos,
-            })),
-          }
-        : null,
+      urlTorta: urlTorta({ enviados: b.fila.enviados, total: b.fila.contratos }),
     }
 
     // La campana guarda texto plano: tiene que leerse sola, sin el correo.
@@ -164,7 +147,19 @@ export async function GET(req: NextRequest) {
   }
 
   // ══ Consolidado del municipio ════════════════════════════════════════
-  const transversales = await usuariosTransversales(admin)
+  //
+  // Alcalde, administración y contratación — y además la gente de las
+  // dependencias con competencia presupuestal sobre el municipio entero, que
+  // hoy es Hacienda: tramita las cuentas de las cuatro secretarías, así que ve
+  // exactamente lo mismo que el alcalde. Quién entra en esa lista lo decide
+  // `lib/alcance.ts`, no este archivo.
+  //
+  // Se vuelven a cargar los ámbitos en vez de reutilizar los de `c.dependencias`
+  // a propósito: ahí solo están las dependencias CON contratos ese mes, y el
+  // derecho de Hacienda a ver el municipio no depende de que ella misma tuviera
+  // contratos vigentes.
+  const ambitos = await cargarAmbitos(admin)
+  const transversales = await destinatariosDelMunicipio(admin, ambitos)
   if (transversales.length) {
     const filas = c.dependencias.map(b => ({
       nombre: b.ambito.nombre,

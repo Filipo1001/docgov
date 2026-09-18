@@ -70,12 +70,6 @@ export interface FilaDependencia {
   valor: number
 }
 
-export interface SinPlanilla {
-  contrato: string
-  nombre: string
-  meses: string[]
-}
-
 /** Un contrato cuyo dato económico impide contarlo. Se nombra, no se esconde. */
 export interface Reparo {
   contrato: string
@@ -103,7 +97,6 @@ export interface BloqueDependencia {
    * entera— y además avisa cuando el cambio es grande.
    */
   cambioPoblacion: boolean
-  sinPlanilla: SinPlanilla[]
   /** Días medios de `enviado` a `radicado`. Mide al equipo, no al contratista. */
   tramiteDias: number | null
   /** Periodos del mes que se pagaron fuera del sistema. */
@@ -169,22 +162,19 @@ type FilaPeriodo = {
   estado: string
   es_historico: boolean
   valor_cobro: number | null
-  numero_planilla: string | null
-  fecha_fin: string | null
 }
 
 /**
  * Calcula el consolidado de un mes concreto.
  *
- * `hoyISO` entra por parámetro y no se lee del reloj para que el cálculo sea
- * reproducible: es lo que permite correr el mes pasado y comparar el resultado
- * con la base antes de enviar nada.
+ * No lee el reloj: todo sale del mes y el año que se le pasan. Eso es lo que
+ * permite correr un mes cualquiera y comparar el resultado con la base antes
+ * de enviarle nada a nadie.
  */
 export async function calcularConsolidado(
   admin: SupabaseClient,
   mesIdx: number,
   anio: number,
-  hoyISO: string,
 ): Promise<Consolidado> {
   const mes = MESES[mesIdx]
   const ini = inicioDeMes(anio, mesIdx)
@@ -218,7 +208,7 @@ export async function calcularConsolidado(
   // inactivos, que es una comprobación en memoria y no una consulta frágil.
   const periodosRaw = await todas<FilaPeriodo>((desde, hasta) => admin
     .from('periodos')
-    .select('id, contrato_id, mes, anio, estado, es_historico, valor_cobro, numero_planilla, fecha_fin')
+    .select('id, contrato_id, mes, anio, estado, es_historico, valor_cobro')
     .range(desde, hasta))
   const periodos = periodosRaw.filter(p => porContrato.has(p.contrato_id))
 
@@ -328,22 +318,6 @@ export async function calcularConsolidado(
         : `No hay comparación con ${mesPrevio}: eran muy pocos contratos para que el porcentaje signifique algo.`
     }
 
-    // ── Meses cerrados sin planilla: los que el acta imprime como «—» ────
-    const sinPlanillaMap = new Map<string, string[]>()
-    for (const p of periodos) {
-      if (p.es_historico) continue
-      if ((p.numero_planilla ?? '').trim()) continue
-      if (!p.fecha_fin || p.fecha_fin >= hoyISO) continue
-      const c = porContrato.get(p.contrato_id)
-      if (!c || c.dependencia_id !== ambito.dependenciaId) continue
-      sinPlanillaMap.set(p.contrato_id, [...(sinPlanillaMap.get(p.contrato_id) ?? []), p.mes])
-    }
-    const sinPlanilla: SinPlanilla[] = [...sinPlanillaMap.entries()].map(([cid, meses]) => ({
-      contrato: porContrato.get(cid)?.numero ?? '?',
-      nombre: nombreDe.get(porContrato.get(cid)?.contratista_id ?? '') ?? 'Sin nombre',
-      meses,
-    }))
-
     // ── Días de trámite ──────────────────────────────────────────────────
     const tiempos = cerrados
       .map(x => {
@@ -373,7 +347,7 @@ export async function calcularConsolidado(
 
     bloques.push({
       ambito, fila, previo, notaPrevio, cambioPoblacion,
-      sinPlanilla, tramiteDias, historicos, reparos,
+      tramiteDias, historicos, reparos,
     })
   }
 

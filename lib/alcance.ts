@@ -43,20 +43,20 @@ export interface Ambito {
   /** Hacienda, Bienestar Social y Desarrollo Territorial hoy no tienen. */
   asesorIds: string[]
   /**
-   * Si esta dependencia puede ver el reparto del municipio entero.
+   * Si esta dependencia recibe además el consolidado del municipio.
    *
-   * El consolidado mensual llevaba, al final, cómo se repartió el dinero
-   * radicado entre las cuatro secretarías, y le llegaba a todas. No le
-   * corresponde a todas: al secretario de Desarrollo Territorial no le incumbe
-   * cuánto está ejecutando Gobierno. Hacienda es la excepción con fundamento —
-   * paga las cuentas de las cuatro, así que el reparto ES su materia.
+   * El consolidado de cada secretaría habla solo de la suya. Hacienda es la
+   * excepción con fundamento: tramita las cuentas de las cuatro, así que el
+   * municipio entero es su materia. En vez de darle un bloque extra dentro de
+   * su propio correo, recibe el MISMO que el alcalde — las secretarías
+   * comparadas, sin un solo nombre propio.
    *
-   * Sale de `dependencias.ve_consolidado_municipio` (migración 047), no de
+   * Sale de `dependencias.recibe_consolidado_municipio` (migración 047), no de
    * comparar el nombre contra 'Secretaría de Hacienda' dentro de un `if`: la
    * migración 035 ya obligó una vez a perseguir un nombre de dependencia por
    * media base de datos.
    */
-  veMunicipio: boolean
+  recibeMunicipio: boolean
 }
 
 /** Roles que ven el municipio entero y no pertenecen a una sola dependencia. */
@@ -74,10 +74,10 @@ export async function cargarAmbitos(
   admin: SupabaseClient,
 ): Promise<Map<string, Ambito>> {
   // `select('*')` y no la lista de columnas: mientras la migración 047 no esté
-  // aplicada, pedir `ve_consolidado_municipio` por su nombre haría fallar la
-  // consulta entera. Con el asterisco la columna llega o no llega, y si no
-  // llega nadie ve el reparto del municipio — que es el valor seguro.
-  // `dependencias` tiene siete columnas y ninguna reservada.
+  // aplicada, pedir `recibe_consolidado_municipio` por su nombre haría fallar
+  // la consulta entera. Con el asterisco la columna llega o no llega, y si no
+  // llega el consolidado del municipio va solo a los roles transversales — que
+  // es el valor seguro. `dependencias` tiene siete columnas, ninguna reservada.
   const [{ data: deps }, { data: gente }] = await Promise.all([
     admin.from('dependencias').select('*'),
     admin
@@ -94,7 +94,8 @@ export async function cargarAmbitos(
       nombre: d.nombre as string,
       supervisorId: null,
       asesorIds: [],
-      veMunicipio: (d as { ve_consolidado_municipio?: boolean }).ve_consolidado_municipio === true,
+      recibeMunicipio:
+        (d as { recibe_consolidado_municipio?: boolean }).recibe_consolidado_municipio === true,
     })
   }
 
@@ -148,6 +149,26 @@ export async function usuariosTransversales(
     .in('rol', roles as unknown as string[])
     .eq('activo', true)
   return [...new Set((data ?? []).map(u => u.id as string))]
+}
+
+/**
+ * Quién recibe el consolidado del MUNICIPIO: los roles transversales más la
+ * gente de las dependencias marcadas para recibirlo.
+ *
+ * Se resuelve aquí y no en el cron por la misma razón que todo lo demás de
+ * este módulo: el día que haya una segunda dependencia con competencia
+ * presupuestal —o que Hacienda gane un asesor— nadie tiene que acordarse de
+ * tocar el cron.
+ */
+export async function destinatariosDelMunicipio(
+  admin: SupabaseClient,
+  ambitos: Map<string, Ambito>,
+): Promise<string[]> {
+  const transversales = await usuariosTransversales(admin)
+  const porCompetencia = [...ambitos.values()]
+    .filter(a => a.recibeMunicipio)
+    .flatMap(a => destinatariosDe(a))
+  return [...new Set([...transversales, ...porCompetencia])]
 }
 
 /**
