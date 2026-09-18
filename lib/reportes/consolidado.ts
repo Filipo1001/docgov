@@ -54,20 +54,20 @@ export interface FilaDependencia {
   nombre: string
   /** Contratos vigentes DURANTE el mes reportado. */
   contratos: number
-  /** De esos, los que cerraron el ciclo. */
+  /** De esos, los que cerraron el ciclo (aprobado o radicado). */
   cerrados: number
   pct: number
+  /**
+   * Contratos cuyo contratista SÍ mandó su informe: todo lo que salió del
+   * borrador, esté donde esté después. Es lo que mide la torta del correo, y
+   * no es lo mismo que `cerrados`: la diferencia entre ambos es trabajo
+   * pendiente de la secretaría, no del contratista.
+   */
+  enviados: number
   /** Personas distintas: tres contratistas tienen dos contratos vigentes. */
   contratistas: number
   /** Suma de `valor_cobro` de lo que cerró. Radicado, no pagado. */
   valor: number
-}
-
-export interface Abierto {
-  contrato: string
-  nombre: string
-  /** Etiqueta en castellano de por qué sigue abierto. */
-  estado: string
 }
 
 export interface SinPlanilla {
@@ -103,7 +103,6 @@ export interface BloqueDependencia {
    * entera— y además avisa cuando el cambio es grande.
    */
   cambioPoblacion: boolean
-  abiertos: Abierto[]
   sinPlanilla: SinPlanilla[]
   /** Días medios de `enviado` a `radicado`. Mide al equipo, no al contratista. */
   tramiteDias: number | null
@@ -172,13 +171,6 @@ type FilaPeriodo = {
   valor_cobro: number | null
   numero_planilla: string | null
   fecha_fin: string | null
-}
-
-const ETIQUETA_ABIERTO: Record<string, string> = {
-  borrador: 'sin enviar',
-  enviado: 'esperando revisión',
-  revision: 'revisado, falta aprobar',
-  rechazado: 'devuelto al contratista',
 }
 
 /**
@@ -277,6 +269,12 @@ export async function calcularConsolidado(
 
     const conPeriodo = suyos.map(c => ({ c, p: periodoDe(c.id, mes, anio) }))
     const cerrados = conPeriodo.filter(x => x.p && !x.p.es_historico && CERRADOS.has(x.p.estado))
+    // «Enviado» es cualquier cosa que ya no sea borrador: enviado, en revisión,
+    // aprobado, radicado, e incluso devuelto —quien recibió una devolución sí
+    // mandó su informe—. Los históricos no cuentan: se tramitaron fuera.
+    const enviados = conPeriodo.filter(
+      x => x.p && !x.p.es_historico && x.p.estado !== 'borrador',
+    ).length
     const historicos = conPeriodo.filter(x => x.p?.es_historico).length
 
     const valor = cerrados.reduce((s, x) => s + Number(x.p!.valor_cobro ?? 0), 0)
@@ -287,6 +285,7 @@ export async function calcularConsolidado(
       contratos: suyos.length,
       cerrados: cerrados.length,
       pct: Math.round((100 * cerrados.length) / suyos.length),
+      enviados,
       contratistas: new Set(cerrados.map(x => x.c.contratista_id)).size,
       valor,
     }
@@ -328,17 +327,6 @@ export async function calcularConsolidado(
         ? `No hay comparación con ${mesPrevio}: ${fuera} de sus ${suyosPrevio.length} contratos se tramitaron fuera de Contratista Digital ese mes.`
         : `No hay comparación con ${mesPrevio}: eran muy pocos contratos para que el porcentaje signifique algo.`
     }
-
-    // ── Lo que quedó abierto, con nombre ─────────────────────────────────
-    const abiertos: Abierto[] = conPeriodo
-      .filter(x => !(x.p && !x.p.es_historico && CERRADOS.has(x.p.estado)))
-      .filter(x => !x.p?.es_historico)
-      .map(x => ({
-        contrato: x.c.numero,
-        nombre: nombreDe.get(x.c.contratista_id ?? '') ?? 'Sin nombre',
-        estado: x.p ? (ETIQUETA_ABIERTO[x.p.estado] ?? x.p.estado) : 'sin crear el periodo',
-      }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 
     // ── Meses cerrados sin planilla: los que el acta imprime como «—» ────
     const sinPlanillaMap = new Map<string, string[]>()
@@ -385,7 +373,7 @@ export async function calcularConsolidado(
 
     bloques.push({
       ambito, fila, previo, notaPrevio, cambioPoblacion,
-      abiertos, sinPlanilla, tramiteDias, historicos, reparos,
+      sinPlanilla, tramiteDias, historicos, reparos,
     })
   }
 

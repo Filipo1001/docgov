@@ -37,6 +37,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { enviarNotificacion } from '@/lib/notifications'
 import { destinatariosDe, usuariosTransversales } from '@/lib/alcance'
 import { calcularConsolidado } from '@/lib/reportes/consolidado'
+import { urlTorta } from '@/lib/graficos/torta'
 import type {
   DatosConsolidadoDependencia,
   DatosConsolidadoMunicipio,
@@ -115,32 +116,37 @@ export async function GET(req: NextRequest) {
         pct: b.fila.pct,
         contratistas: b.fila.contratistas,
         valor: b.fila.valor,
+        enviados: b.fila.enviados,
       },
+      urlTorta: urlTorta({ enviados: b.fila.enviados, total: b.fila.contratos }),
       previo: b.previo,
       notaPrevio: b.notaPrevio,
       cambioPoblacion: b.cambioPoblacion,
       tramiteDias: b.tramiteDias,
-      abiertos: b.abiertos,
       sinPlanilla: b.sinPlanilla,
       reparos: b.reparos,
-      municipio: {
-        valor: c.municipio.valor,
-        informes: c.municipio.informes,
-        filas: c.municipio.filas.map(f => ({
-          dependenciaId: f.dependenciaId,
-          nombre: f.nombre,
-          valor: f.valor,
-          cerrados: f.cerrados,
-          contratos: f.contratos,
-        })),
-      },
+      // El reparto del municipio solo viaja a quien tiene competencia sobre el
+      // presupuesto entero. Para el resto va `null` y el bloque no se pinta.
+      municipio: b.ambito.veMunicipio
+        ? {
+            valor: c.municipio.valor,
+            informes: c.municipio.informes,
+            filas: c.municipio.filas.map(f => ({
+              dependenciaId: f.dependenciaId,
+              nombre: f.nombre,
+              valor: f.valor,
+              cerrados: f.cerrados,
+              contratos: f.contratos,
+            })),
+          }
+        : null,
     }
 
     // La campana guarda texto plano: tiene que leerse sola, sin el correo.
     const mensaje =
       `${b.fila.cerrados} de ${b.fila.contratos} contratos cerraron el ciclo de ${c.mes}. ` +
-      `${b.fila.contratistas} contratistas, ${cop(b.fila.valor)} radicados.` +
-      (b.abiertos.length ? ` Quedaron ${b.abiertos.length} sin cerrar.` : '')
+      `${b.fila.enviados} de ${b.fila.contratos} enviaron su informe. ` +
+      `${b.fila.contratistas} contratistas, ${cop(b.fila.valor)} radicados.`
 
     for (const destinatarioId of destinatarios) {
       if (yaRecibieron.has(`reporte_mensual:${destinatarioId}`)) { omitidos++; continue }

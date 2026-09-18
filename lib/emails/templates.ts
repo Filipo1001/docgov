@@ -651,20 +651,26 @@ export interface DatosConsolidadoDependencia {
   anio: number
   mesPrevio: string
   dependencia: string
-  fila: { contratos: number; cerrados: number; pct: number; contratistas: number; valor: number }
+  fila: { contratos: number; cerrados: number; pct: number; contratistas: number; valor: number; enviados: number }
   previo: { cerrados: number; contratos: number; pct: number } | null
   notaPrevio: string | null
   cambioPoblacion: boolean
   tramiteDias: number | null
-  abiertos: { contrato: string; nombre: string; estado: string }[]
   sinPlanilla: { contrato: string; nombre: string; meses: string[] }[]
   reparos: { contrato: string; nombre: string; motivo: string }[]
+  /**
+   * El reparto del municipio, solo para quien tiene competencia sobre el
+   * presupuesto entero. Llega `null` para el resto: a Desarrollo Territorial
+   * no le incumbe cuánto está ejecutando Gobierno. Ver la migración 047.
+   */
   municipio: {
     valor: number
     informes: number
     filas: { dependenciaId: string; nombre: string; valor: number; cerrados: number; contratos: number }[]
-  }
+  } | null
   dependenciaId: string
+  /** URL absoluta del PNG de la torta; `null` si no se pudo firmar. */
+  urlTorta: string | null
 }
 
 /**
@@ -698,11 +704,13 @@ export function emailConsolidadoDependencia(data: TemplateData) {
         : '')
     : `<span style="color:#64748b;">${esc(d.notaPrevio ?? '')}</span>`
 
-  const abiertos = lista(
-    d.abiertos.map(a =>
-      `<strong>${esc(a.nombre)}</strong> &middot; contrato ${esc(a.contrato)} <span style="color:#64748b;">— ${esc(a.estado)}</span>`),
-    'Todos los contratos de la dependencia cerraron su ciclo.',
-  )
+  // La torta: contratos activos contra informes enviados. Va como <img> y no
+  // como <svg> porque Gmail y Outlook eliminan el SVG del cuerpo del correo.
+  // Se pide a la mitad del tamaño al que se dibuja, que es como se ve nítida
+  // en una pantalla de densidad doble.
+  const torta = d.urlTorta
+    ? `<img src="${esc(d.urlTorta)}" width="420" height="190" alt="De ${d.fila.contratos} contratos activos, ${d.fila.enviados} enviaron su informe." style="display:block;width:100%;max-width:420px;height:auto;border:0;margin:0 auto;" />`
+    : `<p style="color:#64748b;font-size:13px;margin:0;">${d.fila.enviados} de ${d.fila.contratos} contratos activos enviaron su informe.</p>`
 
   const planillas = d.sinPlanilla.length
     ? seccion('Actas que saldrán sin número de planilla', `
@@ -720,12 +728,22 @@ export function emailConsolidadoDependencia(data: TemplateData) {
         `<strong>${esc(r.nombre)}</strong> &middot; contrato ${esc(r.contrato)} <span style="color:#64748b;">— ${esc(r.motivo)}</span>`), ''))
     : ''
 
-  const distribucion = barras(d.municipio.filas.map(f => ({
-    nombre: f.nombre,
-    valor: f.valor,
-    etiqueta: cop(f.valor),
-    propia: f.dependenciaId === d.dependenciaId,
-  })))
+  const reparto = d.municipio
+    ? seccion(
+        `Reparto en el municipio · ${cop(d.municipio.valor)} en ${d.municipio.informes} informes`,
+        barras(d.municipio.filas.map(f => ({
+          nombre: f.nombre,
+          valor: f.valor,
+          etiqueta: cop(f.valor),
+          propia: f.dependenciaId === d.dependenciaId,
+        }))) +
+        `<p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:2px 0 0;">
+           Cifras agregadas, sin nombres. Te llega porque Hacienda tramita las
+           cuentas de todas las secretarías.
+         </p>`,
+      )
+    : ''
+
 
   return {
     subject: `${esc(d.dependencia)} — consolidado de ${esc(d.mes)} ${d.anio}`,
@@ -749,15 +767,10 @@ export function emailConsolidadoDependencia(data: TemplateData) {
          Entre el envío del contratista y la radicación pasaron <strong>${d.tramiteDias} días</strong> de media.
        </p>` : ''}
 
-       ${seccion(`Lo que quedó abierto (${d.abiertos.length})`, abiertos)}
+       ${seccion('Contratos activos y envío de informes', torta)}
        ${planillas}
        ${reparos}
-
-       ${seccion(`Reparto en el municipio · ${cop(d.municipio.valor)} en ${d.municipio.informes} informes`, distribucion)}
-       <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:2px 0 0;">
-         Las cifras del municipio son agregadas. Los nombres y contratos de este
-         correo son únicamente de ${esc(d.dependencia)}.
-       </p>`,
+       ${reparto}`,
       '#192031',
     ),
   }

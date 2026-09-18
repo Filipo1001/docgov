@@ -42,6 +42,21 @@ export interface Ambito {
   supervisorId: string | null
   /** Hacienda, Bienestar Social y Desarrollo Territorial hoy no tienen. */
   asesorIds: string[]
+  /**
+   * Si esta dependencia puede ver el reparto del municipio entero.
+   *
+   * El consolidado mensual llevaba, al final, cómo se repartió el dinero
+   * radicado entre las cuatro secretarías, y le llegaba a todas. No le
+   * corresponde a todas: al secretario de Desarrollo Territorial no le incumbe
+   * cuánto está ejecutando Gobierno. Hacienda es la excepción con fundamento —
+   * paga las cuentas de las cuatro, así que el reparto ES su materia.
+   *
+   * Sale de `dependencias.ve_consolidado_municipio` (migración 047), no de
+   * comparar el nombre contra 'Secretaría de Hacienda' dentro de un `if`: la
+   * migración 035 ya obligó una vez a perseguir un nombre de dependencia por
+   * media base de datos.
+   */
+  veMunicipio: boolean
 }
 
 /** Roles que ven el municipio entero y no pertenecen a una sola dependencia. */
@@ -58,8 +73,13 @@ export type RolTransversal = (typeof ROLES_TRANSVERSALES)[number]
 export async function cargarAmbitos(
   admin: SupabaseClient,
 ): Promise<Map<string, Ambito>> {
+  // `select('*')` y no la lista de columnas: mientras la migración 047 no esté
+  // aplicada, pedir `ve_consolidado_municipio` por su nombre haría fallar la
+  // consulta entera. Con el asterisco la columna llega o no llega, y si no
+  // llega nadie ve el reparto del municipio — que es el valor seguro.
+  // `dependencias` tiene siete columnas y ninguna reservada.
   const [{ data: deps }, { data: gente }] = await Promise.all([
-    admin.from('dependencias').select('id, nombre'),
+    admin.from('dependencias').select('*'),
     admin
       .from('usuarios')
       .select('id, rol, dependencia_id')
@@ -74,6 +94,7 @@ export async function cargarAmbitos(
       nombre: d.nombre as string,
       supervisorId: null,
       asesorIds: [],
+      veMunicipio: (d as { ve_consolidado_municipio?: boolean }).ve_consolidado_municipio === true,
     })
   }
 
