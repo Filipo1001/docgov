@@ -23,7 +23,7 @@ import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-elec
 import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
-import { adjuntarCertificacion } from '@/lib/certificaciones'
+import { descargarCertificacionDelPaquete, NOMBRE_ARCHIVO_CERTIFICACION } from '@/lib/certificaciones'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -84,6 +84,27 @@ export async function GET(
     .single()
 
   const estado = data.periodo.estado
+
+  // La carta de no retención y el acta de terminación salen del depósito, no
+  // de un render: se piden AQUÍ para que su ida y vuelta corra en paralelo con
+  // la generación de los PDF, que es lo que tarda. Resolverlas al final, en
+  // secuencia, sumaba su tiempo a uno que ya era largo.
+  const certificacionPromise = descargarCertificacionDelPaquete(periodoId)
+  const actaTerminacionPromise = (async () => {
+    try {
+      const admin = createAdminSupabaseClient()
+      const { data: acta } = await admin
+        .from('actas_terminacion')
+        .select('pdf_path')
+        .eq('periodo_id', periodoId)
+        .maybeSingle()
+      if (!acta?.pdf_path) return null
+      const { data: blob } = await admin.storage.from('actas-terminacion').download(acta.pdf_path)
+      return blob ? Buffer.from(await blob.arrayBuffer()) : null
+    } catch {
+      return null   // el paquete sale sin el acta
+    }
+  })()
 
   // Informe y Cuenta de Cobro: cache-first (igual que /actas). La primera
   // descarga genera y cachea; las siguientes se sirven desde Storage casi
@@ -151,27 +172,20 @@ export async function GET(
   // Hasta ahora había que acordarse de bajarla aparte y adjuntarla a mano —lo
   // mismo que se hacía cuando se firmaba en papel—, así que el trámite que
   // este documento venía a resolver seguía igual de manual en el último paso.
-  await adjuntarCertificacion(periodoId, (nombre, contenido) => folder.file(nombre, contenido))
-
-  // Acta de terminación: se adjunta cuando el periodo que se descarga es aquel
-  // en el que se aceptó, de modo que el paquete del último informe salga con
-  // el cierre del contrato dentro. Se busca por `periodo_id` y no por contrato
-  // para no repetirla en todos los paquetes anteriores.
   //
-  // No bloqueante: si falla, el paquete sale sin ella. Un ZIP incompleto es
-  // recuperable; un 500 en la descarga deja al contratista sin nada.
-  try {
-    const { data: acta } = await createAdminSupabaseClient()
-      .from('actas_terminacion')
-      .select('pdf_path')
-      .eq('periodo_id', periodoId)
-      .maybeSingle()
-    if (acta?.pdf_path) {
-      const { data: blob } = await createAdminSupabaseClient()
-        .storage.from('actas-terminacion').download(acta.pdf_path)
-      if (blob) folder.file('Acta_de_Terminacion.pdf', Buffer.from(await blob.arrayBuffer()))
-    }
-  } catch { /* el paquete sale sin el acta */ }
+  // El acta de terminación va en el paquete del periodo donde se aceptó, para
+  // que el último informe salga con el cierre del contrato dentro y no se
+  // repita en todos los anteriores.
+  //
+  // Las dos son no bloqueantes: si el depósito falla, el paquete sale sin
+  // ellas. Un ZIP incompleto se vuelve a bajar; un 500 deja a la contratista
+  // sin nada el día que va a radicar.
+  const [certificacionBuffer, actaBuffer] = await Promise.all([
+    certificacionPromise,
+    actaTerminacionPromise,
+  ])
+  if (certificacionBuffer) folder.file(NOMBRE_ARCHIVO_CERTIFICACION, certificacionBuffer)
+  if (actaBuffer) folder.file('Acta_de_Terminacion.pdf', actaBuffer)
 
   // STORE (sin compresión): los PDFs ya vienen comprimidos, así que DEFLATE
   // gasta CPU sin reducir tamaño — y esa CPU cuenta contra maxDuration en el

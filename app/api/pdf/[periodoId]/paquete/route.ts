@@ -27,7 +27,7 @@ import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-elec
 import { buildPDFData } from '@/lib/pdf/data'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
-import { adjuntarCertificacion } from '@/lib/certificaciones'
+import { descargarCertificacionDelPaquete, NOMBRE_ARCHIVO_CERTIFICACION } from '@/lib/certificaciones'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -84,6 +84,10 @@ export async function GET(
   }
 
   const estado = data.periodo.estado
+
+  // Se pide ya, para que su ida y vuelta al depósito corra en paralelo con la
+  // generación de los cuatro PDF en vez de sumarse al final.
+  const certificacionPromise = descargarCertificacionDelPaquete(periodoId)
 
   // Quien factura electrónicamente no lleva Cuenta de Cobro: se sustituye por
   // el PDF de su factura. Se resuelve antes de lanzar los generadores para no
@@ -195,7 +199,8 @@ export async function GET(
   // STORE (level 0): PDFs are already compressed — DEFLATE wastes CPU with no size gain
   // La carta de no retención, en el paquete de la primera cuenta del año. El
   // expediente que revisa el supervisor debe contener lo mismo que se radica.
-  await adjuntarCertificacion(periodoId, (nombre, contenido) => folder.file(nombre, contenido))
+  const certificacionBuffer = await certificacionPromise
+  if (certificacionBuffer) folder.file(NOMBRE_ARCHIVO_CERTIFICACION, certificacionBuffer)
 
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',

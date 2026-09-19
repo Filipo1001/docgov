@@ -133,15 +133,28 @@ export async function certificacionParaPaquete(periodoId: string): Promise<strin
   return primero?.id === periodoId ? cert.pdf_path : null
 }
 
-export async function adjuntarCertificacion(
+/**
+ * La carta ya descargada, lista para meter en un ZIP, o `null` si a este
+ * periodo no le toca.
+ *
+ * Devuelve el contenido en vez de recibir un callback para que quien arma el
+ * paquete pueda lanzarla EN PARALELO con la generación de los PDF, que es lo
+ * que de verdad tarda. Antes se resolvía al final y en secuencia, sumando su
+ * ida y vuelta al depósito a un tiempo que ya era largo.
+ *
+ * No lanza: si el depósito falla, el paquete sale sin ella. Un ZIP incompleto
+ * se vuelve a bajar; un 500 deja a la contratista sin nada el día que radica.
+ */
+export async function descargarCertificacionDelPaquete(
   periodoId: string,
-  poner: (nombre: string, contenido: Buffer) => void,
-): Promise<void> {
+): Promise<Buffer | null> {
   try {
     const path = await certificacionParaPaquete(periodoId)
-    if (!path) return
+    if (!path) return null
     const { data: blob } = await createAdminSupabaseClient()
       .storage.from('certificaciones').download(path)
-    if (blob) poner(NOMBRE_ARCHIVO_CERTIFICACION, Buffer.from(await blob.arrayBuffer()))
-  } catch { /* el paquete sale sin la carta */ }
+    return blob ? Buffer.from(await blob.arrayBuffer()) : null
+  } catch {
+    return null
+  }
 }

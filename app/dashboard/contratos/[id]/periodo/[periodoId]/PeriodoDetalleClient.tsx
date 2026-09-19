@@ -1963,15 +1963,27 @@ export default function PeriodoDetallePage({
     setGuardandoMesCotizacion(false)
   }
 
-  // Descarga del paquete ZIP desde el nodo del pipeline, con feedback de progreso.
-  // Hace fetch del ZIP (mostrando toast + spinner) y dispara la descarga al llegar,
-  // en vez de un <a download> silencioso que deja al usuario sin saber qué pasa.
+  // Descarga de un ZIP con señal de que está pasando algo.
+  //
+  // Sustituye al <a download> silencioso: el navegador se iba a pedir el
+  // archivo, la pantalla no cambiaba, y cada clic lanzaba una GENERACIÓN
+  // COMPLETA e independiente en el servidor. Con el informe sin cachear eso
+  // son varios segundos bajando las fotos del periodo una a una —mediana 15,
+  // hasta 134— así que pulsar tres veces era lo natural, y producía tres ZIP.
+  //
+  // De paso recupera los errores: un 422 «faltan datos» o un 403 llegaban como
+  // JSON y el navegador los guardaba como archivo. El mensaje se perdía.
   async function handleDescargarPaquete(href: string) {
     if (descargandoPaquete) return
     setDescargandoPaquete(true)
+    // Dos fases, y la frontera es real: la promesa del fetch resuelve cuando
+    // llegan las cabeceras, o sea cuando el servidor terminó de generar y
+    // empieza a mandar bytes. Antes de eso se espera al servidor; después se
+    // está bajando. Saber en cuál de las dos está cambia la paciencia.
     const toastId = toast.loading('Generando documentos…')
     try {
       const res = await fetch(href)
+      if (res.ok) toast.loading('Descargando…', { id: toastId })
       if (!res.ok) {
         // Datos incompletos (422) u otro error: mostrar el mensaje real del servidor
         let msg = 'No se pudo generar el paquete'
@@ -3814,16 +3826,21 @@ export default function PeriodoDetallePage({
               {/* Descargar Para Secop — solo contratista */}
               {esContratista && (
                 puedeDescargarPaquete ? (
-                  <a
-                    href={`/api/pdf/${periodoId}/secop`}
-                    download
-                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl hover:bg-emerald-700 transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => handleDescargarPaquete(`/api/pdf/${periodoId}/secop`)}
+                    disabled={descargandoPaquete}
+                    aria-busy={descargandoPaquete}
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl hover:bg-emerald-700 disabled:bg-emerald-600/70 disabled:cursor-wait transition-colors"
                   >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    {descargandoPaquete ? <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg> : <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                    Descargar Para Secop
-                  </a>
+                    </svg>}
+                    {descargandoPaquete ? 'Preparando…' : 'Descargar Para Secop'}
+                  </button>
                 ) : (
                   <div
                     className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
@@ -3840,16 +3857,21 @@ export default function PeriodoDetallePage({
               {/* Descargar Paquete completo — solo asesor / secretaria */}
               {(esAsesor || esSecretaria) && (
                 puedeDescargarPaquete ? (
-                  <a
-                    href={`/api/pdf/${periodoId}/paquete`}
-                    download
-                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => handleDescargarPaquete(`/api/pdf/${periodoId}/paquete`)}
+                    disabled={descargandoPaquete}
+                    aria-busy={descargandoPaquete}
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 disabled:bg-gray-900/70 disabled:cursor-wait transition-colors"
                   >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    {descargandoPaquete ? <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg> : <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                    Descargar Paquete
-                  </a>
+                    </svg>}
+                    {descargandoPaquete ? 'Preparando…' : 'Descargar Paquete'}
+                  </button>
                 ) : (
                   <div
                     className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"

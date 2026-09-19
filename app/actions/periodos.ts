@@ -22,6 +22,7 @@ import { extraerPath } from '@/lib/storage-firmado'
 import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
+import { precalentarPDFs } from '@/lib/pdf/precalentar'
 import { certificacionPendiente } from '@/lib/certificaciones'
 import { actaTerminacionPendiente, emitirActaTerminacion } from '@/lib/actas-terminacion'
 import type { EstadoPeriodo, Rol, ActionResult } from '@/lib/types'
@@ -710,7 +711,23 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
     // lanza — un fallo emitiendo no puede tumbar una aprobación ya guardada.
     await Promise.allSettled(validIds.map(id => emitirActaTerminacion(id, usuario.id)))
 
-    validIds.forEach(id => invalidarCachePDF(createAdminSupabaseClient(), id).catch(() => {}))
+    // Invalidar y luego DEJAR CALIENTE el caché, en ese orden y encadenados.
+    //
+    // El informe incrusta cada foto del periodo y react-pdf las baja una a una
+    // al renderizar: mediana 15 fotos, hasta 134. Ese coste caía entero sobre
+    // el clic de la contratista —de 203 periodos aprobados solo 80 tenían su
+    // informe en caché—, con un botón que además no daba señal de estar
+    // trabajando, así que se pulsaba varias veces y se generaba varias veces.
+    //
+    // Aquí el trabajo no le cuesta el tiempo a nadie: `after()` corre cuando la
+    // secretaria ya recibió su respuesta. El encadenamiento importa —invalidar
+    // después de precalentar borraría justo lo que se acaba de generar.
+    after(async () => {
+      await Promise.allSettled(validIds.map(async (id) => {
+        await invalidarCachePDF(createAdminSupabaseClient(), id).catch(() => {})
+        await precalentarPDFs(id)
+      }))
+    })
     revalidar()
     return { data: { aprobados: validIds.length } }
   } catch (e: unknown) {
