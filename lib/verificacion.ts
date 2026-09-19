@@ -20,20 +20,37 @@ import { createAdminSupabaseClient } from './supabase-admin'
 import { ORIGEN_APP } from './dominio'
 
 /**
- * Origen público de la app en este deployment. En producción es el dominio
- * propio; en preview, Vercel expone la URL única del deployment por
- * VERCEL_URL — usarla evita que los QR/enlaces generados en preview apunten
- * a producción (donde esta ruta puede no existir todavía) y viceversa.
+ * Origen que se graba en el QR de un documento emitido. SIEMPRE el dominio
+ * propio, corra donde corra el código.
  *
- * Los documentos emitidos antes de agosto de 2026 llevan grabado el dominio
- * anterior en la imagen del QR. Siguen resolviendo por la redirección 301 del
- * middleware, no porque este valor los alcance: una vez impreso, el QR es
- * inmutable. Ver lib/dominio.ts.
+ * ── Por qué ya no depende del deployment ─────────────────────────────────
+ *
+ * Antes, fuera de producción devolvía la URL única que Vercel da a cada
+ * despliegue, con la idea de que un QR hecho en preview no mandara a
+ * producción. El razonamiento falla por la base: preview y producción
+ * COMPARTEN la base de datos y el depósito de archivos. Un documento que se
+ * emite desde un preview no es una prueba — es una fila real en
+ * `documentos_emitidos` con un código real, y su PDF real queda guardado en el
+ * depósito de producción.
+ *
+ * Medido el 19 de septiembre de 2026: las CATORCE certificaciones de
+ * retención existentes llevaban impreso un QR hacia
+ * `docgov-…-projects.vercel.app`. Quien lo escaneaba aterrizaba en la pantalla
+ * de acceso de Vercel, no en la verificación. El mismo código, pedido al
+ * dominio propio, respondía «Documento auténtico»: el dato estaba bien, lo
+ * impreso no.
+ *
+ * Como el código vive en la base de producción, el dominio propio SIEMPRE lo
+ * resuelve —también el emitido desde un preview—, así que apuntar ahí es
+ * correcto en los dos entornos. Y es lo único compatible con la regla 1 del
+ * proyecto: el QR es inmutable una vez impreso, y la URL que lleva grabada
+ * tiene que seguir respondiendo dentro de diez años.
+ *
+ * Los documentos emitidos antes de agosto de 2026 llevan el dominio anterior.
+ * Siguen resolviendo por la redirección 301 del middleware. Ver lib/dominio.ts.
  */
 function baseUrl(): string {
-  if (process.env.VERCEL_ENV === 'production') return ORIGEN_APP
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return 'http://localhost:3000'
+  return ORIGEN_APP
 }
 
 export type TipoDocumento = 'informe' | 'cuenta-cobro' | 'acta-supervision' | 'acta-pago' | 'certificacion-retencion' | 'acta-terminacion'
