@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import PeriodoDetalleClient, { type PeriodoHermano } from './PeriodoDetalleClient'
 import type { Contrato, Periodo, Obligacion, Actividad, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { buscarDuplicados } from '@/lib/duplicados'
+import { certificacionParaPaquete } from '@/lib/certificaciones'
 import { firmarUrls, firmarUrlsMiniatura, firmarUrl, UMBRAL_MINIATURA_BYTES } from '@/lib/storage-firmado'
 import type { AdjuntoDTO } from '@/app/actions/adjuntos'
 
@@ -168,15 +169,15 @@ export default async function PeriodoDetallePage({
       ; (initialAdjuntos[a.actividad_id] ??= []).push({ ...resto, urlFirmada })
   }
 
-  // ¿Existe ya la certificación de retención para (contrato, año gravable)?
-  // Solo se muestra su tarjeta de descarga en el PRIMER periodo del contrato.
-  const { data: certRow } = await supabase
-    .from('certificaciones_retencion')
-    .select('id')
-    .eq('contrato_id', id)
-    .eq('anio_gravable', (periodo as { anio: number }).anio)
-    .maybeSingle()
-  const certDisponible = !!certRow
+  // ¿Le toca a ESTE periodo enseñar la carta de no retención?
+  //
+  // La decisión sale de `certificacionParaPaquete`, la misma función con la
+  // que se arma el ZIP, para que la tarjeta que se ve y el documento que se
+  // descarga no puedan discrepar. Antes se decidía aquí con otro criterio —el
+  // periodo de menor número— y las catorce cartas emitidas caían en periodos
+  // de enero en borrador: la tarjeta existía, en una pantalla a la que nadie
+  // entra, y en el paquete no iba nunca.
+  const certDisponible = (await certificacionParaPaquete(periodoId)) !== null
 
   // Acta de terminación: única por contrato. Su descarga se ofrece solo en el
   // último periodo y solo si ya fue aceptada.

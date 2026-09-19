@@ -1084,14 +1084,15 @@ export default function PeriodoDetallePage({
     ? ['aprobado', 'radicado'].includes(periodo.estado)
     : false
 
-  // La certificación de retención es única por contrato → su descarga se
-  // muestra SOLO en el primer periodo (el de menor número) y solo si ya existe.
-  const esPrimerPeriodo = periodo != null && (
-    periodosHermanos.length > 0
-      ? periodo.numero_periodo === Math.min(...periodosHermanos.map(p => p.numero_periodo))
-      : periodo.numero_periodo === 1
-  )
-  const mostrarCertificacion = esPrimerPeriodo && certDisponible
+  // La carta de no retención es única por contrato y año → su descarga se
+  // muestra solo en el periodo que la lleva. Quién es ese periodo lo decide el
+  // servidor con la misma función que arma el ZIP (`certificacionParaPaquete`),
+  // así que aquí no se vuelve a razonar: si llegó `certDisponible`, se enseña.
+  //
+  // Antes se calculaba aquí como «el de menor numero_periodo», y eso ponía la
+  // tarjeta en los eneros en borrador de contratos que entraron al sistema en
+  // julio — una pantalla a la que nadie entra.
+  const mostrarCertificacion = certDisponible
 
   // El acta de terminación es única por contrato → su descarga se muestra SOLO
   // en el último periodo (el de mayor número) y solo si ya fue aceptada.

@@ -51,3 +51,97 @@ export async function certificacionPendiente(
   const esPrimerInforme = (count ?? 0) === 0
   return esPrimerInforme
 }
+
+/** Nombre con el que la carta entra en los paquetes ZIP. */
+export const NOMBRE_ARCHIVO_CERTIFICACION = 'Certificacion_de_Retencion.pdf'
+
+/**
+ * La carta de no retención que debe viajar DENTRO del paquete de este periodo,
+ * o `null` si a este periodo no le corresponde.
+ *
+ * ── Por qué hace falta ───────────────────────────────────────────────────
+ *
+ * La carta se emitía, se verificaba y se podía descargar suelta, pero no
+ * entraba en ningún ZIP: ni en el de SECOP —el que arma la contratista para
+ * radicar— ni en el paquete completo del supervisor. O sea que el documento
+ * que por norma acompaña a la PRIMERA cuenta de cobro había que acordarse de
+ * bajarlo aparte y adjuntarlo a mano, que es exactamente lo que se hacía
+ * cuando la carta se firmaba en papel.
+ *
+ * ── Por qué solo en un periodo ───────────────────────────────────────────
+ *
+ * La carta es una por contrato y año gravable, y la norma la pide con la
+ * primera cuenta. Metida en los doce paquetes del año sería un documento
+ * repetido once veces dentro del expediente, y quien reciba el paquete de
+ * octubre no sabría si esa carta es de octubre o de enero.
+ *
+ * ── Cuál es «el primero», que no es el que parece ────────────────────────
+ *
+ * NO es el de menor `numero_periodo`. Casi todos los contratos arrancaron en
+ * enero y entraron al sistema en julio, así que sus periodos 1 a 6 existen
+ * pero están en borrador y nunca saldrán de ahí: se pagaron por fuera. De las
+ * catorce cartas emitidas, las catorce tienen su periodo #1 en borrador — con
+ * ese criterio la carta no habría aparecido en un solo ZIP, porque el
+ * paquete solo se genera desde `aprobado`.
+ *
+ * El portador es el primer periodo que SALIÓ de borrador, por `fecha_envio`.
+ * Es además donde la carta se aceptó de verdad: `certificacionPendiente` se
+ * evalúa al enviar, así que el primer envío y la firma del juramento son el
+ * mismo acto. Con esta regla trece de las catorce quedan dentro de un paquete
+ * descargable, y la catorceava en cuanto se apruebe su periodo.
+ *
+ * Se acota al año porque la carta está indexada por (contrato, año): un
+ * contrato que cruzara de diciembre a enero tendría dos cartas, y cada una
+ * debe salir con la primera cuenta de SU año.
+ *
+ * La pantalla del periodo usa esta MISMA función para decidir si enseña la
+ * tarjeta de descarga, de modo que lo que se ve y lo que va en el ZIP no
+ * puedan discrepar.
+ */
+export async function certificacionParaPaquete(periodoId: string): Promise<string | null> {
+  if (!RETENCION_OBLIGATORIA) return null
+
+  const admin = createAdminSupabaseClient()
+
+  const { data: periodo } = await admin
+    .from('periodos')
+    .select('contrato_id, anio, fecha_envio')
+    .eq('id', periodoId)
+    .single()
+  if (!periodo) return null
+  // Un periodo que nunca se envió no puede ser el portador de nada.
+  if (!periodo.fecha_envio) return null
+
+  const { data: cert } = await admin
+    .from('certificaciones_retencion')
+    .select('pdf_path')
+    .eq('contrato_id', periodo.contrato_id)
+    .eq('anio_gravable', periodo.anio)
+    .maybeSingle()
+  if (!cert?.pdf_path) return null
+
+  const { data: primero } = await admin
+    .from('periodos')
+    .select('id')
+    .eq('contrato_id', periodo.contrato_id)
+    .eq('anio', periodo.anio)
+    .not('fecha_envio', 'is', null)
+    .order('fecha_envio', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  return primero?.id === periodoId ? cert.pdf_path : null
+}
+
+export async function adjuntarCertificacion(
+  periodoId: string,
+  poner: (nombre: string, contenido: Buffer) => void,
+): Promise<void> {
+  try {
+    const path = await certificacionParaPaquete(periodoId)
+    if (!path) return
+    const { data: blob } = await createAdminSupabaseClient()
+      .storage.from('certificaciones').download(path)
+    if (blob) poner(NOMBRE_ARCHIVO_CERTIFICACION, Buffer.from(await blob.arrayBuffer()))
+  } catch { /* el paquete sale sin la carta */ }
+}

@@ -1,10 +1,12 @@
 /**
  * GET /api/pdf/[periodoId]/secop
  *
- * Descarga un ZIP con los 3 documentos requeridos para SECOP:
+ * Descarga un ZIP con los documentos requeridos para SECOP:
  *   Informe_de_Actividades.pdf
  *   Cuenta_de_Cobro.pdf
- *   Planilla_Seguridad_Social.{ext}  (si está adjunta)
+ *   Planilla_Seguridad_Social.{ext}   (si está adjunta)
+ *   Certificacion_de_Retencion.pdf    (solo en la PRIMERA cuenta del año)
+ *   Acta_de_Terminacion.pdf           (solo en el periodo donde se aceptó)
  *
  * Acceso: contratista del contrato + asesor / supervisor / admin
  * Condición: periodo debe estar en estado 'aprobado' o 'radicado'
@@ -21,6 +23,7 @@ import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-elec
 import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
+import { adjuntarCertificacion } from '@/lib/certificaciones'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -143,6 +146,12 @@ export async function GET(
   if (planillaBuffer) {
     folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
   }
+
+  // La carta de no retención acompaña por norma a la PRIMERA cuenta de cobro.
+  // Hasta ahora había que acordarse de bajarla aparte y adjuntarla a mano —lo
+  // mismo que se hacía cuando se firmaba en papel—, así que el trámite que
+  // este documento venía a resolver seguía igual de manual en el último paso.
+  await adjuntarCertificacion(periodoId, (nombre, contenido) => folder.file(nombre, contenido))
 
   // Acta de terminación: se adjunta cuando el periodo que se descarga es aquel
   // en el que se aceptó, de modo que el paquete del último informe salga con

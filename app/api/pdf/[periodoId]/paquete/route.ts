@@ -1,12 +1,13 @@
 /**
  * GET /api/pdf/[periodoId]/paquete
  *
- * Descarga un ZIP con los 5 documentos del periodo:
+ * Descarga un ZIP con los documentos del periodo:
  *   Informe_de_Actividades.pdf
  *   Cuenta_de_Cobro.pdf
  *   Acta_de_Supervision.pdf
  *   Acta_de_Pago.pdf
- *   Planilla_Seguridad_Social.{ext}  (si está adjunta)
+ *   Planilla_Seguridad_Social.{ext}   (si está adjunta)
+ *   Certificacion_de_Retencion.pdf    (solo en la PRIMERA cuenta del año)
  *
  * Acceso: solo asesor / supervisor / admin
  * Condición: periodo debe estar en estado 'aprobado' o 'radicado'
@@ -26,6 +27,7 @@ import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-elec
 import { buildPDFData } from '@/lib/pdf/data'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
+import { adjuntarCertificacion } from '@/lib/certificaciones'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -191,6 +193,10 @@ export async function GET(
   }
 
   // STORE (level 0): PDFs are already compressed — DEFLATE wastes CPU with no size gain
+  // La carta de no retención, en el paquete de la primera cuenta del año. El
+  // expediente que revisa el supervisor debe contener lo mismo que se radica.
+  await adjuntarCertificacion(periodoId, (nombre, contenido) => folder.file(nombre, contenido))
+
   const zipBuffer = await zip.generateAsync({
     type: 'nodebuffer',
     compression: 'STORE',
