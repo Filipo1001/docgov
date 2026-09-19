@@ -140,6 +140,26 @@ const s = StyleSheet.create({
     fontSize: 9.5,
     lineHeight: 1.35,
   },
+  /**
+   * El objeto del contrato, cuando es largo.
+   *
+   * Es la única fila de altura variable de todo el documento: las demás llevan
+   * una línea. Un objeto de más de ~515 caracteres empujaba el contenido unos
+   * pocos puntos por debajo del borde y react-pdf abría una segunda página
+   * —vacía, porque lo que desbordaba eran márgenes, no texto—.
+   *
+   * Solo 3 de los 156 contratos llegan ahí, pero otros dos rondan los 513, así
+   * que no basta con ganar veinte caracteres.
+   *
+   * Se aprieta SOLO esta celda: el resto del documento sale idéntico al de
+   * siempre, que es lo que importa cuando lo compara quien lo recibe.
+   */
+  valObjetoLargo: {
+    flex: 1,
+    padding: '3 6',
+    fontSize: 8.5,
+    lineHeight: 1.22,
+  },
 
   // ── Bank sub-row (nested 4 columns inside the last table row)
   bankCell: {
@@ -309,6 +329,12 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
   // CC number (zero-padded)
   const ccNum = String(periodo.numero).padStart(2, '0')
 
+  // Umbral medido, no estimado: renderizando el documento real y contando
+  // páginas, el salto ocurre entre 500 y 520 caracteres. Se corta en 460 para
+  // dejar holgura — hay contratos en 513 y 514 que hoy caben por los pelos y
+  // cualquier retoque futuro los volcaría.
+  const objetoLargo = (contrato.objeto ?? '').length > 460
+
   // Municipality header
   const municipioHeader = municipio.departamento
     ? `EL MUNICIPIO DE ${municipio.nombre.toUpperCase()} ${municipio.departamento.toUpperCase()}`
@@ -361,7 +387,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
 
           <View style={s.row}>
             <View style={s.lbl}><Text>Objeto del contrato:</Text></View>
-            <View style={s.val}><Text>{contrato.objeto.toUpperCase()}</Text></View>
+            <View style={objetoLargo ? s.valObjetoLargo : s.val}><Text>{contrato.objeto.toUpperCase()}</Text></View>
           </View>
 
           {ot && (
