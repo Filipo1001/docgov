@@ -42,21 +42,27 @@ export default function CertificacionModal({
   onCerrar: () => void
   onAceptada: () => void
 }) {
-  // Respuesta jurada: false = NO (el caso mayoritario), true = SI.
+  // Respuesta jurada. `null` = todavía no ha contestado.
   //
-  // Si ya juró este año en otro contrato, se abre con esa misma respuesta
-  // marcada: la declaración es sobre su situación en el año gravable, no
-  // sobre el contrato, y volver a preguntarle lo mismo sería no haber
-  // escuchado la primera vez. Sigue necesitando confirmar —el documento
-  // lleva su firma— pero le cuesta un clic, no un formulario.
-  const [vinculo, setVinculo] = useState(prefill?.respuestaPrevia?.vinculoMasTrabajador ?? false)
+  // Antes arrancaba en `false`, o sea con el NO ya marcado, y eso permitía
+  // firmar el documento sin haber mirado la pregunta. Ahora hay que elegir:
+  // mientras no lo haga, el botón de aceptar no se activa. Vale para los dos
+  // lados — ni un NO por inercia ni un SÍ por descuido.
+  //
+  // La excepción es quien ya juró este año en otro contrato: se abre con su
+  // misma respuesta marcada, porque la declaración es sobre su situación en
+  // el año gravable y no sobre el contrato. Volver a preguntarle lo mismo
+  // sería no haber escuchado la primera vez.
+  const [vinculo, setVinculo] = useState<boolean | null>(
+    prefill?.respuestaPrevia?.vinculoMasTrabajador ?? null,
+  )
   const [juramento, setJuramento] = useState(false)
   const [procesando, setProcesando] = useState(false)
 
   if (!abierto || !prefill) return null
 
   async function aceptar() {
-    if (!juramento || procesando) return
+    if (!juramento || procesando || vinculo === null) return
     setProcesando(true)
     const result = await aceptarCertificacion(periodoId, vinculo)
     if (result.error) {
@@ -125,36 +131,120 @@ export default function CertificacionModal({
           )}
 
           {/* Declaración jurada — SI / NO */}
+          {/*
+            La pregunta va DOS veces: primero en castellano llano, después el
+            texto legal literal.
+
+            El literal —«He contratado o vinculado más de un trabajador…»— se
+            lee al revés con una facilidad peligrosa: «he contratado» se
+            confunde con «he sido contratado», y quien firma esto es
+            justamente una persona contratada por la alcaldía. Leída rápido,
+            la respuesta parece que es SÍ. Y un SÍ falso cambia la tarifa de
+            retención que Hacienda le aplica, sobre un documento que se rinde
+            bajo juramento.
+
+            La pregunta llana no sustituye al texto legal, que es el que se
+            jura y va impreso en la carta: lo precede, para que cuando se lea
+            ya se sepa de qué trata.
+          */}
           <div>
-            <p className="text-[13px] font-medium text-gray-800 mb-2">
-              Declaro bajo la gravedad de juramento que, para efectos del artículo 383 del Estatuto Tributario:
-            </p>
-            <p className="text-[13px] text-gray-600 italic mb-3">
-              “He contratado o vinculado más de un trabajador asociado a mi actividad económica por al menos noventa
-              (90) días continuos o discontinuos.”
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setVinculo(false)}
-                className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
-                  !vinculo ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                NO
-                <span className="block text-[11px] font-normal mt-0.5 text-gray-400">No he vinculado más de un trabajador</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setVinculo(true)}
-                className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
-                  vinculo ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                SÍ
-                <span className="block text-[11px] font-normal mt-0.5 text-gray-400">Sí he vinculado más de un trabajador</span>
-              </button>
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Tu declaración</p>
+
+            <div className="rounded-xl border border-gray-200 p-4">
+              <p className="text-[15px] font-semibold text-gray-900 leading-snug">
+                ¿Tienes personas empleadas por ti?
+              </p>
+              <p className="text-[13px] text-gray-600 leading-relaxed mt-1.5">
+                No se trata de tu contrato con la alcaldía. La pregunta es si <strong>tú</strong> eres
+                empleador: si has tenido <strong>dos o más personas trabajando para ti</strong>, en tu
+                propia actividad, durante noventa días o más de este año.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setVinculo(false)}
+                  aria-pressed={vinculo === false}
+                  className={`text-left rounded-xl border px-4 py-3 transition-colors ${
+                    vinculo === false
+                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100'
+                      : 'border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`block text-sm font-bold ${vinculo === false ? 'text-blue-700' : 'text-gray-700'}`}>NO</span>
+                  <span className="block text-[12px] text-gray-500 mt-0.5 leading-snug">
+                    Trabajo por mi cuenta. Nadie está empleado por mí.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVinculo(true)}
+                  aria-pressed={vinculo === true}
+                  className={`text-left rounded-xl border px-4 py-3 transition-colors ${
+                    vinculo === true
+                      ? 'border-amber-500 bg-amber-50 ring-2 ring-amber-100'
+                      : 'border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`block text-sm font-bold ${vinculo === true ? 'text-amber-700' : 'text-gray-700'}`}>SÍ</span>
+                  <span className="block text-[12px] text-gray-500 mt-0.5 leading-snug">
+                    Tengo dos o más personas empleadas por mí.
+                  </span>
+                </button>
+              </div>
+
+              {/*
+                El SÍ se confirma aparte. No para disuadir a quien de verdad
+                tiene empleados —su SÍ es tan legítimo como el NO y sale igual
+                de firmado—, sino porque es la respuesta a la que se llega por
+                error de lectura. La frase de abajo es la que devuelve al sitio
+                a quien se equivocó, y no dice nada a quien no.
+              */}
+              {vinculo === true && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-[13px] text-amber-900 leading-relaxed">
+                    Estás declarando que <strong>tú eres empleador</strong> de dos o más personas.
+                    Con esta respuesta la alcaldía te aplica una retención distinta.
+                  </p>
+                  <p className="text-[13px] text-amber-900 leading-relaxed mt-2">
+                    Si lo que quisiste decir es que <strong>la alcaldía te contrató a ti</strong>,
+                    la respuesta es <strong>NO</strong>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setVinculo(false)}
+                    className="mt-2.5 text-[13px] font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+                  >
+                    Me equivoqué, cambiar a NO
+                  </button>
+                </div>
+              )}
+
+              {vinculo === null && (
+                <p className="text-[12px] text-gray-400 mt-3">
+                  Elige una de las dos para poder continuar.
+                </p>
+              )}
             </div>
+
+            {/* El texto que se jura y que va impreso en la carta, literal. */}
+            <div className="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-4">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+                Lo que dirá el documento
+              </p>
+              <p className="text-[13px] text-gray-600 leading-relaxed">
+                Declaro bajo la gravedad de juramento que, para efectos del artículo 383 del Estatuto
+                Tributario: <span className="italic">“He contratado o vinculado más de un trabajador
+                asociado a mi actividad económica por al menos noventa (90) días continuos o
+                discontinuos.”</span>{' '}
+                {vinculo !== null && (
+                  <strong className={vinculo ? 'text-amber-700' : 'text-blue-700'}>
+                    {vinculo ? 'SÍ' : 'NO'}
+                  </strong>
+                )}
+              </p>
+            </div>
+
             <p className="text-[12px] text-gray-500 mt-2">
               Me comprometo a informar en el momento en que contrate o vincule más de un trabajador.
             </p>
@@ -207,7 +297,7 @@ export default function CertificacionModal({
           <button
             type="button"
             onClick={aceptar}
-            disabled={!juramento || procesando || faltaFirma}
+            disabled={!juramento || procesando || faltaFirma || vinculo === null}
             className="text-sm font-semibold text-white bg-blue-600 px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {procesando ? 'Generando…' : 'Aceptar y firmar'}
