@@ -39,7 +39,6 @@ export interface Usuario {
   tipo_cuenta?: string | null
   numero_cuenta?: string | null
   /** Municipio de expedición de la cédula, tal como aparece en el documento. */
-  lugar_expedicion_cedula?: string | null
 }
 
 export interface Preaprobacion {

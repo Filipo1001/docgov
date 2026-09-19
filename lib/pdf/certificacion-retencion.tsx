@@ -22,7 +22,6 @@ export interface CertificacionData {
   contratista: { nombre_completo: string; cedula: string; firma_url?: string }
   contrato: { numero: string; anio: number }
   /** Lugar de expedición de la cédula (snapshot del municipio del contrato). */
-  lugarExpedicion: string
   /** Respuesta jurada: SI (true) / NO (false). */
   vinculoMasTrabajador: boolean
   /** ISO de la aceptación — encabeza la carta ("Fredonia, 30 de enero de 2026"). */
@@ -76,7 +75,7 @@ const s = StyleSheet.create({
 })
 
 export function CertificacionRetencionPDF({ data }: { data: CertificacionData }) {
-  const { municipio, contratista, contrato, lugarExpedicion, vinculoMasTrabajador, fechaAceptacion, verificacion } = data
+  const { municipio, contratista, contrato, vinculoMasTrabajador, fechaAceptacion, verificacion } = data
 
   const nombre = contratista.nombre_completo.toUpperCase()
   const cedula = formatCedula(contratista.cedula)
@@ -113,10 +112,9 @@ export function CertificacionRetencionPDF({ data }: { data: CertificacionData })
 
         {/* Cuerpo */}
         <Text style={s.parrafo}>
-          Yo, <Text style={s.nombre}>{nombre}</Text> identificado con cédula de ciudadanía No. {cedula} expedida
-          en {lugarExpedicion.toUpperCase()} con el fin de dar cumplimiento a las disposiciones establecidas en la
-          Ley 1819 de 2016 y del parágrafo 2 de artículo 383 del Estatuto Tributario, manifiesto bajo gravedad de
-          juramento que:
+          Yo, <Text style={s.nombre}>{nombre}</Text> identificado con cédula de ciudadanía No. {cedula}, con el
+          fin de dar cumplimiento a las disposiciones establecidas en la Ley 1819 de 2016 y del parágrafo 2 del
+          artículo 383 del Estatuto Tributario, manifiesto bajo gravedad de juramento que:
         </Text>
 
         <Text style={s.parrafoBold}>

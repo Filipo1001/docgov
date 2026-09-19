@@ -47,7 +47,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const [{ data: u }, { data: m }] = await Promise.all([
         supabase
           .from('usuarios')
-          .select('id, municipio_id, dependencia_id, nombre_completo, cedula, email, telefono, rol, activo, cargo, direccion, foto_url, rh, tipo_documento, firma_url, lugar_expedicion_cedula')
+          .select('id, municipio_id, dependencia_id, nombre_completo, cedula, email, telefono, rol, activo, cargo, direccion, foto_url, rh, tipo_documento, firma_url')
           .eq('id', userId)
           .single(),
         supabase.from('municipios').select('*').single(),

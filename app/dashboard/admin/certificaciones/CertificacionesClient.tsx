@@ -34,22 +34,30 @@ export default function CertificacionesClient() {
     <div className="max-w-2xl">
       <PageHeader
         title="Certificaciones de retención"
-        subtitle="Reemitir las cartas que salieron sin la firma del contratista"
+        subtitle="Reemitir las cartas con la firma, y sin el lugar de expedición inventado"
       />
 
       <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
         <div className="space-y-2 text-sm text-gray-600 leading-relaxed">
           <p>
-            La firma se guarda en un depósito privado y esta plantilla nunca pedía el
-            permiso de lectura, así que el PDF salía completo pero con el espacio de la
-            firma en blanco. Afecta a <strong>todas las certificaciones emitidas hasta
-            hoy</strong>.
+            Hay <strong>dos defectos</strong> en todas las certificaciones emitidas hasta
+            hoy, y esta acción corrige los dos.
           </p>
           <p>
-            Al reemitir <strong>no se cambia una palabra de lo declarado</strong>: se
-            conservan el código de verificación, la fecha de aceptación y la respuesta
-            jurada tal como se guardó el día que la persona la dio. Solo se añade la
-            firma que siempre debió llevar.
+            <strong>Salieron sin firma.</strong> La firma se guarda en un depósito privado
+            y esta plantilla nunca pedía el permiso de lectura, así que el PDF salía
+            completo pero con ese espacio en blanco.
+          </p>
+          <p>
+            <strong>Afirmaban dónde se expidió la cédula.</strong> Decían «expedida en
+            FREDONIA» porque se usaba el municipio del contrato como si fuera el de la
+            cédula — un dato que nadie comprobó, dentro de un documento que se rinde bajo
+            juramento. Al reemitir, esa frase desaparece.
+          </p>
+          <p>
+            <strong>No se cambia una palabra de lo declarado</strong>: se conservan el
+            código de verificación, la fecha de aceptación y la respuesta jurada tal como
+            se guardó el día que la persona la dio.
           </p>
           <p className="text-gray-500">
             Los códigos QR ya repartidos siguen funcionando, porque el código no cambia.

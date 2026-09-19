@@ -353,11 +353,6 @@ export default function PerfilPage() {
           <SectionHeading>Información personal</SectionHeading>
           <Field label="Nombre completo"    value={usuario.nombre_completo} />
           <Field label="Cédula"             value={formatCedula(usuario.cedula)} />
-          {/* Lo aporta la propia persona al firmar su primera certificación de
-              retención: la frase jurada de ese documento lo afirma, y antes se
-              rellenaba con el municipio del contrato. Aquí se muestra para que
-              pueda comprobarlo. */}
-          <Field label="Cédula expedida en"  value={usuario.lugar_expedicion_cedula} />
           <Field label="Correo electrónico" value={usuario.email} />
           <Field label="Teléfono"           value={usuario.telefono} />
           <Field label="Dirección"          value={usuario.direccion} />
