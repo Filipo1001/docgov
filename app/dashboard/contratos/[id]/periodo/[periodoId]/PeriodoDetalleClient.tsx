@@ -1219,8 +1219,8 @@ export default function PeriodoDetallePage({
 
     const faltaPlanilla = !periodo?.planilla_ss_url
     const faltaNumero = !numPlanilla.trim()
-    // La fecha se mira contra lo GUARDADO, no contra el campo: el selector
-    // puede tener un valor a medio escribir que nunca llegó a la base.
+    // Se mira lo GUARDADO, no el campo. `periodo` se actualiza en cuanto el
+    // guardado confirma, así que esto es lo que de verdad está en la base.
     const faltaFecha = !periodo?.fecha_pago_planilla
 
     if (faltaPlanilla || faltaNumero || faltaFecha) {
@@ -1982,7 +1982,15 @@ export default function PeriodoDetallePage({
 
     setGuardandoFechaPago(true)
     const result = await guardarFechaPagoPlanilla(periodoId, valor)
-    if (result.error) setErrorFechaPago(result.error)
+    if (result.error) {
+      setErrorFechaPago(result.error)
+    } else {
+      // Se refleja en `periodo` sin esperar a la siguiente recarga. No es
+      // cosmético: la comprobación previa al envío lee de ahí, y sin esto
+      // elegir la fecha y pulsar «Enviar» seguido daba «falta la fecha»
+      // sobre una fecha que ya estaba guardada.
+      setPeriodo(prev => (prev ? { ...prev, fecha_pago_planilla: valor } : prev))
+    }
     setGuardandoFechaPago(false)
   }
 
