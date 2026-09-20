@@ -164,6 +164,9 @@ export interface Periodo {
       contratistas obligados a emitirla. */
   factura_electronica_url?: string | null
   numero_planilla: string | null     // Planilla number
+  /** Fecha de pago impresa en el comprobante de la planilla (YYYY-MM-DD).
+      Cuarto dato de la llave con la que el Ministerio de Salud verifica. */
+  fecha_pago_planilla?: string | null
   cotizacion_mes?: string | null     // Mes real cotizado (puede diferir de `mes` por "mes vencido")
   cotizacion_origen?: 'inferido' | 'confirmado' | null  // Trazabilidad: sugerido por el sistema vs validado por humano
   numero_radicado: string | null     // Radicado number assigned on filing

@@ -220,7 +220,7 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
         .eq('periodo_id', periodoId),
       supabase
         .from('periodos')
-        .select('planilla_ss_url, numero_planilla')
+        .select('planilla_ss_url, numero_planilla, fecha_pago_planilla')
         .eq('id', periodoId)
         .single(),
       estadoFacturaPeriodo(periodoId),
@@ -245,6 +245,16 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
     // Planilla de seguridad social obligatoria
     if (!planillaData?.planilla_ss_url || !planillaData?.numero_planilla?.trim()) {
       return { error: 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida' }
+    }
+
+    // La fecha de pago se exige igual que el número, y por la misma razón:
+    // sueltos no sirven de nada. El Ministerio de Salud solo responde si se
+    // le pregunta con los cuatro datos a la vez —documento, número de
+    // planilla y fecha de pago—, así que una planilla sin fecha es una
+    // planilla que nadie podrá comprobar. Está impresa en el PDF que el
+    // contratista acaba de adjuntar.
+    if (!planillaData?.fecha_pago_planilla) {
+      return { error: 'Indica la fecha en que pagaste la planilla. Aparece en el mismo comprobante que adjuntaste.' }
     }
 
     // La factura electrónica sustituye a la Cuenta de Cobro para quien está
@@ -1325,7 +1335,7 @@ export async function eliminarPlanilla(periodoId: string): Promise<ActionResult>
  * Save numero_planilla for a period.
  * Format: digits only, 6–20 characters (matches real PILA numbers in Colombia).
  */
-import { validarNumeroPlanilla } from '@/lib/validaciones'
+import { validarNumeroPlanilla, validarFechaPagoPlanilla } from '@/lib/validaciones'
 
 export async function guardarNumeroPlanilla(
   periodoId: string,
@@ -1359,6 +1369,53 @@ export async function guardarNumeroPlanilla(
 
     if (error) return { error: `Error al guardar: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo guardar el número de planilla. El periodo no fue encontrado.' }
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * Guardar la fecha de pago de la planilla.
+ *
+ * Va aparte de `guardarNumeroPlanilla` porque se escribe en otro momento: el
+ * número se teclea y se guarda al salir del campo, la fecha la elige un
+ * selector y se guarda en cuanto se elige. Las guardas son las mismas.
+ */
+export async function guardarFechaPagoPlanilla(
+  periodoId: string,
+  fecha: string
+): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede actualizar la fecha de pago de la planilla' }
+    }
+
+    const errorFormato = validarFechaPagoPlanilla(fecha)
+    if (errorFormato) return { error: errorFormato }
+
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+
+    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+      return { error: 'No se puede modificar la planilla de un periodo ya aprobado o radicado' }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { data: updated, error } = await adminClient
+      .from('periodos')
+      .update({ fecha_pago_planilla: fecha.trim() })
+      .eq('id', periodoId)
+      .select('id')
+
+    if (error) return { error: `Error al guardar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo guardar la fecha de pago. El periodo no fue encontrado.' }
 
     revalidar(periodo.contrato_id, periodoId)
     return {}

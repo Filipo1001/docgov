@@ -47,6 +47,7 @@ import {
   confirmarUploadPlanilla,
   eliminarPlanilla,
   guardarNumeroPlanilla,
+  guardarFechaPagoPlanilla,
   guardarMesCotizacion,
   revisarPlanilla,
   actualizarObservacionSupervisor,
@@ -54,7 +55,7 @@ import {
   adminDevolverPeriodo,
   habilitarEnvioTardio,
 } from '@/app/actions/periodos'
-import { validarNumeroPlanilla } from '@/lib/validaciones'
+import { validarNumeroPlanilla, validarFechaPagoPlanilla, hoyBogotaISO } from '@/lib/validaciones'
 import { prepararUploadEvidencia, registrarEvidencia, eliminarEvidencia, guardarHashesBatch } from '@/app/actions/evidencias'
 import { comprimirEvidencia } from '@/lib/compress'
 import { computeFileHash, computePerceptualHash, computePerceptualHashFromUrl } from '@/lib/pHash'
@@ -312,6 +313,9 @@ export default function PeriodoDetallePage({
       if (initialPeriodo?.numero_planilla) {
         setNumPlanilla(initialPeriodo.numero_planilla)
       }
+      if (initialPeriodo?.fecha_pago_planilla) {
+        setFechaPago(initialPeriodo.fecha_pago_planilla)
+      }
       // Keep mes de cotización in sync with server-side value
       setMesCotizacion(initialPeriodo?.cotizacion_mes ?? initialPeriodo?.mes ?? '')
     }
@@ -368,6 +372,14 @@ export default function PeriodoDetallePage({
   // Planilla state
   const [numPlanilla, setNumPlanilla] = useState(initialPeriodo.numero_planilla ?? '')
   const [guardandoPlanilla, setGuardandoPlanilla] = useState(false)
+
+  // Fecha de pago de la planilla. Va junto al número porque son los dos datos
+  // que el contratista lee del mismo comprobante, y porque sueltos no sirven:
+  // el Ministerio de Salud solo confirma un pago si se le pregunta con los
+  // cuatro —documento, número de planilla y fecha— a la vez.
+  const [fechaPago, setFechaPago] = useState(initialPeriodo.fecha_pago_planilla ?? '')
+  const [errorFechaPago, setErrorFechaPago] = useState<string | null>(null)
+  const [guardandoFechaPago, setGuardandoFechaPago] = useState(false)
 
   // Mes de cotización (validado por asesor/supervisor/admin durante la revisión)
   const [mesCotizacion, setMesCotizacion] = useState(
@@ -430,7 +442,7 @@ export default function PeriodoDetallePage({
   const [lightbox, setLightbox] = useState<{ url: string; alt: string; evId?: string } | null>(null)
 
   // Inline planilla validation (submit section)
-  const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
+  const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false, fecha: false })
   const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
 
   // Admin: base cotización SS
@@ -711,6 +723,7 @@ export default function PeriodoDetallePage({
       setObligaciones(datos.obligaciones)
       setActividades(datos.actividades)
       if (datos.periodo?.numero_planilla) setNumPlanilla(datos.periodo.numero_planilla)
+      if (datos.periodo?.fecha_pago_planilla) setFechaPago(datos.periodo.fecha_pago_planilla)
     } catch {
       // Keep showing existing data on transient network errors
     } finally {
@@ -1206,15 +1219,22 @@ export default function PeriodoDetallePage({
 
     const faltaPlanilla = !periodo?.planilla_ss_url
     const faltaNumero = !numPlanilla.trim()
+    // La fecha se mira contra lo GUARDADO, no contra el campo: el selector
+    // puede tener un valor a medio escribir que nunca llegó a la base.
+    const faltaFecha = !periodo?.fecha_pago_planilla
 
-    if (faltaPlanilla || faltaNumero) {
-      setErroresCampos({ planilla: faltaPlanilla, numero: faltaNumero })
-      toast.error('Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida')
+    if (faltaPlanilla || faltaNumero || faltaFecha) {
+      setErroresCampos({ planilla: faltaPlanilla, numero: faltaNumero, fecha: faltaFecha })
+      toast.error(
+        faltaPlanilla || faltaNumero
+          ? 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida'
+          : 'Indica la fecha en que pagaste la planilla. Aparece en el mismo comprobante que adjuntaste.'
+      )
       seccionEnvioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
 
-    setErroresCampos({ planilla: false, numero: false })
+    setErroresCampos({ planilla: false, numero: false, fecha: false })
 
     // El botón se bloquea YA —sin esperar la verificación del acta—, pero
     // `EnvioInforme` todavía no se abre. Se probó a abrirla en este mismo
@@ -1949,6 +1969,21 @@ export default function PeriodoDetallePage({
       }
     }
     setGuardandoPlanilla(false)
+  }
+
+  async function handleGuardarFechaPago(valor: string) {
+    setFechaPago(valor)
+    if (!valor) { setErrorFechaPago(null); return }
+
+    const errorFormato = validarFechaPagoPlanilla(valor)
+    if (errorFormato) { setErrorFechaPago(errorFormato); return }
+    setErrorFechaPago(null)
+    setErroresCampos(prev => ({ ...prev, fecha: false }))
+
+    setGuardandoFechaPago(true)
+    const result = await guardarFechaPagoPlanilla(periodoId, valor)
+    if (result.error) setErrorFechaPago(result.error)
+    setGuardandoFechaPago(false)
   }
 
   async function handleGuardarMesCotizacion(mes: string) {
@@ -3408,8 +3443,8 @@ export default function PeriodoDetallePage({
             {rechazado
               ? 'Verifica que la planilla esté adjunta y reenvía el informe a revisión.'
               : exigeFacturaElectronica
-                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número y tu factura electrónica.'
-                : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
+                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número y su fecha de pago, y tu factura electrónica.'
+                : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número y su fecha de pago.'
             }
           </p>
 
@@ -3486,8 +3521,10 @@ export default function PeriodoDetallePage({
               </div>
             )}
 
-            {/* Planilla file upload */}
-            <div>
+            {/* Planilla file upload — ocupa la fila entera para que el número
+                y la fecha de pago, que son los dos datos que se leen de ESTE
+                mismo comprobante, queden juntos en la fila de abajo. */}
+            <div className="sm:col-span-2">
               {/*
                 Outer div owns the visual card styling.
                 Inner label only covers the text area — triggers the file input.
@@ -3577,6 +3614,33 @@ export default function PeriodoDetallePage({
               )}
               {erroresCampos.numero && !errorFormatoPlanilla && (
                 <p className="text-xs text-red-500 mt-1">Ingresa el número de planilla</p>
+              )}
+            </div>
+
+            {/* Fecha de pago de la planilla */}
+            <div className="flex flex-col justify-center">
+              <label htmlFor="fecha-pago-planilla" className="block text-xs text-gray-500 mb-1">
+                Fecha de pago
+              </label>
+              <input
+                id="fecha-pago-planilla"
+                type="date"
+                value={fechaPago}
+                max={hoyBogotaISO()}
+                onChange={(e) => handleGuardarFechaPago(e.target.value)}
+                disabled={guardandoFechaPago}
+                className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-900 outline-none focus:ring-2 transition-colors disabled:opacity-60 ${
+                  erroresCampos.fecha || errorFechaPago
+                    ? 'bg-red-50 border-red-400 focus:ring-red-300'
+                    : 'bg-gray-50 border-gray-200 focus:ring-blue-400 focus:border-blue-500'
+                }`}
+              />
+              {errorFechaPago ? (
+                <p className="text-xs text-red-500 mt-1">{errorFechaPago}</p>
+              ) : erroresCampos.fecha ? (
+                <p className="text-xs text-red-500 mt-1">Ingresa la fecha de pago</p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">La que aparece en el comprobante</p>
               )}
             </div>
           </div>
@@ -4310,13 +4374,28 @@ export default function PeriodoDetallePage({
                       </button>
                     )}
 
-                    {/* Número de planilla readonly (cuando no es gestionable) */}
-                    {!esPlanillaGestionable && periodo.numero_planilla && (
-                      <div className="px-4 py-3 flex items-center gap-2">
+                    {/* Número y fecha de pago, en solo lectura (cuando no es
+                        gestionable). Van juntos porque juntos —con la cédula
+                        del contratista— son la pregunta que el Ministerio de
+                        Salud sabe responder. Por separado no sirven de nada,
+                        y por eso el rótulo dice cuando falta la fecha en vez
+                        de callarse: los periodos anteriores a septiembre de
+                        2026 nunca la registraron. */}
+                    {!esPlanillaGestionable && (periodo.numero_planilla || periodo.fecha_pago_planilla) && (
+                      <div className="px-4 py-3 flex items-start gap-2">
                         <Icono glifo={Iconos.dominio.numero} tamano="sm" />
-                        <p className="text-sm text-gray-700">
-                          N.° de planilla: <strong className="text-gray-900">{periodo.numero_planilla}</strong>
-                        </p>
+                        <div>
+                          {periodo.numero_planilla && (
+                            <p className="text-sm text-gray-700">
+                              N.° de planilla: <strong className="text-gray-900">{periodo.numero_planilla}</strong>
+                            </p>
+                          )}
+                          <p className="text-sm text-gray-700">
+                            {periodo.fecha_pago_planilla
+                              ? <>Pagada el <strong className="text-gray-900">{periodo.fecha_pago_planilla.split('-').reverse().join('/')}</strong></>
+                              : <span className="text-gray-400">Sin fecha de pago registrada</span>}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
