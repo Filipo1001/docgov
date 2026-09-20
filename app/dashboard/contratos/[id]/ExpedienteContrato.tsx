@@ -3,20 +3,25 @@
 /**
  * Expediente documental del contrato.
  *
- * Dos secciones con propósitos distintos, y por eso se ven distintas:
+ * ── Qué se ve, y por qué así ─────────────────────────────────────────────
  *
- * REQUERIDOS. Los seis soportes que la ley exige para legalizar el contrato
- * (CDP, RP, RUT...). Es un checklist, no una lista de archivos: cada categoría
- * aparece siempre, tenga documento o no, para que el hueco sea visible — que
- * falte el RP es justo lo que un ente de control viene a buscar. El estado
- * (adjuntado / pendiente) se comunica con un icono de estado, no con un
- * pictograma por categoría: siete iconos distintos para siete papeles no
- * transmitían de qué documento se trataba, solo decoraban.
+ * EL CONTRATO, arriba y con su papel escrito debajo: «viaja dentro del paquete
+ * de SECOP de la primera cuenta de cobro». No es un adorno — es lo que hace
+ * que esa casilla exista. Cuando falta, el hueco no dice «sin adjuntar»: dice
+ * qué se rompe y cuándo, porque es el estado que se ve en 114 de los 156
+ * contratos y el único momento en que la pantalla puede evitar el problema.
  *
- * ADICIONALES. Todo lo demás — un otrosí, un concepto jurídico, cualquier
- * soporte que no encaje en las seis categorías. No es una lista rígida: el
- * nombre del archivo identifica el documento, así que "los tipos varían según
- * el contexto" sin que la interfaz necesite saberlo de antemano.
+ * OTROS DOCUMENTOS, debajo y sin lista fija. Otrosíes, conceptos jurídicos,
+ * cualquier soporte que solo se archiva. El nombre del archivo los identifica.
+ *
+ * ── Lo que había antes ───────────────────────────────────────────────────
+ *
+ * Seis casillas fijas (contrato firmado, CDP, RP, RUT, certificación bancaria,
+ * póliza) con un contador «0 de 6» presidiéndolo todo. De los 42 documentos
+ * adjuntos que había en producción, ninguno se subió en una de ellas: la
+ * alcaldía escanea el expediente entero y sube un solo PDF de ~104 páginas.
+ * El contador estaba en rojo permanente y lo único real vivía en un pie de
+ * página gris. Ver lib/documentos-contrato.ts.
  */
 
 import { useState } from 'react'
@@ -30,9 +35,15 @@ import {
   eliminarDocumentoContrato, listarDocumentosContrato,
 } from '@/app/actions/documentos-contrato'
 import {
-  REQUERIDOS,
   type DocumentoContratoDTO, type TipoDocumento,
 } from '@/lib/documentos-contrato'
+
+/** «14 de septiembre de 2026», en hora de Colombia. */
+function fechaLegible(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-CO', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Bogota',
+  })
+}
 
 function pesoLegible(bytes: number): string {
   return bytes >= 1024 * 1024
@@ -116,10 +127,20 @@ export default function ExpedienteContrato({
   contratoId,
   initial,
   editable,
+  mesPrimeraCuenta,
 }: {
   contratoId: string
   initial: DocumentoContratoDTO[]
   editable: boolean
+  /**
+   * Mes de la primera cuenta de cobro del contrato, si ya se puede saber.
+   *
+   * Es lo que convierte el hueco vacío en un aviso con fecha. Llega `null`
+   * cuando el contrato todavía no tiene ningún periodo enviado: entonces la
+   * pantalla dice «la primera cuenta de cobro» sin comprometerse con un mes
+   * que aún no existe.
+   */
+  mesPrimeraCuenta: string | null
 }) {
   const [docs, setDocs] = useState(initial)
   const [subiendo, setSubiendo] = useState<TipoDocumento | null>(null)
@@ -164,112 +185,106 @@ export default function ExpedienteContrato({
     toast.success('Documento eliminado')
   }
 
-  const conDocumento = REQUERIDOS.filter(t => porTipo(t.id).length > 0).length
+  const contrato = porTipo('contrato')[0] ?? null
+  const otros = porTipo('otro')
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-          Expediente documental
-        </h3>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-          conDocumento === REQUERIDOS.length
-            ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-            : 'text-gray-500 bg-gray-50 border border-gray-200'
-        }`}>
-          {conDocumento} de {REQUERIDOS.length}
-        </span>
-      </div>
+      <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+        Expediente documental
+      </h3>
 
-      {/* ── Requeridos: checklist con hueco visible ── */}
-      <div className="space-y-1.5">
-        {REQUERIDOS.map(tipo => {
-          const archivos = porTipo(tipo.id)
-          const adjuntado = archivos.length > 0
-          const cargando = subiendo === tipo.id
-
-          return (
-            <div
-              key={tipo.id}
-              className={`rounded-xl border px-3 py-2.5 transition-colors ${
-                adjuntado ? 'border-gray-200 bg-white' : 'border-dashed border-gray-200 bg-gray-50/60'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Icono
-                  glifo={adjuntado ? Iconos.estado.aprobado : Iconos.estado.pendiente}
-                  tamano="md"
-                  className={`shrink-0 ${adjuntado ? 'text-emerald-500' : 'text-gray-300'}`}
-                />
-
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium ${adjuntado ? 'text-gray-900' : 'text-gray-400'}`}>
-                    {tipo.label}
-                  </p>
-                  {!adjuntado && (
-                    <p className="text-[11px] text-gray-400">Sin adjuntar</p>
-                  )}
-                </div>
-
-                {editable && (
-                  <BotonAdjuntar
-                    cargando={cargando}
-                    tieneArchivos={adjuntado}
-                    onFile={file => subir(tipo.id, file)}
-                  />
-                )}
-              </div>
-
-              {adjuntado && (
-                <ListaArchivos
-                  archivos={archivos}
-                  editable={editable}
-                  onVer={d => d.urlFirmada && setVisor({ url: d.urlFirmada, nombre: d.nombre_original })}
-                  onBorrar={borrar}
-                />
-              )}
+      {/* ── El contrato ── */}
+      {contrato ? (
+        <div className="rounded-xl border border-gray-200 overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+              <Icono glifo={Iconos.estado.aprobado} tamano="md" className="text-emerald-600" />
             </div>
-          )
-        })}
-      </div>
+            <button
+              type="button"
+              onClick={() => contrato.urlFirmada && setVisor({ url: contrato.urlFirmada, nombre: contrato.nombre_original })}
+              className="min-w-0 flex-1 text-left group"
+            >
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Contrato</p>
+              <p className="text-sm font-medium text-gray-900 truncate group-hover:underline underline-offset-2">
+                {contrato.nombre_original}
+              </p>
+              <p className="text-xs text-gray-400">
+                {contrato.paginas ? `${contrato.paginas} páginas · ` : ''}{pesoLegible(contrato.bytes)} · {fechaLegible(contrato.created_at)}
+              </p>
+            </button>
+            {editable && (
+              <button
+                onClick={() => borrar(contrato.id)}
+                aria-label={`Eliminar ${contrato.nombre_original}`}
+                className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+              >
+                <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
+              </button>
+            )}
+          </div>
+          <div className="bg-emerald-50/60 border-t border-emerald-100 px-4 py-2.5">
+            <p className="text-[12px] text-emerald-800">
+              {mesPrimeraCuenta
+                ? <>Viaja dentro del paquete de SECOP de <strong>{mesPrimeraCuenta}</strong>, la primera cuenta de cobro.</>
+                : <>Viajará dentro del paquete de SECOP de la primera cuenta de cobro.</>}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 px-4 py-5">
+          <div className="flex items-start gap-3">
+            <Icono glifo={Iconos.estado.pendiente} tamano="md" className="text-amber-500 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Contrato</p>
+              <p className="text-sm font-medium text-amber-900 mt-0.5">Falta el contrato firmado</p>
+              <p className="text-xs text-amber-700/80 mt-1 leading-relaxed">
+                {mesPrimeraCuenta
+                  ? <>Debe acompañar la cuenta de cobro de <strong>{mesPrimeraCuenta}</strong>. Sin él, el paquete de SECOP sale incompleto.</>
+                  : <>Debe acompañar la primera cuenta de cobro. Sin él, el paquete de SECOP sale incompleto.</>}
+              </p>
+            </div>
+            {editable && (
+              <BotonAdjuntar
+                cargando={subiendo === 'contrato'}
+                tieneArchivos={false}
+                onFile={file => subir('contrato', file)}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* ── Adicionales: sin lista fija — el nombre del archivo identifica el documento ── */}
-      <div className="mt-5 pt-5 border-t border-gray-100">
-        <div className="flex items-center gap-2 mb-2.5">
-          <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="text-gray-300" />
+      {/* ── Otros documentos ── */}
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-            Documentos adicionales
+            Otros documentos {otros.length > 0 && <span className="normal-case font-normal">({otros.length})</span>}
           </p>
-          {adicionales.length > 0 && (
-            <span className="text-xs text-gray-400">({adicionales.length})</span>
+          {editable && (
+            <BotonAdjuntar
+              cargando={subiendo === 'otro'}
+              tieneArchivos={otros.length > 0}
+              onFile={file => subir('otro', file)}
+            />
           )}
         </div>
 
-        {adicionales.length > 0 ? (
-          <div className="rounded-xl border border-gray-200 px-3 py-2.5">
+        {otros.length > 0 ? (
+          <div className="mt-2">
             <ListaArchivos
-              archivos={adicionales}
+              archivos={otros}
               editable={editable}
               indentado={false}
               onVer={d => d.urlFirmada && setVisor({ url: d.urlFirmada, nombre: d.nombre_original })}
               onBorrar={borrar}
             />
           </div>
-        ) : !editable ? (
-          <p className="text-xs text-gray-400">Sin documentos adicionales.</p>
-        ) : null}
-
-        {editable && (
-          <div className="mt-2">
-            <BotonAdjuntar
-              cargando={subiendo === 'otro'}
-              tieneArchivos={adicionales.length > 0}
-              onFile={file => subir('otro', file)}
-            />
-            <span className="text-[11px] text-gray-400 ml-2">
-              Otrosíes, conceptos jurídicos u otro soporte que no esté arriba
-            </span>
-          </div>
+        ) : (
+          <p className="text-[11px] text-gray-400 mt-1.5">
+            Otrosíes, conceptos jurídicos, cualquier soporte posterior.
+          </p>
         )}
       </div>
 

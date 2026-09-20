@@ -19,7 +19,6 @@ import { firmarUrl } from '@/lib/storage-firmado'
 import { esGestorContratos } from '@/lib/constants'
 import {
   validarPDF, type LimitesPDF,
-  ADJUNTO_MAX_BYTES, ADJUNTO_MAX_PAGINAS,
   ADICIONAL_MAX_BYTES, ADICIONAL_MAX_PAGINAS,
 } from '@/lib/pdf-validacion'
 import { createHash } from 'crypto'
@@ -33,15 +32,17 @@ import {
 const BUCKET = 'adjuntos'
 
 /**
- * Topes según el tipo. Los «Documentos adicionales» —el tipo `otro`— admiten
- * el triple, porque ahí van los otrosíes y los conceptos jurídicos, que son
- * los documentos largos del expediente. Los demás tipos son piezas cortas y
- * conocidas: un RUT o una certificación bancaria no llegan a 15 MB.
+ * Topes del expediente del contrato.
+ *
+ * Los dos tipos que quedan son documentos largos, así que los dos llevan el
+ * tope grande. El contrato es un expediente de legalización escaneado entero
+ * —mediana de 104 páginas y 6,8 MB en producción, el mayor 148 páginas y
+ * 16,7 MB— y en «otros» van otrosíes y conceptos jurídicos, que tampoco son
+ * cortos. El tope pequeño existía para piezas como el RUT o la certificación
+ * bancaria, que dejaron de tener casilla propia.
  */
-function limitesPara(tipo: TipoDocumento): LimitesPDF {
-  return tipo === 'otro'
-    ? { maxBytes: ADICIONAL_MAX_BYTES, maxPaginas: ADICIONAL_MAX_PAGINAS }
-    : { maxBytes: ADJUNTO_MAX_BYTES, maxPaginas: ADJUNTO_MAX_PAGINAS }
+function limitesPara(_tipo: TipoDocumento): LimitesPDF {
+  return { maxBytes: ADICIONAL_MAX_BYTES, maxPaginas: ADICIONAL_MAX_PAGINAS }
 }
 
 /** Gestiona el expediente quien gestiona el contrato. */

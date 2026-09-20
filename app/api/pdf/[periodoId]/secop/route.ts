@@ -6,6 +6,7 @@
  *   Cuenta_de_Cobro.pdf
  *   Planilla_Seguridad_Social.{ext}   (si está adjunta)
  *   Certificacion_de_Retencion.pdf    (solo en la PRIMERA cuenta del año)
+ *   Contrato.pdf                      (el expediente, solo en la PRIMERA cuenta)
  *   Acta_de_Terminacion.pdf           (solo en el periodo donde se aceptó)
  *
  * Acceso: contratista del contrato + asesor / supervisor / admin
@@ -24,6 +25,7 @@ import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 import { descargarCertificacionDelPaquete, NOMBRE_ARCHIVO_CERTIFICACION } from '@/lib/certificaciones'
+import { descargarContratoDelPaquete, NOMBRE_ARCHIVO_CONTRATO } from '@/lib/expediente-contrato'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -90,6 +92,7 @@ export async function GET(
   // la generación de los PDF, que es lo que tarda. Resolverlas al final, en
   // secuencia, sumaba su tiempo a uno que ya era largo.
   const certificacionPromise = descargarCertificacionDelPaquete(periodoId)
+  const contratoPromise = descargarContratoDelPaquete(periodoId)
   const actaTerminacionPromise = (async () => {
     try {
       const admin = createAdminSupabaseClient()
@@ -180,10 +183,12 @@ export async function GET(
   // Las dos son no bloqueantes: si el depósito falla, el paquete sale sin
   // ellas. Un ZIP incompleto se vuelve a bajar; un 500 deja a la contratista
   // sin nada el día que va a radicar.
-  const [certificacionBuffer, actaBuffer] = await Promise.all([
+  const [certificacionBuffer, actaBuffer, contratoBuffer] = await Promise.all([
     certificacionPromise,
     actaTerminacionPromise,
+    contratoPromise,
   ])
+  if (contratoBuffer) folder.file(NOMBRE_ARCHIVO_CONTRATO, contratoBuffer)
   if (certificacionBuffer) folder.file(NOMBRE_ARCHIVO_CERTIFICACION, certificacionBuffer)
   if (actaBuffer) folder.file('Acta_de_Terminacion.pdf', actaBuffer)
 

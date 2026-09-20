@@ -49,6 +49,23 @@ export default function ContratoDetallePage({
   const [obligaciones, setObligaciones] = useState<any[]>(initialObligaciones)
   const [periodos, setPeriodos] = useState<any[]>(initialPeriodos)
 
+  // El mes cuya cuenta de cobro lleva el contrato dentro del paquete de SECOP.
+  //
+  // Misma regla que usa el ZIP (`contratoParaPaquete`): el primer periodo que
+  // SALIÓ de borrador, por fecha de envío. No el de menor número — casi todos
+  // los contratos arrancaron en enero y entraron al sistema en julio, así que
+  // sus periodos 1 a 6 existen y se quedarán en borrador para siempre.
+  //
+  // `null` mientras no se haya enviado ninguno: entonces la pantalla habla de
+  // «la primera cuenta de cobro» sin comprometerse con un mes que aún no
+  // existe.
+  const mesPrimeraCuenta: string | null = (() => {
+    const enviados = periodos
+      .filter(p => p?.fecha_envio && !p?.es_historico)
+      .sort((a, b) => String(a.fecha_envio).localeCompare(String(b.fecha_envio)))
+    return enviados[0]?.mes ?? null
+  })()
+
   // Form para nueva obligación
   const [nuevaObligacion, setNuevaObligacion] = useState('')
   const [esPermanente, setEsPermanente] = useState(false)
@@ -548,6 +565,7 @@ export default function ContratoDetallePage({
         contratoId={id as string}
         initial={initialDocumentos}
         editable={esGestor}
+        mesPrimeraCuenta={mesPrimeraCuenta}
       />
 
       {/* Ejecución del contrato */}
