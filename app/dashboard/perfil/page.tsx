@@ -1,17 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
-import { Iconos } from '@/lib/iconos'
+import { useEffect, useState } from 'react'
 import { useUsuario } from '@/lib/user-context'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import type { Contrato } from '@/lib/types'
 import { formatCedula } from '@/lib/format'
-import { subirFirma } from '@/app/actions/periodos'
 import { obtenerFirmaFirmada, obtenerDatosPerfil } from '@/app/actions/usuario'
 import ErrorState from '@/components/ui/ErrorState'
-import { normalizarFirma } from '@/lib/compress'
+import CapturaFirma from '@/components/firma/CapturaFirma'
 
 // ─── Display maps ──────────────────────────────────────────────
 
@@ -138,9 +135,6 @@ export default function PerfilPage() {
     if (usuario?.firma_url) obtenerFirmaFirmada().then(setFirmaFirmada).catch(() => {})
     else setFirmaFirmada(null)
   }, [usuario?.firma_url])
-  const [subiendoFirma,  setSubiendoFirma]  = useState(false)
-  const [firmaError,     setFirmaError]     = useState<string | null>(null)
-  const firmaInputRef = useRef<HTMLInputElement>(null)
 
   // Los datos llegan por Server Action, no por el cliente del navegador.
   //
@@ -208,31 +202,6 @@ export default function PerfilPage() {
         reintentando={loading}
       />
     )
-  }
-
-  async function handleSubirFirma(file: File) {
-    setFirmaError(null)
-    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
-    if (!ALLOWED.includes(file.type)) {
-      setFirmaError('Solo se permiten imágenes JPG, PNG o WEBP')
-      return
-    }
-    setSubiendoFirma(true)
-    try {
-      const blob = await normalizarFirma(file)
-      const formData = new FormData()
-      formData.append('file', new File([blob], 'firma.png', { type: 'image/png' }))
-      const result = await subirFirma(formData)
-      if (result.error) {
-        setFirmaError(result.error)
-      } else {
-        setFirmaUrl(result.data?.url ?? null)
-      }
-    } catch {
-      setFirmaError('Error al procesar la imagen')
-    } finally {
-      setSubiendoFirma(false)
-    }
   }
 
   // Effective firma URL: local override (recién subida, ya firmada) →
@@ -459,114 +428,15 @@ export default function PerfilPage() {
         </div>
       )}
 
-      {/* ── Signature ────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center justify-between mb-3">
-          <SectionHeading>Firma</SectionHeading>
-          {firmaActual && (
-            <button
-              onClick={() => firmaInputRef.current?.click()}
-              disabled={subiendoFirma}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
-            >
-              {subiendoFirma ? 'Subiendo...' : 'Reemplazar'}
-            </button>
-          )}
-        </div>
-
-        {/* Recommendation banner — shown when no firma */}
-        {!firmaActual && (
-          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-            <span className="text-base shrink-0 mt-0.5">💡</span>
-            <p className="text-xs text-amber-700 leading-relaxed">
-              <strong>Recomendado:</strong> Registra tu firma para completar correctamente tus informes.
-              La firma se adjuntará automáticamente a los documentos generados.
-            </p>
-          </div>
-        )}
-
-        {firmaActual ? (
-          /* Firma registrada */
-          <div className="flex flex-col items-start gap-3">
-            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 inline-block">
-              <img
-                src={firmaActual}
-                alt="Firma del usuario"
-                className="max-h-24 max-w-xs object-contain"
-              />
-            </div>
-            <p className="text-xs text-gray-400">
-              Firma registrada — se incluirá en los documentos del sistema
-            </p>
-          </div>
-        ) : (
-          /* Upload area */
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => !subiendoFirma && firmaInputRef.current?.click()}
-            onKeyDown={(e) => e.key === 'Enter' && !subiendoFirma && firmaInputRef.current?.click()}
-            className={`flex flex-col sm:flex-row items-center sm:items-start gap-5 border-2 border-dashed rounded-2xl p-6 transition-colors ${
-              subiendoFirma
-                ? 'border-blue-200 bg-blue-50/50 cursor-wait'
-                : 'border-gray-200 bg-gray-50/50 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'
-            }`}
-          >
-            {/* Icon */}
-            <div className="shrink-0 w-14 h-14 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-gray-300">
-                <path
-                  d="M4 20 C6 13, 9 11, 11 15 C13 19, 11 22, 14 20 C17 18, 19 12, 22 16"
-                  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" fill="none"
-                />
-                <line x1="3" y1="23" x2="25" y2="23" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-              </svg>
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold text-gray-600 mb-1">
-                {subiendoFirma ? 'Procesando firma...' : 'Subir firma'}
-              </p>
-              <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
-                {subiendoFirma
-                  ? 'Eliminando fondo y guardando...'
-                  : 'JPG, PNG o WEBP. El fondo se eliminará automáticamente y la imagen se ajustará al tamaño estándar.'}
-              </p>
-              {!subiendoFirma && (
-                <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
-                  Seleccionar imagen
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Error message */}
-        {firmaError && (
-          <p className="mt-2 text-xs text-red-500">{firmaError}</p>
-        )}
-
-        {/* Single hidden file input */}
-        <input
-          ref={firmaInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          disabled={subiendoFirma}
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleSubirFirma(file)
-            e.target.value = ''
-          }}
-        />
-      </div>
-
-      {/* Indicador de subida unificado — ver components/ui/SubiendoArchivo.tsx */}
-      <SubiendoArchivo
-        abierto={subiendoFirma}
-        icono={Iconos.navegacion.firmas}
-        etiqueta={'Subiendo firma'}
-        detalle="No cierres esta página."
+      {/* ── Firma ─────────────────────────────────────────────────
+          El bloque entero vive en components/firma/CapturaFirma: lo comparte
+          con la certificación de retención, donde antes solo había un aviso
+          rojo que mandaba a esta misma página y dejaba el envío a medias. */}
+      <CapturaFirma
+        nombre={usuario?.nombre_completo ?? ''}
+        cedula={usuario?.cedula}
+        firmaActual={firmaActual}
+        onGuardada={setFirmaUrl}
       />
 
     </div>

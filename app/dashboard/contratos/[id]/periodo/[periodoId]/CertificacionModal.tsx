@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { aceptarCertificacion } from '@/app/actions/certificaciones'
 import { formatCedula } from '@/lib/format'
+import CapturaFirma from '@/components/firma/CapturaFirma'
 
 /** ISO → "29 de julio de 2026", en hora de Colombia. */
 function fechaCorta(iso: string): string {
@@ -53,6 +54,11 @@ export default function CertificacionModal({
   // misma respuesta marcada, porque la declaración es sobre su situación en
   // el año gravable y no sobre el contrato. Volver a preguntarle lo mismo
   // sería no haber escuchado la primera vez.
+  // La firma puede resolverse sin cerrar el modal, así que `faltaFirma` —que
+  // llega del servidor al abrirlo— deja de ser la verdad en cuanto se registra.
+  const [firmaResuelta, setFirmaResuelta] = useState(false)
+  const bloqueadoPorFirma = faltaFirma && !firmaResuelta
+
   const [vinculo, setVinculo] = useState<boolean | null>(
     prefill?.respuestaPrevia?.vinculoMasTrabajador ?? null,
   )
@@ -260,12 +266,26 @@ export default function CertificacionModal({
             </p>
           </div>
 
-          {faltaFirma && (
-            <div className="rounded-xl bg-red-50 border border-red-100 p-4">
-              <p className="text-[12px] text-red-700 leading-relaxed">
-                No tienes una firma registrada. Ve a <strong>tu perfil</strong> y sube tu firma antes de aceptar la
-                certificación.
+          {/* La firma se resuelve AQUÍ, no en otra pantalla.
+              Antes este recuadro decía «ve a tu perfil y sube tu firma» y
+              dejaba el botón muerto: un callejón sin salida en mitad del
+              primer envío, con el informe ya escrito. De los 120
+              contratistas, 27 no tienen firma — y ninguno de esos 27 ha
+              llegado a enviar un informe nunca. */}
+          {bloqueadoPorFirma && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+              <p className="text-[12px] text-amber-800 leading-relaxed mb-3">
+                Falta tu firma. Es la que se estampa en esta certificación y en
+                el resto de tus documentos. Se resuelve aquí mismo, sin salir
+                de esta pantalla.
               </p>
+              <CapturaFirma
+                nombre={prefill.nombre}
+                cedula={prefill.cedula}
+                firmaActual={null}
+                onGuardada={() => setFirmaResuelta(true)}
+                compacto
+              />
             </div>
           )}
 
@@ -297,7 +317,7 @@ export default function CertificacionModal({
           <button
             type="button"
             onClick={aceptar}
-            disabled={!juramento || procesando || faltaFirma || vinculo === null}
+            disabled={!juramento || procesando || bloqueadoPorFirma || vinculo === null}
             className="text-sm font-semibold text-white bg-blue-600 px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {procesando ? 'Generando…' : 'Aceptar y firmar'}
