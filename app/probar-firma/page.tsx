@@ -15,6 +15,7 @@
 
 import { useState } from 'react'
 import EscanerFirma from '@/components/firma/EscanerFirma'
+import CapturaFirma from '@/components/firma/CapturaFirma'
 
 export default function ProbarFirma() {
   const [abierto, setAbierto] = useState(false)
@@ -28,15 +29,25 @@ export default function ProbarFirma() {
         </p>
         <h1 className="text-2xl font-semibold text-[#192031] mb-3">Escáner de firma</h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-7">
-          Firma en una hoja de papel, pulsa el botón y apunta la cámara. No hay
-          que disparar: captura sola cuando la ve bien.
+          El bloque tal como lo verá el contratista. Si escaneas: no hay que
+          disparar, captura sola cuando la ve bien.
         </p>
+
+        {/* El bloque tal como lo verá el contratista en su perfil. */}
+        <CapturaFirma
+          nombre="NOMBRE DE PRUEBA"
+          cedula="1234567890"
+          firmaActual={null}
+          onGuardada={setResultado}
+          soloDemo
+          compacto
+        />
 
         <button
           onClick={() => { setResultado(null); setAbierto(true) }}
-          className="w-full bg-[#192031] hover:bg-[#242F45] text-white font-semibold py-3.5 rounded-2xl transition-colors"
+          className="w-full text-xs text-gray-400 hover:text-gray-600 mt-4 py-1"
         >
-          Escanear mi firma
+          Abrir solo el escáner
         </button>
 
         {resultado && (

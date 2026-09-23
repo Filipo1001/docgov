@@ -6,11 +6,12 @@
  * retención, que es donde antes había un callejón sin salida —«ve a tu
  * perfil y sube tu firma»— justo en mitad del primer envío.
  *
- * El orden de las opciones es deliberado. Escanear es un botón grande;
- * subir un archivo es un enlace pequeño debajo. No porque subir esté mal,
- * sino porque de los siete pasos que tenía el camino viejo, cinco ocurrían
- * fuera de la aplicación, y ahí es donde se quedaron 27 de 120 contratistas
- * sin registrar su firma. Ninguno de esos 27 ha enviado jamás un informe.
+ * Los dos caminos —escanear y subir una imagen— pesan lo mismo y cada uno
+ * dice para quién es, de modo que elegir no exija pensar. Escanear va
+ * primero porque de los siete pasos del camino viejo cinco ocurrían fuera de
+ * la aplicación, y ahí es donde se quedaron 27 de los 120 contratistas sin
+ * registrar su firma; ninguno de esos 27 ha enviado jamás un informe. Pero
+ * quien ya tiene la foto en el teléfono no tiene por qué buscar un papel.
  */
 
 import { useRef, useState } from 'react'
@@ -25,6 +26,7 @@ export default function CapturaFirma({
   firmaActual,
   onGuardada,
   compacto = false,
+  soloDemo = false,
 }: {
   nombre: string
   cedula?: string | null
@@ -33,12 +35,20 @@ export default function CapturaFirma({
   onGuardada: (url: string) => void
   /** Dentro de un modal el bloque va sin marco ni título propios. */
   compacto?: boolean
+  /** No guarda en el servidor: solo enseña el resultado. Lo usa la página de
+   *  prueba, que vive fuera del inicio de sesión. Se va con ella. */
+  soloDemo?: boolean
 }) {
   const [escaneando, setEscaneando] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const archivoRef = useRef<HTMLInputElement>(null)
 
   async function guardar(blob: Blob) {
+    if (soloDemo) {
+      onGuardada(URL.createObjectURL(blob))
+      setEscaneando(false)
+      return
+    }
     const formData = new FormData()
     formData.append('file', new File([blob], 'firma.png', { type: 'image/png' }))
     const res = await subirFirma(formData)
@@ -76,54 +86,76 @@ export default function CapturaFirma({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={firmaActual} alt="Tu firma" className="max-h-16 object-contain" />
           </div>
-          <button
-            onClick={() => setEscaneando(true)}
-            disabled={subiendo}
-            className="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50 px-1"
-          >
-            Volver a escanear
-          </button>
+          <div className="shrink-0 flex sm:flex-col gap-3 sm:gap-1">
+            <button
+              onClick={() => setEscaneando(true)}
+              disabled={subiendo}
+              className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50 px-1 text-left"
+            >
+              Volver a escanear
+            </button>
+            <button
+              onClick={() => archivoRef.current?.click()}
+              disabled={subiendo}
+              className="text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 px-1 text-left"
+            >
+              Subir otra
+            </button>
+          </div>
         </div>
       ) : (
         <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-5">
-          <ol className="space-y-2.5 mb-5">
-            {[
-              'Firma en una hoja de papel',
-              'Apunta la cámara a tu firma',
-            ].map((paso, i) => (
-              <li key={i} className="flex items-center gap-3">
-                <span className="shrink-0 w-6 h-6 rounded-full bg-white border border-gray-200 text-gray-500 text-xs font-semibold flex items-center justify-center">
-                  {i + 1}
-                </span>
-                <span className="text-sm text-gray-700">{paso}</span>
-              </li>
-            ))}
-          </ol>
-
-          <p className="text-xs text-gray-400 mb-4 leading-relaxed">
-            No tienes que recortar nada ni buscarla en la galería. La cámara
-            captura sola cuando se ve bien y te la mostramos antes de guardarla.
+          <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+            Tu firma se estampa en la cuenta de cobro, el informe y las actas.
+            Se registra una sola vez.
           </p>
 
-          <button
-            onClick={() => setEscaneando(true)}
-            disabled={subiendo}
-            className="w-full bg-[#192031] hover:bg-[#242F45] disabled:opacity-60 text-white font-semibold py-3.5 rounded-2xl transition-colors flex items-center justify-center gap-2"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-              <circle cx="12" cy="13" r="4" />
-            </svg>
-            {subiendo ? 'Procesando…' : 'Escanear mi firma'}
-          </button>
+          {/* Los dos caminos, con el mismo peso visual. Cada uno dice para
+              quién es, de modo que la elección no exija pensar: quien tiene la
+              firma en el teléfono va al segundo, y quien no, al primero. */}
+          <div className="flex flex-col gap-2.5">
+            <button
+              onClick={() => setEscaneando(true)}
+              disabled={subiendo}
+              className="w-full bg-[#192031] hover:bg-[#242F45] disabled:opacity-60 text-white py-3.5 px-4 rounded-2xl transition-colors flex items-center gap-3 text-left"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              <span className="min-w-0">
+                <span className="block font-semibold text-[15px] leading-tight">
+                  {subiendo ? 'Procesando…' : 'Escanear mi firma'}
+                </span>
+                <span className="block text-[12px] text-white/60 leading-tight mt-0.5">
+                  Firma en un papel y apunta la cámara
+                </span>
+              </span>
+            </button>
 
-          <button
-            onClick={() => archivoRef.current?.click()}
-            disabled={subiendo}
-            className="w-full text-xs text-gray-400 hover:text-gray-600 mt-3 py-1 disabled:opacity-50"
-          >
-            Prefiero subir una imagen que ya tengo
-          </button>
+            <button
+              onClick={() => archivoRef.current?.click()}
+              disabled={subiendo}
+              className="w-full bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-900 py-3.5 px-4 rounded-2xl transition-colors flex items-center gap-3 text-left"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-400">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="M21 15l-5-5L5 21" />
+              </svg>
+              <span className="min-w-0">
+                <span className="block font-semibold text-[15px] leading-tight">Subir una imagen</span>
+                <span className="block text-[12px] text-gray-400 leading-tight mt-0.5">
+                  Si ya tienes una foto de tu firma
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <p className="text-xs text-gray-400 mt-4 leading-relaxed">
+            Con cualquiera de los dos: no tienes que recortar nada ni quitarle
+            el fondo. Te la mostramos antes de guardarla.
+          </p>
         </div>
       )}
 
