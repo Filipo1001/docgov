@@ -288,6 +288,15 @@ export default function AdminHome({
             <p className="text-xs text-gray-500 mt-1">Gestionar firmas de contratistas</p>
           </Card>
         </Link>
+        <Link href="/dashboard/admin/correos" className="block">
+          <Card className="hover:border-gray-300 transition-colors group h-full">
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 text-gray-500 group-hover:bg-gray-200 transition-colors">
+              <Icono glifo={Iconos.aviso.correo} tamano="md" />
+            </div>
+            <h3 className="font-medium text-gray-900 text-sm">Correo masivo</h3>
+            <p className="text-xs text-gray-500 mt-1">Un aviso a todos los usuarios</p>
+          </Card>
+        </Link>
         <Link href="/dashboard/admin/historicos" className="block">
           <Card className="hover:border-gray-300 transition-colors group h-full">
             <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3 text-gray-500 group-hover:bg-gray-200 transition-colors">
