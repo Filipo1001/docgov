@@ -44,6 +44,11 @@ export const ROLES_EQUIPO = ['supervisor', 'asesor', 'contratacion', 'alcalde', 
  * La fecha y el enlace van en un solo párrafo a propósito: así caen dentro
  * del MISMO recuadro resaltado, y el aviso tiene un solo bloque que mirar en
  * vez de dos seguidos.
+ *
+ * Y dice la fecha, no «mañana»: un correo masivo no siempre sale el día que
+ * se escribe, y un aviso que se contradice a sí mismo —«mañana» un martes,
+ * para un jueves— le cuesta a cien personas averiguar cuál de las dos cosas
+ * era la buena.
  */
 export const ASUNTO_PREDEFINIDO = '🚀 Espacio de acompañamiento – Contratista Digital'
 
@@ -53,7 +58,7 @@ export const MENSAJE_PREDEFINIDO = `Hola {{nombre}}.
 
 ¿No pudiste asistir a las capacitaciones presenciales?
 
-Mañana tendremos un espacio para resolver tus dudas, repasar el funcionamiento de la plataforma y ayudarte con lo que necesites.
+El jueves 24 de septiembre tendremos un espacio para resolver tus dudas, repasar el funcionamiento de la plataforma y ayudarte con lo que necesites.
 
 Y lo mejor: no tienes que ir a ningún lado. Será completamente virtual. 💻
 
