@@ -96,6 +96,10 @@ export default function EscanerFirma({
   const capturandoRef = useRef(false)
   /** El bucle lee el modo automático sin volver a montarse por cada cambio. */
   const autoRef = useRef(true)
+  /** Capturas seguidas que no encontraron ni un trazo. */
+  const fallosRef = useRef(0)
+  const destelloRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const avisoRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [etapa, setEtapa]     = useState<Etapa>('iniciando')
   const [consejo, setConsejo] = useState<Consejo>('buscando')
@@ -103,6 +107,7 @@ export default function EscanerFirma({
   const [destello, setDestello] = useState(false)
   const [linterna, setLinterna] = useState(false)
   const [hayLinterna, setHayLinterna] = useState(false)
+  const [aviso, setAviso]     = useState<string | null>(null)
   const [error, setError]     = useState<string | null>(null)
   const [firma, setFirma]     = useState<{ blob: Blob; url: string } | null>(null)
   const [guardando, setGuardando] = useState(false)
@@ -163,7 +168,8 @@ export default function EscanerFirma({
     // Destello primero: el disparo tiene que sentirse en el mismo instante en
     // que se pulsa, no cuando termine de procesar.
     setDestello(true)
-    setTimeout(() => setDestello(false), 220)
+    if (destelloRef.current) clearTimeout(destelloRef.current)
+    destelloRef.current = setTimeout(() => setDestello(false), 220)
     setEtapa('procesando')
 
     const cuadros: ImageData[] = []
@@ -177,11 +183,26 @@ export default function EscanerFirma({
 
     const lienzo = cuadros.length ? consolidar(cuadros) : null
     if (!lienzo) {
+      // Disparó pero no había tinta: una sombra, un papel en blanco, un
+      // encuadre que se movió. Sin avisar, en automático esto se repetía en
+      // bucle y desde fuera parecía que la aplicación no hacía nada.
       capturandoRef.current = false
       buenosRef.current = 0
+      fallosRef.current++
+      const insiste = fallosRef.current >= 2
+      if (insiste) setAuto(false)
+      setAviso(
+        insiste
+          ? 'Seguimos sin encontrar el trazo. Encuádrala y toma la foto tú.'
+          : 'No vimos ningún trazo. Acerca la firma o busca más luz.',
+      )
+      if (avisoRef.current) clearTimeout(avisoRef.current)
+      avisoRef.current = setTimeout(() => setAviso(null), 3200)
+      setConsejo('buscando')
       setEtapa('escaneando')
       return
     }
+    fallosRef.current = 0
 
     const blob = await new Promise<Blob | null>(res => lienzo.toBlob(res, 'image/png'))
     if (!blob) {
@@ -229,6 +250,19 @@ export default function EscanerFirma({
   useEffect(() => {
     if (!abierto) return
     let cancelado = false
+
+    // El componente no se desmonta al cerrarse —solo deja de pintarse—, así
+    // que al reabrirlo conservaba la etapa y la firma de la vez anterior: el
+    // primer fotograma enseñaba la firma vieja antes de arrancar la cámara.
+    setEtapa('iniciando')
+    setFirma(null)
+    setConsejo('buscando')
+    setAviso(null)
+    setAuto(true)
+    buenosRef.current = 0
+    fallosRef.current = 0
+    capturandoRef.current = false
+    previoRef.current = null
 
     ;(async () => {
       try {
@@ -282,8 +316,23 @@ export default function EscanerFirma({
       capturandoRef.current = false
       setHayLinterna(false)
       setLinterna(false)
+      if (destelloRef.current) clearTimeout(destelloRef.current)
+      if (avisoRef.current) clearTimeout(avisoRef.current)
     }
   }, [abierto])
+
+  // Red de seguridad: al volver a escanear, asegurarse de que el vídeo sigue
+  // enganchado al stream. Con el elemento ya montado no debería perderlo,
+  // pero iOS suelta la reproducción al volver de segundo plano y una cámara
+  // congelada es indistinguible de una aplicación colgada.
+  useEffect(() => {
+    if (etapa !== 'escaneando') return
+    const video = videoRef.current
+    const stream = streamRef.current
+    if (!video || !stream) return
+    if (video.srcObject !== stream) video.srcObject = stream
+    if (video.paused) void video.play().catch(() => {})
+  }, [etapa])
 
   async function alternarLinterna() {
     const pista = streamRef.current?.getVideoTracks()[0]
@@ -311,7 +360,13 @@ export default function EscanerFirma({
     setFirma(null)
     previoRef.current = null
     buenosRef.current = 0
+    fallosRef.current = 0
     capturandoRef.current = false
+    // El rótulo también vuelve al principio. Si se quedaba en «listo», el
+    // primer instante tras Repetir enseñaba «Escaneando…» y el recuadro en
+    // verde sobre una cámara que aún no había leído nada.
+    setConsejo('buscando')
+    setAviso(null)
     setEtapa('escaneando')
   }
 
@@ -326,6 +381,8 @@ export default function EscanerFirma({
   }
 
   const listo = consejo === 'listo' && etapa === 'escaneando'
+  /** El vídeo sigue montado durante la revisión; su cromo, no. */
+  const escaneandoVisible = etapa === 'escaneando' || etapa === 'procesando'
 
   return (
     <div
@@ -362,8 +419,13 @@ export default function EscanerFirma({
         </div>
       </div>
 
-      {/* ── Cámara ── */}
-      {etapa !== 'revisando' && etapa !== 'error' && (
+      {/* ── Cámara ──
+          Se monta mientras haya cámara y NO se desmonta al revisar: el vídeo
+          es quien sostiene el stream, y quitarlo del árbol dejaba un elemento
+          nuevo y vacío al volver con «Repetir». El análisis no recibía ni un
+          cuadro, así que el rótulo se quedaba congelado en el último que vio
+          —«Escaneando…»— para siempre. La revisión se pinta ENCIMA. */}
+      {etapa !== 'error' && (
         <div className="relative flex-1 overflow-hidden">
           <video
             ref={videoRef}
@@ -375,17 +437,25 @@ export default function EscanerFirma({
 
           {/* Rótulo arriba, como en el escáner de las Notas: una frase corta,
               en presente, que cambia con lo que la cámara ve. */}
-          <div className="absolute inset-x-0 top-0 pt-4 px-6 flex justify-center pointer-events-none">
-            <p className={`text-[15px] font-medium px-4 py-2 rounded-full transition-colors duration-200 ${
-              listo ? 'bg-emerald-500 text-white' : 'bg-black/55 text-white'
+          <div
+            className="absolute inset-x-0 top-0 pt-4 px-6 flex justify-center pointer-events-none transition-opacity"
+            style={{ opacity: escaneandoVisible ? 1 : 0 }}
+          >
+            <p className={`text-[15px] font-medium px-4 py-2 rounded-full transition-colors duration-200 text-center ${
+              aviso ? 'bg-amber-500 text-white'
+                    : listo ? 'bg-emerald-500 text-white'
+                            : 'bg-black/55 text-white'
             }`}>
-              {etapa === 'procesando' ? 'Escaneando…' : MENSAJE[consejo]}
+              {aviso ?? (etapa === 'procesando' ? 'Escaneando…' : MENSAJE[consejo])}
             </p>
           </div>
 
           {/* Recuadro guía. Al reconocer la firma se TIÑE — ese cambio de
               color es el aviso de que va a disparar, y no necesita leyenda. */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity"
+            style={{ opacity: escaneandoVisible ? 1 : 0 }}
+          >
             <div
               ref={marcoRef}
               style={{ width: '88%', aspectRatio: String(PROPORCION_MARCO) }}
@@ -415,7 +485,10 @@ export default function EscanerFirma({
 
           {/* Controles abajo: obturador siempre visible, y el automático al
               lado como interruptor, igual que el Auto/Manual de las Notas. */}
-          <div className="absolute inset-x-0 bottom-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-black/70 to-transparent">
+          <div
+            className="absolute inset-x-0 bottom-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-black/70 to-transparent transition-opacity"
+            style={{ opacity: escaneandoVisible ? 1 : 0, pointerEvents: escaneandoVisible ? 'auto' : 'none' }}
+          >
             <div className="flex items-center justify-center gap-6">
               <button
                 onClick={() => setAuto(a => !a)}
@@ -446,7 +519,7 @@ export default function EscanerFirma({
 
       {/* ── Revisión, sobre el documento de verdad ── */}
       {etapa === 'revisando' && firma && (
-        <div className="flex-1 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div className="absolute inset-0 z-10 bg-black overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[calc(max(1rem,env(safe-area-inset-top))+3.25rem)]">
           <p className="text-white/70 text-sm text-center mb-5">
             Así va a salir impresa en tu cuenta de cobro
           </p>
@@ -502,7 +575,7 @@ export default function EscanerFirma({
       )}
 
       {etapa === 'iniciando' && (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black flex items-center justify-center">
           <p className="text-white/70 text-sm">Abriendo la cámara…</p>
         </div>
       )}
