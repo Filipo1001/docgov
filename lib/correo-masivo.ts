@@ -80,6 +80,14 @@ Equipo Contratista Digital`
  *
  * Sigue la línea del recordatorio automático del día 22 para que quien
  * reciba los dos no sienta que le escriben dos sistemas distintos.
+ *
+ * Y no menciona la sesión de acompañamiento: son dos avisos con dos
+ * propósitos y dos destinatarios distintos —este va solo a quien no ha
+ * enviado—, y mezclarlos le quita filo a los dos.
+ *
+ * «Subir tu firma» va primero en la lista de pasos a propósito: 27 de los
+ * 120 contratistas no la tienen registrada, y ninguno de esos 27 ha logrado
+ * enviar un informe nunca. Es el primer muro, no el último detalle.
  */
 export const ASUNTO_RECORDATORIO = 'Recuerda enviar tu informe de septiembre'
 
@@ -87,14 +95,7 @@ export const MENSAJE_RECORDATORIO = `Hola {{nombre}}.
 
 Todavía no hemos recibido tu informe de actividades de septiembre.
 
-Ya estamos en la última semana del mes, así que este es un buen momento para registrar tus actividades, adjuntar tu planilla de seguridad social y enviarlo a revisión.
-
-Si ya lo tienes todo cargado, solo te falta pulsar enviar.
-
-📅 Hoy jueves 24 a las 3:00 p. m. tenemos un espacio virtual para resolver dudas sobre la plataforma. Si algo se te está atravesando, es el momento de preguntarlo.
-🔗 https://meet.google.com/scz-zpcz-ink
-
-Gracias por tu trabajo.
+Ya estamos en la última semana del mes, así que este es un buen momento para subir tu firma, registrar tus actividades, adjuntar tu planilla de seguridad social y enviarlo a revisión.
 
 Equipo Contratista Digital`
 
