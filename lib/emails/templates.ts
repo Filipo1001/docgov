@@ -227,6 +227,33 @@ export function emailRecordatorioInforme(data: TemplateData) {
   }
 }
 
+/**
+ * Recordatorio del día 24 — la víspera del corte real del 25.
+ *
+ * Es el único de los cuatro que enumera lo que falta, y la lista llega
+ * personalizada en `detalle`: el avance de esa persona y sus pasos, con la
+ * firma dentro solo si no la tiene registrada. El resto de recordatorios se
+ * apañan con un texto fijo porque no prometen nada concreto.
+ *
+ * No afirma que el plazo vence mañana: el corte del 25 es costumbre de la
+ * alcaldía y no está estipulado por escrito.
+ */
+export function emailRecordatorioSemanaFinal(data: TemplateData) {
+  return {
+    subject: `Última semana para enviar tu informe — ${data.mes} ${data.anio}`,
+    html: baseHtml(
+      'Tu informe todavía no ha llegado',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">
+         Todavía no hemos recibido tu informe de actividades de
+         <strong>${data.mes} ${data.anio}</strong> del contrato <strong>${data.contrato}</strong>.
+       </p>
+       ${data.detalle ? `<p style="color:#333;font-size:14px;line-height:1.6;">${data.detalle}</p>` : ''}`,
+      '#d97706',
+    ),
+  }
+}
+
 export function emailRecordatorioUrgente(data: TemplateData) {
   return {
     subject: `⏰ Quedan pocos días — informe de ${data.mes} ${data.anio}`,
@@ -847,6 +874,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   consolidado_municipio: emailConsolidadoMunicipio,
   radicado: emailPeriodoRadicado,
   recordatorio: emailRecordatorioInforme,
+  recordatorio_semana_final: emailRecordatorioSemanaFinal,
   recordatorio_urgente: emailRecordatorioUrgente,
   recordatorio_vencido: emailRecordatorioVencido,
   revision_pendiente: emailRevisionPendiente,

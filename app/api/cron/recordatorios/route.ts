@@ -55,6 +55,8 @@ import { enviarNotificacion } from '@/lib/notifications'
 import { notasPorObligacion } from '@/lib/notas-obligaciones'
 import { cargarAmbitos, destinatariosDe } from '@/lib/alcance'
 import { MESES } from '@/lib/constants'
+import { enviarCorreo } from '@/lib/resend'
+import { EMAIL_TEMPLATES } from '@/lib/emails/templates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -98,6 +100,24 @@ export async function GET(req: NextRequest) {
   const admin = createAdminSupabaseClient()
   const { anio, mesIdx, dia, iso } = hoyBogota()
   const resumen: Record<string, number> = { r1_recordatorios: 0, r1_primerizos: 0, r2_bandeja: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r7_vencimientos: 0 }
+
+  // ── Ensayo: ?prueba=<correo> ─────────────────────────────────
+  //
+  // Manda a UNA dirección el recordatorio del día 24 tal como lo recibirían
+  // dos personas reales —una sin firma registrada y otra con ella, que es la
+  // única diferencia que tiene el mensaje— y se va sin tocar nada más.
+  //
+  // No escribe en `notificaciones`, y eso no es un detalle: el guard
+  // anti-duplicado de R1 se apoya en esa tabla, así que un ensayo que dejara
+  // rastro haría que el envío de verdad se saltara justo a las personas con
+  // las que se probó.
+  //
+  // Y sale antes que las demás reglas: un ensayo no puede acabar mandándole
+  // avisos reales a los secretarios.
+  const prueba = req.nextUrl.searchParams.get('prueba')
+  if (prueba) {
+    return NextResponse.json(await ensayoRecordatorio(admin, prueba, MESES[mesIdx], anio))
+  }
 
   // ══ R1 — Informes en borrador (días 22, 24, 28 y 2) ═══════════
   //
@@ -254,14 +274,21 @@ export async function GET(req: NextRequest) {
           'enviarlo a revisión',
         ].filter(Boolean) as string[]
 
+        // Lo personal viaja en `detalle`, que es lo que la plantilla del día
+        // 24 pinta: el resto del payload son cadenas fijas y la plantilla no
+        // ve el `mensaje`, que solo alimenta la campana dentro de la app.
+        const detalle = dia === 24
+          ? `${avance} Ya estamos en la última semana del mes, así que este es un buen momento para ${enumerar(pasos)}.`
+          : undefined
+
         const mensaje = esVencido
           ? `El plazo para enviar tu informe de ${p.mes} ${p.anio} ya venció. Contacta a tu supervisor para habilitar el envío tardío.`
           : dia === 24
-            ? `Todavía no hemos recibido tu informe de actividades de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. ${avance} Ya estamos en la última semana del mes, así que este es un buen momento para ${enumerar(pasos)}.`
+            ? `Todavía no hemos recibido tu informe de actividades de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. ${detalle}`
             : `${avance} Aún no has enviado tu informe de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. Ingresa a Contratista Digital para completarlo.`
         await enviarNotificacion({
           destinatarioId: p.contrato!.contratista_id!,
-          tipo, titulo, mensaje,
+          tipo, titulo, mensaje, detalle,
           periodoId: p.id,
           mes: p.mes, anio: p.anio,
           contrato: p.contrato!.numero,
@@ -733,4 +760,90 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, fecha: iso, dia, ...resumen })
+}
+
+/**
+ * El recordatorio del día 24, renderizado con datos reales y enviado a una
+ * sola dirección. Devuelve a quién imitó, para poder comprobar que las dos
+ * variantes —con y sin el paso de la firma— salen como deben.
+ */
+async function ensayoRecordatorio(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  destino: string,
+  mes: string,
+  anio: number,
+) {
+  const { data: borradores } = await admin
+    .from('periodos')
+    .select('id, mes, anio, contrato_id, contrato:contratos(numero, contratista_id, supervisor_id)')
+    .eq('mes', mes)
+    .eq('anio', anio)
+    .eq('estado', 'borrador')
+    .eq('es_historico', false)
+
+  const todos = ((borradores ?? []) as unknown as PeriodoBorrador[])
+    .filter(p => p.contrato?.contratista_id)
+  if (!todos.length) return { ensayo: true, destino, enviados: 0, nota: 'no hay periodos en borrador este mes' }
+
+  const { data: personas } = await admin
+    .from('usuarios')
+    .select('id, nombre_completo, firma_url')
+    .in('id', [...new Set(todos.map(p => p.contrato!.contratista_id!))])
+  const porId = new Map((personas ?? []).map(u => [u.id as string, u as { nombre_completo: string; firma_url: string | null }]))
+
+  // Una de cada variante: la diferencia entre los dos mensajes es el paso de
+  // la firma, y verlos juntos es lo que permite juzgarla.
+  const sinFirma = todos.find(p => porId.get(p.contrato!.contratista_id!)?.firma_url == null)
+  const conFirma = todos.find(p => porId.get(p.contrato!.contratista_id!)?.firma_url != null)
+  const muestras = [sinFirma, conFirma].filter(Boolean) as PeriodoBorrador[]
+
+  const { data: acts } = await admin
+    .from('actividades')
+    .select('periodo_id')
+    .in('periodo_id', muestras.map(p => p.id))
+  const cuenta = new Map<string, number>()
+  for (const a of acts ?? []) {
+    const k = a.periodo_id as string
+    cuenta.set(k, (cuenta.get(k) ?? 0) + 1)
+  }
+
+  const plantilla = EMAIL_TEMPLATES['recordatorio_semana_final']
+  const enviados: { imitando: string; conPasoDeFirma: boolean; ok: boolean }[] = []
+
+  for (const p of muestras) {
+    const persona = porId.get(p.contrato!.contratista_id!)!
+    const hechas = cuenta.get(p.id) ?? 0
+    const avance = hechas === 0
+      ? 'Todavía no has registrado ninguna actividad.'
+      : `Llevas ${hechas} actividad${hechas === 1 ? '' : 'es'} registrada${hechas === 1 ? '' : 's'}.`
+    const pasos = [
+      persona.firma_url == null ? 'subir tu firma' : null,
+      'registrar tus actividades',
+      'adjuntar tu planilla de seguridad social',
+      'enviarlo a revisión',
+    ].filter(Boolean) as string[]
+
+    const { subject, html } = plantilla({
+      nombreDestinatario: (persona.nombre_completo ?? '').split(' ')[0] ?? 'Contratista',
+      mes: p.mes,
+      anio: p.anio,
+      contrato: p.contrato!.numero,
+      detalle: `${avance} Ya estamos en la última semana del mes, así que este es un buen momento para ${enumerar(pasos)}.`,
+    })
+
+    const res = await enviarCorreo({ to: destino, subject: `[ENSAYO] ${subject}`, html })
+    enviados.push({
+      imitando: persona.nombre_completo,
+      conPasoDeFirma: persona.firma_url == null,
+      ok: res.ok,
+    })
+  }
+
+  return {
+    ensayo: true,
+    destino,
+    enviados,
+    nota: 'no se escribió ninguna notificación: el envío real sigue intacto',
+    alcanceReal: todos.length,
+  }
 }
