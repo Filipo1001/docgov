@@ -19,7 +19,7 @@
 
 import { MARCA } from '@/lib/marca'
 
-export const CANDADO_DESTINO: string | null = 'restrepoceballosfelipe@gmail.com'
+export const CANDADO_DESTINO: string | null = null
 
 /** Los correos que no existen: el marcador que se pone cuando no se conoce. */
 export const DOMINIO_MARCADOR = '@pendiente.local'
