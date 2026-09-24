@@ -19,7 +19,8 @@
  *   · La rama de R4 sobre meses sin planilla — es un hueco administrativo que
  *     no cambia de un día para otro; va en el consolidado del día 6.
  *
- *  R1 — Contratistas con informe en borrador (escalonado por día del mes):
+ *  R1 — Contratistas con informe en borrador (escalonado por día del mes,
+ *       22 · 24 · 28 · 2; el 24 es la víspera del corte real del 25):
  *       día 22: recordatorio suave · día 28: urgente · día 2: venció (mes anterior)
  *       El suave estaba el 25 y se adelantó al 22: en agosto el 82% del
  *       trabajo se cargó entre el 24 y el 28, así que avisar el 25 llegaba
@@ -59,6 +60,12 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
+/** «a, b y c» — una lista en español, no separada por comas hasta el final. */
+function enumerar(partes: string[]): string {
+  if (partes.length <= 1) return partes[0] ?? ''
+  return `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`
+}
+
 /** Fecha actual en Bogotá (el server corre en UTC). */
 function hoyBogota(): { anio: number; mesIdx: number; dia: number; iso: string } {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -92,15 +99,29 @@ export async function GET(req: NextRequest) {
   const { anio, mesIdx, dia, iso } = hoyBogota()
   const resumen: Record<string, number> = { r1_recordatorios: 0, r1_primerizos: 0, r2_bandeja: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r7_vencimientos: 0 }
 
-  // ══ R1 — Informes en borrador (días 22, 28 y 2) ═══════════════
-  if (dia === 22 || dia === 28 || dia === 2) {
+  // ══ R1 — Informes en borrador (días 22, 24, 28 y 2) ═══════════
+  //
+  // El 24 se añadió porque el corte real de la alcaldía es el 25, y eso no
+  // estaba en ninguna parte del código: el escalonado 22/28/2 daba por hecho
+  // un cierre a fin de mes, así que entre el aviso del 22 y el del 28 caía
+  // el plazo de verdad sin que el sistema dijera nada. Al medirlo, el 24 de
+  // septiembre había 88 de 104 periodos en borrador.
+  //
+  // El corte del 25 es costumbre, no está estipulado por escrito, y por eso
+  // el aviso NO afirma que mañana vence: dice que se acaba el mes y que su
+  // informe no ha llegado, que es lo que sí es cierto.
+  if (dia === 22 || dia === 24 || dia === 28 || dia === 2) {
     // Día 2 → el mes VENCIDO es el anterior; días 22/28 → el mes en curso
     const esVencido = dia === 2
     const mesObjetivoIdx = esVencido ? (mesIdx === 0 ? 11 : mesIdx - 1) : mesIdx
     const anioObjetivo = esVencido && mesIdx === 0 ? anio - 1 : anio
     const mesNombre = MESES[mesObjetivoIdx]
 
-    const tipo = esVencido ? 'recordatorio_vencido' : dia === 28 ? 'recordatorio_urgente' : 'recordatorio'
+    const tipo = esVencido
+      ? 'recordatorio_vencido'
+      : dia === 28 ? 'recordatorio_urgente'
+      : dia === 24 ? 'recordatorio_semana_final'
+      : 'recordatorio'
     let consulta = admin
       .from('periodos')
       .select('id, mes, anio, contrato_id, contrato:contratos(numero, contratista_id, supervisor_id)')
@@ -172,6 +193,28 @@ export async function GET(req: NextRequest) {
     // que mueve a alguien es ver cuánto le falta. Dos consultas agregadas —
     // solo en los tres días que esta regla dispara— y se resuelve.
     const pendientesIds = candidatos.filter(p => !enviadas.has(p.id)).map(p => p.id)
+
+    // Quién no tiene firma registrada.
+    //
+    // Solo hace falta el día 24, que es el único aviso que enumera los pasos
+    // que faltan. Decirle «sube tu firma» a quien ya la tiene es la clase de
+    // instrucción que no aplica y que enseña a no leer los correos; y
+    // callársela a quien no la tiene es peor, porque es su primer muro: 27
+    // de los 120 contratistas no la tienen, y ninguno de esos 27 ha logrado
+    // enviar un informe nunca.
+    const sinFirma = new Set<string>()
+    if (dia === 24 && pendientesIds.length) {
+      const contratistas = [...new Set(
+        candidatos.filter(p => !enviadas.has(p.id)).map(p => p.contrato!.contratista_id!),
+      )]
+      const { data: usuariosSinFirma } = await admin
+        .from('usuarios')
+        .select('id')
+        .in('id', contratistas)
+        .is('firma_url', null)
+      for (const u of usuariosSinFirma ?? []) sinFirma.add(u.id as string)
+    }
+
     const actividadesPorPeriodo = new Map<string, number>()
     if (pendientesIds.length) {
       const { data: acts } = await admin
@@ -191,7 +234,9 @@ export async function GET(req: NextRequest) {
           ? `Tu informe de ${p.mes} ${p.anio} venció`
           : dia === 28
             ? `Quedan pocos días — informe de ${p.mes}`
-            : `Recuerda enviar tu informe de ${p.mes}`
+            : dia === 24
+              ? `Última semana para enviar tu informe de ${p.mes}`
+              : `Recuerda enviar tu informe de ${p.mes}`
 
         // El avance va primero y en concreto: quien no ha empezado y quien ya
         // lleva media docena de actividades no están en la misma situación, y
@@ -200,9 +245,20 @@ export async function GET(req: NextRequest) {
           ? 'Todavía no has registrado ninguna actividad.'
           : `Llevas ${hechas} actividad${hechas === 1 ? '' : 'es'} registrada${hechas === 1 ? '' : 's'}.`
 
+        // El día 24 enumera lo que falta, en el orden en que se hace, y la
+        // firma solo aparece para quien no la tiene.
+        const pasos = [
+          sinFirma.has(p.contrato!.contratista_id!) ? 'subir tu firma' : null,
+          'registrar tus actividades',
+          'adjuntar tu planilla de seguridad social',
+          'enviarlo a revisión',
+        ].filter(Boolean) as string[]
+
         const mensaje = esVencido
           ? `El plazo para enviar tu informe de ${p.mes} ${p.anio} ya venció. Contacta a tu supervisor para habilitar el envío tardío.`
-          : `${avance} Aún no has enviado tu informe de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. Ingresa a Contratista Digital para completarlo.`
+          : dia === 24
+            ? `Todavía no hemos recibido tu informe de actividades de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. ${avance} Ya estamos en la última semana del mes, así que este es un buen momento para ${enumerar(pasos)}.`
+            : `${avance} Aún no has enviado tu informe de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. Ingresa a Contratista Digital para completarlo.`
         await enviarNotificacion({
           destinatarioId: p.contrato!.contratista_id!,
           tipo, titulo, mensaje,
