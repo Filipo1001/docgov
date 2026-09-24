@@ -21,10 +21,18 @@ import { previsualizarDestinatarios } from '@/app/actions/correo-masivo'
 import {
   FILTROS, cuerpoAHtml, primerNombreDe,
   ASUNTO_PREDEFINIDO, MENSAJE_PREDEFINIDO,
+  ASUNTO_RECORDATORIO, MENSAJE_RECORDATORIO,
   type FiltroMasivo, type Previsualizacion,
 } from '@/lib/correo-masivo'
 import { MARCA } from '@/lib/marca'
 import { LogoCD } from '@/components/Logo'
+
+/** Los dos avisos que la alcaldía manda de verdad. No es un sistema de
+ *  plantillas: son borradores, se cargan y se editan encima. */
+const PLANTILLAS = [
+  { id: 'induccion',    label: 'Inducción virtual',      asunto: ASUNTO_PREDEFINIDO,  cuerpo: MENSAJE_PREDEFINIDO,  filtro: 'todos' as FiltroMasivo },
+  { id: 'recordatorio', label: 'Recordatorio de informe', asunto: ASUNTO_RECORDATORIO, cuerpo: MENSAJE_RECORDATORIO, filtro: 'pendientes' as FiltroMasivo },
+] as const
 
 interface Parte {
   enviados: number
@@ -163,7 +171,23 @@ export default function CorreoMasivoClient() {
 
       {/* 2 · Qué dice */}
       <section className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900">2 · Qué dice</h2>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-sm font-semibold text-gray-900">2 · Qué dice</h2>
+          <div className="flex gap-2">
+            {PLANTILLAS.map(pl => (
+              <button
+                key={pl.id}
+                onClick={() => { setAsunto(pl.asunto); setMensaje(pl.cuerpo); setFiltro(pl.filtro) }}
+                className="text-[11px] font-medium text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-300 rounded-full px-3 py-1 transition-colors"
+              >
+                {pl.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-[11px] text-gray-400 -mt-2">
+          Cargar un borrador reemplaza el asunto, el mensaje y el destinatario.
+        </p>
 
         <div>
           <label htmlFor="asunto" className="block text-xs text-gray-500 mb-1">Asunto</label>

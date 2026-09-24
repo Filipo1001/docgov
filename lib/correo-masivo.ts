@@ -27,6 +27,7 @@ export const DOMINIO_MARCADOR = '@pendiente.local'
 export const FILTROS = [
   { id: 'todos',        label: 'Todos',         detalle: 'Contratistas y equipo de la alcaldía' },
   { id: 'contratistas', label: 'Contratistas',  detalle: 'Solo quienes reportan informes' },
+  { id: 'pendientes',   label: 'No han enviado', detalle: 'Contratistas con el informe del mes en borrador' },
   { id: 'equipo',       label: 'Equipo',        detalle: 'Secretarios, asesores, contratación y alcaldía' },
 ] as const
 
@@ -67,6 +68,33 @@ Y lo mejor: no tienes que ir a ningún lado. Será completamente virtual. 💻
 https://meet.google.com/scz-zpcz-ink
 
 ¡Te esperamos! 🚀
+
+Equipo Contratista Digital`
+
+/**
+ * Recordatorio de informe. Deliberadamente NO dice que el plazo vence
+ * mañana: el corte del 25 es una costumbre de la alcaldía, no algo
+ * estipulado en el contrato, y un correo institucional no puede afirmar un
+ * plazo que no existe por escrito. Dice lo que sí es cierto —que el mes se
+ * está acabando y que su informe no ha llegado— y eso basta.
+ *
+ * Sigue la línea del recordatorio automático del día 22 para que quien
+ * reciba los dos no sienta que le escriben dos sistemas distintos.
+ */
+export const ASUNTO_RECORDATORIO = 'Recuerda enviar tu informe de septiembre'
+
+export const MENSAJE_RECORDATORIO = `Hola {{nombre}}.
+
+Todavía no hemos recibido tu informe de actividades de septiembre.
+
+Ya estamos en la última semana del mes, así que este es un buen momento para registrar tus actividades, adjuntar tu planilla de seguridad social y enviarlo a revisión.
+
+Si ya lo tienes todo cargado, solo te falta pulsar enviar.
+
+📅 Hoy jueves 24 a las 3:00 p. m. tenemos un espacio virtual para resolver dudas sobre la plataforma. Si algo se te está atravesando, es el momento de preguntarlo.
+🔗 https://meet.google.com/scz-zpcz-ink
+
+Gracias por tu trabajo.
 
 Equipo Contratista Digital`
 
@@ -161,11 +189,25 @@ function renderParrafo(parrafo: string): string {
   return `<div style="background:#f6f7f9;border-left:3px solid ${MARCA};border-radius:10px;padding:16px 18px 6px;margin:0 0 16px;">${cuerpo}</div>`
 }
 
+/**
+ * El rótulo del botón sale de a DÓNDE lleva, no de un texto fijo.
+ *
+ * Estaba escrito «Entrar a la reunión» a secas, que es correcto para un
+ * enlace de Meet y absurdo para cualquier otro. Tres casos cubren todo lo
+ * que esta alcaldía va a pegar en un correo.
+ */
+function rotuloDe(url: string): string {
+  const u = url.toLowerCase()
+  if (/meet\.google|zoom\.us|teams\.microsoft|whereby|meet\.jit/.test(u)) return 'Entrar a la reunión'
+  if (u.includes('contratistadigital.com')) return 'Abrir Contratista Digital'
+  return 'Abrir el enlace'
+}
+
 function boton(url: string): string {
   const limpia = escaparHtml(url)
   return `<div style="margin:4px 0 14px;">
     <a href="${limpia}" style="display:inline-block;background:${MARCA};color:#fff;padding:13px 26px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;">
-      Entrar a la reunión
+      ${rotuloDe(url)}
     </a>
   </div>`
 }

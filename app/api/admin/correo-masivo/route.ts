@@ -20,12 +20,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { resolverDestinatarios } from '@/lib/destinatarios-masivo'
 import { enviarCorreo } from '@/lib/resend'
 import { baseHtml } from '@/lib/emails/templates'
 import { MARCA } from '@/lib/marca'
 import {
-  CANDADO_DESTINO, DOMINIO_MARCADOR, ROLES_EQUIPO,
-  cuerpoAHtml, primerNombreDe,
+  CANDADO_DESTINO, cuerpoAHtml, primerNombreDe,
   type FiltroMasivo, type Destinatario,
 } from '@/lib/correo-masivo'
 
@@ -52,28 +52,17 @@ export async function POST(request: NextRequest) {
   if (!mensaje) return NextResponse.json({ error: 'El mensaje es obligatorio' }, { status: 400 })
 
   const admin = createAdminSupabaseClient()
-  let consulta = admin
-    .from('usuarios')
-    .select('nombre_completo, email, rol')
-    .eq('activo', true)
-    .order('nombre_completo')
-
-  if (filtro === 'contratistas') consulta = consulta.eq('rol', 'contratista')
-  if (filtro === 'equipo')       consulta = consulta.in('rol', [...ROLES_EQUIPO])
-
-  const { data, error } = await consulta
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const vistos = new Set<string>()
   let destinatarios: Destinatario[] = []
   let excluidos = 0
-
-  for (const f of (data ?? []) as Destinatario[]) {
-    const email = (f.email ?? '').trim().toLowerCase()
-    if (!email || !email.includes('@') || email.endsWith(DOMINIO_MARCADOR)) { excluidos++; continue }
-    if (vistos.has(email)) continue
-    vistos.add(email)
-    destinatarios.push({ ...f, email })
+  try {
+    const r = await resolverDestinatarios(filtro)
+    destinatarios = r.destinatarios
+    excluidos = r.excluidos
+  } catch (e: unknown) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'No se pudo armar la lista' },
+      { status: 500 },
+    )
   }
 
   // El candado. La lista se calculó entera —el parte dice a cuántos habría
