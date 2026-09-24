@@ -3,19 +3,42 @@
 /**
  * Escáner de firma en vivo.
  *
- * La persona firma en un papel, apunta el teléfono y ya. No hay botón de
- * disparo: el escáner mira, avisa de UNA cosa a la vez —«acércate», «falta
- * luz», «quieto»— y captura solo cuando la imagen está bien. Después enseña
- * el resultado sobre el documento donde va a salir impreso, y solo entonces
- * pregunta si se guarda.
+ * ── LO QUE SE COPIA, Y DE DÓNDE ──────────────────────────────────────────
  *
- * Por qué sin botón: el disparo obliga a decidir «¿ya está suficientemente
- * bien?» a quien no tiene forma de saberlo. Esa decisión es justo la que
- * fallaba antes, y es la que el software sí puede tomar.
+ * La pantalla no inventa nada: repite el escáner de documentos de las Notas
+ * del iPhone, que es el que más gente ha usado sin que nadie se lo explique.
+ * De ahí salen las cuatro piezas:
  *
- * Aun así hay un disparo manual, escondido hasta que pasan unos segundos sin
- * captura automática. Nunca dejar a nadie encerrado pesa más que la limpieza
- * de la pantalla.
+ *   · Un rótulo corto y en presente arriba de todo («Coloca tu firma en el
+ *     recuadro»), que cambia según lo que la cámara ve.
+ *   · El recuadro se TIÑE cuando reconoce lo que busca. Ese cambio de color
+ *     es el aviso de que va a disparar; no hace falta explicarlo.
+ *   · Un destello blanco al capturar. Todas las cámaras del mundo lo hacen.
+ *   · Botón de disparo SIEMPRE visible, y un interruptor «Automático» al
+ *     lado, exactamente como el Auto/Manual de las Notas.
+ *
+ * ── LO QUE SE QUITÓ, Y POR QUÉ ───────────────────────────────────────────
+ *
+ * Había un anillo de progreso que se llenaba mientras la imagen estaba
+ * estable. Era una invención: ningún escáner usa eso, y la primera pregunta
+ * de quien lo probó fue «¿ese círculo para qué es?». Cuando hay que explicar
+ * un indicador, el indicador sobra. El recuadro que cambia de color dice lo
+ * mismo sin preguntas.
+ *
+ * El disparo manual estaba escondido nueve segundos «para no ensuciar la
+ * pantalla». Nadie esconde el obturador de una cámara. Ahora está desde el
+ * primer instante: quien no se fía del automático, dispara y punto.
+ *
+ * ── DETALLES QUE SOLO SE VEN EN UN TELÉFONO ──────────────────────────────
+ *
+ * Toda la capa lleva la selección de texto desactivada. Con un dedo apoyado
+ * sobre la pantalla —que es como se sostiene un teléfono mientras se apunta
+ * con el otro— el navegador entendía «pulsación larga» y seleccionaba los
+ * rótulos de abajo, con su lupa azul encima de la cámara.
+ *
+ * La linterna solo aparece si la cámara de ese teléfono la expone. En iOS no
+ * se puede encender desde el navegador, así que allí sencillamente no está en
+ * vez de estar y no hacer nada.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -25,24 +48,23 @@ import {
   type Consejo,
 } from '@/lib/firma-escaner'
 
-/** Cuadros seguidos en «listo» antes de capturar. A ~12/s son unos 0,4 s:
- *  suficiente para descartar un acierto de casualidad, poco para impacientar. */
+/** Cuadros seguidos en «listo» antes de disparar en automático. A ~12 por
+ *  segundo son unos 0,4 s: bastante para descartar un acierto de casualidad,
+ *  poco para que parezca que no reacciona. */
 const CUADROS_PARA_DISPARAR = 5
-
-/** Sin captura automática pasado esto, aparece el disparo manual. */
-const MS_HASTA_DISPARO_MANUAL = 9000
 
 /** Lado mayor del recorte que se procesa. Más resolución no mejora un trazo
  *  y multiplica el trabajo de la mediana en un teléfono modesto. */
 const ANCHO_PROCESO = 1280
 
-const MENSAJE: Record<Consejo, { titulo: string; pista: string }> = {
-  buscando:  { titulo: 'Apunta a tu firma',     pista: 'Ponla dentro del recuadro' },
-  falta_luz: { titulo: 'Necesitas más luz',     pista: 'Acércate a una ventana o enciende la luz' },
-  acercate:  { titulo: 'Acércate un poco',      pista: 'La firma debe llenar el recuadro' },
-  despeja:   { titulo: 'Algo tapa el recuadro', pista: 'Retira la mano o la sombra' },
-  quieto:    { titulo: 'Mantén el pulso',       pista: 'Apoya los codos si puedes' },
-  listo:     { titulo: 'Quieto ahí…',           pista: 'Capturando' },
+/** El rótulo de arriba. Uno solo, en presente, sin signos de admiración. */
+const MENSAJE: Record<Consejo, string> = {
+  buscando:  'Coloca tu firma en el recuadro',
+  falta_luz: 'Hace falta más luz',
+  acercate:  'Acerca un poco más el teléfono',
+  despeja:   'Algo está tapando el recuadro',
+  quieto:    'Sostén el teléfono quieto',
+  listo:     'Escaneando…',
 }
 
 type Etapa = 'iniciando' | 'escaneando' | 'procesando' | 'revisando' | 'error'
@@ -72,14 +94,20 @@ export default function EscanerFirma({
   const ultimoAnalisisRef = useRef(0)
   /** Evita que la ráfaga se dispare dos veces si el bucle va rápido. */
   const capturandoRef = useRef(false)
+  /** El bucle lee el modo automático sin volver a montarse por cada cambio. */
+  const autoRef = useRef(true)
 
-  const [etapa, setEtapa]       = useState<Etapa>('iniciando')
-  const [consejo, setConsejo]   = useState<Consejo>('buscando')
-  const [progreso, setProgreso] = useState(0)
-  const [manual, setManual]     = useState(false)
-  const [error, setError]       = useState<string | null>(null)
-  const [firma, setFirma]       = useState<{ blob: Blob; url: string } | null>(null)
+  const [etapa, setEtapa]     = useState<Etapa>('iniciando')
+  const [consejo, setConsejo] = useState<Consejo>('buscando')
+  const [auto, setAuto]       = useState(true)
+  const [destello, setDestello] = useState(false)
+  const [linterna, setLinterna] = useState(false)
+  const [hayLinterna, setHayLinterna] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
+  const [firma, setFirma]     = useState<{ blob: Blob; url: string } | null>(null)
   const [guardando, setGuardando] = useState(false)
+
+  useEffect(() => { autoRef.current = auto }, [auto])
 
   // ── Geometría ───────────────────────────────────────────────────────────
   //
@@ -102,7 +130,6 @@ export default function EscanerFirma({
     const w = guia.width  / escala
     const h = guia.height / escala
 
-    // Un marco parcialmente fuera del cuadro real daría un recorte inválido.
     return {
       x: Math.max(0, Math.round(x)),
       y: Math.max(0, Math.round(y)),
@@ -111,7 +138,7 @@ export default function EscanerFirma({
     }
   }, [])
 
-  /** Un recorte del marco guía, al ancho pedido. */
+  /** Un recorte del recuadro guía, al ancho pedido. */
   const tomarRecorte = useCallback((anchoDestino: number): ImageData | null => {
     const video = videoRef.current
     const r = recorteEnVideo()
@@ -132,6 +159,11 @@ export default function EscanerFirma({
   const capturar = useCallback(async () => {
     if (capturandoRef.current) return
     capturandoRef.current = true
+
+    // Destello primero: el disparo tiene que sentirse en el mismo instante en
+    // que se pulsa, no cuando termine de procesar.
+    setDestello(true)
+    setTimeout(() => setDestello(false), 220)
     setEtapa('procesando')
 
     const cuadros: ImageData[] = []
@@ -147,7 +179,6 @@ export default function EscanerFirma({
     if (!lienzo) {
       capturandoRef.current = false
       buenosRef.current = 0
-      setProgreso(0)
       setEtapa('escaneando')
       return
     }
@@ -169,7 +200,7 @@ export default function EscanerFirma({
 
     const bucle = (t: number) => {
       rafRef.current = requestAnimationFrame(bucle)
-      // ~12 lecturas por segundo. Analizar cada cuadro no mejora el consejo y
+      // ~12 lecturas por segundo. Analizar cada cuadro no mejora el rótulo y
       // sí calienta el teléfono.
       if (t - ultimoAnalisisRef.current < 80) return
       ultimoAnalisisRef.current = t
@@ -183,11 +214,9 @@ export default function EscanerFirma({
 
       if (lectura.consejo === 'listo') {
         buenosRef.current++
-        setProgreso(Math.min(1, buenosRef.current / CUADROS_PARA_DISPARAR))
-        if (buenosRef.current >= CUADROS_PARA_DISPARAR) void capturar()
+        if (autoRef.current && buenosRef.current >= CUADROS_PARA_DISPARAR) void capturar()
       } else {
         buenosRef.current = 0
-        setProgreso(0)
       }
     }
 
@@ -216,6 +245,13 @@ export default function EscanerFirma({
         })
         if (cancelado) { stream.getTracks().forEach(t => t.stop()); return }
         streamRef.current = stream
+
+        // La linterna solo existe en algunos Android. Si no está, el botón no
+        // se dibuja: un botón que no hace nada es peor que no tenerlo.
+        const pista = stream.getVideoTracks()[0]
+        const capacidades = pista?.getCapabilities?.() as { torch?: boolean } | undefined
+        setHayLinterna(!!capacidades?.torch)
+
         const video = videoRef.current
         if (video) {
           video.srcObject = stream
@@ -244,15 +280,26 @@ export default function EscanerFirma({
       previoRef.current = null
       buenosRef.current = 0
       capturandoRef.current = false
+      setHayLinterna(false)
+      setLinterna(false)
     }
   }, [abierto])
 
-  // Disparo manual, solo si el automático no llegó.
-  useEffect(() => {
-    if (etapa !== 'escaneando') return
-    const t = setTimeout(() => setManual(true), MS_HASTA_DISPARO_MANUAL)
-    return () => clearTimeout(t)
-  }, [etapa])
+  async function alternarLinterna() {
+    const pista = streamRef.current?.getVideoTracks()[0]
+    if (!pista) return
+    const encender = !linterna
+    try {
+      // `torch` no está en la definición estándar de TypeScript aunque los
+      // navegadores que la soportan la aceptan aquí; de ahí el doble paso.
+      await pista.applyConstraints(
+        { advanced: [{ torch: encender }] } as unknown as MediaTrackConstraints,
+      )
+      setLinterna(encender)
+    } catch {
+      setHayLinterna(false)
+    }
+  }
 
   // La URL del objeto vive mientras se revisa; al descartarla hay que soltarla.
   useEffect(() => () => { if (firma) URL.revokeObjectURL(firma.url) }, [firma])
@@ -265,7 +312,6 @@ export default function EscanerFirma({
     previoRef.current = null
     buenosRef.current = 0
     capturandoRef.current = false
-    setProgreso(0)
     setEtapa('escaneando')
   }
 
@@ -279,10 +325,13 @@ export default function EscanerFirma({
     }
   }
 
-  const texto = MENSAJE[consejo]
+  const listo = consejo === 'listo' && etapa === 'escaneando'
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+    <div
+      className="fixed inset-0 z-[100] bg-black flex flex-col select-none"
+      style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+    >
       {/* ── Cabecera ── */}
       <div className="relative z-20 flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         <button
@@ -294,7 +343,23 @@ export default function EscanerFirma({
         <p className="text-white/90 text-sm font-semibold">
           {etapa === 'revisando' ? 'Tu firma' : 'Escanear firma'}
         </p>
-        <span className="w-16" />
+        <div className="w-16 flex justify-end">
+          {hayLinterna && etapa !== 'revisando' && etapa !== 'error' && (
+            <button
+              onClick={() => void alternarLinterna()}
+              aria-pressed={linterna}
+              aria-label={linterna ? 'Apagar la linterna' : 'Encender la linterna'}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                linterna ? 'bg-white text-gray-900' : 'bg-white/15 text-white'
+              }`}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 2h6l-1 5h3l-7 15 2-10H8z" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Cámara ── */}
@@ -305,17 +370,29 @@ export default function EscanerFirma({
             playsInline
             muted
             autoPlay
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
 
-          {/* Marco guía: todo lo de fuera se oscurece con un borde enorme. */}
+          {/* Rótulo arriba, como en el escáner de las Notas: una frase corta,
+              en presente, que cambia con lo que la cámara ve. */}
+          <div className="absolute inset-x-0 top-0 pt-4 px-6 flex justify-center pointer-events-none">
+            <p className={`text-[15px] font-medium px-4 py-2 rounded-full transition-colors duration-200 ${
+              listo ? 'bg-emerald-500 text-white' : 'bg-black/55 text-white'
+            }`}>
+              {etapa === 'procesando' ? 'Escaneando…' : MENSAJE[consejo]}
+            </p>
+          </div>
+
+          {/* Recuadro guía. Al reconocer la firma se TIÑE — ese cambio de
+              color es el aviso de que va a disparar, y no necesita leyenda. */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
               ref={marcoRef}
               style={{ width: '88%', aspectRatio: String(PROPORCION_MARCO) }}
-              className="relative rounded-2xl outline-[9999px] outline outline-black/55 transition-colors duration-200"
+              className={`relative rounded-2xl outline-[9999px] outline outline-black/55 transition-colors duration-200 ${
+                listo || etapa === 'procesando' ? 'bg-emerald-400/20' : ''
+              }`}
             >
-              {/* Esquinas: dicen «encuadra aquí» sin escribirlo. */}
               {(['-top-px -left-px border-t-4 border-l-4 rounded-tl-2xl',
                  '-top-px -right-px border-t-4 border-r-4 rounded-tr-2xl',
                  '-bottom-px -left-px border-b-4 border-l-4 rounded-bl-2xl',
@@ -323,45 +400,45 @@ export default function EscanerFirma({
                 <span
                   key={i}
                   className={`absolute w-9 h-9 ${c} transition-colors duration-200 ${
-                    consejo === 'listo' ? 'border-emerald-400' : 'border-white/90'
+                    listo || etapa === 'procesando' ? 'border-emerald-400' : 'border-white/90'
                   }`}
                 />
               ))}
             </div>
           </div>
 
-          {/* Un mensaje, uno solo. */}
-          <div className="absolute inset-x-0 bottom-0 pb-[max(1.5rem,env(safe-area-inset-bottom))] px-6">
-            <div className="flex flex-col items-center gap-3">
-              {/* Anillo de progreso: enseña que la captura está en camino. */}
-              <div className="relative w-14 h-14">
-                <svg viewBox="0 0 56 56" className="w-14 h-14 -rotate-90">
-                  <circle cx="28" cy="28" r="25" fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="4" />
-                  <circle
-                    cx="28" cy="28" r="25" fill="none"
-                    stroke={consejo === 'listo' ? '#34d399' : 'rgba(255,255,255,.55)'}
-                    strokeWidth="4" strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 25}
-                    strokeDashoffset={2 * Math.PI * 25 * (1 - progreso)}
-                    style={{ transition: 'stroke-dashoffset .12s linear' }}
-                  />
-                </svg>
-              </div>
-              <p className="text-white text-lg font-semibold text-center">
-                {etapa === 'procesando' ? 'Listo, procesando…' : texto.titulo}
-              </p>
-              <p className="text-white/70 text-sm text-center max-w-xs">
-                {etapa === 'procesando' ? 'Un segundo' : texto.pista}
-              </p>
+          {/* Destello de disparo. */}
+          <div
+            className="absolute inset-0 bg-white pointer-events-none transition-opacity duration-200"
+            style={{ opacity: destello ? 1 : 0 }}
+          />
 
-              {manual && etapa === 'escaneando' && (
-                <button
-                  onClick={() => void capturar()}
-                  className="mt-1 text-white/90 text-sm underline underline-offset-4"
-                >
-                  Capturar ahora
-                </button>
-              )}
+          {/* Controles abajo: obturador siempre visible, y el automático al
+              lado como interruptor, igual que el Auto/Manual de las Notas. */}
+          <div className="absolute inset-x-0 bottom-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-black/70 to-transparent">
+            <div className="flex items-center justify-center gap-6">
+              <button
+                onClick={() => setAuto(a => !a)}
+                aria-pressed={auto}
+                className={`text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full transition-colors ${
+                  auto ? 'bg-white text-gray-900' : 'bg-white/15 text-white/80'
+                }`}
+              >
+                Automático
+              </button>
+
+              <button
+                onClick={() => void capturar()}
+                disabled={etapa !== 'escaneando'}
+                aria-label="Capturar la firma"
+                className="w-[70px] h-[70px] rounded-full border-4 border-white/90 flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
+              >
+                <span className="w-[56px] h-[56px] rounded-full bg-white" />
+              </button>
+
+              {/* Mismo ancho que el interruptor, para que el obturador quede
+                  centrado de verdad y no ligeramente a la derecha. */}
+              <span className="w-[86px]" aria-hidden="true" />
             </div>
           </div>
         </div>
@@ -392,7 +469,7 @@ export default function EscanerFirma({
               disabled={guardando}
               className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-semibold py-3.5 rounded-2xl transition-colors"
             >
-              {guardando ? 'Guardando…' : 'Sí, es mi firma'}
+              {guardando ? 'Guardando…' : 'Usar esta firma'}
             </button>
             <button
               onClick={repetir}
