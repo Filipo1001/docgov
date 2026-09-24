@@ -29,7 +29,6 @@ export default function CapturaFirma({
   firmaActual,
   onGuardada,
   compacto = false,
-  soloDemo = false,
 }: {
   nombre: string
   cedula?: string | null
@@ -38,20 +37,12 @@ export default function CapturaFirma({
   onGuardada: (url: string) => void
   /** Dentro de un modal el bloque va sin marco ni título propios. */
   compacto?: boolean
-  /** No guarda en el servidor: solo enseña el resultado. Lo usa la página de
-   *  prueba, que vive fuera del inicio de sesión. Se va con ella. */
-  soloDemo?: boolean
 }) {
   const [escaneando, setEscaneando] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const archivoRef = useRef<HTMLInputElement>(null)
 
   async function guardar(blob: Blob) {
-    if (soloDemo) {
-      onGuardada(URL.createObjectURL(blob))
-      setEscaneando(false)
-      return
-    }
     const formData = new FormData()
     formData.append('file', new File([blob], 'firma.png', { type: 'image/png' }))
     const res = await subirFirma(formData)
