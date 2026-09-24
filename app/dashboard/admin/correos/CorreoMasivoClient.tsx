@@ -20,6 +20,7 @@ import { toast } from 'sonner'
 import { previsualizarDestinatarios } from '@/app/actions/correo-masivo'
 import {
   FILTROS, cuerpoAHtml, primerNombreDe,
+  ASUNTO_PREDEFINIDO, MENSAJE_PREDEFINIDO,
   type FiltroMasivo, type Previsualizacion,
 } from '@/lib/correo-masivo'
 import { MARCA } from '@/lib/marca'
@@ -35,8 +36,8 @@ interface Parte {
 
 export default function CorreoMasivoClient() {
   const [filtro, setFiltro]   = useState<FiltroMasivo>('todos')
-  const [asunto, setAsunto]   = useState('')
-  const [mensaje, setMensaje] = useState('')
+  const [asunto, setAsunto]   = useState(ASUNTO_PREDEFINIDO)
+  const [mensaje, setMensaje] = useState(MENSAJE_PREDEFINIDO)
   const [previa, setPrevia]   = useState<Previsualizacion | null>(null)
   const [cargando, setCargando] = useState(true)
   const [enviando, setEnviando] = useState(false)
@@ -185,11 +186,15 @@ export default function CorreoMasivoClient() {
             placeholder={'Hola {{nombre}},\n\nMañana…'}
             className="w-full px-3 py-2.5 border border-gray-200 bg-gray-50 rounded-xl text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-500 leading-relaxed"
           />
-          <p className="text-[11px] text-gray-400 mt-1.5">
-            Escribe <code className="px-1 py-0.5 bg-gray-100 rounded">{'{{nombre}}'}</code> donde
-            quieras que aparezca el nombre de pila de cada persona. Una línea en
-            blanco separa párrafos.
-          </p>
+          <ul className="text-[11px] text-gray-400 mt-2 space-y-1 leading-relaxed">
+            <li>
+              <code className="px-1 py-0.5 bg-gray-100 rounded">{'{{nombre}}'}</code> se
+              reemplaza por el nombre de pila de cada persona. Da igual cómo lo escribas.
+            </li>
+            <li>Una línea en blanco separa párrafos.</li>
+            <li>Un párrafo que empieza por un emoji sale resaltado en un recuadro.</li>
+            <li>Una línea que sea solo un enlace se convierte en botón.</li>
+          </ul>
         </div>
       </section>
 
@@ -215,10 +220,7 @@ export default function CorreoMasivoClient() {
             </div>
             <div className="px-7 py-6">
               {mensaje.trim() ? (
-                <div
-                  className="[&_p]:text-[13px] [&_p]:leading-[1.7] [&_p]:text-gray-700 [&_p]:mb-3"
-                  dangerouslySetInnerHTML={{ __html: cuerpoAHtml(mensaje, nombreEjemplo) }}
-                />
+                <div dangerouslySetInnerHTML={{ __html: cuerpoAHtml(mensaje, nombreEjemplo) }} />
               ) : (
                 <p className="text-[13px] text-gray-300 italic">El mensaje va aquí.</p>
               )}
