@@ -39,11 +39,26 @@
 
 // ─── Medidas del resultado ────────────────────────────────────────────────
 
-/** Tamaño final de la firma, igual al que ya usaban los PDF. */
-export const FIRMA_W = 600
-export const FIRMA_H = 200
+/**
+ * TOPES del PNG resultante, no medidas fijas.
+ *
+ * Antes eran exactamente 600 × 200 y la firma se centraba dentro, con
+ * transparencia rellenando lo que sobrara. Eso castigaba a quien tiene una
+ * firma compacta o con rúbrica encima: su PNG salía con márgenes vacíos y,
+ * como las actas la pintan con ajuste «contener» en un hueco de 150 × 50,
+ * esos márgenes viajaban al PDF y la firma se imprimía más pequeña que la de
+ * los demás sin que nadie entendiera por qué.
+ *
+ * Ahora el lienzo se recorta ajustado a la tinta y estos dos números solo
+ * limitan el tamaño. Una firma apaisada sigue saliendo igual que siempre;
+ * una cuadrada deja de salir encogida.
+ */
+export const FIRMA_ANCHO_MAX = 600
+export const FIRMA_ALTO_MAX = 300
 
-/** Proporción del marco guía. Una firma manuscrita es apaisada. */
+/** Proporción con la que ARRANCA el marco guía. Ajustable por quien escanea:
+ *  una firma pequeña en una hoja grande no se puede encuadrar de otro modo,
+ *  porque el teléfono no enfoca más cerca de unos diez centímetros. */
 export const PROPORCION_MARCO = 3
 
 /** Lado mayor del recorte que se analiza en vivo. Más que esto no aporta y
@@ -298,22 +313,19 @@ export function consolidar(cuadros: ImageData[]): HTMLCanvasElement | null {
   intermedio.height = h
   intermedio.getContext('2d')!.putImageData(tinta, 0, 0)
 
+  // El lienzo ES el recuadro de la tinta, sin márgenes. Nunca se amplía —
+  // estirar un recorte pequeño solo lo emborrona— así que la escala se limita
+  // a 1: si la firma ya cabe, se copia tal cual.
+  const escala = Math.min(FIRMA_ANCHO_MAX / caja.w, FIRMA_ALTO_MAX / caja.h, 1)
+  const dw = Math.max(1, Math.round(caja.w * escala))
+  const dh = Math.max(1, Math.round(caja.h * escala))
+
   const destino = document.createElement('canvas')
-  destino.width = FIRMA_W
-  destino.height = FIRMA_H
+  destino.width = dw
+  destino.height = dh
   const ctx = destino.getContext('2d')!
   ctx.imageSmoothingQuality = 'high'
-
-  // Se mantiene la proporción de la firma y se centra: estirarla para llenar
-  // el lienzo la deformaría, y una firma deformada ya no es la de nadie.
-  const escala = Math.min(FIRMA_W / caja.w, FIRMA_H / caja.h)
-  const dw = caja.w * escala
-  const dh = caja.h * escala
-  ctx.drawImage(
-    intermedio,
-    caja.x, caja.y, caja.w, caja.h,
-    (FIRMA_W - dw) / 2, (FIRMA_H - dh) / 2, dw, dh,
-  )
+  ctx.drawImage(intermedio, caja.x, caja.y, caja.w, caja.h, 0, 0, dw, dh)
   return destino
 }
 

@@ -96,10 +96,30 @@ export default function EscanerFirma({
   const capturandoRef = useRef(false)
   /** El bucle lee el modo automático sin volver a montarse por cada cambio. */
   const autoRef = useRef(true)
+  /** Igual para el ajuste del recuadro: disparar mientras alguien arrastra una
+   *  esquina es capturar justo el encuadre que está corrigiendo. */
+  const ajustandoRef = useRef(false)
   /** Capturas seguidas que no encontraron ni un trazo. */
   const fallosRef = useRef(0)
   const destelloRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const avisoRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  /**
+   * Tamaño del recuadro guía, en fracción del área de cámara.
+   *
+   * Es ajustable porque el marco fijo dejaba sin salida a un caso muy común:
+   * una firma pequeña en una hoja grande. El teléfono no enfoca más cerca de
+   * unos diez centímetros, así que por más que uno se acerque la firma sigue
+   * ocupando un tercio del marco — y el escáner, que mide la tinta como
+   * FRACCIÓN del recuadro, se queda repitiendo «acércate» para siempre.
+   * Encoger el recuadro sube esa fracción sin mover el teléfono.
+   *
+   * Arranca en 3:1 —la proporción de una firma apaisada— y se recuerda entre
+   * sesiones: se ajusta una vez y no se vuelve a tocar.
+   */
+  const camaraRef = useRef<HTMLDivElement>(null)
+  const [marco, setMarco] = useState<{ w: number; h: number } | null>(null)
+  const [ajustando, setAjustando] = useState(false)
 
   const [etapa, setEtapa]     = useState<Etapa>('iniciando')
   const [consejo, setConsejo] = useState<Consejo>('buscando')
@@ -113,6 +133,64 @@ export default function EscanerFirma({
   const [guardando, setGuardando] = useState(false)
 
   useEffect(() => { autoRef.current = auto }, [auto])
+  useEffect(() => { ajustandoRef.current = ajustando }, [ajustando])
+
+  // Medida inicial del recuadro: la guardada, o un 88 % de ancho en 3:1, que
+  // es exactamente lo que había antes de que fuera ajustable.
+  useEffect(() => {
+    if (!abierto || marco) return
+    const caja = camaraRef.current?.getBoundingClientRect()
+    if (!caja?.width) return
+    let guardado: { w: number; h: number } | null = null
+    try {
+      const crudo = localStorage.getItem('firma-marco')
+      if (crudo) guardado = JSON.parse(crudo)
+    } catch { /* modo privado, datos bloqueados: se usa el de por defecto */ }
+    setMarco(
+      guardado && guardado.w > 0 && guardado.h > 0
+        ? guardado
+        : { w: 0.88, h: (caja.width * 0.88) / PROPORCION_MARCO / caja.height },
+    )
+  }, [abierto, marco])
+
+  useEffect(() => {
+    if (!marco) return
+    try { localStorage.setItem('firma-marco', JSON.stringify(marco)) } catch { /* ignora */ }
+  }, [marco])
+
+  /**
+   * Arrastre de una esquina: el recuadro crece y se encoge alrededor de su
+   * centro, así que la esquina sigue al dedo y las cuatro se comportan igual.
+   * Moverlo además de redimensionarlo sería una segunda cosa que aprender sin
+   * que resuelva nada: lo que se encuadra siempre está en el centro.
+   */
+  function iniciarAjuste(e: React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const caja = camaraRef.current?.getBoundingClientRect()
+    if (!caja) return
+    setAjustando(true)
+
+    const mover = (ev: PointerEvent) => {
+      const medioW = Math.abs(ev.clientX - (caja.left + caja.width / 2))
+      const medioH = Math.abs(ev.clientY - (caja.top + caja.height / 2))
+      setMarco({
+        // Topes: ni tan chico que no quepa una firma, ni tan grande que se
+        // salga del cuadro real de la cámara.
+        w: Math.min(0.96, Math.max(0.25, (medioW * 2) / caja.width)),
+        h: Math.min(0.80, Math.max(0.08, (medioH * 2) / caja.height)),
+      })
+    }
+    const soltar = () => {
+      setAjustando(false)
+      window.removeEventListener('pointermove', mover)
+      window.removeEventListener('pointerup', soltar)
+      window.removeEventListener('pointercancel', soltar)
+    }
+    window.addEventListener('pointermove', mover)
+    window.addEventListener('pointerup', soltar)
+    window.addEventListener('pointercancel', soltar)
+  }
 
   // ── Geometría ───────────────────────────────────────────────────────────
   //
@@ -235,7 +313,9 @@ export default function EscanerFirma({
 
       if (lectura.consejo === 'listo') {
         buenosRef.current++
-        if (autoRef.current && buenosRef.current >= CUADROS_PARA_DISPARAR) void capturar()
+        if (autoRef.current && !ajustandoRef.current && buenosRef.current >= CUADROS_PARA_DISPARAR) {
+          void capturar()
+        }
       } else {
         buenosRef.current = 0
       }
@@ -426,7 +506,7 @@ export default function EscanerFirma({
           cuadro, así que el rótulo se quedaba congelado en el último que vio
           —«Escaneando…»— para siempre. La revisión se pinta ENCIMA. */}
       {etapa !== 'error' && (
-        <div className="relative flex-1 overflow-hidden">
+        <div ref={camaraRef} className="relative flex-1 overflow-hidden">
           <video
             ref={videoRef}
             playsInline
@@ -451,31 +531,59 @@ export default function EscanerFirma({
           </div>
 
           {/* Recuadro guía. Al reconocer la firma se TIÑE — ese cambio de
-              color es el aviso de que va a disparar, y no necesita leyenda. */}
+              color es el aviso de que va a disparar, y no necesita leyenda.
+              Las esquinas son además los tiradores para ajustarlo. */}
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity"
             style={{ opacity: escaneandoVisible ? 1 : 0 }}
           >
             <div
               ref={marcoRef}
-              style={{ width: '88%', aspectRatio: String(PROPORCION_MARCO) }}
+              style={{
+                width: `${(marco?.w ?? 0.88) * 100}%`,
+                height: `${(marco?.h ?? 0.18) * 100}%`,
+              }}
               className={`relative rounded-2xl outline-[9999px] outline outline-black/55 transition-colors duration-200 ${
                 listo || etapa === 'procesando' ? 'bg-emerald-400/20' : ''
               }`}
             >
-              {(['-top-px -left-px border-t-4 border-l-4 rounded-tl-2xl',
-                 '-top-px -right-px border-t-4 border-r-4 rounded-tr-2xl',
-                 '-bottom-px -left-px border-b-4 border-l-4 rounded-bl-2xl',
-                 '-bottom-px -right-px border-b-4 border-r-4 rounded-br-2xl'] as const).map((c, i) => (
-                <span
-                  key={i}
-                  className={`absolute w-9 h-9 ${c} transition-colors duration-200 ${
-                    listo || etapa === 'procesando' ? 'border-emerald-400' : 'border-white/90'
-                  }`}
-                />
+              {([
+                { borde: '-top-px -left-px border-t-4 border-l-4 rounded-tl-2xl', tirador: '-top-5 -left-5' },
+                { borde: '-top-px -right-px border-t-4 border-r-4 rounded-tr-2xl', tirador: '-top-5 -right-5' },
+                { borde: '-bottom-px -left-px border-b-4 border-l-4 rounded-bl-2xl', tirador: '-bottom-5 -left-5' },
+                { borde: '-bottom-px -right-px border-b-4 border-r-4 rounded-br-2xl', tirador: '-bottom-5 -right-5' },
+              ] as const).map((esquina, i) => (
+                <span key={i}>
+                  <span
+                    className={`absolute w-9 h-9 ${esquina.borde} transition-colors duration-200 ${
+                      listo || etapa === 'procesando' ? 'border-emerald-400' : 'border-white/90'
+                    }`}
+                  />
+                  {/* El área que recibe el dedo es mucho mayor que lo que se
+                      ve: una esquina de 36 px es imposible de agarrar en
+                      movimiento con una mano sosteniendo el teléfono. */}
+                  <span
+                    onPointerDown={iniciarAjuste}
+                    role="slider"
+                    aria-label="Ajustar el tamaño del recuadro"
+                    aria-valuenow={Math.round((marco?.w ?? 0.88) * 100)}
+                    aria-valuemin={25}
+                    aria-valuemax={96}
+                    tabIndex={-1}
+                    className={`absolute w-14 h-14 ${esquina.tirador} pointer-events-auto touch-none cursor-grab active:cursor-grabbing`}
+                  />
+                </span>
               ))}
             </div>
           </div>
+
+          {/* Se dice una sola vez, y solo mientras no haya nada que encuadrar:
+              en cuanto la cámara ve una firma, el rótulo de arriba manda. */}
+          {consejo === 'buscando' && etapa === 'escaneando' && !ajustando && (
+            <p className="absolute inset-x-0 bottom-32 text-center text-white/70 text-[13px] px-8 pointer-events-none">
+              Arrastra las esquinas para ajustar el recuadro a tu firma
+            </p>
+          )}
 
           {/* Destello de disparo. */}
           <div
