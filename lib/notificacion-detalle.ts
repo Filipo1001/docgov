@@ -35,6 +35,18 @@ export interface ItemDetalle {
 /** Un tramo del mensaje: un encabezado y los contratos que enumera. */
 export interface BloqueDetalle {
   encabezado: string
+  /**
+   * La cifra con la que abre el encabezado, aparte.
+   *
+   * Todos estos avisos empiezan contando: «11 van a pasar su primera cuenta
+   * sin el contrato», «10 contratos tienen meses cerrados sin planilla». Esa
+   * cifra es la prioridad del aviso —dice si esto es un caso aislado o medio
+   * municipio— y dentro del párrafo pesaba lo mismo que el resto. Separarla
+   * permite pintarla grande y que sea lo primero que se lee.
+   */
+  cantidad: number | null
+  /** El encabezado sin la cifra, para no repetirla al lado. */
+  resumen: string
   items: ItemDetalle[]
   /** Contratos que el cron contó pero no escribió («y 3 más»). */
   omitidos: number
@@ -85,8 +97,12 @@ export function interpretar(mensaje: string | null): Detalle {
   for (let m = BLOQUE.exec(texto); m; m = BLOQUE.exec(texto)) {
     const items = itemsDe(m[2])
     if (!items.length) continue
+    const encabezado = m[1].trim().replace(/^[·,;]\s*/, '')
+    const conCifra = /^(\d+)\s+(.+)$/.exec(encabezado)
     bloques.push({
-      encabezado: m[1].trim().replace(/^[·,;]\s*/, ''),
+      encabezado,
+      cantidad: conCifra ? Number(conCifra[1]) : null,
+      resumen: conCifra ? conCifra[2] : encabezado,
       items,
       omitidos: m[3] ? Number(m[3]) : 0,
     })

@@ -459,3 +459,26 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
   .prop-rotulo { opacity: 1; transition: none; }
   .prop-sello { opacity: 1; transform: none; animation: none; }
 }
+
+/* ── Hoja inferior de las notificaciones ──────────────────────────────────
+   En un teléfono el modal no «aparece»: sube desde el borde, que es de donde
+   vino el dedo. En escritorio no hay borde del que subir, así que allí crece
+   en el sitio —de ahí dos animaciones y no una reaprovechada.
+
+   El arrastre para cerrar anula la animación con un `style` en línea, porque
+   mientras el dedo manda no puede haber una transición peleando con él.      */
+@keyframes hoja-sube {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hoja-crece {
+  from { opacity: 0; transform: scale(0.97) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.hoja-entra { animation: hoja-sube 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+@media (min-width: 640px) {
+  .hoja-entra { animation: hoja-crece 0.2s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoja-entra { animation: overlay-fade-in 0.15s ease-out; }
+}
