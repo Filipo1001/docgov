@@ -31,6 +31,20 @@
  * Ahora es una fila de la propia lista, punteada: ocupa el lugar de lo que
  * falta en vez de excusarlo aparte.
  *
+ * ── Por qué va en un portal y no donde se escribe ────────────────────────
+ *
+ * La campana vive dentro del <aside> de app/dashboard/layout.tsx, y ese aside
+ * lleva `transform` para deslizarse en móvil. Un transform distinto de `none`
+ * convierte al elemento en el bloque contenedor de todo `position: fixed` que
+ * cuelgue de él: el `inset-0` de esta capa dejaba de medirse contra la pantalla
+ * y pasaba a medirse contra la barra lateral —256 px—, así que el modal salía
+ * aplastado en una franja a la izquierda. Y como el aside conserva el transform
+ * en escritorio (`md:translate-x-0`), no era un problema solo del teléfono.
+ *
+ * El portal lo cuelga de <body>, fuera del alcance de ese transform. Es la
+ * única forma de que una capa a pantalla completa sea de verdad a pantalla
+ * completa desde dentro de la barra.
+ *
  * ── El teléfono no es el escritorio estrechado ───────────────────────────
  *
  * En móvil es una hoja que sube del borde inferior, con asa, y se cierra
@@ -41,6 +55,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import type { Notificacion } from '@/lib/types'
 import { interpretar } from '@/lib/notificacion-detalle'
@@ -146,6 +161,9 @@ export default function NotificacionDetalleModal({
   const router = useRouter()
   const [ids, setIds] = useState<Record<string, string>>({})
   const [arrastre, setArrastre] = useState(0)
+  // El portal necesita un DOM; en el render del servidor no lo hay.
+  const [montado, setMontado] = useState(false)
+  useEffect(() => { setMontado(true) }, [])
   const inicioY = useRef<number | null>(null)
   const cerrarRef = useRef<HTMLButtonElement>(null)
 
@@ -205,7 +223,7 @@ export default function NotificacionDetalleModal({
     window.addEventListener('pointerup', alSoltar)
   }
 
-  if (!notificacion || !detalle) return null
+  if (!notificacion || !detalle || !montado) return null
 
   const { glifo, severidad } = severidadDe(notificacion.tipo)
   const p = PALETAS[severidad]
@@ -224,7 +242,7 @@ export default function NotificacionDetalleModal({
     router.push(ruta)
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-[2px] sm:p-4 upload-overlay-enter"
       onClick={onCerrar}
@@ -471,6 +489,7 @@ export default function NotificacionDetalleModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
