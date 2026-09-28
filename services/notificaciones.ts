@@ -66,3 +66,18 @@ export async function marcarTodasLeidas(userId: string): Promise<void> {
     .eq('usuario_id', userId)
     .eq('leida', false)
 }
+
+/**
+ * Mark a single notification as unread again.
+ *
+ * Reading a notification is not the same as dealing with it. Hasta ahora leerla
+ * era irreversible, así que abrir el aviso de «10 actas sin planilla» en un
+ * momento malo lo apagaba para siempre. Esto devuelve el punto azul.
+ */
+export async function marcarNoLeida(notificacionId: string): Promise<void> {
+  const supabase = createClient()
+  await supabase
+    .from('notificaciones')
+    .update({ leida: false })
+    .eq('id', notificacionId)
+}

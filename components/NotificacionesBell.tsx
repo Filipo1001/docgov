@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { useUsuario } from '@/lib/user-context'
 import { createClient } from '@/lib/supabase'
-import { getNotificaciones, getConteoNoLeidas, marcarLeida, marcarTodasLeidas } from '@/services/notificaciones'
+import { getNotificaciones, getConteoNoLeidas, marcarLeida, marcarNoLeida, marcarTodasLeidas } from '@/services/notificaciones'
+import NotificacionDetalleModal from '@/components/NotificacionDetalleModal'
 import type { Notificacion } from '@/lib/types'
 import Icono from '@/components/ui/Icono'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
@@ -33,10 +33,10 @@ const CIRCUIT_BACKOFF_MS = 30 * 60 * 1000 // 30 minutos
 
 export default function NotificacionesBell() {
   const { usuario } = useUsuario()
-  const router = useRouter()
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([])
   const [totalNoLeidas, setTotalNoLeidas] = useState(0)
   const [abierto, setAbierto] = useState(false)
+  const [detalle, setDetalle] = useState<Notificacion | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   // Circuit breaker state (no reactivo — solo refs para no causar re-renders)
@@ -141,21 +141,26 @@ export default function NotificacionesBell() {
 
   const noLeidas = notificaciones.filter(n => !n.leida).length
 
+  /**
+   * Todo clic abre el detalle. Antes navegaba al informe, y las 60
+   * notificaciones sin `periodo_id` —las de gestión, que son también las más
+   * largas— se quedaban sin destino: el panel se cerraba y no pasaba nada. El
+   * modal responde siempre, y desde él se va al informe si lo hay.
+   */
   async function handleClickNotificacion(n: Notificacion) {
+    setDetalle(n)
+    setAbierto(false)
     if (!n.leida) {
-      await marcarLeida(n.id)
       setNotificaciones(prev => prev.map(x => x.id === n.id ? { ...x, leida: true } : x))
       setTotalNoLeidas(prev => Math.max(0, prev - 1))
+      await marcarLeida(n.id)
     }
-    if (n.periodo_id) {
-      const contratoId = (n.periodo as any)?.contrato_id
-      if (contratoId) {
-        router.push(`/dashboard/contratos/${contratoId}/periodo/${n.periodo_id}`)
-      } else {
-        router.push('/dashboard/contratos')
-      }
-    }
-    setAbierto(false)
+  }
+
+  async function handleMarcarNoLeida(id: string) {
+    setNotificaciones(prev => prev.map(x => x.id === id ? { ...x, leida: false } : x))
+    setTotalNoLeidas(prev => prev + 1)
+    await marcarNoLeida(id)
   }
 
   async function handleMarcarTodas() {
@@ -220,7 +225,7 @@ export default function NotificacionesBell() {
                         {n.titulo}
                       </p>
                       {n.mensaje && (
-                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug line-clamp-2">
+                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug line-clamp-3 whitespace-pre-line">
                           {n.mensaje}
                         </p>
                       )}
@@ -236,6 +241,12 @@ export default function NotificacionesBell() {
           </div>
         </div>
       )}
+
+      <NotificacionDetalleModal
+        notificacion={detalle}
+        onCerrar={() => setDetalle(null)}
+        onMarcarNoLeida={handleMarcarNoLeida}
+      />
     </div>
   )
 }

@@ -70,10 +70,22 @@ export interface Notificacion {
   leida: boolean
   periodo_id: string | null
   created_at: string
+  /**
+   * Rastro del correo que acompañó al aviso. La tabla ya lo guardaba; el tipo
+   * no lo declaraba, así que el modal de detalle no podía decir «esto también
+   * te llegó por correo» sin un cast. Son columnas sin ACL propia: `select *`
+   * las devuelve.
+   */
+  email_estado?: string | null
+  email_id?: string | null
+  email_error?: string | null
+  email_at?: string | null
   periodo?: {
     id: string
     mes: string
     anio: number
+    /** Necesario para armar la ruta del informe; el servicio ya lo pedía. */
+    contrato_id?: string
     contrato?: { numero: string }
   }
 }
