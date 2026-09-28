@@ -50,9 +50,22 @@ import { useRef, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 
-const MINIMO = 1
+/**
+ * Baja hasta cero a propósito.
+ *
+ * Cero no es «sin llenar»: es la afirmación de que esa obligación no se
+ * requirió este mes, y el contratista tiene que sustentarla. Antes ese caso no
+ * tenía forma de expresarse y la única salida era no registrar nada — con lo
+ * que el informe imprimía «Permanente» en esa obligación, que es una
+ * afirmación distinta y falsa: ninguna de las 1.302 obligaciones en producción
+ * está marcada como permanente. Quien decide si el cero exige justificación es
+ * el formulario que usa este control, no el control.
+ */
+const MINIMO = 0
 /** El máximo real en producción es 287; 999 ataja un dedazo sin estorbar. */
 const MAXIMO = 999
+/** A lo que vuelve un campo que se quedó vacío: el 93,1 % de los casos. */
+const PREDETERMINADO = 1
 
 export default function ContadorAcciones({
   valor,
@@ -85,24 +98,36 @@ export default function ContadorAcciones({
     onCambio(Math.min(MAXIMO, Math.max(MINIMO, Number(limpio))))
   }
 
-  // Al salir se normaliza: vacío o cero vuelven al mínimo.
+  // Al salir se normaliza. Dejar el campo vacío NO es lo mismo que escribir un
+  // cero: lo primero es no haber terminado de teclear y vuelve al valor por
+  // defecto; lo segundo es afirmar que la obligación no se ejecutó, y se
+  // respeta. Confundirlos haría que a quien borró para escribir «6» y se
+  // distrajo le quedara declarada una obligación sin ejecutar.
   function alSalir() {
     const n = Number(texto)
-    const final = !texto || !Number.isFinite(n) || n < MINIMO ? MINIMO : Math.min(MAXIMO, n)
+    const final = !texto || !Number.isFinite(n)
+      ? PREDETERMINADO
+      : Math.min(MAXIMO, Math.max(MINIMO, n))
     setTexto(String(final))
     onCambio(final)
   }
+
+  // Nada de `Number(texto) || valor`: desde que el mínimo es 0, ese `||` trata
+  // un cero legítimo como ausencia y salta al otro operando. La cifra que se
+  // está viendo se lee del texto cuando el texto es un número, y solo se cae a
+  // la prop mientras el campo está vacío.
+  const escrito = texto === '' ? null : Number(texto)
+  const actual = escrito !== null && Number.isFinite(escrito) ? escrito : valor
 
   function mover(paso: number) {
-    const base = Number(texto) || valor || MINIMO
-    const final = Math.min(MAXIMO, Math.max(MINIMO, base + paso))
+    const final = Math.min(MAXIMO, Math.max(MINIMO, actual + paso))
     setTexto(String(final))
     onCambio(final)
   }
 
-  const actual = Number(texto) || valor
   const enMinimo = actual <= MINIMO
   const enMaximo = actual >= MAXIMO
+  const enCero = actual === 0
 
   // 44 px en el teléfono —el mínimo táctil recomendado— y 36 en escritorio,
   // donde el puntero apunta fino y un botón grande solo ocupa sitio.
@@ -114,7 +139,15 @@ export default function ContadorAcciones({
 
   return (
     <div className="flex items-center gap-2.5">
-      <div className="inline-flex items-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 p-1">
+      {/* En cero el control se tiñe. No es decoración: es el único estado del
+          formulario que cambia lo que el informe AFIRMA sobre la obligación, y
+          tiene que distinguirse de un 1 de un vistazo. */}
+      <div
+        className={
+          'inline-flex items-center gap-0.5 rounded-xl border p-1 transition-colors ' +
+          (enCero ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50')
+        }
+      >
         <button
           type="button"
           onClick={() => mover(-1)}
@@ -136,7 +169,10 @@ export default function ContadorAcciones({
           onFocus={e => e.currentTarget.select()}
           onBlur={alSalir}
           aria-label="Número de acciones"
-          className="w-12 bg-transparent text-center text-sm font-semibold text-gray-900 tabular-nums outline-none"
+          className={
+            'w-12 bg-transparent text-center text-sm font-semibold tabular-nums outline-none ' +
+            (enCero ? 'text-amber-700' : 'text-gray-900')
+          }
         />
 
         <button
@@ -153,8 +189,8 @@ export default function ContadorAcciones({
       {/* La palabra del informe, no una etiqueta que haya que interpretar. La
           columna del PDF se titula «NÚMERO DE ACCIONES» y la tarjeta ya guardada
           dice «N acciones»: el formulario tenía que hablar el mismo idioma. */}
-      <span className="text-xs text-gray-500">
-        {actual === 1 ? 'acción' : 'acciones'}
+      <span className={`text-xs ${enCero ? 'font-medium text-amber-700' : 'text-gray-500'}`}>
+        {enCero ? 'no se ejecutó' : actual === 1 ? 'acción' : 'acciones'}
       </span>
     </div>
   )

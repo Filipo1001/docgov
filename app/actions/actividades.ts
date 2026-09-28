@@ -16,6 +16,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { ESTADOS_EDITABLES } from '@/lib/constants'
 import type { ActionResult } from '@/lib/types'
 import { normalizarActividad } from '@/lib/texto-contractual'
+import { validarActividad } from '@/lib/validar-actividad'
 
 // ─── actualizarActividad ────────────────────────────────────────────────────
 // Old: getUser → usuarios → periodos → contratos → actividades.verify → update (6 sequential)
@@ -34,9 +35,8 @@ export async function actualizarActividad(
     const trimmed = normalizarActividad(descripcion)
     if (!trimmed) return { error: 'La descripción no puede estar vacía' }
     if (trimmed.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
-    if (cantidad < 1 || !Number.isInteger(cantidad)) {
-      return { error: 'La cantidad debe ser un número entero mayor a 0' }
-    }
+    const problema = validarActividad(cantidad, trimmed)
+    if (problema) return { error: problema }
 
     const supabase = await createServerSupabaseClient()
 
@@ -108,9 +108,8 @@ export async function crearActividad(params: {
     const trimmed = normalizarActividad(params.descripcion)
     if (!trimmed) return { error: 'La descripción no puede estar vacía' }
     if (trimmed.length > 1500) return { error: 'La descripción no puede superar los 1500 caracteres' }
-    if (params.cantidad < 1 || !Number.isInteger(params.cantidad)) {
-      return { error: 'La cantidad debe ser un número entero mayor a 0' }
-    }
+    const problema = validarActividad(params.cantidad, trimmed)
+    if (problema) return { error: problema }
 
     const supabase = await createServerSupabaseClient()
 

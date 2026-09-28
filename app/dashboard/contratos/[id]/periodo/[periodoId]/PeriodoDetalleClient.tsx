@@ -22,6 +22,7 @@ import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
 import ContadorAcciones from '@/components/ui/ContadorAcciones'
+import AvisoSinAcciones, { faltanParaMotivo } from '@/components/ui/AvisoSinAcciones'
 import EnvioInforme from '@/components/EnvioInforme'
 import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
@@ -3094,6 +3095,9 @@ export default function PeriodoDetallePage({
                           <textarea
                             value={editDesc}
                             onChange={(e) => setEditDesc(e.target.value)}
+                            placeholder={editCantidad === 0
+                              ? '¿Por qué no se requirió esta obligación este mes?'
+                              : 'Describe la actividad realizada...'}
                             rows={3}
                             autoFocus
                             maxLength={1500}
@@ -3113,13 +3117,17 @@ export default function PeriodoDetallePage({
                               </button>
                               <button
                                 onClick={() => handleGuardarEdicion(act.id)}
-                                disabled={guardandoEdicion || !editDesc.trim()}
+                                disabled={guardandoEdicion || !editDesc.trim() || faltanParaMotivo(editCantidad, editDesc) > 0}
                                 className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
                               >
                                 {guardandoEdicion ? 'Guardando...' : 'Guardar'}
                               </button>
                             </div>
                           </div>
+
+                          {editCantidad === 0 && (
+                            <AvisoSinAcciones faltan={faltanParaMotivo(editCantidad, editDesc)} />
+                          )}
                         </div>
                       ) : (
                         /* ── Read / normal mode ── */
@@ -3128,8 +3136,18 @@ export default function PeriodoDetallePage({
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs text-gray-400">{actIndex + 1}.</span>
-                                <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                                  {act.cantidad} {act.cantidad === 1 ? 'acción' : 'acciones'}
+                                {/* Una obligación declarada sin ejecutar no es
+                                    «0 acciones» entre otras tantas: es lo que
+                                    el supervisor tiene que mirar primero al
+                                    revisar el informe, y se rotula aparte. */}
+                                <span className={
+                                  act.cantidad === 0
+                                    ? 'text-xs bg-amber-100 text-amber-800 font-medium px-2 py-0.5 rounded-full'
+                                    : 'text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full'
+                                }>
+                                  {act.cantidad === 0
+                                    ? 'No ejecutada'
+                                    : `${act.cantidad} ${act.cantidad === 1 ? 'acción' : 'acciones'}`}
                                 </span>
                               </div>
                               <p className="text-sm text-gray-700 break-words">{act.descripcion}</p>
@@ -3316,10 +3334,17 @@ export default function PeriodoDetallePage({
                 <div className="ml-0 sm:ml-10">
                   {formActivo === obl.id ? (
                     <div className="bg-blue-50 rounded-xl p-4">
+                      {/* En cero, el campo deja de pedir una actividad y pasa a
+                          pedir el motivo. Es el mismo campo porque es el mismo
+                          sitio del informe: la columna «DESCRIPCIÓN DE LA
+                          ACTIVIDAD» es donde la supervisión va a leer el
+                          sustento. */}
                       <textarea
                         value={nuevaActividad}
                         onChange={(e) => setNuevaActividad(e.target.value)}
-                        placeholder="Describe la actividad realizada..."
+                        placeholder={nuevaCantidad === 0
+                          ? '¿Por qué no se requirió esta obligación este mes?'
+                          : 'Describe la actividad realizada...'}
                         rows={3}
                         maxLength={1500}
                         className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
@@ -3345,13 +3370,17 @@ export default function PeriodoDetallePage({
                           </button>
                           <button
                             onClick={() => handleAgregarActividad(obl.id)}
-                            disabled={guardando || !nuevaActividad.trim()}
+                            disabled={guardando || !nuevaActividad.trim() || faltanParaMotivo(nuevaCantidad, nuevaActividad) > 0}
                             className="bg-gray-900 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
                           >
                             {guardando ? 'Guardando...' : 'Guardar'}
                           </button>
                         </div>
                       </div>
+
+                      {nuevaCantidad === 0 && (
+                        <AvisoSinAcciones faltan={faltanParaMotivo(nuevaCantidad, nuevaActividad)} />
+                      )}
                     </div>
                   ) : (
                     <button
