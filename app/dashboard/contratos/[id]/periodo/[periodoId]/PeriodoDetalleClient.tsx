@@ -21,6 +21,7 @@ import CertificacionModal, { type CertPrefill } from './CertificacionModal'
 import ActaTerminacionModal, { type ActaPrefill } from './ActaTerminacionModal'
 import VisorPDF from '@/components/VisorPDF'
 import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
+import ContadorAcciones from '@/components/ui/ContadorAcciones'
 import EnvioInforme from '@/components/EnvioInforme'
 import { LogoCD } from '@/components/Logo'
 import { MARCA } from '@/lib/marca'
@@ -3101,16 +3102,7 @@ export default function PeriodoDetallePage({
                           {/* Redacción asistida (LanguageTool) */}
                           <MejorarRedaccion texto={editDesc} onAceptar={setEditDesc} />
                           <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-                            <div className="flex items-center gap-2">
-                              <label className="text-xs text-gray-500">Cantidad:</label>
-                              <input
-                                type="number"
-                                min={1}
-                                value={editCantidad}
-                                onChange={(e) => setEditCantidad(Math.max(1, parseInt(e.target.value) || 1))}
-                                className="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 text-center"
-                              />
-                            </div>
+                            <ContadorAcciones valor={editCantidad} onCambio={setEditCantidad} />
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={handleCancelarEdicion}
@@ -3343,14 +3335,7 @@ export default function PeriodoDetallePage({
                           medido, no supuesto. El modo edición de más arriba ya
                           envolvía; este formulario se había quedado atrás. */}
                       <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-gray-500">Cantidad:</label>
-                          <input
-                            type="number" min={1} value={nuevaCantidad}
-                            onChange={(e) => setNuevaCantidad(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 text-center"
-                          />
-                        </div>
+                        <ContadorAcciones valor={nuevaCantidad} onCambio={setNuevaCantidad} />
                         <div className="flex items-center gap-2 ml-auto">
                           <button
                             onClick={() => { setFormActivo(null); setNuevaActividad(''); setNuevaCantidad(1) }}

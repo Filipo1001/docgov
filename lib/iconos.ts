@@ -44,7 +44,7 @@ import {
   Check, CheckCircle2, XCircle, AlertTriangle, Info, CircleDashed, Clock,
   Lock, Unlock, ShieldCheck, Ban,
   // Acciones
-  Plus, Pencil, Trash2, Search, X, ChevronRight, ChevronDown, RefreshCw,
+  Plus, Minus, Pencil, Trash2, Search, X, ChevronRight, ChevronDown, RefreshCw,
   Eye, Send, MoreHorizontal, ExternalLink, Copy, Filter, Undo2,
   // Personas y avisos
   Bell, Mail, MessageSquare, UserPlus, Building,
@@ -107,6 +107,8 @@ export const Iconos = {
 
   accion: {
     agregar: Plus,
+    /** Restar de a uno. Pareja de `agregar` en los contadores. */
+    quitar: Minus,
     editar: Pencil,
     eliminar: Trash2,
     buscar: Search,
