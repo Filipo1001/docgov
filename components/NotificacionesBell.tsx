@@ -139,8 +139,6 @@ export default function NotificacionesBell() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const noLeidas = notificaciones.filter(n => !n.leida).length
-
   /**
    * Todo clic abre el detalle. Antes navegaba al informe, y las 60
    * notificaciones sin `periodo_id` —las de gestión, que son también las más

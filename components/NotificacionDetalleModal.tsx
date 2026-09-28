@@ -159,11 +159,34 @@ export default function NotificacionDetalleModal({
   onMarcarNoLeida: (id: string) => void
 }) {
   const router = useRouter()
-  const [ids, setIds] = useState<Record<string, string>>({})
+
+  /**
+   * Los ids resueltos van atados al aviso al que pertenecen.
+   *
+   * Guardarlos sueltos obligaba a vaciarlos con un `setIds({})` al principio del
+   * efecto, o sea un setState síncrono que dispara un render en cascada — y, si
+   * llegaba tarde, a pintar por un instante las filas de un aviso con los
+   * enlaces del anterior. Con el aviso dentro del propio estado no hay nada que
+   * vaciar: si la etiqueta no coincide, el mapa sencillamente no aplica.
+   */
+  const [ids, setIds] = useState<{ para: string; mapa: Record<string, string> }>(
+    { para: '', mapa: {} },
+  )
+
+  /**
+   * La campana pasa `onCerrar={() => setDetalle(null)}`: una función nueva en
+   * cada render suyo, y se re-renderiza con cada notificación que entra en
+   * tiempo real. Como dependencia haría que el efecto de foco y bloqueo se
+   * rehiciera con el modal abierto —devolviendo el foco y arrancándolo otra vez
+   * hacia el botón de cerrar mientras alguien lee—. En una ref, el efecto
+   * depende solo de QUÉ aviso se muestra, que es lo único que debería moverlo.
+   */
+  const cerrarRefFn = useRef(onCerrar)
+  useEffect(() => { cerrarRefFn.current = onCerrar })
+  // Cerrar deja siempre el arrastre a cero: es el único camino de salida, así
+  // que la próxima apertura no puede heredar el desplazamiento de la anterior.
+  const cerrar = useCallback(() => { setArrastre(0); cerrarRefFn.current() }, [])
   const [arrastre, setArrastre] = useState(0)
-  // El portal necesita un DOM; en el render del servidor no lo hay.
-  const [montado, setMontado] = useState(false)
-  useEffect(() => { setMontado(true) }, [])
   const inicioY = useRef<number | null>(null)
   const cerrarRef = useRef<HTMLButtonElement>(null)
 
@@ -171,14 +194,15 @@ export default function NotificacionDetalleModal({
 
   // Los números de contrato del mensaje → ids, para que cada fila sea un enlace.
   useEffect(() => {
-    setIds({})
-    setArrastre(0)
     if (!notificacion) return
     const d = interpretar(notificacion.mensaje)
     if (!d.bloques.length) return
     const numeros = d.bloques.flatMap(b => b.items.map(i => i.contrato))
+    const para = notificacion.id
     let vivo = true
-    resolverContratos(numeros).then(m => { if (vivo) setIds(m) }).catch(() => {})
+    resolverContratos(numeros)
+      .then(mapa => { if (vivo) setIds({ para, mapa }) })
+      .catch(() => {})
     return () => { vivo = false }
   }, [notificacion])
 
@@ -193,37 +217,56 @@ export default function NotificacionDetalleModal({
     document.body.style.overflow = 'hidden'
     cerrarRef.current?.focus()
 
-    function onTecla(e: KeyboardEvent) { if (e.key === 'Escape') onCerrar() }
+    function onTecla(e: KeyboardEvent) { if (e.key === 'Escape') cerrar() }
     document.addEventListener('keydown', onTecla)
     return () => {
       document.removeEventListener('keydown', onTecla)
       document.body.style.overflow = overflow
       previo?.focus?.()
     }
-  }, [notificacion, onCerrar])
+    // Depende del id y no del objeto a propósito: lo que debe rehacer el foco y
+    // el bloqueo es que cambie el aviso mostrado, no que la campana recargue su
+    // lista por detrás con el modal abierto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificacion?.id, cerrar])
 
   // ── Arrastre para cerrar (solo hacia abajo, solo desde el asa) ──
-  const alMover = useCallback((e: PointerEvent) => {
-    if (inicioY.current === null) return
-    setArrastre(Math.max(0, e.clientY - inicioY.current))
-  }, [])
-
-  const alSoltar = useCallback((e: PointerEvent) => {
-    const recorrido = inicioY.current === null ? 0 : Math.max(0, e.clientY - inicioY.current)
-    inicioY.current = null
-    window.removeEventListener('pointermove', alMover)
-    window.removeEventListener('pointerup', alSoltar)
-    if (recorrido > UMBRAL_CIERRE) onCerrar()
-    else setArrastre(0)
-  }, [alMover, onCerrar])
-
-  function iniciarArrastre(e: React.PointerEvent) {
+  //
+  // Con captura de puntero, no con oyentes en `window`. La primera versión
+  // colgaba un pointermove y un pointerup del objeto global y los quitaba desde
+  // dentro del propio manejador, que se referenciaba a sí mismo antes de estar
+  // declarado: funcionaba por los pelos, y cualquier cambio que dejara de
+  // estabilizar ese callback habría quitado un oyente distinto del que puso,
+  // dejándolos vivos uno por cada gesto. `setPointerCapture` hace que el asa
+  // siga recibiendo los eventos aunque el dedo se salga de ella, React los
+  // suelta al desmontar, y no queda nada global que limpiar.
+  function alBajar(e: React.PointerEvent<HTMLDivElement>) {
     inicioY.current = e.clientY
-    window.addEventListener('pointermove', alMover)
-    window.addEventListener('pointerup', alSoltar)
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
-  if (!notificacion || !detalle || !montado) return null
+  function alArrastrar(e: React.PointerEvent<HTMLDivElement>) {
+    if (inicioY.current === null) return
+    setArrastre(Math.max(0, e.clientY - inicioY.current))
+  }
+
+  function alSoltar(e: React.PointerEvent<HTMLDivElement>) {
+    if (inicioY.current === null) return
+    const recorrido = Math.max(0, e.clientY - inicioY.current)
+    inicioY.current = null
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    if (recorrido > UMBRAL_CIERRE) cerrar()
+    else setArrastre(0)
+  }
+
+  // `notificacion` solo se llena tras un clic, así que aquí siempre estamos en
+  // el cliente y `document.body` existe: el portal no necesita esperar a nada.
+  if (!notificacion || !detalle) return null
+
+  // El mapa solo vale para el aviso que se está mostrando.
+  const enlaces = ids.para === notificacion.id ? ids.mapa : {}
 
   const { glifo, severidad } = severidadDe(notificacion.tipo)
   const p = PALETAS[severidad]
@@ -238,14 +281,14 @@ export default function NotificacionDetalleModal({
   const totalItems = detalle.bloques.reduce((n, b) => n + b.items.length + b.omitidos, 0)
 
   function irA(ruta: string) {
-    onCerrar()
+    cerrar()
     router.push(ruta)
   }
 
   return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-[2px] sm:p-4 upload-overlay-enter"
-      onClick={onCerrar}
+      onClick={cerrar}
       role="dialog"
       aria-modal="true"
       aria-label={notificacion.titulo}
@@ -261,7 +304,10 @@ export default function NotificacionDetalleModal({
         {/* ── Asa: solo en móvil, y es la zona por la que se arrastra ── */}
         <div
           className="sm:hidden shrink-0 pt-2.5 pb-1 flex justify-center cursor-grab active:cursor-grabbing touch-none"
-          onPointerDown={iniciarArrastre}
+          onPointerDown={alBajar}
+          onPointerMove={alArrastrar}
+          onPointerUp={alSoltar}
+          onPointerCancel={alSoltar}
         >
           <div className="w-10 h-1 rounded-full bg-slate-300" />
         </div>
@@ -282,7 +328,7 @@ export default function NotificacionDetalleModal({
             </div>
             <button
               ref={cerrarRef}
-              onClick={onCerrar}
+              onClick={cerrar}
               className="shrink-0 -mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none transition-colors"
             >
               <Icono glifo={Iconos.accion.cerrar} tamano="md" etiqueta="Cerrar" />
@@ -356,7 +402,7 @@ export default function NotificacionDetalleModal({
 
               <ul className="rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden bg-white">
                 {bloque.items.map((item, j) => {
-                  const id = ids[item.contrato]
+                  const id = enlaces[item.contrato]
                   const fila = (
                     <div className="flex items-center gap-3 px-3 sm:px-4 py-3">
                       <span className="shrink-0 min-w-[2.75rem] px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold tabular-nums text-center">
@@ -457,7 +503,7 @@ export default function NotificacionDetalleModal({
         {/* ── Pie: pegado abajo, con respeto por el notch ── */}
         <div className="shrink-0 border-t border-slate-100 bg-white/95 backdrop-blur px-5 sm:px-7 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-3">
           <button
-            onClick={() => { onMarcarNoLeida(notificacion.id); onCerrar() }}
+            onClick={() => { onMarcarNoLeida(notificacion.id); cerrar() }}
             className="text-xs font-semibold text-slate-500 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none rounded-lg px-1 py-2 transition-colors"
           >
             Marcar no leída
@@ -481,7 +527,7 @@ export default function NotificacionDetalleModal({
             </button>
           ) : (
             <button
-              onClick={onCerrar}
+              onClick={cerrar}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#192031] hover:bg-[#242F45] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#192031] focus-visible:outline-none transition-colors"
             >
               Entendido
