@@ -3126,7 +3126,7 @@ export default function PeriodoDetallePage({
                           </div>
 
                           {editCantidad === 0 && (
-                            <AvisoSinAcciones faltan={faltanParaMotivo(editCantidad, editDesc)} />
+                            <AvisoSinAcciones />
                           )}
                         </div>
                       ) : (
@@ -3379,7 +3379,7 @@ export default function PeriodoDetallePage({
                       </div>
 
                       {nuevaCantidad === 0 && (
-                        <AvisoSinAcciones faltan={faltanParaMotivo(nuevaCantidad, nuevaActividad)} />
+                        <AvisoSinAcciones />
                       )}
                     </div>
                   ) : (
