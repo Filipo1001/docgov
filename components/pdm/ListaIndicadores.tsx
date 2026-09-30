@@ -13,19 +13,22 @@ import { useMemo, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, ROTULO_RESPONSABLE, DEPENDENCIAS, estadoDe, fmt, fmtRazon, razon,
+  ESTADOS, ROTULO_RESPONSABLE, agrupar, estadoDe, fmt, fmtRazon, razon,
   sinResponsableUnico, tipoResponsable, type Indicador,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
 import type { Filtro } from '@/lib/pdm/filtros'
+import type { PersonaFicha } from '@/lib/pdm/personas'
 
 const PAGINA = 25
 
-export function TarjetaIndicador({ i, reportado, onAbrir, conBoton }: {
+export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado }: {
   i: Indicador
   reportado?: number
   onAbrir: () => void
   conBoton?: boolean
+  /** Nombre de la persona asignada en la plataforma; sin él se muestra lo que decía el Excel. */
+  asignado?: string
 }) {
   const estado = estadoDe(i, reportado)
   const r = razon(i, reportado)
@@ -61,7 +64,7 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton }: {
       <div className="mt-3.5 flex items-center justify-between gap-3 text-xs">
         <span className={`inline-flex min-w-0 items-center gap-1.5 ${huerfano ? 'font-medium text-red-700' : 'text-gray-600'}`}>
           <Icono glifo={huerfano ? Iconos.estado.advertencia : Iconos.navegacion.usuarios} tamano="sm" className="shrink-0" />
-          <span className="truncate">{huerfano ? ROTULO_RESPONSABLE[tipoResponsable(i.responsable)] : i.responsable}</span>
+          <span className="truncate">{huerfano ? ROTULO_RESPONSABLE[tipoResponsable(i.responsable)] : (asignado ?? i.responsable)}</span>
         </span>
         {conBoton
           ? <span className="shrink-0 rounded-lg bg-[#192031] px-3 py-1.5 font-semibold text-white">Reportar</span>
@@ -72,7 +75,7 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton }: {
 }
 
 export default function ListaIndicadores({
-  lista, reportado, onAbrir, conBoton, dependencia, onDependencia, filtroInicial,
+  lista, reportado, onAbrir, conBoton, dependencia, onDependencia, filtroInicial, fichas,
 }: {
   lista: Indicador[]
   reportado: Record<number, number>
@@ -83,10 +86,15 @@ export default function ListaIndicadores({
   onDependencia?: (d: string) => void
   /** Desde dónde se llegó: un enlace de otra sección puede pedir la lista ya filtrada. */
   filtroInicial?: Filtro
+  /** Quién es el responsable de cada indicador en la plataforma, por `id`. */
+  fichas?: Record<number, PersonaFicha>
 }) {
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<Filtro>(filtroInicial ?? 'todos')
   const [limite, setLimite] = useState(PAGINA)
+
+  // Las secretarías del selector son las de la lista que se recibe: ya no hay un catálogo fijo en el código.
+  const dependencias = useMemo(() => agrupar(lista, i => i.dependencia).map(([n]) => n), [lista])
 
   const delAlcance = useMemo(
     () => (dependencia ? lista.filter(i => i.dependencia === dependencia) : lista),
@@ -147,7 +155,7 @@ export default function ListaIndicadores({
             className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 sm:w-72"
           >
             <option value="">Todas las secretarías</option>
-            {DEPENDENCIAS.map(d => <option key={d} value={d}>{d}</option>)}
+            {dependencias.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         )}
       </div>
@@ -184,6 +192,7 @@ export default function ListaIndicadores({
                 reportado={reportado[i.id]}
                 onAbrir={() => onAbrir(i.id)}
                 conBoton={conBoton}
+                asignado={(() => { const f = fichas?.[i.id]; return f && 'nombre' in f ? f.nombre : undefined })()}
               />
             ))}
           </div>

@@ -1,9 +1,9 @@
-import { INDICADORES, REPORTANTES, resumir } from './plan'
+import { resumir, tipoResponsable, type Indicador } from './plan'
 import { VINCULOS } from './vinculos'
 import { resumirContratos, type ContratoFila } from './contrato'
 import {
   nombrePropio,
-  type Directorio, type PersonaDirectorio, type PersonaFicha, type SinUsuario,
+  type Directorio, type MotivoSinVincular, type PersonaDirectorio, type PersonaFicha, type SinUsuario,
 } from './personas'
 
 /**
@@ -12,6 +12,13 @@ import {
  *
  * La lectura vive en `directorio.ts` (que es `server-only`); esto no, para poder
  * ejercitarlo fuera de Next.
+ *
+ * ── De dónde sale «quién lleva qué» ──────────────────────────────────────
+ *
+ * De las ASIGNACIONES que traen los propios indicadores, que son las de la base.
+ * Antes salía de una tabla de nombres escrita en el código (`vinculos.ts`); esa
+ * tabla ya cumplió su papel (fue la semilla de las asignaciones) y hoy solo sirve
+ * para explicar por qué alguien que figura en el Excel no tiene usuario.
  */
 
 export interface FilaUsuario {
@@ -30,7 +37,24 @@ export interface FilaContrato {
   fecha_fin: string
 }
 
-export function armarDirectorio(usuarios: FilaUsuario[], contratos: FilaContrato[], hoy: string): Directorio {
+/** El nombre con que el Excel llamaba a esta persona: el texto de origen más repetido entre sus indicadores, si nombra a una persona. */
+function comoFiguraEnElExcel(suyos: Indicador[]): string | null {
+  const cuenta = new Map<string, number>()
+  for (const i of suyos) {
+    if (tipoResponsable(i.responsable) === 'persona') cuenta.set(i.responsable, (cuenta.get(i.responsable) ?? 0) + 1)
+  }
+  let mejor: string | null = null
+  let max = 0
+  for (const [texto, n] of cuenta) if (n > max) { mejor = texto; max = n }
+  return mejor
+}
+
+export function armarDirectorio(
+  usuarios: FilaUsuario[],
+  contratos: FilaContrato[],
+  indicadores: Indicador[],
+  hoy: string,
+): Directorio {
   const contratosDe = new Map<string, ContratoFila[]>()
   for (const c of contratos) {
     const lista = contratosDe.get(c.contratista_id) ?? []
@@ -38,18 +62,19 @@ export function armarDirectorio(usuarios: FilaUsuario[], contratos: FilaContrato
     contratosDe.set(c.contratista_id, lista)
   }
 
-  // Cada usuario vinculado sabe cómo figura en el Excel.
-  const excelDe = new Map<string, string>()
-  for (const [nombre, v] of Object.entries(VINCULOS)) {
-    if ('usuarioId' in v) excelDe.set(v.usuarioId, nombre)
+  // Los indicadores de cada persona, según las asignaciones.
+  const asignadosA = new Map<string, Indicador[]>()
+  for (const i of indicadores) {
+    for (const a of i.asignados) {
+      const lista = asignadosA.get(a.usuarioId) ?? []
+      lista.push(i)
+      asignadosA.set(a.usuarioId, lista)
+    }
   }
-
-  const indicadoresDe = (excel: string) => INDICADORES.filter(i => i.responsable === excel)
 
   const personas: PersonaDirectorio[] = usuarios.map(u => {
     const dep = Array.isArray(u.dependencia) ? u.dependencia[0] : u.dependencia
-    const excel = excelDe.get(u.id) ?? null
-    const suyos = excel ? indicadoresDe(excel) : []
+    const suyos = asignadosA.get(u.id) ?? []
     return {
       id: u.id,
       nombre: nombrePropio(u.nombre_completo),
@@ -57,7 +82,7 @@ export function armarDirectorio(usuarios: FilaUsuario[], contratos: FilaContrato
       fotoUrl: u.foto_url,
       secretaria: dep?.nombre ?? null,
       contrato: resumirContratos(contratosDe.get(u.id) ?? [], u.rol, hoy),
-      excel,
+      excel: comoFiguraEnElExcel(suyos),
       indicadores: suyos.length,
       resumen: suyos.length ? resumir(suyos) : null,
     }
@@ -67,23 +92,39 @@ export function armarDirectorio(usuarios: FilaUsuario[], contratos: FilaContrato
   personas.sort((a, b) => b.indicadores - a.indicadores || a.nombre.localeCompare(b.nombre, 'es'))
 
   const porId = new Map(personas.map(p => [p.id, p]))
-  const fichas: Record<string, PersonaFicha> = {}
-  const sinUsuario: SinUsuario[] = []
+  const fichas: Record<number, PersonaFicha> = {}
+  const sinAsignar = new Map<string, { motivo: MotivoSinVincular; lista: Indicador[] }>()
 
-  for (const { nombre } of REPORTANTES) {
-    const v = VINCULOS[nombre]
-    const persona = v && 'usuarioId' in v ? porId.get(v.usuarioId) : undefined
-    if (persona) {
-      fichas[nombre] = { nombre: persona.nombre, fotoUrl: persona.fotoUrl, secretaria: persona.secretaria, contrato: persona.contrato }
-      continue
+  for (const i of indicadores) {
+    // 1. Asignado en la plataforma: el principal, o el primero si no hay principal.
+    if (i.asignados.length > 0) {
+      const elegido = i.asignados.find(a => a.principal) ?? i.asignados[0]
+      const p = porId.get(elegido.usuarioId)
+      if (p) {
+        fichas[i.id] = { nombre: p.nombre, fotoUrl: p.fotoUrl, secretaria: p.secretaria, contrato: p.contrato }
+        continue
+      }
+      // Asignado a alguien que ya no figura entre los usuarios activos: se trata como sin asignar.
     }
-    // Sin entrada, o con un identificador que ya no existe: no se adivina.
-    const motivo = !v ? 'pendiente' : 'usuarioId' in v ? 'no_encontrado' : v.sinUsuario
-    const suyos = indicadoresDe(nombre)
-    fichas[nombre] = { sinUsuario: motivo }
-    sinUsuario.push({ nombre, motivo, indicadores: suyos.length, resumen: resumir(suyos) })
+
+    // 2. Sin asignar. Si el Excel nombraba a UNA persona, se dice por qué no tiene usuario.
+    if (tipoResponsable(i.responsable) !== 'persona') continue
+    const v = VINCULOS[i.responsable]
+    let motivo: MotivoSinVincular | null
+    if (!v) motivo = 'pendiente'                        // un nombre nuevo en el Excel: nadie lo ha confirmado
+    else if ('sinUsuario' in v) motivo = v.sinUsuario   // personal de planta sin usuario, o pendiente
+    else motivo = porId.has(v.usuarioId) ? null : 'no_encontrado' // tiene usuario y nadie lo ha asignado, o el usuario ya no existe
+    if (!motivo) continue
+
+    fichas[i.id] = { sinUsuario: motivo }
+    const acum = sinAsignar.get(i.responsable) ?? { motivo, lista: [] }
+    acum.lista.push(i)
+    sinAsignar.set(i.responsable, acum)
   }
-  sinUsuario.sort((a, b) => b.indicadores - a.indicadores || a.nombre.localeCompare(b.nombre, 'es'))
+
+  const sinUsuario: SinUsuario[] = [...sinAsignar.entries()]
+    .map(([nombre, { motivo, lista }]) => ({ nombre, motivo, indicadores: lista.length, resumen: resumir(lista) }))
+    .sort((a, b) => b.indicadores - a.indicadores || a.nombre.localeCompare(b.nombre, 'es'))
 
   return { ok: true, personas, sinUsuario, fichas }
 }

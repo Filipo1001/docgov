@@ -159,7 +159,7 @@ export function AvisoVistaPrevia() {
   return (
     <div className="border-b border-amber-200 bg-amber-50">
       <p className="mx-auto max-w-7xl px-4 py-1.5 text-xs text-amber-900 md:px-8">
-        <b>Vista previa.</b> Datos del archivo de seguimiento, corte de {VISTA_PREVIA.corte}.
+        <b>Vista previa.</b> {VISTA_PREVIA.texto}
       </p>
     </div>
   )

@@ -1,21 +1,22 @@
 /**
- * Plan de Desarrollo: los datos y las cuentas que se hacen con ellos.
+ * Plan de Desarrollo: los tipos y las cuentas que se hacen con ellos.
  *
- * ── Qué es esto hoy ──────────────────────────────────────────────────────
+ * ── De dónde salen los datos ─────────────────────────────────────────────
  *
- * VISTA PREVIA. Los indicadores salen de `datos-preview.json`, sembrado desde
- * el archivo «Seguimiento PDM Septiembre de 2026.xlsx» de la Alcaldía. No hay
- * base de datos detrás: nada de lo que se haga en pantalla se guarda, y por eso
- * el módulo no puede afectar a Contratista Digital.
+ * De la base de datos (tablas `pdm_*`), leídas en el servidor por `datos.ts`.
+ * Este archivo no sabe de dónde vienen: recibe listas y devuelve cuentas.
  *
- * Cuando el esquema real exista, lo único que cambia es de dónde sale
- * `INDICADORES`. Las funciones de este archivo reciben la lista y devuelven
- * cuentas; no saben de dónde vino.
+ * Antes leía un JSON con el archivo de Excel sembrado en el código. Ese JSON
+ * traía el AVANCE del seguimiento de junio, y se retiró: el plan se cargó en la
+ * base sin ningún avance, a propósito. Un avance sin autor, sin fecha y sin
+ * evidencia no es un dato del plan sino un dato sin dueño, y mezclado con lo
+ * demás lo contamina. Por eso `avance` es `null` para todos hasta que alguien
+ * reporte con su nombre y su evidencia.
  *
  * ── Qué se corrigió al sembrar ───────────────────────────────────────────
  *
  * El Excel tiene tres columnas rotuladas «2026» y una «2027». Son 2024, 2025,
- * 2026 y 2027: en 190 de 254 filas las cuatro suman exactamente la meta del
+ * 2026 y 2027: en 190 de 257 filas las cuatro suman exactamente la meta del
  * cuatrienio. La meta de este año es, por tanto, la tercera. Con el rótulo
  * equivocado cualquiera habría tomado la primera.
  *
@@ -28,10 +29,19 @@
  * hace visible en lugar de esconderla.
  */
 
-import datos from './datos-preview.json'
+/** Quién tiene un indicador asignado en la plataforma. */
+export interface Asignacion {
+  usuarioId: string
+  principal: boolean
+}
 
 export interface Indicador {
+  /**
+   * Fila del Excel de origen (clave estable, única en el plan). Es lo que
+   * identifica al indicador en pantalla; para escribir en la base se usa `uuid`.
+   */
   id: number
+  uuid: string
   codigo: string
   linea: string
   sector: string
@@ -40,14 +50,21 @@ export interface Indicador {
   indicador: string
   unidad: string
   dependencia: string
+  /**
+   * Lo que decía el Excel en «Funcionario Responsable», tal cual: una persona, un
+   * equipo, una oficina, varias personas o nada. NO es la asignación real (esa
+   * está en `asignados`); sirve para saber qué se quiso decir cuando no hay una
+   * persona única a quien asignar.
+   */
   responsable: string
+  /** Asignados en la plataforma. Vacío si nadie lo tiene todavía. */
+  asignados: Asignacion[]
   lineaBase: number | null
   metaCuatrienio: number | null
   meta2026: number | null
+  /** Último avance reportado. `null` mientras nadie haya reportado: hoy, todos. */
   avance: number | null
 }
-
-export const INDICADORES = datos as Indicador[]
 
 // ─── Reportes ─────────────────────────────────────────────────────────────────
 
@@ -59,7 +76,7 @@ export const INDICADORES = datos as Indicador[]
  * reporte anterior?», que en el archivo de Excel no existe porque cada corte
  * escribe encima del otro.
  *
- * En la vista previa solo viven en memoria, mientras la pestaña está abierta.
+ * Hoy nada los produce: todavía no hay reportes en la base. Llegan con la Fase B.
  */
 export interface Reporte {
   fecha: number
@@ -191,15 +208,18 @@ export function agrupar(lista: Indicador[], clave: (i: Indicador) => string): [s
   return [...m.entries()].sort((a, b) => b[1].length - a[1].length)
 }
 
-// ─── Catálogos ────────────────────────────────────────────────────────────────
+// ─── ¿Hay seguimiento? ────────────────────────────────────────────────────────
 
-export const DEPENDENCIAS = agrupar(INDICADORES, i => i.dependencia).map(([n]) => n)
-
-/** Personas con nombre propio en el Excel, de más a menos indicadores. */
-export const REPORTANTES = agrupar(
-  INDICADORES.filter(i => tipoResponsable(i.responsable) === 'persona'),
-  i => i.responsable,
-).map(([nombre, l]) => ({ nombre, indicadores: l.length }))
+/**
+ * ¿Ha reportado alguien algo, en algún indicador?
+ *
+ * Con el plan recién cargado la respuesta es NO, y las pantallas tienen que
+ * decirlo. Sin esto, «0 cumplidos de 221» se pinta como «0 %», que suena a un
+ * plan que no cumple cuando en realidad es un plan que no ha empezado a medirse.
+ */
+export function haySeguimiento(lista: Indicador[], reportado: Record<number, number> = {}): boolean {
+  return lista.some(i => avanceDe(i, reportado[i.id]) !== null)
+}
 
 // ─── Formato ──────────────────────────────────────────────────────────────────
 
@@ -215,12 +235,14 @@ export function fmtPct(n: number | null): string {
 /**
  * La razón avance/meta, lista para mostrar.
  *
- * Se topa en «≥ 100 %» a propósito. En 62 de los 257 indicadores el avance del
- * archivo es EXACTAMENTE el doble de la meta de 2026, y en otros 18 el
- * cuádruple: múltiplos enteros perfectos que un avance real no produce. Lo más
- * probable es que la columna sea acumulada, o que arrastre metas copiadas, y
- * no el avance del año. Mostrar «200 %» daría por bueno un dato cuyo sentido no
- * está definido; «cumplida» dice solo lo que se puede sostener.
+ * Se topa en «≥ 100 %» a propósito. El archivo del que se partió traía, en 62 de
+ * los 257 indicadores, un avance EXACTAMENTE igual al doble de la meta de 2026, y
+ * en otros 18 al cuádruple: múltiplos enteros perfectos que un avance real no
+ * produce, señal de una columna acumulada o de metas copiadas. Ese avance se
+ * descartó, pero la pregunta de fondo sigue abierta —¿el avance se reporta
+ * acumulado o del año?—, y mientras no se responda, mostrar «200 %» daría por
+ * bueno un dato cuyo sentido no está definido; «cumplida» dice solo lo que se
+ * puede sostener.
  */
 export function fmtRazon(r: number | null): string {
   if (r === null) return ''

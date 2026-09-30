@@ -16,8 +16,12 @@
  *      contrato: el contrato vencido junto a indicadores a su nombre es lo que
  *      más conviene ver.
  *
- * Es solo lectura, y a propósito no tiene botón de «Asignar»: asignar escribe
- * datos, y eso llega con la base de datos. Un botón que no hace nada es ruido.
+ * Es solo lectura, y a propósito no tiene botón de «Asignar» todavía: la pantalla
+ * de asignación es el paso que sigue. Un botón que no hace nada es ruido.
+ *
+ * «Quién lleva qué» sale de las asignaciones de la base; lo que el Excel decía en
+ * «Funcionario Responsable» se conserva aparte, para saber a qué equipo u oficina
+ * hay que ponerle nombre.
  */
 
 import { useMemo, useState } from 'react'
@@ -25,8 +29,8 @@ import Link from 'next/link'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  INDICADORES, agrupar, coincideNombre, sinResponsableUnico, tipoResponsable,
-  type TipoResponsable,
+  agrupar, coincideNombre, haySeguimiento, sinResponsableUnico, tipoResponsable,
+  type Indicador, type TipoResponsable,
 } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import type { Directorio, MotivoSinVincular, PersonaDirectorio } from '@/lib/pdm/personas'
@@ -53,11 +57,14 @@ const PAGINA = 25
 
 type Filtro = 'todos' | 'con' | 'sin' | 'vencido'
 
-const hrefResponsable = (excel: string) => `${HREF_INDICADORES}?responsable=${encodeURIComponent(excel)}`
+/** Los indicadores asignados a una persona de la plataforma. */
+const hrefUsuario = (id: string) => `${HREF_INDICADORES}?usuario=${encodeURIComponent(id)}`
+/** Los indicadores cuyo Excel nombraba a alguien que todavía no tiene usuario. */
+const hrefOrigen = (nombre: string) => `${HREF_INDICADORES}?origen=${encodeURIComponent(nombre)}`
 
-function FilaPersona({ p }: { p: PersonaDirectorio }) {
+function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimiento: boolean }) {
   const atencion = p.resumen ? p.resumen.atrasados + p.resumen.criticos : 0
-  const enlace = p.excel !== null && p.indicadores > 0
+  const enlace = p.indicadores > 0
   const contenido = (
     <>
       <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
@@ -74,7 +81,7 @@ function FilaPersona({ p }: { p: PersonaDirectorio }) {
           </p>
         )}
       </div>
-      {p.resumen && (
+      {p.resumen && conSeguimiento && (
         <div className="hidden w-32 shrink-0 sm:block">
           <BarraEstados r={p.resumen} alto="h-2" />
         </div>
@@ -97,7 +104,7 @@ function FilaPersona({ p }: { p: PersonaDirectorio }) {
   const clase = 'flex items-center gap-3.5 py-3'
   return enlace ? (
     <Link
-      href={hrefResponsable(p.excel as string)}
+      href={hrefUsuario(p.id)}
       className={`${clase} transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none`}
     >
       {contenido}
@@ -107,18 +114,19 @@ function FilaPersona({ p }: { p: PersonaDirectorio }) {
   )
 }
 
-export default function ResponsablesPdm({ directorio }: { directorio: Directorio }) {
+export default function ResponsablesPdm({ directorio, indicadores }: { directorio: Directorio; indicadores: Indicador[] }) {
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [secretaria, setSecretaria] = useState('')
   const [limite, setLimite] = useState(PAGINA)
 
-  const huerfanos = useMemo(() => INDICADORES.filter(sinResponsableUnico), [])
+  const conSeguimiento = useMemo(() => haySeguimiento(indicadores), [indicadores])
+  const huerfanos = useMemo(() => indicadores.filter(sinResponsableUnico), [indicadores])
   const porTipo = useMemo(() => agrupar(huerfanos, i => tipoResponsable(i.responsable)), [huerfanos])
   const porSecretaria = useMemo(() => {
-    const total = new Map(agrupar(INDICADORES, i => i.dependencia).map(([d, l]) => [d, l.length]))
+    const total = new Map(agrupar(indicadores, i => i.dependencia).map(([d, l]) => [d, l.length]))
     return agrupar(huerfanos, i => i.dependencia).map(([d, l]) => ({ dependencia: d, sin: l.length, total: total.get(d) ?? l.length }))
-  }, [huerfanos])
+  }, [huerfanos, indicadores])
 
   const { personas, sinUsuario } = directorio
   const secretarias = useMemo(
@@ -162,7 +170,7 @@ export default function ResponsablesPdm({ directorio }: { directorio: Directorio
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="text-sm font-bold text-gray-900">Sin una persona que responda</h2>
           <p className="text-xs text-gray-500">
-            <b className="tabular-nums text-red-600">{huerfanos.length}</b> de {INDICADORES.length} indicadores
+            <b className="tabular-nums text-red-600">{huerfanos.length}</b> de {indicadores.length} indicadores
           </p>
         </div>
         <p className="mt-1 text-xs text-gray-500">
@@ -217,7 +225,7 @@ export default function ResponsablesPdm({ directorio }: { directorio: Directorio
             {sinUsuario.map(s => (
               <li key={s.nombre}>
                 <Link
-                  href={hrefResponsable(s.nombre)}
+                  href={hrefOrigen(s.nombre)}
                   className="flex items-center gap-3.5 py-3 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
                 >
                   <Avatar nombre={s.nombre} apagado />
@@ -293,7 +301,7 @@ export default function ResponsablesPdm({ directorio }: { directorio: Directorio
             <>
               <ul className="mt-2 divide-y divide-gray-100">
                 {visibles.slice(0, limite).map(p => (
-                  <li key={p.id}><FilaPersona p={p} /></li>
+                  <li key={p.id}><FilaPersona p={p} conSeguimiento={conSeguimiento} /></li>
                 ))}
               </ul>
               {visibles.length > limite && (

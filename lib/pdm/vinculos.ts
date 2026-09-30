@@ -17,18 +17,21 @@
  * no se mueve. La regla se usó UNA vez, para proponer; cada decisión la
  * confirmó una persona (29 de septiembre de 2026).
  *
- * ── Qué es provisional ───────────────────────────────────────────────────
+ * ── Qué es esto HOY ──────────────────────────────────────────────────────
  *
- * Vive en el código porque todavía no hay base de datos donde guardarlo. Es lo
- * primero que se cargará a la tabla de asignaciones cuando exista: estas mismas
- * decisiones son su semilla. No se pierde trabajo.
+ * Fue la semilla. Con estas decisiones se cargaron en la base las asignaciones
+ * (149, una por indicador con un responsable que tiene usuario), y desde entonces
+ * la fuente de «quién lleva qué» es la tabla `pdm_asignaciones`, no este archivo.
+ * Lo que este archivo sigue haciendo es explicar por qué alguien que figura en el
+ * Excel NO tiene usuario (personal de planta al que aún no se le crea uno, o un
+ * nombre sin confirmar). Las entradas con `usuarioId` ya no gobiernan nada: se
+ * conservan como registro de lo que se decidió el 29 de septiembre de 2026.
  *
  * ── Qué pasa cuando algo falla ───────────────────────────────────────────
  *
- * Nada se rompe. Si un identificador ya no existe (por ejemplo, porque se
- * eliminó el usuario), o un nombre nuevo del Excel no tiene entrada, esa persona
- * aparece en «Personas del Excel sin usuario» y el indicador conserva el texto
- * original. Ver `cargarDirectorio`.
+ * Nada se rompe. Si un nombre nuevo del Excel no tiene entrada, esa persona
+ * aparece en «Figuran en el Excel y no tienen usuario» como pendiente, y el
+ * indicador conserva el texto original. Ver `armarDirectorio`.
  */
 
 export type MotivoSinUsuario =

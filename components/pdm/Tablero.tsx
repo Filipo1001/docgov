@@ -16,7 +16,7 @@
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, ROTULO_RESPONSABLE, agrupar, estadoDe, fmt, fmtPct, resumir,
+  ESTADOS, ROTULO_RESPONSABLE, agrupar, estadoDe, fmt, fmtPct, haySeguimiento, resumir,
   sinResponsableUnico, tipoResponsable,
   type Indicador, type Resumen,
 } from '@/lib/pdm/plan'
@@ -39,15 +39,15 @@ function Cifra({ titulo, valor, nota, tono = 'neutro' }: {
   )
 }
 
-function FilaGrupo({ nombre, r, onClick }: { nombre: string; r: Resumen; onClick?: () => void }) {
+function FilaGrupo({ nombre, r, conSeguimiento, onClick }: { nombre: string; r: Resumen; conSeguimiento: boolean; onClick?: () => void }) {
   const contenido = (
     <div className="py-3.5">
       <div className="flex items-baseline justify-between gap-3">
         <p className="min-w-0 truncate text-sm font-semibold text-gray-900">{nombre}</p>
-        <p className="shrink-0 text-sm font-bold tabular-nums text-gray-900">{fmtPct(r.cumplimiento)}</p>
+        {conSeguimiento && <p className="shrink-0 text-sm font-bold tabular-nums text-gray-900">{fmtPct(r.cumplimiento)}</p>}
       </div>
-      <div className="mt-2"><BarraEstados r={r} alto="h-2" /></div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+      {conSeguimiento && <div className="mt-2"><BarraEstados r={r} alto="h-2" /></div>}
+      <div className={`${conSeguimiento ? 'mt-2' : 'mt-1.5'} flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500`}>
         <span>{r.total} indicadores</span>
         {r.sinResponsable > 0 && (
           <span className="inline-flex items-center gap-1 font-medium text-red-700">
@@ -77,6 +77,9 @@ export default function Tablero({
   onVerDependencia?: (dependencia: string) => void
 }) {
   const r = resumir(lista, reportado)
+  // Con el plan recién cargado, nadie ha reportado nada: «0 %» sería engañoso (suena a un plan que
+  // no cumple, cuando es un plan que aún no ha empezado a medirse). Se dice tal cual.
+  const conSeg = haySeguimiento(lista, reportado)
   const dependencias = agrupar(lista, i => i.dependencia)
   const lineas = agrupar(lista, i => i.linea).sort((a, b) => a[0].localeCompare(b[0]))
 
@@ -96,8 +99,10 @@ export default function Tablero({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Cifra
           titulo="Cumplimiento provisional"
-          valor={fmtPct(r.cumplimiento)}
-          nota={`${r.cumplidos} de ${r.medibles} con meta 2026, según un criterio por definir`}
+          valor={conSeg ? fmtPct(r.cumplimiento) : '—'}
+          nota={conSeg
+            ? `${r.cumplidos} de ${r.medibles} con meta 2026, según un criterio por definir`
+            : `Aún no hay seguimiento: ${r.medibles} indicadores tienen meta 2026 y ninguno ha reportado`}
         />
         <Cifra
           titulo="Sin responsable único"
@@ -107,21 +112,32 @@ export default function Tablero({
         />
         <Cifra
           titulo="Atrasados o críticos"
-          valor={String(r.atrasados + r.criticos)}
-          nota={`${r.criticos} críticos y ${r.atrasados} atrasados frente a su meta 2026`}
+          valor={conSeg ? String(r.atrasados + r.criticos) : '—'}
+          nota={conSeg
+            ? `${r.criticos} críticos y ${r.atrasados} atrasados frente a su meta 2026`
+            : 'Se calcula cuando haya avances reportados'}
         />
         <Cifra
           titulo="Con evidencia"
           valor={`${conEvidencia}`}
-          nota={`de ${r.total}. El archivo actual no recoge evidencias; el sistema las exige`}
+          nota={`de ${r.total}. Ningún reporte con evidencia todavía; el sistema la exige al reportar`}
         />
       </div>
 
       {/* 2 · Cómo se reparte el plan */}
       <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
         <h2 className="text-sm font-bold text-gray-900">Estado del plan</h2>
-        <div className="mt-3"><BarraEstados r={r} /></div>
-        <div className="mt-3"><Leyenda r={r} /></div>
+        {conSeg ? (
+          <>
+            <div className="mt-3"><BarraEstados r={r} /></div>
+            <div className="mt-3"><Leyenda r={r} /></div>
+          </>
+        ) : (
+          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+            El plan está cargado con sus metas y sus responsables, y todavía sin avances: nadie ha
+            reportado. Cuando lleguen los primeros reportes, aquí se verá cómo va cada indicador.
+          </p>
+        )}
         {r.sinMeta > 0 && (
           <p className="mt-3 text-xs text-gray-500">
             {r.sinMeta} indicadores no tienen meta para 2026 y no entran en el cálculo.
@@ -142,6 +158,7 @@ export default function Tablero({
                 key={nombre}
                 nombre={nombre}
                 r={resumir(l, reportado)}
+                conSeguimiento={conSeg}
                 onClick={onVerDependencia ? () => onVerDependencia(nombre) : undefined}
               />
             ))}
@@ -151,7 +168,7 @@ export default function Tablero({
           <h2 className="text-sm font-bold text-gray-900">Por línea estratégica</h2>
           <div className="mt-1 divide-y divide-gray-100">
             {lineas.map(([nombre, l]) => (
-              <FilaGrupo key={nombre} nombre={nombre} r={resumir(l, reportado)} />
+              <FilaGrupo key={nombre} nombre={nombre} r={resumir(l, reportado)} conSeguimiento={conSeg} />
             ))}
           </div>
         </section>
@@ -224,12 +241,14 @@ export default function Tablero({
         )}
       </section>
 
-      <p className="px-1 text-xs leading-relaxed text-gray-500">
-        Criterio provisional: un indicador se cuenta como cumplido cuando su avance alcanza la meta de 2026.
-        Pero en 62 indicadores el avance del archivo es exactamente el doble de esa meta, y en 18 el cuádruple: la
-        columna parece acumulada y no del año. Qué se mide y contra qué lo define la Alcaldía; una vez definido queda
-        escrito en el sistema y se aplica igual a todos. Hasta entonces, este porcentaje es una referencia y no una cifra oficial.
-      </p>
+      {conSeg && (
+        <p className="px-1 text-xs leading-relaxed text-gray-500">
+          Criterio provisional: un indicador se cuenta como cumplido cuando su avance alcanza la meta de 2026.
+          Falta definir si el avance se reporta acumulado o del año, y qué umbrales separan «en ruta», «atrasado» y
+          «crítico». Lo define la Alcaldía; una vez definido queda escrito en el sistema y se aplica igual a todos.
+          Hasta entonces, este porcentaje es una referencia y no una cifra oficial.
+        </p>
+      )}
     </div>
   )
 }

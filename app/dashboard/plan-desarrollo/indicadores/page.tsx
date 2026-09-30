@@ -1,37 +1,63 @@
 import IndicadoresPdm from '@/components/pdm/IndicadoresPdm'
+import PlanNoDisponible from '@/components/pdm/PlanNoDisponible'
 import { exigirAccesoPdm, metadataPdm } from '@/lib/pdm/acceso'
+import { cargarPlanPdm } from '@/lib/pdm/datos'
 import { cargarDirectorio } from '@/lib/pdm/directorio'
 import { FILTROS, type Filtro } from '@/lib/pdm/filtros'
-import { DEPENDENCIAS, REPORTANTES } from '@/lib/pdm/plan'
 
 export const generateMetadata = () => metadataPdm('Indicadores')
 
 /**
  * Los enlaces de otras secciones llegan con el filtro en la dirección. Nada de
- * lo que venga se cree: cada valor se contrasta con el catálogo y, si no
- * coincide, se ignora y la lista sale completa.
+ * lo que venga se cree: cada valor se contrasta con lo que de verdad existe y, si
+ * no coincide, se ignora y la lista sale completa.
+ *
+ *   dependencia  una secretaría del plan
+ *   filtro       uno de los filtros rápidos
+ *   usuario      el id de una persona de la plataforma → sus indicadores asignados
+ *   origen       el nombre, tal como lo escribió el Excel, de alguien que todavía no
+ *                tiene usuario → los indicadores que el Excel le atribuía
  */
 export default async function IndicadoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dependencia?: string; filtro?: string; responsable?: string }>
+  searchParams: Promise<{ dependencia?: string; filtro?: string; usuario?: string; origen?: string }>
 }) {
   await exigirAccesoPdm()
   const p = await searchParams
-  const { fichas } = await cargarDirectorio()
+  const plan = await cargarPlanPdm()
+  if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} />
+  const dir = await cargarDirectorio()
 
-  const dependencia = DEPENDENCIAS.find(d => d === p.dependencia)
+  const dependencia = plan.indicadores.find(i => i.dependencia === p.dependencia)?.dependencia
   const filtro = FILTROS.find((f): f is Filtro => f === p.filtro)
-  const responsable = REPORTANTES.find(r => r.nombre === p.responsable)?.nombre
+
+  let restringirA: { etiqueta: string; ids: number[] } | undefined
+  const persona = dir.personas.find(x => x.id === p.usuario)
+  const sinUsuario = dir.sinUsuario.find(x => x.nombre === p.origen)
+  if (persona) {
+    restringirA = {
+      etiqueta: persona.nombre,
+      ids: plan.indicadores.filter(i => i.asignados.some(a => a.usuarioId === persona.id)).map(i => i.id),
+    }
+  } else if (sinUsuario) {
+    restringirA = {
+      etiqueta: sinUsuario.nombre,
+      ids: plan.indicadores
+        .filter(i => i.responsable === sinUsuario.nombre && dir.fichas[i.id] !== undefined && 'sinUsuario' in dir.fichas[i.id])
+        .map(i => i.id),
+    }
+  }
 
   return (
     <IndicadoresPdm
       // Un enlace nuevo a esta misma pantalla debe arrancar de cero.
-      key={`${dependencia ?? ''}|${filtro ?? ''}|${responsable ?? ''}`}
+      key={`${dependencia ?? ''}|${filtro ?? ''}|${persona?.id ?? sinUsuario?.nombre ?? ''}`}
+      indicadores={plan.indicadores}
+      fichas={dir.fichas}
       dependenciaInicial={dependencia}
       filtroInicial={filtro}
-      responsable={responsable}
-      fichas={fichas}
+      restringirA={restringirA}
     />
   )
 }

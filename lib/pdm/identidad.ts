@@ -26,12 +26,17 @@ export const PLAN = {
 } as const
 
 /**
- * Mientras el módulo muestre el archivo de Excel y no una base de datos, lo
- * dice en pantalla. Apagar esto es lo único que hay que hacer para quitar el
- * aviso, y solo debe apagarse el día que los datos salgan de la base.
+ * El año contra el que se mide el seguimiento. La meta «de este año» del Tablero
+ * es la de este año, y solo la de este año se pide a la base (ver `datos.ts`).
+ */
+export const ANIO_SEGUIMIENTO = 2026
+
+/**
+ * Mientras el módulo esté en vista previa (solo administrador, solo en el entorno
+ * de pruebas), lo dice en pantalla: una línea, sin ocupar una tarjeta. Se apaga
+ * aquí, y solo debe apagarse el día que el módulo se abra de verdad.
  */
 export const VISTA_PREVIA = {
   activa: true,
-  /** El archivo se llama «Septiembre de 2026», pero su columna de seguimiento dice «Junio/2026». */
-  corte: 'junio de 2026',
+  texto: 'Plan cargado del archivo de la Alcaldía, sin avances: el seguimiento empieza aquí.',
 } as const

@@ -46,8 +46,8 @@ export interface Directorio {
   ok: boolean
   personas: PersonaDirectorio[]
   sinUsuario: SinUsuario[]
-  /** Por nombre del Excel. */
-  fichas: Record<string, PersonaFicha>
+  /** Por indicador (su `id`). Sin entrada: el Excel no nombraba a una persona a quien asignarlo. */
+  fichas: Record<number, PersonaFicha>
 }
 
 const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'e'])

@@ -2,6 +2,7 @@ import 'server-only'
 import { cache } from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { hoyBogota } from './contrato'
+import { cargarPlanPdm } from './datos'
 import { armarDirectorio, type FilaContrato, type FilaUsuario } from './directorio-armar'
 import type { Directorio } from './personas'
 
@@ -23,6 +24,9 @@ import type { Directorio } from './personas'
  * Excel; solo pierden la foto y el contrato. Un fallo aquí no puede dejar sin
  * pantalla al módulo, ni tocar a CD.
  *
+ * Depende del plan (`cargarPlanPdm`): las asignaciones, que dicen quién lleva qué,
+ * vienen en los indicadores. Si el plan no se pudo leer, tampoco hay directorio.
+ *
  * `cache` de React: una sola lectura por petición aunque la llamen varios
  * componentes.
  */
@@ -31,6 +35,9 @@ const VACIO: Directorio = { ok: false, personas: [], sinUsuario: [], fichas: {} 
 
 export const cargarDirectorio = cache(async (): Promise<Directorio> => {
   try {
+    const plan = await cargarPlanPdm()
+    if (!plan.ok) return VACIO
+
     const supabase = await createServerSupabaseClient()
     const [usuarios, contratos] = await Promise.all([
       supabase
@@ -52,6 +59,7 @@ export const cargarDirectorio = cache(async (): Promise<Directorio> => {
     return armarDirectorio(
       usuarios.data as unknown as FilaUsuario[],
       contratos.data as FilaContrato[],
+      plan.indicadores,
       hoyBogota(),
     )
   } catch (e) {

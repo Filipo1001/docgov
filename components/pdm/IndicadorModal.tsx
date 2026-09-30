@@ -7,16 +7,17 @@
  *
  * La historia del indicador es la lista de sus reportes, del más reciente al
  * más antiguo, cada uno con autor, fecha, valor anterior, valor nuevo, la
- * explicación y la evidencia. Al fondo va el corte del archivo original, para
- * que se vea de dónde parte el sistema. Nada se sobrescribe: un reporte nuevo
- * añade una fila, no cambia las anteriores.
+ * explicación y la evidencia. Nada se sobrescribe: un reporte nuevo añade una
+ * fila, no cambia las anteriores. Sin reportes, dice que aún no hay seguimiento:
+ * no hay un «valor de partida» del archivo, porque el avance del Excel no se
+ * cargó (era un número sin autor, sin fecha y sin evidencia).
  *
  * ── Por qué la evidencia es obligatoria ─────────────────────────────────
  *
  * Es el punto del módulo. El archivo actual registra el avance como un número
  * sin documento que lo respalde; aquí no se puede reportar sin adjuntar al
- * menos uno. En la vista previa el archivo no se sube a ninguna parte: se
- * muestra su nombre y nada más.
+ * menos uno. Hoy el archivo no se sube a ninguna parte: la subida llega con la
+ * Fase B, y mientras tanto solo se muestra su nombre.
  *
  * Va montado en <body> con un portal: el dashboard usa `transform` en contenedores
  * que convierten un `position: fixed` en algo relativo a ellos y no a la
@@ -143,10 +144,17 @@ export default function IndicadorModal({
           {/* Avance */}
           <section>
             <div className="flex items-end justify-between gap-4">
-              <p className="text-4xl font-bold tabular-nums leading-none text-gray-900">
-                {fmt(vigente ?? indicador.avance)}
-                <span className="ml-2 text-base font-medium text-gray-400">de {fmt(indicador.meta2026)}</span>
-              </p>
+              {(vigente ?? indicador.avance) === null ? (
+                <p className="text-2xl font-bold leading-none text-gray-400">
+                  Sin avance
+                  <span className="ml-2 text-base font-medium">· meta {fmt(indicador.meta2026)}</span>
+                </p>
+              ) : (
+                <p className="text-4xl font-bold tabular-nums leading-none text-gray-900">
+                  {fmt(vigente ?? indicador.avance)}
+                  <span className="ml-2 text-base font-medium text-gray-400">de {fmt(indicador.meta2026)}</span>
+                </p>
+              )}
               {r !== null && <p className="text-2xl font-bold tabular-nums text-gray-700">{fmtRazon(r)}</p>}
             </div>
             <div className="mt-3"><BarraAvance razon={r} estado={estado} /></div>
@@ -210,12 +218,15 @@ export default function IndicadorModal({
                   </p>
                 </li>
               ))}
-              <li className="relative border-l-2 border-transparent pl-5">
-                <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full bg-gray-300" />
-                <p className="text-xs text-gray-500">Corte de junio de 2026 · archivo original</p>
-                <p className="mt-0.5 text-sm font-semibold text-gray-900">{fmt(indicador.avance)}</p>
-                <p className="mt-1 text-xs text-gray-500">Sin autor, sin fecha exacta y sin evidencia: el archivo no los registra.</p>
-              </li>
+              {reportes.length === 0 && (
+                <li className="relative border-l-2 border-transparent pl-5">
+                  <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full bg-gray-300" />
+                  <p className="text-sm font-semibold text-gray-900">Sin seguimiento todavía</p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                    El primer reporte quedará aquí, con su autor, su fecha y su evidencia.
+                  </p>
+                </li>
+              )}
             </ol>
           </section>
 

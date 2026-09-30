@@ -11,7 +11,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { INDICADORES, agrupar } from '@/lib/pdm/plan'
+import { agrupar, type Indicador } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import Tablero from './Tablero'
@@ -22,23 +22,23 @@ const SIN_REPORTES: never[] = []
 const SIN_REPORTADO: Record<number, number> = {}
 const NO_REPORTA = () => {}
 
-export default function ResumenPdm({ fichas }: { fichas: Record<string, PersonaFicha> }) {
+export default function ResumenPdm({ indicadores, fichas }: { indicadores: Indicador[]; fichas: Record<number, PersonaFicha> }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState<number | null>(null)
-  const indicador = abierto === null ? null : INDICADORES.find(i => i.id === abierto) ?? null
+  const indicador = abierto === null ? null : indicadores.find(i => i.id === abierto) ?? null
 
-  const lineas = agrupar(INDICADORES, i => i.linea).length
-  const secretarias = agrupar(INDICADORES, i => i.dependencia).length
+  const lineas = agrupar(indicadores, i => i.linea).length
+  const secretarias = agrupar(indicadores, i => i.dependencia).length
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <EncabezadoSeccion
         titulo="Resumen"
-        detalle={`${INDICADORES.length} indicadores de producto · ${lineas} líneas estratégicas · ${secretarias} secretarías`}
+        detalle={`${indicadores.length} indicadores de producto · ${lineas} líneas estratégicas · ${secretarias} secretarías`}
       />
 
       <Tablero
-        lista={INDICADORES}
+        lista={indicadores}
         reportado={SIN_REPORTADO}
         conEvidencia={0}
         onAbrir={setAbierto}
@@ -52,7 +52,7 @@ export default function ResumenPdm({ fichas }: { fichas: Record<string, PersonaF
         puedeReportar={false}
         onCerrar={() => setAbierto(null)}
         onReportar={NO_REPORTA}
-        persona={indicador ? fichas[indicador.responsable] : undefined}
+        persona={indicador ? fichas[indicador.id] : undefined}
       />
     </div>
   )
