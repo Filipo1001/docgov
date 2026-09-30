@@ -129,9 +129,12 @@ export default function Tablero({
         )}
       </section>
 
-      {/* 3 · Dónde está cada secretaría y cada línea */}
+      {/* 3 · Dónde está cada secretaría y cada línea.
+          `min-w-0` en las tarjetas: un elemento de una cuadrícula no se encoge por debajo
+          de su contenido, y el nombre de una secretaría en una sola línea empujaba la
+          tarjeta a 404 px dentro de un teléfono de 375. */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
+        <section className="min-w-0 rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
           <h2 className="text-sm font-bold text-gray-900">Por secretaría</h2>
           <div className="mt-1 divide-y divide-gray-100">
             {dependencias.map(([nombre, l]) => (
@@ -144,7 +147,7 @@ export default function Tablero({
             ))}
           </div>
         </section>
-        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
+        <section className="min-w-0 rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
           <h2 className="text-sm font-bold text-gray-900">Por línea estratégica</h2>
           <div className="mt-1 divide-y divide-gray-100">
             {lineas.map(([nombre, l]) => (

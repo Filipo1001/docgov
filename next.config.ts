@@ -9,6 +9,14 @@ const devOrigins = process.env.ALLOWED_DEV_ORIGINS
 const nextConfig: NextConfig = {
   allowedDevOrigins: devOrigins,
 
+  // `VERCEL_ENV` solo existe en el servidor. El layout del panel es un
+  // componente de cliente y necesita saber si el módulo de Plan de Desarrollo
+  // existe en este entorno (lib/pdm/menu.ts), así que se copia aquí, al
+  // compilar. Nada más la lee: para el resto de la aplicación esto es inerte.
+  env: {
+    NEXT_PUBLIC_ENTORNO_VERCEL: process.env.VERCEL_ENV ?? '',
+  },
+
   // Keep @react-pdf/renderer and canvas on the Node.js server only.
   // Prevents bundling issues when these packages are imported in API routes.
   serverExternalPackages: ['@react-pdf/renderer', 'canvas'],

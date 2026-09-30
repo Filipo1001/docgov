@@ -17,8 +17,8 @@ import {
   sinResponsableUnico, tipoResponsable, type Indicador,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
+import type { Filtro } from '@/lib/pdm/filtros'
 
-type Filtro = 'todos' | 'sin_responsable' | 'atencion' | 'sin_reporte'
 const PAGINA = 25
 
 export function TarjetaIndicador({ i, reportado, onAbrir, conBoton }: {
@@ -72,7 +72,7 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton }: {
 }
 
 export default function ListaIndicadores({
-  lista, reportado, onAbrir, conBoton, dependencia, onDependencia,
+  lista, reportado, onAbrir, conBoton, dependencia, onDependencia, filtroInicial,
 }: {
   lista: Indicador[]
   reportado: Record<number, number>
@@ -81,9 +81,11 @@ export default function ListaIndicadores({
   /** Si viene, se muestra el selector de secretaría (alcalde y Control Interno). */
   dependencia?: string
   onDependencia?: (d: string) => void
+  /** Desde dónde se llegó: un enlace de otra sección puede pedir la lista ya filtrada. */
+  filtroInicial?: Filtro
 }) {
   const [q, setQ] = useState('')
-  const [filtro, setFiltro] = useState<Filtro>('todos')
+  const [filtro, setFiltro] = useState<Filtro>(filtroInicial ?? 'todos')
   const [limite, setLimite] = useState(PAGINA)
 
   const delAlcance = useMemo(

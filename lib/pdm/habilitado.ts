@@ -1,4 +1,5 @@
 import 'server-only'
+import { entornoPermiteModulo } from '@/lib/pdm/entorno'
 
 /**
  * ¿Existe hoy el módulo de Plan de Desarrollo en este entorno?
@@ -27,5 +28,5 @@ import 'server-only'
  * deliberada: ese día esta función pasa a leer una habilitación por usuario.
  */
 export function pdmHabilitado(): boolean {
-  return process.env.VERCEL_ENV === 'preview' || process.env.NODE_ENV === 'development'
+  return entornoPermiteModulo(process.env.VERCEL_ENV, process.env.NODE_ENV)
 }

@@ -1,4 +1,5 @@
 import type { ItemMenu } from '@/lib/constants'
+import { entornoPermiteModulo } from '@/lib/pdm/entorno'
 
 /**
  * El botón del módulo en la barra lateral del administrador.
@@ -30,6 +31,31 @@ export function insertarDebajoDeInicio(items: ItemMenu[], extra: ItemMenu): Item
 }
 
 /**
+ * ¿Existe el módulo en este entorno, visto desde el navegador?
+ *
+ * Es la misma pregunta que `pdmHabilitado()` responde en el servidor, con la
+ * misma regla (`entornoPermiteModulo`). `VERCEL_ENV` solo existe en el servidor;
+ * `next.config.ts` la copia a `NEXT_PUBLIC_ENTORNO_VERCEL` al compilar para que
+ * el layout —que es un componente de cliente— pueda preguntarlo. Ha de
+ * escribirse literal, sin desestructurar: solo así Next la sustituye.
+ */
+export const MARCO_PDM_DISPONIBLE = entornoPermiteModulo(
+  process.env.NEXT_PUBLIC_ENTORNO_VERCEL,
+  process.env.NODE_ENV,
+)
+
+/**
+ * ¿Debe el layout del panel pintar el marco del módulo en esta ruta?
+ *
+ * Exige las dos cosas: que la ruta sea del módulo Y que el entorno lo admita.
+ * Con solo la primera, en producción cualquiera que abriera esa dirección vería
+ * la cabecera del módulo encima de un 404.
+ */
+export function usaMarcoPdm(pathname: string | null | undefined): boolean {
+  return MARCO_PDM_DISPONIBLE && esRutaPdm(pathname)
+}
+
+/**
  * ¿La ruta pertenece al módulo? Decide qué marco pinta el panel: en el módulo
  * no va la barra lateral de contratos, que ahí solo sería ruido.
  *
@@ -41,4 +67,36 @@ export function esRutaPdm(pathname: string | null | undefined): boolean {
   if (!pathname) return false
   const base = ITEM_PLAN_DESARROLLO.href
   return pathname === base || pathname.startsWith(`${base}/`)
+}
+
+// ─── Secciones del módulo ─────────────────────────────────────────────────────
+
+export interface SeccionPdm {
+  href: string
+  rotulo: string
+  /** Solo es la activa en esa ruta exacta (el resumen es la raíz y no puede tragarse a las demás). */
+  exacta?: boolean
+}
+
+/**
+ * Las pestañas del módulo, en el orden en que se leen. Una pestaña solo existe
+ * cuando funciona: «Cortes» llega con la base de datos, no antes.
+ */
+const BASE = ITEM_PLAN_DESARROLLO.href
+export const HREF_INDICADORES = `${BASE}/indicadores`
+export const HREF_RESPONSABLES = `${BASE}/responsables`
+export const SECCIONES_PDM: SeccionPdm[] = [
+  { href: BASE, rotulo: 'Resumen', exacta: true },
+  { href: HREF_INDICADORES, rotulo: 'Indicadores' },
+  { href: HREF_RESPONSABLES, rotulo: 'Responsables' },
+]
+
+/** ¿Cuál pestaña corresponde a esta ruta? `null` si ninguna (no se marca ninguna). */
+export function seccionActiva(pathname: string | null | undefined): string | null {
+  if (!pathname) return null
+  const ruta = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+  const hallada = SECCIONES_PDM.find(s =>
+    s.exacta ? ruta === s.href : ruta === s.href || ruta.startsWith(`${s.href}/`),
+  )
+  return hallada?.href ?? null
 }

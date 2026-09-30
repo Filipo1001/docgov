@@ -9,7 +9,7 @@ import { UserProvider, useUsuario } from '@/lib/user-context'
 import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
 import { moduloPdmVisible } from '@/app/actions/pdm'
-import { insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO, esRutaPdm } from '@/lib/pdm/menu'
+import { insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO, usaMarcoPdm } from '@/lib/pdm/menu'
 import EnlaceMenuPdm from '@/components/pdm/EnlaceMenuPdm'
 import MarcoPdm from '@/components/pdm/MarcoPdm'
 import { avatarThumb } from '@/lib/avatar'
@@ -360,9 +360,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   // El módulo Plan de Desarrollo se pinta con su propio marco: la barra lateral
   // de contratos ahí solo sería ruido. Se queda dentro de este layout para
-  // heredar la sesión y el caché. Solo lo activa una ruta que ES del módulo;
-  // ante cualquier duda se cae al marco de siempre, que es el de abajo.
-  if (esRutaPdm(pathname)) return <MarcoPdm>{children}</MarcoPdm>
+  // heredar la sesión y el caché. Solo lo activa una ruta que ES del módulo en
+  // un entorno que lo ADMITE; ante cualquier duda se cae al marco de siempre,
+  // que es el de abajo.
+  if (usaMarcoPdm(pathname)) return <MarcoPdm>{children}</MarcoPdm>
 
   return (
     <div className="min-h-screen bg-gray-50">
