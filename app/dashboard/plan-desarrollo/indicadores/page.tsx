@@ -1,5 +1,6 @@
 import IndicadoresPdm from '@/components/pdm/IndicadoresPdm'
 import { exigirAccesoPdm, metadataPdm } from '@/lib/pdm/acceso'
+import { cargarDirectorio } from '@/lib/pdm/directorio'
 import { FILTROS, type Filtro } from '@/lib/pdm/filtros'
 import { DEPENDENCIAS, REPORTANTES } from '@/lib/pdm/plan'
 
@@ -17,6 +18,7 @@ export default async function IndicadoresPage({
 }) {
   await exigirAccesoPdm()
   const p = await searchParams
+  const { fichas } = await cargarDirectorio()
 
   const dependencia = DEPENDENCIAS.find(d => d === p.dependencia)
   const filtro = FILTROS.find((f): f is Filtro => f === p.filtro)
@@ -29,6 +31,7 @@ export default async function IndicadoresPage({
       dependenciaInicial={dependencia}
       filtroInicial={filtro}
       responsable={responsable}
+      fichas={fichas}
     />
   )
 }

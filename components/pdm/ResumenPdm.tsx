@@ -16,12 +16,13 @@ import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import Tablero from './Tablero'
 import IndicadorModal from './IndicadorModal'
+import type { PersonaFicha } from '@/lib/pdm/personas'
 
 const SIN_REPORTES: never[] = []
 const SIN_REPORTADO: Record<number, number> = {}
 const NO_REPORTA = () => {}
 
-export default function ResumenPdm() {
+export default function ResumenPdm({ fichas }: { fichas: Record<string, PersonaFicha> }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState<number | null>(null)
   const indicador = abierto === null ? null : INDICADORES.find(i => i.id === abierto) ?? null
@@ -51,6 +52,7 @@ export default function ResumenPdm() {
         puedeReportar={false}
         onCerrar={() => setAbierto(null)}
         onReportar={NO_REPORTA}
+        persona={indicador ? fichas[indicador.responsable] : undefined}
       />
     </div>
   )

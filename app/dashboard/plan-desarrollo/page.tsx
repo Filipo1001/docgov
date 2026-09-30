@@ -1,5 +1,6 @@
 import ResumenPdm from '@/components/pdm/ResumenPdm'
 import { exigirAccesoPdm, metadataPdm } from '@/lib/pdm/acceso'
+import { cargarDirectorio } from '@/lib/pdm/directorio'
 
 /**
  * Plan de Desarrollo — Resumen (vista previa).
@@ -27,5 +28,6 @@ export const generateMetadata = () => metadataPdm('Resumen')
 
 export default async function ResumenPage() {
   await exigirAccesoPdm()
-  return <ResumenPdm />
+  const { fichas } = await cargarDirectorio()
+  return <ResumenPdm fichas={fichas} />
 }

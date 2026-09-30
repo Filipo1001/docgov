@@ -20,6 +20,7 @@ import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import ListaIndicadores from './ListaIndicadores'
 import type { Filtro } from '@/lib/pdm/filtros'
+import type { PersonaFicha } from '@/lib/pdm/personas'
 import IndicadorModal from './IndicadorModal'
 
 const SIN_REPORTES: never[] = []
@@ -27,18 +28,22 @@ const SIN_REPORTADO: Record<number, number> = {}
 const NO_REPORTA = () => {}
 
 export default function IndicadoresPdm({
-  dependenciaInicial, filtroInicial, responsable,
+  dependenciaInicial, filtroInicial, responsable, fichas,
 }: {
   dependenciaInicial?: string
   filtroInicial?: Filtro
   /** Solo los de esta persona (nombre tal como figura en el archivo). */
   responsable?: string
+  fichas: Record<string, PersonaFicha>
 }) {
   const [dependencia, setDependencia] = useState(dependenciaInicial ?? '')
   const [abierto, setAbierto] = useState<number | null>(null)
 
   const lista = responsable ? INDICADORES.filter(i => i.responsable === responsable) : INDICADORES
   const indicador = abierto === null ? null : INDICADORES.find(i => i.id === abierto) ?? null
+  // En el chip, el nombre de la persona en la plataforma; si no tiene usuario, el del archivo.
+  const ficha = responsable ? fichas[responsable] : undefined
+  const etiqueta = ficha && 'nombre' in ficha ? ficha.nombre : responsable
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -50,7 +55,7 @@ export default function IndicadoresPdm({
       {responsable && (
         <div>
           <span className="inline-flex items-center gap-2 rounded-full bg-teal-50 py-1 pl-3.5 pr-1.5 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-100">
-            A nombre de {responsable}
+            A nombre de {etiqueta}
             <Link
               href={HREF_INDICADORES}
               className="flex h-6 w-6 items-center justify-center rounded-full text-teal-700 transition-colors hover:bg-teal-100"
@@ -77,6 +82,7 @@ export default function IndicadoresPdm({
         puedeReportar={false}
         onCerrar={() => setAbierto(null)}
         onReportar={NO_REPORTA}
+        persona={indicador ? fichas[indicador.responsable] : undefined}
       />
     </div>
   )

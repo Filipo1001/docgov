@@ -3,20 +3,21 @@
 /**
  * Responsables: quién responde por cada indicador, y dónde nadie responde.
  *
- * Dos preguntas del administrador, en el orden en que las hace:
+ * Tres preguntas del administrador, en el orden en que las hace, con lo que
+ * hay que resolver primero arriba:
  *
  *   1. ¿Dónde están los huecos? Los indicadores a nombre de un equipo, una
  *      oficina, varias personas o de nadie no tienen a quién exigirle el
- *      reporte. Aquí se ven por secretaría, y cada una lleva a su lista.
- *   2. ¿Cómo está repartida la carga? Cada persona con lo que tiene a su
- *      nombre y cómo va, para ver quién está sobrecargado.
+ *      reporte. Se ven por secretaría, y cada una lleva a su lista.
+ *   2. ¿Quién figura en el Excel y todavía no tiene usuario? Son los que no se
+ *      pueden habilitar hasta que se les cree uno.
+ *   3. ¿Quiénes son las personas de la plataforma y cómo están de carga? Todos
+ *      los usuarios de Contratista Digital, con su foto, su secretaría y su
+ *      contrato: el contrato vencido junto a indicadores a su nombre es lo que
+ *      más conviene ver.
  *
  * Es solo lectura, y a propósito no tiene botón de «Asignar»: asignar escribe
  * datos, y eso llega con la base de datos. Un botón que no hace nada es ruido.
- *
- * Los nombres son los del archivo de Excel, escritos a mano. Todavía no se
- * cruzan con los usuarios de la plataforma, así que aquí no se puede decir
- * quién tiene o no acceso para reportar.
  */
 
 import { useMemo, useState } from 'react'
@@ -24,14 +25,16 @@ import Link from 'next/link'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  INDICADORES, REPORTANTES, agrupar, resumir, sinResponsableUnico, tipoResponsable,
-  type Indicador, type TipoResponsable,
+  INDICADORES, agrupar, coincideNombre, sinResponsableUnico, tipoResponsable,
+  type TipoResponsable,
 } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
+import type { Directorio, MotivoSinVincular, PersonaDirectorio } from '@/lib/pdm/personas'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import { BarraEstados } from './Barras'
+import { Avatar, LineaContrato } from './PersonaVista'
 
-/** Cómo se dice, en una tarjeta pequeña, a qué está a nombre un indicador sin persona. */
+/** Cómo se dice, en una línea, a qué está a nombre un indicador sin persona. */
 const A_NOMBRE_DE: Record<Exclude<TipoResponsable, 'persona'>, string> = {
   equipo: 'de un equipo',
   varios: 'de varias personas',
@@ -39,10 +42,76 @@ const A_NOMBRE_DE: Record<Exclude<TipoResponsable, 'persona'>, string> = {
   ninguno: 'de nadie',
 }
 
-const sinTildes = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const MOTIVO: Record<MotivoSinVincular, string> = {
+  planta: 'Personal de planta · aún sin usuario',
+  pendiente: 'Pendiente de confirmar quién es',
+  no_encontrado: 'Su usuario ya no existe',
+}
 
-export default function ResponsablesPdm() {
+const sinTildes = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const PAGINA = 25
+
+type Filtro = 'todos' | 'con' | 'sin' | 'vencido'
+
+const hrefResponsable = (excel: string) => `${HREF_INDICADORES}?responsable=${encodeURIComponent(excel)}`
+
+function FilaPersona({ p }: { p: PersonaDirectorio }) {
+  const atencion = p.resumen ? p.resumen.atrasados + p.resumen.criticos : 0
+  const enlace = p.excel !== null && p.indicadores > 0
+  const contenido = (
+    <>
+      <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-gray-900">{p.nombre}</p>
+        <p className="truncate text-xs text-gray-500">{p.secretaria ?? 'Sin secretaría'}</p>
+        <LineaContrato contrato={p.contrato} />
+        {p.excel && !coincideNombre(p.nombre, p.excel) && (
+          <p className="text-[11px] text-gray-400">En el Excel figura como «{p.excel}»</p>
+        )}
+        {atencion > 0 && (
+          <p className="mt-0.5 text-xs font-medium text-red-700">
+            {atencion} {atencion === 1 ? 'atrasado o crítico' : 'atrasados o críticos'}
+          </p>
+        )}
+      </div>
+      {p.resumen && (
+        <div className="hidden w-32 shrink-0 sm:block">
+          <BarraEstados r={p.resumen} alto="h-2" />
+        </div>
+      )}
+      <p className="w-16 shrink-0 text-right">
+        {p.indicadores > 0 ? (
+          <>
+            <b className="block text-sm tabular-nums text-gray-900">{p.indicadores}</b>
+            <span className="text-[11px] text-gray-500">{p.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
+          </>
+        ) : (
+          <span className="text-xs text-gray-400">Ninguno</span>
+        )}
+      </p>
+      {enlace
+        ? <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
+        : <span className="w-4 shrink-0" aria-hidden />}
+    </>
+  )
+  const clase = 'flex items-center gap-3.5 py-3'
+  return enlace ? (
+    <Link
+      href={hrefResponsable(p.excel as string)}
+      className={`${clase} transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none`}
+    >
+      {contenido}
+    </Link>
+  ) : (
+    <div className={clase}>{contenido}</div>
+  )
+}
+
+export default function ResponsablesPdm({ directorio }: { directorio: Directorio }) {
   const [q, setQ] = useState('')
+  const [filtro, setFiltro] = useState<Filtro>('todos')
+  const [secretaria, setSecretaria] = useState('')
+  const [limite, setLimite] = useState(PAGINA)
 
   const huerfanos = useMemo(() => INDICADORES.filter(sinResponsableUnico), [])
   const porTipo = useMemo(() => agrupar(huerfanos, i => tipoResponsable(i.responsable)), [huerfanos])
@@ -51,19 +120,38 @@ export default function ResponsablesPdm() {
     return agrupar(huerfanos, i => i.dependencia).map(([d, l]) => ({ dependencia: d, sin: l.length, total: total.get(d) ?? l.length }))
   }, [huerfanos])
 
-  const personas = useMemo(() => {
-    const por = new Map<string, Indicador[]>()
-    for (const i of INDICADORES) por.set(i.responsable, [...(por.get(i.responsable) ?? []), i])
-    return REPORTANTES.map(p => {
-      const lista = por.get(p.nombre) ?? []
-      const r = resumir(lista)
-      const deps = [...new Set(lista.map(i => i.dependencia))]
-      return { nombre: p.nombre, n: lista.length, r, atencion: r.atrasados + r.criticos, deps }
-    })
-  }, [])
+  const { personas, sinUsuario } = directorio
+  const secretarias = useMemo(
+    () => [...new Set(personas.map(p => p.secretaria).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b, 'es')),
+    [personas],
+  )
+
+  // Los conteos de los filtros se calculan sobre la secretaría elegida, como en la lista de indicadores.
+  const delAlcance = useMemo(
+    () => (secretaria ? personas.filter(p => p.secretaria === secretaria) : personas),
+    [personas, secretaria],
+  )
+  const cuenta = useMemo(() => ({
+    todos: delAlcance.length,
+    con: delAlcance.filter(p => p.indicadores > 0).length,
+    sin: delAlcance.filter(p => p.indicadores === 0).length,
+    vencido: delAlcance.filter(p => p.contrato.estado === 'vencido').length,
+  }), [delAlcance])
 
   const t = sinTildes(q.trim())
-  const visibles = t ? personas.filter(p => sinTildes(p.nombre).includes(t)) : personas
+  const visibles = useMemo(() => delAlcance.filter(p => {
+    if (filtro === 'con' && p.indicadores === 0) return false
+    if (filtro === 'sin' && p.indicadores > 0) return false
+    if (filtro === 'vencido' && p.contrato.estado !== 'vencido') return false
+    return !t || sinTildes(p.nombre).includes(t)
+  }), [delAlcance, filtro, t])
+
+  const filtros: { k: Filtro; rotulo: string }[] = [
+    { k: 'todos', rotulo: 'Todos' },
+    { k: 'con', rotulo: 'Con indicadores' },
+    { k: 'sin', rotulo: 'Sin indicadores' },
+    { k: 'vencido', rotulo: 'Contrato vencido' },
+  ]
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -109,62 +197,117 @@ export default function ResponsablesPdm() {
         </ul>
       </section>
 
-      {/* 2 · La carga por persona */}
-      <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-baseline gap-3">
-            <h2 className="text-sm font-bold text-gray-900">Por persona</h2>
-            <span className="text-xs text-gray-500">{personas.length} personas</span>
-          </div>
-          <label className="relative block sm:w-72">
-            <span className="sr-only">Buscar persona</span>
-            <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              id="pdm-persona"
-              type="search"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Buscar persona"
-              className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
-            />
-          </label>
+      {!directorio.ok && (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0 text-amber-700" />
+          <p className="text-sm text-amber-900">
+            No se pudo leer la lista de usuarios de Contratista Digital. Recarga la página; si sigue igual, el resto del módulo funciona con los datos del archivo.
+          </p>
         </div>
+      )}
 
-        {visibles.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500">Nadie coincide con «{q}».</p>
-        ) : (
+      {/* 2 · Figuran en el Excel y no tienen usuario */}
+      {sinUsuario.length > 0 && (
+        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="text-sm font-bold text-gray-900">Figuran en el Excel y no tienen usuario</h2>
+            <p className="text-xs text-gray-500">{sinUsuario.length} personas</p>
+          </div>
           <ul className="mt-2 divide-y divide-gray-100">
-            {visibles.map(p => (
-              <li key={p.nombre}>
+            {sinUsuario.map(s => (
+              <li key={s.nombre}>
                 <Link
-                  href={`${HREF_INDICADORES}?responsable=${encodeURIComponent(p.nombre)}`}
-                  className="flex items-center gap-4 py-3 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+                  href={hrefResponsable(s.nombre)}
+                  className="flex items-center gap-3.5 py-3 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
                 >
+                  <Avatar nombre={s.nombre} apagado />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">{p.nombre}</p>
-                    <p className="truncate text-xs text-gray-500">
-                      {p.deps.length === 1 ? p.deps[0] : `${p.deps.length} secretarías`}
-                    </p>
-                    {p.atencion > 0 && (
-                      <p className="mt-0.5 text-xs font-medium text-red-700">
-                        {p.atencion} {p.atencion === 1 ? 'atrasado o crítico' : 'atrasados o críticos'}
-                      </p>
-                    )}
-                  </div>
-                  <div className="hidden w-40 shrink-0 sm:block">
-                    <BarraEstados r={p.r} alto="h-2" />
+                    <p className="truncate text-sm font-semibold text-gray-900">{s.nombre}</p>
+                    <p className="text-xs text-gray-500">{MOTIVO[s.motivo]}</p>
                   </div>
                   <p className="w-16 shrink-0 text-right">
-                    <b className="block text-sm tabular-nums text-gray-900">{p.n}</b>
-                    <span className="text-[11px] text-gray-500">{p.n === 1 ? 'indicador' : 'indicadores'}</span>
+                    <b className="block text-sm tabular-nums text-gray-900">{s.indicadores}</b>
+                    <span className="text-[11px] text-gray-500">{s.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
                   </p>
                   <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
                 </Link>
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
+
+      {/* 3 · Las personas de la plataforma */}
+      {directorio.ok && (
+        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-sm font-bold text-gray-900">Personas</h2>
+            <span className="text-xs text-gray-500">{personas.length} usuarios de Contratista Digital</span>
+          </div>
+
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <label className="relative block flex-1">
+              <span className="sr-only">Buscar persona</span>
+              <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                id="pdm-persona"
+                type="search"
+                value={q}
+                onChange={e => { setQ(e.target.value); setLimite(PAGINA) }}
+                placeholder="Buscar persona"
+                className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+              />
+            </label>
+            <select
+              id="pdm-secretaria"
+              aria-label="Secretaría"
+              value={secretaria}
+              onChange={e => { setSecretaria(e.target.value); setLimite(PAGINA) }}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 sm:w-72"
+            >
+              <option value="">Todas las secretarías</option>
+              {secretarias.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+            {filtros.map(f => (
+              <button
+                key={f.k}
+                onClick={() => { setFiltro(f.k); setLimite(PAGINA) }}
+                aria-pressed={filtro === f.k}
+                className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                  filtro === f.k
+                    ? 'border-[#192031] bg-[#192031] text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {f.rotulo} <span className="ml-1 tabular-nums opacity-70">{cuenta[f.k]}</span>
+              </button>
+            ))}
+          </div>
+
+          {visibles.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">Nadie coincide con lo que buscas.</p>
+          ) : (
+            <>
+              <ul className="mt-2 divide-y divide-gray-100">
+                {visibles.slice(0, limite).map(p => (
+                  <li key={p.id}><FilaPersona p={p} /></li>
+                ))}
+              </ul>
+              {visibles.length > limite && (
+                <button
+                  onClick={() => setLimite(l => l + PAGINA)}
+                  className="mx-auto mt-3 block rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  Mostrar {Math.min(PAGINA, visibles.length - limite)} más · {visibles.length - limite} restantes
+                </button>
+              )}
+            </>
+          )}
+        </section>
+      )}
     </div>
   )
 }

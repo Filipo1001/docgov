@@ -32,6 +32,8 @@ import {
   type Indicador, type Reporte,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
+import { Avatar, LineaContrato } from './PersonaVista'
+import type { MotivoSinVincular, PersonaFicha } from '@/lib/pdm/personas'
 
 const fechaHora = (t: number) =>
   new Date(t).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
@@ -45,14 +47,22 @@ function Dato({ rotulo, valor }: { rotulo: string; valor: string }) {
   )
 }
 
+const NOTA_SIN_USUARIO: Record<MotivoSinVincular, string> = {
+  planta: 'Personal de planta. Aún no tiene usuario en la plataforma.',
+  pendiente: 'Aún no se ha confirmado quién es esta persona en la plataforma.',
+  no_encontrado: 'Su usuario en la plataforma ya no existe.',
+}
+
 export default function IndicadorModal({
-  indicador, reportes, puedeReportar, onCerrar, onReportar,
+  indicador, reportes, puedeReportar, onCerrar, onReportar, persona,
 }: {
   indicador: Indicador | null
   reportes: Reporte[]
   puedeReportar: boolean
   onCerrar: () => void
   onReportar: (id: number, r: Omit<Reporte, 'fecha' | 'autor' | 'anterior'>) => void
+  /** Quién es el responsable en la plataforma, si se sabe. Sin él se muestra el texto del archivo. */
+  persona?: PersonaFicha
 }) {
   const [valor, setValor] = useState('')
   const [texto, setTexto] = useState('')
@@ -146,14 +156,30 @@ export default function IndicadorModal({
           {/* Responsable */}
           <section className={`rounded-xl border px-4 py-3 ${huerfano ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Responsable</p>
-            <p className={`mt-1 text-sm font-semibold ${huerfano ? 'text-red-800' : 'text-gray-900'}`}>
-              {huerfano ? ROTULO_RESPONSABLE[tipoResponsable(indicador.responsable)] : indicador.responsable}
-            </p>
-            {huerfano && (
-              <p className="mt-1 text-xs leading-relaxed text-red-700">
-                {indicador.responsable && indicador.responsable !== '-' ? `En el archivo figura «${indicador.responsable}». ` : ''}
-                Nadie tiene la obligación de reportar este indicador ni de responder por él. Asignarle una persona lo resuelve.
-              </p>
+            {!huerfano && persona && 'nombre' in persona ? (
+              <div className="mt-2 flex items-center gap-3">
+                <Avatar nombre={persona.nombre} fotoUrl={persona.fotoUrl} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{persona.nombre}</p>
+                  <p className="text-xs text-gray-500">{persona.secretaria ?? 'Sin secretaría'}</p>
+                  <LineaContrato contrato={persona.contrato} />
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className={`mt-1 text-sm font-semibold ${huerfano ? 'text-red-800' : 'text-gray-900'}`}>
+                  {huerfano ? ROTULO_RESPONSABLE[tipoResponsable(indicador.responsable)] : indicador.responsable}
+                </p>
+                {!huerfano && persona && 'sinUsuario' in persona && (
+                  <p className="mt-1 text-xs text-gray-500">{NOTA_SIN_USUARIO[persona.sinUsuario]}</p>
+                )}
+                {huerfano && (
+                  <p className="mt-1 text-xs leading-relaxed text-red-700">
+                    {indicador.responsable && indicador.responsable !== '-' ? `En el archivo figura «${indicador.responsable}». ` : ''}
+                    Nadie tiene la obligación de reportar este indicador ni de responder por él. Asignarle una persona lo resuelve.
+                  </p>
+                )}
+              </>
             )}
           </section>
 
