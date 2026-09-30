@@ -28,3 +28,17 @@ export function insertarDebajoDeInicio(items: ItemMenu[], extra: ItemMenu): Item
   const corte = posInicio === -1 ? 0 : posInicio + 1
   return [...items.slice(0, corte), extra, ...items.slice(corte)]
 }
+
+/**
+ * ¿La ruta pertenece al módulo? Decide qué marco pinta el panel: en el módulo
+ * no va la barra lateral de contratos, que ahí solo sería ruido.
+ *
+ * Compara por segmento, no por prefijo suelto: `/dashboard/plan-desarrollo-x`
+ * no es del módulo. Ante una ruta ausente o desconocida responde `false`, que es
+ * el marco de siempre — el error nunca deja al panel sin su barra.
+ */
+export function esRutaPdm(pathname: string | null | undefined): boolean {
+  if (!pathname) return false
+  const base = ITEM_PLAN_DESARROLLO.href
+  return pathname === base || pathname.startsWith(`${base}/`)
+}

@@ -45,7 +45,7 @@ import {
   Lock, Unlock, ShieldCheck, Ban,
   // Acciones
   Plus, Minus, Pencil, Trash2, Search, X, ChevronRight, ChevronDown, RefreshCw,
-  Eye, Send, MoreHorizontal, ExternalLink, Copy, Filter, Undo2,
+  Eye, Send, MoreHorizontal, ExternalLink, Copy, Filter, Undo2, ChevronLeft,
   // Personas y avisos
   Bell, Mail, MessageSquare, UserPlus, Building,
   // Dominio
@@ -115,6 +115,8 @@ export const Iconos = {
     buscar: Search,
     cerrar: X,
     avanzar: ChevronRight,
+    /** Pareja de `avanzar`: volver a la pantalla o al módulo de origen. */
+    retroceder: ChevronLeft,
     desplegar: ChevronDown,
     recargar: RefreshCw,
     ver: Eye,

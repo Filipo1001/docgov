@@ -21,10 +21,12 @@ import { pdmHabilitado } from '@/lib/pdm/habilitado'
  *    base es el que ya hace `requireRole`, de solo lectura, para saber quién
  *    entra.
  *
- * No toca `middleware.ts`. La única huella en el resto de la aplicación es el
+ * No toca `middleware.ts`. La huella en el resto de la aplicación son dos: el
  * botón de la barra lateral del administrador, que pregunta a `pdmHabilitado()`
- * antes de pintarse. La ruta cuelga de /dashboard, que ya está enrutada, así que
- * `/verificar` no se ve involucrada en nada de esto (regla 1 de CLAUDE.md).
+ * antes de pintarse, y el layout del panel, que en esta ruta pinta el marco del
+ * módulo (`MarcoPdm`) en vez de la barra de contratos. La ruta cuelga de
+ * /dashboard, que ya está enrutada, así que `/verificar` no se ve involucrada en
+ * nada de esto (regla 1 de CLAUDE.md).
  */
 
 export const metadata = { title: 'Plan de Desarrollo — vista previa' }

@@ -95,7 +95,7 @@ export default function PlanDesarrolloCliente({
   const propios = vista === 'reportante' ? resumir(alcance, reportado) : null
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto max-w-7xl space-y-5">
 
       {/* Aviso: esto es una vista previa, y dice qué significa serlo. */}
       <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">

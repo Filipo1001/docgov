@@ -9,8 +9,9 @@ import { UserProvider, useUsuario } from '@/lib/user-context'
 import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
 import { moduloPdmVisible } from '@/app/actions/pdm'
-import { insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO } from '@/lib/pdm/menu'
+import { insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO, esRutaPdm } from '@/lib/pdm/menu'
 import EnlaceMenuPdm from '@/components/pdm/EnlaceMenuPdm'
+import MarcoPdm from '@/components/pdm/MarcoPdm'
 import { avatarThumb } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
 import AvisoMigracion from '@/components/AvisoMigracion'
@@ -331,6 +332,7 @@ function AuthLoadingSkeleton() {
 // ─── Layout ───────────────────────────────────────────────────
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { cargando, usuario, sesionExpirada } = useUsuario()
+  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   // Prevent double-redirect if navigation is already in flight
   const redirecting = useRef(false)
@@ -355,6 +357,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   // requireRole / requireContractAccess, so children can mount immediately
   // and use their SSR-supplied initial data while client-side auth resolves.
   if (!cargando && !usuario) return <AuthLoadingSkeleton />
+
+  // El módulo Plan de Desarrollo se pinta con su propio marco: la barra lateral
+  // de contratos ahí solo sería ruido. Se queda dentro de este layout para
+  // heredar la sesión y el caché. Solo lo activa una ruta que ES del módulo;
+  // ante cualquier duda se cae al marco de siempre, que es el de abajo.
+  if (esRutaPdm(pathname)) return <MarcoPdm>{children}</MarcoPdm>
 
   return (
     <div className="min-h-screen bg-gray-50">
