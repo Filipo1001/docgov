@@ -4,9 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { UserProvider, useUsuario } from '@/lib/user-context'
 import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
+import { moduloPdmVisible } from '@/app/actions/pdm'
+import { insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO } from '@/lib/pdm/menu'
+import EnlaceMenuPdm from '@/components/pdm/EnlaceMenuPdm'
 import { avatarThumb } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
 import AvisoMigracion from '@/components/AvisoMigracion'
@@ -95,7 +99,21 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     }
   }, [usuario])
 
-  const menuItems = usuario ? getMenuPorRol(usuario.rol) : []
+  // Botón de Plan de Desarrollo: solo administrador, y solo donde el módulo
+  // existe (lo decide el servidor, ver lib/pdm/habilitado.ts). Mientras carga o
+  // si falla, no aparece: `pdmVisible` es undefined y el menú queda como siempre.
+  const { data: pdmVisible } = useQuery({
+    queryKey: ['pdm-visible'],
+    // En flecha, no directa: react-query le pasa su contexto interno a queryFn y
+    // una acción del servidor no puede recibirlo. Igual que el resto de paneles.
+    queryFn: () => moduloPdmVisible(),
+    enabled: usuario?.rol === 'admin',
+    staleTime: Infinity,
+    retry: false,
+  })
+
+  const menuBase = usuario ? getMenuPorRol(usuario.rol) : []
+  const menuItems = pdmVisible ? insertarDebajoDeInicio(menuBase, ITEM_PLAN_DESARROLLO) : menuBase
 
   async function cerrarSesion() {
     if (cerrando) return
@@ -170,6 +188,13 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                   pathname === item.href ||
                   (item.href !== '/dashboard' && pathname.startsWith(item.href))
                 const esInformes = item.href === '/dashboard/informes'
+                if (item.destacado) {
+                  return (
+                    <li key={item.href}>
+                      <EnlaceMenuPdm item={item} activo={activo} />
+                    </li>
+                  )
+                }
                 return (
                   <li key={item.href}>
                     <Link

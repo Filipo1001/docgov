@@ -50,7 +50,7 @@ import {
   Bell, Mail, MessageSquare, UserPlus, Building,
   // Dominio
   CalendarDays, Coins, Stethoscope, Sparkles, QrCode, Hash, MapPin, Phone,
-  Briefcase, TrendingUp, History, Camera, ListChecks, CreditCard,
+  Briefcase, TrendingUp, History, Camera, ListChecks, CreditCard, Target,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -74,6 +74,7 @@ export const Iconos = {
     configuracion: Settings,
     contratistas: Users,
     colaboradores: UserCog,
+    planDesarrollo: Target,
   },
 
   documentos: {

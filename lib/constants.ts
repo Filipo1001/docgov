@@ -15,6 +15,7 @@ export type ClaveIconoNavegacion =
   | 'inicio' | 'usuarios' | 'firmas' | 'contratos' | 'informes'
   | 'dependencias' | 'municipio' | 'historicos' | 'configuracion'
   | 'contratistas' | 'colaboradores'
+  | 'planDesarrollo'
 
 // ─── Period state display ────────────────────
 
@@ -232,6 +233,11 @@ export interface ItemMenu {
   href: string
   label: string
   icono: ClaveIconoNavegacion
+  /**
+   * Se pinta con estilo propio y no con el de un elemento corriente. Hoy solo
+   * lo usa el botón de Plan de Desarrollo, que no es gestión contractual.
+   */
+  destacado?: boolean
 }
 
 export function getMenuPorRol(rol: Rol): ItemMenu[] {
