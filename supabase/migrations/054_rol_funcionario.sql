@@ -1,0 +1,26 @@
+-- Migration 054: nuevo rol de Contratista Digital — `funcionario`
+--
+-- QUÉ ES. El personal de planta de la Alcaldía que NO es supervisor ni asesor ni nada de lo
+-- anterior: personas que responden por indicadores del Plan de Desarrollo y, en CD, no tienen
+-- contratos, informes ni nada que aprobar. Ningún rol existente les servía:
+--   · `asesor` da permisos de revisión de informes en CD;
+--   · `contratista` presupone un contrato.
+--
+-- QUÉ HACE ESTA MIGRACIÓN. Una sola cosa: añade el valor `funcionario` al tipo `rol_usuario`.
+--
+-- POR QUÉ ES SEGURO PARA CD.
+--   · Es ADITIVO: ningún usuario existente cambia (hoy nadie tiene este rol) y ninguna fila se
+--     reescribe.
+--   · Las 69 políticas de CD que miran el rol lo hacen con `get_user_rol()`, que devuelve TEXTO y
+--     compara contra valores concretos: un rol nuevo no coincide con ninguna, así que quien lo tenga
+--     no ve ni toca nada de los contratos, informes o documentos. Es el valor seguro.
+--   · `usuarios.rol` no tiene restricciones CHECK ni hay funciones de CD que enumeren el tipo.
+--
+-- LO QUE NO SE PUEDE DESHACER. PostgreSQL no permite quitar un valor de un tipo enumerado sin
+-- recrear el tipo. Si algún día no hiciera falta, basta con no usarlo: un valor sin usuarios es
+-- inerte.
+--
+-- LO QUE VIENE CON EL CÓDIGO (no es de esta migración): que CD sepa qué mostrarle a un funcionario
+-- al iniciar sesión, y que el administrador pueda crearlo desde la pantalla de usuarios.
+
+alter type public.rol_usuario add value if not exists 'funcionario';
