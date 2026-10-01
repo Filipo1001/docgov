@@ -1,11 +1,12 @@
 import { resumir, tipoResponsable, type Indicador } from './plan'
 import { VINCULOS } from './vinculos'
-import { resumirContratos, type ContratoFila } from './contrato'
+import { CONTRATO_DESCONOCIDO, resumirContratos, type ContratoFila } from './contrato'
 import {
   nombrePropio,
-  type Directorio, type GrupoVista, type MotivoSinVincular, type PersonaDirectorio, type PersonaFicha,
-  type SecretariaPlan, type SinUsuario,
+  type AccesoPersona, type Directorio, type GrupoVista, type MotivoSinVincular, type PersonaDirectorio,
+  type PersonaFicha, type SecretariaPlan, type SinUsuario,
 } from './personas'
+import { esNivelHabilitable } from './niveles'
 
 /**
  * De las filas de la base al directorio. Pura: no lee nada, así que se prueba con
@@ -28,6 +29,29 @@ export interface FilaUsuario {
   rol: string
   foto_url: string | null
   dependencia: { nombre: string } | { nombre: string }[] | null
+}
+
+export interface FilaPermiso {
+  usuario_id: string
+  nivel: string
+  habilitado_por_nombre: string | null
+  created_at: string
+}
+
+/**
+ * Lo que no viene de los usuarios, los contratos ni los indicadores. Todo es opcional: sin nada,
+ * el directorio sale como siempre.
+ */
+export interface ExtrasDirectorio {
+  grupos?: GrupoVista[]
+  secretarias?: SecretariaPlan[]
+  permisos?: FilaPermiso[]
+  /**
+   * Quién mira. Una secretaría solo puede ver los contratos de SU dependencia (la base se lo
+   * impide con las demás): de las otras personas el contrato es «desconocido», no «sin contrato».
+   * Sin observador (o siendo administrador) se ve todo.
+   */
+  observador?: { esAdmin: boolean; secretaria: string | null }
 }
 
 export interface FilaContrato {
@@ -55,9 +79,16 @@ export function armarDirectorio(
   contratos: FilaContrato[],
   indicadores: Indicador[],
   hoy: string,
-  grupos: GrupoVista[] = [],
-  secretarias: SecretariaPlan[] = [],
+  extras: ExtrasDirectorio = {},
 ): Directorio {
+  const { grupos = [], secretarias = [], permisos = [], observador } = extras
+  const accesoDe = new Map<string, AccesoPersona>()
+  for (const p of permisos) {
+    if (esNivelHabilitable(p.nivel)) accesoDe.set(p.usuario_id, { nivel: p.nivel, por: p.habilitado_por_nombre, desde: p.created_at })
+  }
+  const veContratosDe = (secretaria: string | null) =>
+    !observador || observador.esAdmin || (secretaria !== null && secretaria === observador.secretaria)
+
   const contratosDe = new Map<string, ContratoFila[]>()
   for (const c of contratos) {
     const lista = contratosDe.get(c.contratista_id) ?? []
@@ -84,10 +115,11 @@ export function armarDirectorio(
       rol: u.rol,
       fotoUrl: u.foto_url,
       secretaria: dep?.nombre ?? null,
-      contrato: resumirContratos(contratosDe.get(u.id) ?? [], u.rol, hoy),
+      contrato: veContratosDe(dep?.nombre ?? null) ? resumirContratos(contratosDe.get(u.id) ?? [], u.rol, hoy) : CONTRATO_DESCONOCIDO,
       excel: comoFiguraEnElExcel(suyos),
       indicadores: suyos.length,
       resumen: suyos.length ? resumir(suyos) : null,
+      acceso: accesoDe.get(u.id) ?? null,
     }
   })
 

@@ -9,6 +9,7 @@ export type Rol =
   | 'asesor'       // Daniel Marín, Karen
   | 'contratacion' // Dependencia de Contratación: crea usuarios contratistas y gestiona contratos/otrosíes. Sin acceso al flujo de informes.
   | 'alcalde'      // Solo lectura agregada. No aprueba, no radica, no edita: mira el ciclo por secretaría.
+  | 'funcionario'  // Personal de planta sin contratos ni informes en CD. Hoy solo existe para el módulo Plan de Desarrollo.
 
 export type EstadoPeriodo =
   | 'borrador'          // Contratista editing

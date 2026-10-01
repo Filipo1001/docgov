@@ -8,6 +8,9 @@
  * funciones asíncronas, por eso esto vive aparte.
  */
 
+import type { NivelHabilitable } from './niveles'
+import type { EntradaHistorial } from './historial'
+
 export type Resultado<T = void> = { ok: true; datos: T } | { ok: false; error: string }
 
 /** Lo que dice la base tras una asignación: cuánto cambió y cuánto ya estaba así. */
@@ -38,11 +41,25 @@ export interface EntradaAsignarGrupo {
   motivo?: string
 }
 
-export interface EntradaQuitarApoyo {
+/** Quita a una persona de uno o varios indicadores (apoyo, o principal si es la única asignación). */
+export interface EntradaQuitarAsignacion {
   indicadores: string[]
   usuario: string
   motivo?: string
 }
+
+export interface EntradaHabilitar {
+  usuario: string
+  nivel: NivelHabilitable
+  motivo?: string
+}
+
+export interface EntradaDeshabilitar {
+  usuario: string
+  motivo?: string
+}
+
+export type CambioAcceso = 'habilitado' | 'cambiado' | 'quitado' | 'ninguno'
 
 export interface EntradaGuardarGrupo {
   /** Sin él, se crea; con él, se edita. */
@@ -62,13 +79,17 @@ export interface EntradaEliminarGrupo {
   motivo?: string
 }
 
-/** Las cinco cosas que el administrador puede hacer. En producción las respalda el servidor; en pruebas, un doble. */
+/** Lo que quien gestiona puede hacer. En producción lo respalda el servidor; en pruebas, un doble. */
 export interface AccionesPdm {
   asignarPersona: (e: EntradaAsignarPersona) => Promise<Resultado<ResumenCambio>>
   asignarGrupo: (e: EntradaAsignarGrupo) => Promise<Resultado<ResumenCambio>>
-  quitarApoyo: (e: EntradaQuitarApoyo) => Promise<Resultado<ResumenCambio>>
+  quitarAsignacion: (e: EntradaQuitarAsignacion) => Promise<Resultado<ResumenCambio>>
   guardarGrupo: (e: EntradaGuardarGrupo) => Promise<Resultado<{ grupo: string }>>
   eliminarGrupo: (e: EntradaEliminarGrupo) => Promise<Resultado>
+  habilitar: (e: EntradaHabilitar) => Promise<Resultado<{ cambio: CambioAcceso }>>
+  deshabilitar: (e: EntradaDeshabilitar) => Promise<Resultado<{ cambio: CambioAcceso }>>
+  /** Los cambios de responsable de un indicador, del más reciente al más antiguo. Solo el administrador los lee. */
+  historialIndicador: (indicador: string) => Promise<Resultado<EntradaHistorial[]>>
 }
 
 // ─── Validación (la hace el servidor antes de preguntarle nada a la base) ──────

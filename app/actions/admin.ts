@@ -77,6 +77,11 @@ export async function crearUsuario(formData: {
     return { error: 'Contratación solo puede crear usuarios con rol contratista' }
   }
 
+  // El funcionario se habilita y se le asignan indicadores POR SECRETARÍA: sin ella nadie podría hacerlo.
+  if (formData.rol === 'funcionario' && !formData.dependencia_id) {
+    return { error: 'El funcionario necesita una secretaría' }
+  }
+
   const adminClient = createAdminSupabaseClient()
 
   // Normalize fields before writing
@@ -264,6 +269,9 @@ export async function actualizarUsuario(
     if (data.rol && data.rol !== 'contratista') {
       return { error: 'Contratación no puede cambiar el rol de un usuario' }
     }
+  }
+  if (data.rol === 'funcionario' && !data.dependencia_id) {
+    return { error: 'El funcionario necesita una secretaría' }
   }
 
   const adminClient = createAdminSupabaseClient()

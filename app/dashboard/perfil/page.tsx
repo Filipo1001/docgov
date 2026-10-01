@@ -18,6 +18,7 @@ const ROL_LABEL: Record<string, string> = {
   asesor:      'Asesor Jurídico',
   supervisor:  'Secretaría',
   admin:       'Administrador',
+  funcionario: 'Funcionario',
 }
 
 const ROL_BADGE: Record<string, 'blue' | 'indigo' | 'emerald' | 'amber'> = {
@@ -26,6 +27,7 @@ const ROL_BADGE: Record<string, 'blue' | 'indigo' | 'emerald' | 'amber'> = {
   asesor:      'indigo',
   supervisor:  'emerald',
   admin:       'amber',
+  funcionario: 'emerald',
 }
 
 // Top stripe color per role

@@ -29,9 +29,9 @@ import { cargarDirectorio } from '@/lib/pdm/directorio'
 export const generateMetadata = () => metadataPdm('Resumen')
 
 export default async function ResumenPage() {
-  await exigirAccesoPdm()
+  const acceso = await exigirAccesoPdm()
   const plan = await cargarPlanPdm()
-  if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} />
+  if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
   const { fichas } = await cargarDirectorio()
   return <ResumenPdm indicadores={plan.indicadores} fichas={fichas} />
 }

@@ -36,6 +36,8 @@ import { BarraAvance } from './Barras'
 import { Avatar, LineaContrato } from './PersonaVista'
 import type { MotivoSinVincular, PersonaFicha } from '@/lib/pdm/personas'
 import type { AsignadoVista } from '@/lib/pdm/asignados'
+import type { Resultado } from '@/lib/pdm/acciones'
+import { fechaHoraBogota, type EntradaHistorial } from '@/lib/pdm/historial'
 
 const fechaHora = (t: number) =>
   new Date(t).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
@@ -56,7 +58,7 @@ const NOTA_SIN_USUARIO: Record<MotivoSinVincular, string> = {
 }
 
 export default function IndicadorModal({
-  indicador, reportes, puedeReportar, onCerrar, onReportar, persona, asignados, onAsignar, onQuitarApoyo,
+  indicador, reportes, puedeReportar, onCerrar, onReportar, persona, asignados, onAsignar, onQuitar, onCargarHistorial,
 }: {
   indicador: Indicador | null
   reportes: Reporte[]
@@ -69,8 +71,13 @@ export default function IndicadorModal({
   asignados?: AsignadoVista[]
   /** Con esto la ficha deja repartir el indicador. Sin esto no hay botón: lo ven quienes no pueden asignar. */
   onAsignar?: () => void
-  /** Devuelve el mensaje de error, o `null` si salió bien. */
-  onQuitarApoyo?: (usuarioId: string) => Promise<string | null>
+  /**
+   * Quita a una persona del indicador: a un apoyo siempre, y al principal cuando es la ÚNICA asignación
+   * (si hay apoyos, al principal se le reemplaza). Devuelve el mensaje de error, o `null` si salió bien.
+   */
+  onQuitar?: (usuarioId: string) => Promise<string | null>
+  /** Con esto la ficha muestra el historial de cambios de responsable (solo lo lee el administrador). */
+  onCargarHistorial?: () => Promise<Resultado<EntradaHistorial[]>>
 }) {
   const [valor, setValor] = useState('')
   const [texto, setTexto] = useState('')
@@ -78,11 +85,17 @@ export default function IndicadorModal({
   const [enviado, setEnviado] = useState(false)
   const [quitando, setQuitando] = useState<string | null>(null)
   const [errorApoyo, setErrorApoyo] = useState<string | null>(null)
+  const [historial, setHistorial] = useState<EntradaHistorial[] | null>(null)
+  const [cargandoHistorial, setCargandoHistorial] = useState(false)
+  const [errorHistorial, setErrorHistorial] = useState<string | null>(null)
   const cerrarRef = useRef<HTMLButtonElement>(null)
 
   // Escape, bloqueo del fondo y foco al abrir. Depende del id: que el padre se
   // vuelva a pintar con el modal abierto no debe repetirlo.
   const id = indicador?.id
+  // Si cambia quién lleva el indicador, el historial que se había cargado ya no está al día.
+  const firma = asignados?.map(a => `${a.usuarioId}${a.principal ? 'P' : 'A'}`).join(',') ?? ''
+  useEffect(() => { setHistorial(null); setErrorHistorial(null) }, [firma])
   const cerrarFn = useRef(onCerrar)
   useEffect(() => { cerrarFn.current = onCerrar })
   useEffect(() => {
@@ -117,13 +130,26 @@ export default function IndicadorModal({
   const apoyos = asignados?.filter(a => !a.principal) ?? []
 
   async function quitar(usuarioId: string) {
-    if (!onQuitarApoyo) return
+    if (!onQuitar) return
     setQuitando(usuarioId)
     setErrorApoyo(null)
-    const e = await onQuitarApoyo(usuarioId)
+    const e = await onQuitar(usuarioId)
     setQuitando(null)
     if (e) setErrorApoyo(e)
   }
+
+  async function cargarHistorial() {
+    if (!onCargarHistorial) return
+    setCargandoHistorial(true)
+    setErrorHistorial(null)
+    const r = await onCargarHistorial()
+    setCargandoHistorial(false)
+    if (r.ok) setHistorial(r.datos)
+    else setErrorHistorial(r.error)
+  }
+
+  // Al principal solo se le quita si es la única asignación; con apoyos se le reemplaza.
+  const puedeQuitarPrincipal = !!principalVista && !principalVista.grupo && (asignados?.length ?? 0) === 1
 
   function enviar() {
     if (!valido || !indicador) return
@@ -189,14 +215,28 @@ export default function IndicadorModal({
           <section className={`rounded-xl border px-4 py-3 ${huerfano ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Responsable</p>
-              {onAsignar && (
-                <button
-                  id="pdm-ficha-asignar"
-                  onClick={onAsignar}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50"
-                >
-                  Asignar…
-                </button>
+              {(onAsignar || (onQuitar && puedeQuitarPrincipal)) && (
+                <div className="flex shrink-0 items-center gap-2">
+                  {onQuitar && puedeQuitarPrincipal && principalVista && (
+                    <button
+                      id="pdm-ficha-quitar"
+                      onClick={() => quitar(principalVista.usuarioId)}
+                      disabled={quitando !== null}
+                      className="rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50"
+                    >
+                      {quitando === principalVista.usuarioId ? 'Quitando…' : 'Quitar'}
+                    </button>
+                  )}
+                  {onAsignar && (
+                    <button
+                      id="pdm-ficha-asignar"
+                      onClick={onAsignar}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+                    >
+                      Asignar…
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             {!huerfano && persona && 'nombre' in persona ? (
@@ -241,7 +281,7 @@ export default function IndicadorModal({
                             <span className="block truncate text-sm font-medium text-gray-900">{a.nombre}</span>
                             {a.grupo && <span className="block truncate text-xs text-gray-500">Por el grupo «{a.grupo}»</span>}
                           </span>
-                          {onQuitarApoyo && !a.grupo && (
+                          {onQuitar && !a.grupo && (
                             <button
                               onClick={() => quitar(a.usuarioId)}
                               disabled={quitando !== null}
@@ -298,6 +338,42 @@ export default function IndicadorModal({
               )}
             </ol>
           </section>
+
+          {/* Cambios de responsable (solo el administrador): quién cambió qué y cuándo */}
+          {onCargarHistorial && (
+            <section>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-gray-900">Cambios de responsable</h3>
+                {historial === null && (
+                  <button
+                    id="pdm-ficha-historial"
+                    onClick={cargarHistorial}
+                    disabled={cargandoHistorial}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {cargandoHistorial ? 'Cargando…' : 'Ver historial'}
+                  </button>
+                )}
+              </div>
+              {errorHistorial && <p role="alert" className="mt-2 text-xs font-medium text-red-700">{errorHistorial}</p>}
+              {historial !== null && (
+                historial.length === 0 ? (
+                  <p className="mt-2 text-xs text-gray-500">Nadie ha cambiado a los responsables de este indicador desde que se cargó el plan.</p>
+                ) : (
+                  <ol className="mt-3 space-y-3">
+                    {historial.map(h => (
+                      <li key={h.id} className="relative border-l-2 border-gray-200 pl-4">
+                        <span className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-gray-300" />
+                        <p className="text-sm leading-snug text-gray-900">{h.texto}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">{fechaHoraBogota(h.cuando)} · {h.quien}</p>
+                        {h.motivo && <p className="mt-0.5 text-xs italic text-gray-500">«{h.motivo}»</p>}
+                      </li>
+                    ))}
+                  </ol>
+                )
+              )}
+            </section>
+          )}
 
           {/* Reportar */}
           {puedeReportar && (

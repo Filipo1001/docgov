@@ -20,11 +20,13 @@ import EditorGrupo from './EditorGrupo'
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
 
-export default function GruposPdm({ grupos, personas, secretarias, acciones }: {
+export default function GruposPdm({ grupos, personas, secretarias, acciones, puedeGestionar }: {
   grupos: GrupoVista[]
   personas: PersonaDirectorio[]
   secretarias: SecretariaPlan[]
   acciones: AccionesPdm
+  /** Quien solo consulta ve los grupos y no los toca. */
+  puedeGestionar: boolean
 }) {
   // `undefined`: cerrado · `null`: grupo nuevo · un grupo: editándolo
   const [editando, setEditando] = useState<GrupoVista | null | undefined>(undefined)
@@ -38,14 +40,16 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones }: {
           <h2 className="text-sm font-bold text-gray-900">Grupos</h2>
           <span className="text-xs text-gray-500">{plural(grupos.length, 'grupo', 'grupos')}</span>
         </div>
-        <button
-          id="pdm-crear-grupo"
-          onClick={() => { setAviso(null); setEditando(null) }}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
-        >
-          <Icono glifo={Iconos.accion.agregar} tamano="sm" />
-          Crear grupo
-        </button>
+        {puedeGestionar && (
+          <button
+            id="pdm-crear-grupo"
+            onClick={() => { setAviso(null); setEditando(null) }}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
+          >
+            <Icono glifo={Iconos.accion.agregar} tamano="sm" />
+            Crear grupo
+          </button>
+        )}
       </div>
 
       {aviso && (
@@ -89,18 +93,20 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones }: {
               ) : (
                 <span className="w-20 shrink-0 text-right text-xs text-gray-400">Ninguno</span>
               )}
-              <button
-                onClick={() => { setAviso(null); setEditando(g) }}
-                className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                Editar
-              </button>
+              {puedeGestionar && (
+                <button
+                  onClick={() => { setAviso(null); setEditando(g) }}
+                  className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  Editar
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      {editando !== undefined && (
+      {puedeGestionar && editando !== undefined && (
         <EditorGrupo
           // Cada grupo abre su propio formulario: sin esto, pasar de uno a otro arrastraría lo escrito.
           key={editando?.id ?? 'nuevo'}

@@ -55,5 +55,6 @@ const TONO: Record<TonoContrato, string> = {
 /** «Contrato 224 de 2026 · vence el 31 dic 2026». El color avisa: ámbar si vence en 30 días, rojo si ya terminó. */
 export function LineaContrato({ contrato, className = '' }: { contrato: ContratoResumen; className?: string }) {
   const { texto, tono } = describirContrato(contrato)
+  if (texto === '') return null
   return <p className={`text-xs ${TONO[tono]} ${className}`}>{texto}</p>
 }

@@ -18,6 +18,7 @@ const ROL_COLOR: Record<string, string> = {
   supervisor:  'bg-blue-100 text-blue-700',
   contratista: 'bg-gray-100 text-gray-700',
   asesor:      'bg-orange-100 text-orange-700',
+  funcionario: 'bg-teal-100 text-teal-700',
   gobierno:    'bg-cyan-100 text-cyan-700',
   hacienda:    'bg-amber-100 text-amber-700',
 }
@@ -456,7 +457,7 @@ export default function AdminUsuariosClient({
             <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)}
               className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400">
               <option value="">Todos los roles</option>
-              {['admin','supervisor','contratista','asesor','gobierno','hacienda'].map(r =>
+              {['admin','supervisor','contratista','asesor','funcionario','gobierno','hacienda'].map(r =>
                 <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
             </select>
           )}

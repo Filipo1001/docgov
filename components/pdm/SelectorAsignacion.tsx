@@ -220,6 +220,13 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
             </p>
           )}
 
+          {persona && persona.acceso === null && persona.rol !== 'admin' && (
+            <p role="status" className="flex items-start gap-2 rounded-xl bg-gray-100 px-3 py-2.5 text-xs leading-relaxed text-gray-700">
+              <Icono glifo={Iconos.estado.informacion} tamano="sm" className="mt-0.5 shrink-0" />
+              Esta persona aún no tiene acceso al módulo. Asignarle indicadores no se lo da: se habilita en Responsables.
+            </p>
+          )}
+
           <fieldset className="space-y-2">
             <legend className="text-xs font-semibold text-gray-600">Cómo participa</legend>
             {([

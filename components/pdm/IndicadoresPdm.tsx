@@ -21,6 +21,7 @@ import ListaIndicadores from './ListaIndicadores'
 import type { Filtro } from '@/lib/pdm/filtros'
 import type { GrupoVista, PersonaDirectorio, PersonaFicha } from '@/lib/pdm/personas'
 import { asignadosVista } from '@/lib/pdm/asignados'
+import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
 import { describirResumen, type AccionesPdm, type ResumenCambio } from '@/lib/pdm/acciones'
 import IndicadorModal from './IndicadorModal'
 import SelectorAsignacion from './SelectorAsignacion'
@@ -31,13 +32,15 @@ const SIN_REPORTADO: Record<number, number> = {}
 const NO_REPORTA = () => {}
 
 export default function IndicadoresPdm({
-  indicadores, fichas, personas, grupos, dependenciaInicial, filtroInicial, restringirA, acciones = ACCIONES_REALES,
+  indicadores, fichas, personas, grupos, nivel, dependenciaInicial, filtroInicial, restringirA, acciones = ACCIONES_REALES,
 }: {
   indicadores: Indicador[]
   fichas: Record<number, PersonaFicha>
   personas: PersonaDirectorio[]
   grupos: GrupoVista[]
-  /** Lo que el administrador puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
+  /** Qué puede hacer quien mira: quien gestiona asigna y quita; el administrador además ve el historial. */
+  nivel: NivelPdm
+  /** Lo que quien gestiona puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
   acciones?: AccionesPdm
   dependenciaInicial?: string
   filtroInicial?: Filtro
@@ -59,6 +62,7 @@ export default function IndicadoresPdm({
   }, [indicadores, restringirA])
   const indicador = abierto === null ? null : indicadores.find(i => i.id === abierto) ?? null
 
+  const puedeAsignar = gestiona(nivel)
   const personasPorId = useMemo(() => new Map(personas.map(p => [p.id, p])), [personas])
   const gruposPorId = useMemo(() => new Map(grupos.map(g => [g.id, g])), [grupos])
   const marcados = useMemo(() => indicadores.filter(i => elegidos.has(i.id)), [indicadores, elegidos])
@@ -115,16 +119,16 @@ export default function IndicadoresPdm({
         onDependencia={setDependencia}
         filtroInicial={filtroInicial}
         fichas={fichas}
-        seleccion={{
+        seleccion={puedeAsignar ? {
           activa: seleccionActiva,
           elegidos,
           onActiva: activa => { if (activa) { setAviso(null); setSeleccionActiva(true) } else terminarSeleccion() },
           onAlternar: alternar,
           onReemplazar: ids => setElegidos(new Set(ids)),
-        }}
+        } : undefined}
       />
 
-      {seleccionActiva && marcados.length > 0 && (
+      {puedeAsignar && seleccionActiva && marcados.length > 0 && (
         <>
           <div className="h-16" aria-hidden />
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -161,16 +165,17 @@ export default function IndicadoresPdm({
         onReportar={NO_REPORTA}
         persona={indicador ? fichas[indicador.id] : undefined}
         asignados={indicador ? asignadosVista(indicador, personasPorId, gruposPorId) : undefined}
-        onAsignar={indicador ? () => { setAviso(null); setSelectorPara([indicador]) } : undefined}
-        onQuitarApoyo={indicador
+        onAsignar={puedeAsignar && indicador ? () => { setAviso(null); setSelectorPara([indicador]) } : undefined}
+        onQuitar={puedeAsignar && indicador
           ? async usuarioId => {
-              const r = await acciones.quitarApoyo({ indicadores: [indicador.uuid], usuario: usuarioId })
+              const r = await acciones.quitarAsignacion({ indicadores: [indicador.uuid], usuario: usuarioId })
               return r.ok ? null : r.error
             }
           : undefined}
+        onCargarHistorial={nivel === 'admin' && indicador ? () => acciones.historialIndicador(indicador.uuid) : undefined}
       />
 
-      {selectorPara && (
+      {puedeAsignar && selectorPara && (
         <SelectorAsignacion
           // Cada selección abre un formulario nuevo. El prefijo importa: con un solo indicador la clave sería su número,
           // igual que la de la ficha (hermana de esta), y React confundiría las dos al cerrar el selector.

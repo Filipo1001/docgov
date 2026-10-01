@@ -14,6 +14,7 @@ const ROLES = [
   { value: 'asesor',       label: 'Asesor jurídico' },
   { value: 'contratacion', label: 'Contratación' },
   { value: 'alcalde',      label: 'Alcalde' },
+  { value: 'funcionario',  label: 'Funcionario (personal de planta)' },
   { value: 'gobierno',     label: 'Gobierno' },
   { value: 'hacienda',     label: 'Hacienda' },
   { value: 'admin',        label: 'Administrador' },
@@ -49,6 +50,11 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
     e.preventDefault()
     if (!email.trim() || !nombre.trim() || !cedula.trim()) {
       toast.error('Email, nombre y documento son obligatorios')
+      return
+    }
+    // Al funcionario se le habilita y se le asigna POR SECRETARÍA: sin ella ninguna secretaría podría hacerlo.
+    if (rolEfectivo === 'funcionario' && !depId) {
+      toast.error('El funcionario necesita una secretaría')
       return
     }
     setLoading(true)

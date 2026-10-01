@@ -20,7 +20,12 @@
  * Funciones puras y sin dependencias: se pueden probar sin base de datos.
  */
 
-export type EstadoContrato = 'en_fecha' | 'vencido' | 'sin_contrato' | 'planta'
+/**
+ * `desconocido`: no se puede saber. Quien mira es una secretaría y la base solo le deja ver los
+ * contratos de SU dependencia; mostrar a alguien de otra como «sin contrato» sería afirmar algo
+ * falso. Se calla en vez de adivinar.
+ */
+export type EstadoContrato = 'en_fecha' | 'vencido' | 'sin_contrato' | 'planta' | 'desconocido'
 
 export interface ContratoFila {
   numero: string
@@ -97,10 +102,15 @@ export function fechaCorta(iso: string): string {
   return `${dia} ${MESES[mes - 1]} ${anio}`
 }
 
+export const CONTRATO_DESCONOCIDO: ContratoResumen = {
+  estado: 'desconocido', numero: null, anio: null, fin: null, dias: null, enFecha: 0, total: 0,
+}
+
 export type TonoContrato = 'ok' | 'pronto' | 'vencido' | 'neutro'
 
 /** Lo que se escribe en pantalla, y con qué tono. Vence «pronto» dentro de 30 días. */
 export function describirContrato(c: ContratoResumen): { texto: string; tono: TonoContrato } {
+  if (c.estado === 'desconocido') return { texto: '', tono: 'neutro' }
   if (c.estado === 'planta') return { texto: 'Personal de planta', tono: 'neutro' }
   if (c.estado === 'sin_contrato' || c.numero === null || c.fin === null || c.dias === null) {
     return { texto: 'Sin contrato', tono: 'neutro' }

@@ -10,6 +10,16 @@
 import type { ContratoResumen } from './contrato'
 import type { MotivoSinUsuario } from './vinculos'
 import type { Resumen } from './plan'
+import type { NivelHabilitable } from './niveles'
+
+/** Con qué alcance puede entrar una persona al módulo (la fila de `pdm_permisos`). */
+export interface AccesoPersona {
+  nivel: NivelHabilitable
+  /** Quién la habilitó, tal como quedó escrito. */
+  por: string | null
+  /** ISO de cuándo. */
+  desde: string
+}
 
 export interface PersonaDirectorio {
   id: string
@@ -24,6 +34,8 @@ export interface PersonaDirectorio {
   indicadores: number
   /** Cómo van los indicadores a su nombre; `null` si no tiene ninguno. */
   resumen: Resumen | null
+  /** `null`: no tiene acceso al módulo (el administrador no lo necesita y también figura `null`). */
+  acceso: AccesoPersona | null
 }
 
 export type MotivoSinVincular = MotivoSinUsuario | 'no_encontrado'

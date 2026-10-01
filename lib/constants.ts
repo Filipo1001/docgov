@@ -302,6 +302,13 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
       { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
     ],
+    // Funcionario (personal de planta): sin contratos ni informes. Inicio y
+    // Configuración (para cambiar la contraseña inicial); el botón del Plan de
+    // Desarrollo lo añade el layout cuando el servidor dice que le corresponde.
+    funcionario: [
+      { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
+      { href: '/dashboard/configuracion', label: 'Configuración', icono: 'configuracion' },
+    ],
   }
 
   return menus[rol] ?? menus.contratista
@@ -354,4 +361,5 @@ export const ROL_LABEL: Record<string, string> = {
   contratista: 'Contratista',
   contratacion: 'Contratación',
   alcalde: 'Alcalde',
+  funcionario: 'Funcionario',
 }

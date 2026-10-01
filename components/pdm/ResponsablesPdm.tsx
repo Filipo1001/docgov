@@ -40,6 +40,8 @@ import EncabezadoSeccion from './EncabezadoSeccion'
 import { BarraEstados } from './Barras'
 import { Avatar, LineaContrato } from './PersonaVista'
 import GruposPdm from './GruposPdm'
+import AccesoPdm from './AccesoPdm'
+import { ETIQUETA_NIVEL, gestiona, type NivelPdm } from '@/lib/pdm/niveles'
 import { ACCIONES_REALES } from './acciones-reales'
 import type { AccionesPdm } from '@/lib/pdm/acciones'
 
@@ -69,6 +71,9 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
         <p className="truncate text-sm font-semibold text-gray-900">{p.nombre}</p>
         <p className="truncate text-xs text-gray-500">{p.secretaria ?? 'Sin secretaría'}</p>
         <LineaContrato contrato={p.contrato} />
+        {p.acceso && (
+          <p className="text-[11px] font-semibold text-teal-700">Con acceso al módulo · {ETIQUETA_NIVEL[p.acceso.nivel]}</p>
+        )}
         {p.excel && !coincideNombre(p.nombre, p.excel) && (
           <p className="text-[11px] text-gray-400">En el Excel figura como «{p.excel}»</p>
         )}
@@ -111,10 +116,14 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
   )
 }
 
-export default function ResponsablesPdm({ directorio, indicadores, acciones = ACCIONES_REALES }: {
+export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, acciones = ACCIONES_REALES }: {
   directorio: Directorio
   indicadores: Indicador[]
-  /** Lo que el administrador puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
+  /** Qué puede hacer quien mira. */
+  nivel: NivelPdm
+  /** Quién mira. */
+  yoId: string
+  /** Lo que quien gestiona puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
   acciones?: AccionesPdm
 }) {
   const [q, setQ] = useState('')
@@ -243,8 +252,17 @@ export default function ResponsablesPdm({ directorio, indicadores, acciones = AC
 
       {/* 3 · Los grupos */}
       {directorio.ok && (
-        <GruposPdm grupos={directorio.grupos} personas={directorio.personas} secretarias={directorio.secretarias} acciones={acciones} />
+        <GruposPdm
+          grupos={directorio.grupos}
+          personas={directorio.personas}
+          secretarias={directorio.secretarias}
+          acciones={acciones}
+          puedeGestionar={gestiona(nivel)}
+        />
       )}
+
+      {/* 3b · Quién entra al módulo */}
+      {directorio.ok && <AccesoPdm personas={directorio.personas} nivel={nivel} yoId={yoId} acciones={acciones} />}
 
       {/* 4 · Las personas de la plataforma */}
       {directorio.ok && (

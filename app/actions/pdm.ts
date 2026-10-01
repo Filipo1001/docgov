@@ -1,64 +1,54 @@
 'use server'
 
 /**
- * ¿Debe la barra lateral mostrar el botón de Plan de Desarrollo?
+ * ¿Qué puede hacer en el módulo Plan de Desarrollo quien pregunta? `null`: nada, y el botón de
+ * la barra lateral no aparece.
  *
- * La barra es un componente de cliente y `VERCEL_ENV` solo existe en el
- * servidor, así que la pregunta se hace por aquí. Responde únicamente a
- * administradores con sesión y, además, solo donde el módulo existe (ver
- * `pdmHabilitado`).
+ * La barra es un componente de cliente y `VERCEL_ENV` solo existe en el servidor, así que la
+ * pregunta se hace por aquí. Es una acción y no una variable pública a propósito: una variable
+ * pública se fija al compilar, y la decisión de «¿estamos en vista previa?» la toma el servidor
+ * en cada petición, con la misma función que cierra la página (`accesoPdm`). El botón y la
+ * página no pueden discrepar porque leen lo mismo.
  *
- * Es una acción y no una variable pública a propósito: una variable pública se
- * fija al compilar y la decisión de «¿estamos en vista previa?» la toma el
- * servidor en cada petición, con la misma función que cierra la página. El
- * botón y la página no pueden discrepar porque leen lo mismo.
- *
- * Devuelve un booleano y nada más: no expone quién es el usuario ni por qué se
- * negó. Ante cualquier duda —sin sesión, rol distinto, error de lectura— la
- * respuesta es `false`, que es el estado seguro.
+ * Devuelve el nivel y nada más: no expone quién es el usuario ni por qué se negó. Ante
+ * cualquier duda —sin sesión, sin permiso, error de lectura— la respuesta es `null`, que es el
+ * estado seguro.
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { pdmHabilitado } from '@/lib/pdm/habilitado'
+import { accesoPdm } from '@/lib/pdm/acceso'
+import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
+import { describirCambio, type EntradaHistorial, type FilaHistorial } from '@/lib/pdm/historial'
 import { revalidatePath } from 'next/cache'
 import {
   errorEnLista, errorEnMotivo, esUuid, traducirErrorPdm,
   MAX_DESCRIPCION, MAX_INDICADORES, MAX_MIEMBROS, MAX_NOMBRE_GRUPO,
-  type EntradaAsignarGrupo, type EntradaAsignarPersona, type EntradaEliminarGrupo,
-  type EntradaGuardarGrupo, type EntradaQuitarApoyo, type Resultado, type ResumenCambio,
+  type CambioAcceso, type EntradaAsignarGrupo, type EntradaAsignarPersona, type EntradaDeshabilitar,
+  type EntradaEliminarGrupo, type EntradaGuardarGrupo, type EntradaHabilitar, type EntradaQuitarAsignacion,
+  type Resultado, type ResumenCambio,
 } from '@/lib/pdm/acciones'
+import { esNivelHabilitable } from '@/lib/pdm/niveles'
 
-export async function moduloPdmVisible(): Promise<boolean> {
+export async function nivelPdm(): Promise<NivelPdm | null> {
   try {
-    if (!pdmHabilitado()) return false
-
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return false
-
-    const { data: yo } = await supabase
-      .from('usuarios')
-      .select('rol')
-      .eq('id', user.id)
-      .single()
-
-    return yo?.rol === 'admin'
+    return (await accesoPdm())?.nivel ?? null
   } catch {
-    return false
+    return null
   }
 }
 
 // ─── Repartir indicadores ─────────────────────────────────────────────────────
 //
-// Las cinco acciones del administrador. Todas siguen el mismo camino y ninguna se
-// salta una puerta:
+// Las acciones de quien gestiona (el administrador y las secretarías). Todas siguen el mismo
+// camino y ninguna se salta una puerta:
 //
-//   1. `pdmHabilitado()`: fuera de la vista previa (producción) no hacen nada.
-//   2. Sesión y rol de administrador, leídos del servidor y no del navegador.
+//   1. `accesoPdm()`: fuera de la vista previa (producción) no hacen nada.
+//   2. Sesión y nivel (administrador o secretaría), leídos del servidor y no del navegador.
 //   3. Se valida lo que llega (ids, tamaños) ANTES de preguntarle nada a la base.
-//   4. La base decide: llaman a funciones SECURITY INVOKER (migración 052) con la
-//      sesión de quien pide, así que mandan las políticas de la migración 050.
-//      Aunque alguien invocara esto a mano sin ser administrador, la base lo negaría.
+//   4. La base decide: llaman a funciones SECURITY INVOKER (migraciones 052 y 055) con la
+//      sesión de quien pide, así que mandan las políticas de la migración 050: una
+//      secretaría solo toca lo de SU dependencia. Aunque alguien invocara esto a mano,
+//      la base lo negaría.
 //   5. La bitácora (`pdm_historial`) la escribe un disparador de la base, no estas
 //      funciones: no hay manera de cambiar una asignación sin que quede rastro.
 //
@@ -67,14 +57,11 @@ export async function moduloPdmVisible(): Promise<boolean> {
 
 const SIN_PERMISO = 'No tienes permiso para hacer este cambio.'
 
-/** El cliente de Supabase con la sesión del administrador, o `null` si no corresponde. */
-async function sesionAdminPdm() {
-  if (!pdmHabilitado()) return null
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: yo } = await supabase.from('usuarios').select('rol').eq('id', user.id).single()
-  return yo?.rol === 'admin' ? supabase : null
+/** El cliente de Supabase con la sesión de quien gestiona (administrador o secretaría), o `null` si no corresponde. */
+async function sesionGestorPdm() {
+  const acceso = await accesoPdm()
+  if (!acceso || !gestiona(acceso.nivel)) return null
+  return createServerSupabaseClient()
 }
 
 const REFRESCO = '/dashboard/plan-desarrollo'
@@ -90,7 +77,7 @@ const motivoDe = (m?: string) => (m && m.trim() ? m.trim() : null)
 
 export async function asignarPersona(e: EntradaAsignarPersona): Promise<Resultado<ResumenCambio>> {
   try {
-    const supabase = await sesionAdminPdm()
+    const supabase = await sesionGestorPdm()
     if (!supabase) return { ok: false, error: SIN_PERMISO }
     const mal = errorEnLista(e?.indicadores, MAX_INDICADORES, 'al menos un indicador')
       ?? (!esUuid(e?.usuario) ? 'Falta elegir a la persona.' : null)
@@ -113,7 +100,7 @@ export async function asignarPersona(e: EntradaAsignarPersona): Promise<Resultad
 
 export async function asignarGrupo(e: EntradaAsignarGrupo): Promise<Resultado<ResumenCambio>> {
   try {
-    const supabase = await sesionAdminPdm()
+    const supabase = await sesionGestorPdm()
     if (!supabase) return { ok: false, error: SIN_PERMISO }
     const mal = errorEnLista(e?.indicadores, MAX_INDICADORES, 'al menos un indicador')
       ?? (!esUuid(e?.grupo) ? 'Falta elegir el grupo.' : null)
@@ -133,9 +120,9 @@ export async function asignarGrupo(e: EntradaAsignarGrupo): Promise<Resultado<Re
   }
 }
 
-export async function quitarApoyo(e: EntradaQuitarApoyo): Promise<Resultado<ResumenCambio>> {
+export async function quitarAsignacion(e: EntradaQuitarAsignacion): Promise<Resultado<ResumenCambio>> {
   try {
-    const supabase = await sesionAdminPdm()
+    const supabase = await sesionGestorPdm()
     if (!supabase) return { ok: false, error: SIN_PERMISO }
     const mal = errorEnLista(e?.indicadores, MAX_INDICADORES, 'al menos un indicador')
       ?? (!esUuid(e?.usuario) ? 'Falta elegir a la persona.' : null)
@@ -149,14 +136,14 @@ export async function quitarApoyo(e: EntradaQuitarApoyo): Promise<Resultado<Resu
     refrescar()
     return { ok: true, datos: resumenDe(data) }
   } catch (err) {
-    console.error('[pdm/acciones] quitarApoyo:', err)
+    console.error('[pdm/acciones] quitarAsignacion:', err)
     return { ok: false, error: traducirErrorPdm() }
   }
 }
 
 export async function guardarGrupo(e: EntradaGuardarGrupo): Promise<Resultado<{ grupo: string }>> {
   try {
-    const supabase = await sesionAdminPdm()
+    const supabase = await sesionGestorPdm()
     if (!supabase) return { ok: false, error: SIN_PERMISO }
     const nombre = typeof e?.nombre === 'string' ? e.nombre.trim() : ''
     const mal = (e.grupo !== undefined && !esUuid(e.grupo) ? 'Algo de lo elegido no es válido.' : null)
@@ -187,7 +174,7 @@ export async function guardarGrupo(e: EntradaGuardarGrupo): Promise<Resultado<{ 
 
 export async function eliminarGrupo(e: EntradaEliminarGrupo): Promise<Resultado> {
   try {
-    const supabase = await sesionAdminPdm()
+    const supabase = await sesionGestorPdm()
     if (!supabase) return { ok: false, error: SIN_PERMISO }
     const mal = (!esUuid(e?.grupo) ? 'Algo de lo elegido no es válido.' : null) ?? errorEnMotivo(e.motivo)
     if (mal) return { ok: false, error: mal }
@@ -198,6 +185,90 @@ export async function eliminarGrupo(e: EntradaEliminarGrupo): Promise<Resultado>
     return { ok: true, datos: undefined }
   } catch (err) {
     console.error('[pdm/acciones] eliminarGrupo:', err)
+    return { ok: false, error: traducirErrorPdm() }
+  }
+}
+
+// ─── Dar y quitar el acceso al módulo ─────────────────────────────────────────
+
+const CAMBIOS: readonly CambioAcceso[] = ['habilitado', 'cambiado', 'quitado', 'ninguno']
+const cambioDe = (datos: unknown): CambioAcceso => {
+  const c = (datos as { cambio?: unknown } | null)?.cambio
+  return CAMBIOS.find(x => x === c) ?? 'ninguno'
+}
+
+export async function habilitarPersona(e: EntradaHabilitar): Promise<Resultado<{ cambio: CambioAcceso }>> {
+  try {
+    const supabase = await sesionGestorPdm()
+    if (!supabase) return { ok: false, error: SIN_PERMISO }
+    const mal = (!esUuid(e?.usuario) ? 'Falta elegir a la persona.' : null)
+      ?? (!esNivelHabilitable(e.nivel) ? 'Falta elegir el nivel de acceso.' : null)
+      ?? errorEnMotivo(e.motivo)
+    if (mal) return { ok: false, error: mal }
+
+    const { data, error } = await supabase.rpc('pdm_habilitar', {
+      p_usuario: e.usuario, p_nivel: e.nivel, p_motivo: motivoDe(e.motivo),
+    })
+    if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
+    refrescar()
+    return { ok: true, datos: { cambio: cambioDe(data) } }
+  } catch (err) {
+    console.error('[pdm/acciones] habilitarPersona:', err)
+    return { ok: false, error: traducirErrorPdm() }
+  }
+}
+
+export async function deshabilitarPersona(e: EntradaDeshabilitar): Promise<Resultado<{ cambio: CambioAcceso }>> {
+  try {
+    const supabase = await sesionGestorPdm()
+    if (!supabase) return { ok: false, error: SIN_PERMISO }
+    const mal = (!esUuid(e?.usuario) ? 'Falta elegir a la persona.' : null) ?? errorEnMotivo(e.motivo)
+    if (mal) return { ok: false, error: mal }
+
+    const { data, error } = await supabase.rpc('pdm_deshabilitar', { p_usuario: e.usuario, p_motivo: motivoDe(e.motivo) })
+    if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
+    refrescar()
+    return { ok: true, datos: { cambio: cambioDe(data) } }
+  } catch (err) {
+    console.error('[pdm/acciones] deshabilitarPersona:', err)
+    return { ok: false, error: traducirErrorPdm() }
+  }
+}
+
+// ─── El historial de un indicador ─────────────────────────────────────────────
+
+/**
+ * Los cambios de responsable de un indicador, del más reciente al más antiguo.
+ *
+ * Solo lo lee el administrador: la política de `pdm_historial` (migración 050) así lo dice, y
+ * esta acción además se lo pide al servidor. Una secretaría que la invocara recibiría una lista
+ * vacía, no un error: la base no le muestra esas filas.
+ */
+export async function historialIndicador(indicador: string): Promise<Resultado<EntradaHistorial[]>> {
+  try {
+    const acceso = await accesoPdm()
+    if (!acceso || acceso.nivel !== 'admin') return { ok: false, error: SIN_PERMISO }
+    if (!esUuid(indicador)) return { ok: false, error: 'Algo de lo elegido no es válido.' }
+
+    const supabase = await createServerSupabaseClient()
+    const { data, error } = await supabase
+      .from('pdm_historial')
+      .select('id, created_at, actor_nombre, accion, detalle')
+      .eq('entidad', 'indicador')
+      .eq('entidad_id', indicador)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(80)
+    if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
+
+    const entradas: EntradaHistorial[] = []
+    for (const f of (data ?? []) as FilaHistorial[]) {
+      const c = describirCambio(f)
+      if (c) entradas.push({ id: f.id, cuando: f.created_at, quien: f.actor_nombre, texto: c.texto, motivo: c.motivo })
+    }
+    return { ok: true, datos: entradas }
+  } catch (err) {
+    console.error('[pdm/acciones] historialIndicador:', err)
     return { ok: false, error: traducirErrorPdm() }
   }
 }

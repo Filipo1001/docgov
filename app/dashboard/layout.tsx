@@ -8,8 +8,8 @@ import { useQuery } from '@tanstack/react-query'
 import { UserProvider, useUsuario } from '@/lib/user-context'
 import { QueryProvider } from '@/lib/query-provider'
 import { getMenuPorRol } from '@/lib/constants'
-import { moduloPdmVisible } from '@/app/actions/pdm'
-import { insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO, usaMarcoPdm } from '@/lib/pdm/menu'
+import { nivelPdm } from '@/app/actions/pdm'
+import { insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO, MARCO_PDM_DISPONIBLE, usaMarcoPdm } from '@/lib/pdm/menu'
 import EnlaceMenuPdm from '@/components/pdm/EnlaceMenuPdm'
 import MarcoPdm from '@/components/pdm/MarcoPdm'
 import { avatarThumb } from '@/lib/avatar'
@@ -100,18 +100,24 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     }
   }, [usuario])
 
-  // Botón de Plan de Desarrollo: solo administrador, y solo donde el módulo
-  // existe (lo decide el servidor, ver lib/pdm/habilitado.ts). Mientras carga o
-  // si falla, no aparece: `pdmVisible` es undefined y el menú queda como siempre.
-  const { data: pdmVisible } = useQuery({
-    queryKey: ['pdm-visible'],
+  // Botón de Plan de Desarrollo: para quien tenga acceso al módulo (el administrador, o
+  // quien tenga una fila en `pdm_permisos`), y solo donde el módulo existe: lo decide el
+  // servidor, ver lib/pdm/acceso.ts. Mientras carga o si falla, no aparece: `nivel` es
+  // undefined y el menú queda como siempre.
+  //
+  // En producción el módulo no existe y NO se pregunta nada: `MARCO_PDM_DISPONIBLE` es falso
+  // y la consulta ni se lanza, para ningún rol. Contratista Digital no paga ni una petición
+  // por algo que allí no hace nada.
+  const { data: nivelModulo } = useQuery({
+    queryKey: ['pdm-acceso'],
     // En flecha, no directa: react-query le pasa su contexto interno a queryFn y
     // una acción del servidor no puede recibirlo. Igual que el resto de paneles.
-    queryFn: () => moduloPdmVisible(),
-    enabled: usuario?.rol === 'admin',
+    queryFn: () => nivelPdm(),
+    enabled: MARCO_PDM_DISPONIBLE && !!usuario,
     staleTime: Infinity,
     retry: false,
   })
+  const pdmVisible = nivelModulo != null
 
   const menuBase = usuario ? getMenuPorRol(usuario.rol) : []
   const menuItems = pdmVisible ? insertarDebajoDeInicio(menuBase, ITEM_PLAN_DESARROLLO) : menuBase

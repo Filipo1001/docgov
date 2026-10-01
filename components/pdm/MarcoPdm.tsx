@@ -44,7 +44,9 @@ import { Iconos } from '@/lib/iconos'
 import { avatarThumb } from '@/lib/avatar'
 import { useUsuario } from '@/lib/user-context'
 import { PLAN, VISTA_PREVIA } from '@/lib/pdm/identidad'
-import { SECCIONES_PDM, seccionActiva } from '@/lib/pdm/menu'
+import { useQuery } from '@tanstack/react-query'
+import { nivelPdm } from '@/app/actions/pdm'
+import { SECCIONES_PDM, seccionActiva, seccionesPara, type SeccionPdm } from '@/lib/pdm/menu'
 
 function iniciales(nombre: string): string {
   const partes = nombre.trim().split(/\s+/)
@@ -59,9 +61,12 @@ function iniciales(nombre: string): string {
 export function BarraPdm({
   usuario,
   ruta,
+  secciones = SECCIONES_PDM,
 }: {
   usuario: { nombre_completo: string; foto_url?: string | null } | null
   ruta: string | null
+  /** Las pestañas que le tocan a quien mira (ver `seccionesPara`). */
+  secciones?: SeccionPdm[]
 }) {
   const activa = seccionActiva(ruta)
 
@@ -126,7 +131,7 @@ export function BarraPdm({
 
       <nav aria-label="Secciones del plan" className="mx-auto max-w-7xl px-4 md:px-8">
         <ul className="-mb-px flex gap-1 overflow-x-auto">
-          {SECCIONES_PDM.map(s => {
+          {secciones.map(s => {
             const esta = s.href === activa
             return (
               <li key={s.href} className="shrink-0">
@@ -168,10 +173,17 @@ export function AvisoVistaPrevia() {
 export default function MarcoPdm({ children }: { children: React.ReactNode }) {
   const { usuario } = useUsuario()
   const ruta = usePathname()
+  // La misma respuesta del servidor que usa la barra lateral (clave compartida): no es una petición más.
+  const { data: nivel } = useQuery({
+    queryKey: ['pdm-acceso'],
+    queryFn: () => nivelPdm(),
+    staleTime: Infinity,
+    retry: false,
+  })
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <BarraPdm usuario={usuario} ruta={ruta} />
+      <BarraPdm usuario={usuario} ruta={ruta} secciones={seccionesPara(nivel)} />
 
       <AvisoVistaPrevia />
 

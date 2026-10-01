@@ -1,4 +1,7 @@
-import { asignarGrupo, asignarPersona, eliminarGrupo, guardarGrupo, quitarApoyo } from '@/app/actions/pdm'
+import {
+  asignarGrupo, asignarPersona, deshabilitarPersona, eliminarGrupo, guardarGrupo, habilitarPersona,
+  historialIndicador, quitarAsignacion,
+} from '@/app/actions/pdm'
 import type { AccionesPdm } from '@/lib/pdm/acciones'
 
 /**
@@ -6,4 +9,7 @@ import type { AccionesPdm } from '@/lib/pdm/acciones'
  * propiedad con esto como valor por defecto, para poder probarlas con un doble
  * sin tocar la base.
  */
-export const ACCIONES_REALES: AccionesPdm = { asignarPersona, asignarGrupo, quitarApoyo, guardarGrupo, eliminarGrupo }
+export const ACCIONES_REALES: AccionesPdm = {
+  asignarPersona, asignarGrupo, quitarAsignacion, guardarGrupo, eliminarGrupo,
+  habilitar: habilitarPersona, deshabilitar: deshabilitarPersona, historialIndicador,
+}

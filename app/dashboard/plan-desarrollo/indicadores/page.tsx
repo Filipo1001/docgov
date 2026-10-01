@@ -24,10 +24,10 @@ export default async function IndicadoresPage({
 }: {
   searchParams: Promise<{ dependencia?: string; filtro?: string; usuario?: string; origen?: string; grupo?: string }>
 }) {
-  await exigirAccesoPdm()
+  const acceso = await exigirAccesoPdm()
   const p = await searchParams
   const plan = await cargarPlanPdm()
-  if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} />
+  if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
   const dir = await cargarDirectorio()
 
   const dependencia = plan.indicadores.find(i => i.dependencia === p.dependencia)?.dependencia
@@ -64,6 +64,7 @@ export default async function IndicadoresPage({
       fichas={dir.fichas}
       personas={dir.personas}
       grupos={dir.grupos}
+      nivel={acceso.nivel}
       dependenciaInicial={dependencia}
       filtroInicial={filtro}
       restringirA={restringirA}

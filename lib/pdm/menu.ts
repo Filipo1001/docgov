@@ -1,5 +1,6 @@
 import type { ItemMenu } from '@/lib/constants'
 import { entornoPermiteModulo } from '@/lib/pdm/entorno'
+import { veDirectorio, type NivelPdm } from '@/lib/pdm/niveles'
 
 /**
  * El botón del módulo en la barra lateral del administrador.
@@ -90,6 +91,15 @@ export const SECCIONES_PDM: SeccionPdm[] = [
   { href: HREF_INDICADORES, rotulo: 'Indicadores' },
   { href: HREF_RESPONSABLES, rotulo: 'Responsables' },
 ]
+
+/**
+ * Las pestañas que le corresponden a un nivel. Quien solo responde por indicadores no ve
+ * «Responsables» (es el directorio de todas las personas): una pestaña a la que no se puede
+ * entrar no se pinta.
+ */
+export function seccionesPara(nivel: NivelPdm | null | undefined): SeccionPdm[] {
+  return veDirectorio(nivel) ? SECCIONES_PDM : SECCIONES_PDM.filter(s => s.href !== HREF_RESPONSABLES)
+}
 
 /** ¿Cuál pestaña corresponde a esta ruta? `null` si ninguna (no se marca ninguna). */
 export function seccionActiva(pathname: string | null | undefined): string | null {
