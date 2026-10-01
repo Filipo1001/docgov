@@ -33,6 +33,8 @@
 export interface Asignacion {
   usuarioId: string
   principal: boolean
+  /** Grupo del que vino esta asignación; `null` si es individual. */
+  grupoId: string | null
 }
 
 export interface Indicador {

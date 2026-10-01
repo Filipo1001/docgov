@@ -33,6 +33,7 @@ export interface FilaAsignacion {
   indicador_id: string
   usuario_id: string
   principal: boolean
+  grupo_id?: string | null
 }
 
 /** PostgREST devuelve `numeric` como número, pero como texto si excede la precisión de un double: se acepta ambos. */
@@ -52,7 +53,7 @@ export function armarIndicadores(
   const asignadosDe = new Map<string, Asignacion[]>()
   for (const a of asignaciones) {
     const lista = asignadosDe.get(a.indicador_id) ?? []
-    lista.push({ usuarioId: a.usuario_id, principal: a.principal })
+    lista.push({ usuarioId: a.usuario_id, principal: a.principal, grupoId: a.grupo_id ?? null })
     asignadosDe.set(a.indicador_id, lista)
   }
 

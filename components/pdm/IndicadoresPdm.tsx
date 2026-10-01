@@ -19,18 +19,26 @@ import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import ListaIndicadores from './ListaIndicadores'
 import type { Filtro } from '@/lib/pdm/filtros'
-import type { PersonaFicha } from '@/lib/pdm/personas'
+import type { GrupoVista, PersonaDirectorio, PersonaFicha } from '@/lib/pdm/personas'
+import { asignadosVista } from '@/lib/pdm/asignados'
+import { describirResumen, type AccionesPdm, type ResumenCambio } from '@/lib/pdm/acciones'
 import IndicadorModal from './IndicadorModal'
+import SelectorAsignacion from './SelectorAsignacion'
+import { ACCIONES_REALES } from './acciones-reales'
 
 const SIN_REPORTES: never[] = []
 const SIN_REPORTADO: Record<number, number> = {}
 const NO_REPORTA = () => {}
 
 export default function IndicadoresPdm({
-  indicadores, fichas, dependenciaInicial, filtroInicial, restringirA,
+  indicadores, fichas, personas, grupos, dependenciaInicial, filtroInicial, restringirA, acciones = ACCIONES_REALES,
 }: {
   indicadores: Indicador[]
   fichas: Record<number, PersonaFicha>
+  personas: PersonaDirectorio[]
+  grupos: GrupoVista[]
+  /** Lo que el administrador puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
+  acciones?: AccionesPdm
   dependenciaInicial?: string
   filtroInicial?: Filtro
   /** Solo estos indicadores (los de una persona), con el nombre para el rótulo. */
@@ -38,6 +46,11 @@ export default function IndicadoresPdm({
 }) {
   const [dependencia, setDependencia] = useState(dependenciaInicial ?? '')
   const [abierto, setAbierto] = useState<number | null>(null)
+  const [seleccionActiva, setSeleccionActiva] = useState(false)
+  const [elegidos, setElegidos] = useState<ReadonlySet<number>>(new Set())
+  // Los indicadores que se están asignando (los marcados, o el de la ficha abierta); `null`: el selector está cerrado.
+  const [selectorPara, setSelectorPara] = useState<Indicador[] | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
 
   const lista = useMemo(() => {
     if (!restringirA) return indicadores
@@ -46,12 +59,39 @@ export default function IndicadoresPdm({
   }, [indicadores, restringirA])
   const indicador = abierto === null ? null : indicadores.find(i => i.id === abierto) ?? null
 
+  const personasPorId = useMemo(() => new Map(personas.map(p => [p.id, p])), [personas])
+  const gruposPorId = useMemo(() => new Map(grupos.map(g => [g.id, g])), [grupos])
+  const marcados = useMemo(() => indicadores.filter(i => elegidos.has(i.id)), [indicadores, elegidos])
+
+  function alternar(id: number) {
+    setElegidos(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s })
+  }
+  function terminarSeleccion() {
+    setSeleccionActiva(false)
+    setElegidos(new Set())
+  }
+  function terminoAsignar(resumen: ResumenCambio, etiqueta: string) {
+    const eraLote = selectorPara !== null && selectorPara.length === marcados.length && marcados.length > 0
+    setSelectorPara(null)
+    if (eraLote) terminarSeleccion()
+    setAviso(describirResumen(resumen, etiqueta))
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <EncabezadoSeccion
         titulo="Indicadores"
         detalle={restringirA ? `${lista.length} de ${indicadores.length}` : `${indicadores.length} indicadores de producto`}
       />
+
+      {aviso && (
+        <p role="status" className="flex items-start justify-between gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span>{aviso}</span>
+          <button onClick={() => setAviso(null)} className="shrink-0 text-emerald-700 hover:text-emerald-900">
+            <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" />
+          </button>
+        </p>
+      )}
 
       {restringirA && (
         <div>
@@ -75,7 +115,42 @@ export default function IndicadoresPdm({
         onDependencia={setDependencia}
         filtroInicial={filtroInicial}
         fichas={fichas}
+        seleccion={{
+          activa: seleccionActiva,
+          elegidos,
+          onActiva: activa => { if (activa) { setAviso(null); setSeleccionActiva(true) } else terminarSeleccion() },
+          onAlternar: alternar,
+          onReemplazar: ids => setElegidos(new Set(ids)),
+        }}
       />
+
+      {seleccionActiva && marcados.length > 0 && (
+        <>
+          <div className="h-16" aria-hidden />
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur">
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-gray-900">
+                <span className="tabular-nums">{marcados.length}</span> {marcados.length === 1 ? 'seleccionado' : 'seleccionados'}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={terminarSeleccion}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  id="pdm-asignar-seleccion"
+                  onClick={() => setSelectorPara(marcados)}
+                  className="rounded-xl bg-[#192031] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#242F45]"
+                >
+                  Asignar…
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       <IndicadorModal
         key={abierto ?? 'cerrado'}
@@ -85,7 +160,29 @@ export default function IndicadoresPdm({
         onCerrar={() => setAbierto(null)}
         onReportar={NO_REPORTA}
         persona={indicador ? fichas[indicador.id] : undefined}
+        asignados={indicador ? asignadosVista(indicador, personasPorId, gruposPorId) : undefined}
+        onAsignar={indicador ? () => { setAviso(null); setSelectorPara([indicador]) } : undefined}
+        onQuitarApoyo={indicador
+          ? async usuarioId => {
+              const r = await acciones.quitarApoyo({ indicadores: [indicador.uuid], usuario: usuarioId })
+              return r.ok ? null : r.error
+            }
+          : undefined}
       />
+
+      {selectorPara && (
+        <SelectorAsignacion
+          // Cada selección abre un formulario nuevo. El prefijo importa: con un solo indicador la clave sería su número,
+          // igual que la de la ficha (hermana de esta), y React confundiría las dos al cerrar el selector.
+          key={`selector:${selectorPara.map(i => i.id).join(',')}`}
+          indicadores={selectorPara}
+          personas={personas}
+          grupos={grupos}
+          acciones={acciones}
+          onCerrar={() => setSelectorPara(null)}
+          onHecho={terminoAsignar}
+        />
+      )}
     </div>
   )
 }

@@ -21,11 +21,14 @@ import type { PersonaFicha } from '@/lib/pdm/personas'
 
 const PAGINA = 25
 
-export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado }: {
+export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado, seleccionable, elegido }: {
   i: Indicador
   reportado?: number
   onAbrir: () => void
   conBoton?: boolean
+  /** En modo de selección la tarjeta se marca en vez de abrirse. */
+  seleccionable?: boolean
+  elegido?: boolean
   /** Nombre de la persona asignada en la plataforma; sin él se muestra lo que decía el Excel. */
   asignado?: string
 }) {
@@ -35,9 +38,20 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado }: 
   return (
     <button
       onClick={onAbrir}
-      className="block w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+      aria-pressed={seleccionable ? elegido === true : undefined}
+      className={`block w-full rounded-2xl border bg-white p-4 text-left transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${
+        elegido ? 'border-teal-600 ring-1 ring-teal-600' : 'border-gray-200'
+      }`}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        {seleccionable && (
+          <span
+            aria-hidden
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${elegido ? 'border-teal-700 bg-teal-700 text-white' : 'border-gray-300 bg-white'}`}
+          >
+            {elegido && <Icono glifo={Iconos.estado.ok} tamano="sm" className="h-3.5 w-3.5" />}
+          </span>
+        )}
         <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">{i.codigo}</span>
         <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${ESTADOS[estado].chip}`}>
           {ESTADOS[estado].rotulo}
@@ -77,8 +91,18 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado }: 
   )
 }
 
+/** El modo de selección por lotes: lo gobierna quien monta la lista; la lista sabe qué está visible. */
+export interface SeleccionLista {
+  activa: boolean
+  elegidos: ReadonlySet<number>
+  onActiva: (activa: boolean) => void
+  onAlternar: (id: number) => void
+  /** Reemplaza la selección por estos (los visibles, o ninguno). */
+  onReemplazar: (ids: number[]) => void
+}
+
 export default function ListaIndicadores({
-  lista, reportado, onAbrir, conBoton, dependencia, onDependencia, filtroInicial, fichas,
+  lista, reportado, onAbrir, conBoton, dependencia, onDependencia, filtroInicial, fichas, seleccion,
 }: {
   lista: Indicador[]
   reportado: Record<number, number>
@@ -91,6 +115,7 @@ export default function ListaIndicadores({
   filtroInicial?: Filtro
   /** Quién es el responsable de cada indicador en la plataforma, por `id`. */
   fichas?: Record<number, PersonaFicha>
+  seleccion?: SeleccionLista
 }) {
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<Filtro>(filtroInicial ?? 'todos')
@@ -180,6 +205,40 @@ export default function ListaIndicadores({
         ))}
       </div>
 
+      {seleccion && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="pdm-seleccionar"
+            onClick={() => seleccion.onActiva(!seleccion.activa)}
+            aria-pressed={seleccion.activa}
+            className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+              seleccion.activa
+                ? 'border-teal-700 bg-teal-50 text-teal-800'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+            }`}
+          >
+            {seleccion.activa ? 'Terminar selección' : 'Seleccionar varios'}
+          </button>
+          {seleccion.activa && visibles.length > 0 && (
+            <button
+              id="pdm-seleccionar-visibles"
+              onClick={() => seleccion.onReemplazar(visibles.map(i => i.id))}
+              className="rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-300"
+            >
+              Seleccionar los {visibles.length} visibles
+            </button>
+          )}
+          {seleccion.activa && seleccion.elegidos.size > 0 && (
+            <button
+              onClick={() => seleccion.onReemplazar([])}
+              className="px-2 py-1.5 text-xs font-semibold text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline"
+            >
+              Quitar la selección
+            </button>
+          )}
+        </div>
+      )}
+
       {visibles.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-300 px-6 py-12 text-center">
           <p className="text-sm font-medium text-gray-700">Ningún indicador coincide con lo que buscas.</p>
@@ -193,7 +252,9 @@ export default function ListaIndicadores({
                 key={i.id}
                 i={i}
                 reportado={reportado[i.id]}
-                onAbrir={() => onAbrir(i.id)}
+                onAbrir={seleccion?.activa ? () => seleccion.onAlternar(i.id) : () => onAbrir(i.id)}
+                seleccionable={seleccion?.activa}
+                elegido={seleccion?.activa ? seleccion.elegidos.has(i.id) : undefined}
                 conBoton={conBoton}
                 asignado={(() => { const f = fichas?.[i.id]; return f && 'nombre' in f ? f.nombre : undefined })()}
               />

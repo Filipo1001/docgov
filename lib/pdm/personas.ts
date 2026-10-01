@@ -41,6 +41,26 @@ export type PersonaFicha =
   | { nombre: string; fotoUrl: string | null; secretaria: string | null; contrato: ContratoResumen }
   | { sinUsuario: MotivoSinVincular }
 
+/** Una secretaría del plan, con el id que necesita la base para crear un grupo en ella. */
+export interface SecretariaPlan {
+  id: string
+  nombre: string
+}
+
+/** Un grupo de personas que responden juntas por indicadores. */
+export interface GrupoVista {
+  id: string
+  nombre: string
+  secretariaId: string
+  secretaria: string
+  /** `null` si el líder ya no existe: el grupo queda sin líder hasta que se le ponga uno. */
+  liderId: string | null
+  /** Ids de usuario, el líder incluido. */
+  miembros: string[]
+  /** Cuántos indicadores tienen filas marcadas con este grupo. */
+  indicadores: number
+}
+
 export interface Directorio {
   /** `false` si no se pudo leer la base: las pantallas siguen funcionando con el texto del Excel. */
   ok: boolean
@@ -48,6 +68,9 @@ export interface Directorio {
   sinUsuario: SinUsuario[]
   /** Por indicador (su `id`). Sin entrada: el Excel no nombraba a una persona a quien asignarlo. */
   fichas: Record<number, PersonaFicha>
+  grupos: GrupoVista[]
+  /** Las secretarías que tienen indicadores en el plan. */
+  secretarias: SecretariaPlan[]
 }
 
 const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'e'])

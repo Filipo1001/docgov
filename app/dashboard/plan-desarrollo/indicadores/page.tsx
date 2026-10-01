@@ -17,11 +17,12 @@ export const generateMetadata = () => metadataPdm('Indicadores')
  *   usuario      el id de una persona de la plataforma → sus indicadores asignados
  *   origen       el nombre, tal como lo escribió el Excel, de alguien que todavía no
  *                tiene usuario → los indicadores que el Excel le atribuía
+ *   grupo        el id de un grupo → los indicadores que lleva
  */
 export default async function IndicadoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dependencia?: string; filtro?: string; usuario?: string; origen?: string }>
+  searchParams: Promise<{ dependencia?: string; filtro?: string; usuario?: string; origen?: string; grupo?: string }>
 }) {
   await exigirAccesoPdm()
   const p = await searchParams
@@ -35,10 +36,16 @@ export default async function IndicadoresPage({
   let restringirA: { etiqueta: string; ids: number[] } | undefined
   const persona = dir.personas.find(x => x.id === p.usuario)
   const sinUsuario = dir.sinUsuario.find(x => x.nombre === p.origen)
+  const grupo = dir.grupos.find(x => x.id === p.grupo)
   if (persona) {
     restringirA = {
       etiqueta: persona.nombre,
       ids: plan.indicadores.filter(i => i.asignados.some(a => a.usuarioId === persona.id)).map(i => i.id),
+    }
+  } else if (grupo) {
+    restringirA = {
+      etiqueta: `${grupo.nombre} (grupo)`,
+      ids: plan.indicadores.filter(i => i.asignados.some(a => a.grupoId === grupo.id)).map(i => i.id),
     }
   } else if (sinUsuario) {
     restringirA = {
@@ -52,9 +59,11 @@ export default async function IndicadoresPage({
   return (
     <IndicadoresPdm
       // Un enlace nuevo a esta misma pantalla debe arrancar de cero.
-      key={`${dependencia ?? ''}|${filtro ?? ''}|${persona?.id ?? sinUsuario?.nombre ?? ''}`}
+      key={`${dependencia ?? ''}|${filtro ?? ''}|${persona?.id ?? grupo?.id ?? sinUsuario?.nombre ?? ''}`}
       indicadores={plan.indicadores}
       fichas={dir.fichas}
+      personas={dir.personas}
+      grupos={dir.grupos}
       dependenciaInicial={dependencia}
       filtroInicial={filtro}
       restringirA={restringirA}

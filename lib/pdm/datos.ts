@@ -50,7 +50,7 @@ export const cargarPlanPdm = cache(async (): Promise<PlanPdm> => {
         .eq('activo', true)
         .order('fila_origen'),
       supabase.from('pdm_metas').select('indicador_id, meta').eq('anio', ANIO_SEGUIMIENTO),
-      supabase.from('pdm_asignaciones').select('indicador_id, usuario_id, principal'),
+      supabase.from('pdm_asignaciones').select('indicador_id, usuario_id, principal, grupo_id'),
     ])
 
     const error = ind.error ?? met.error ?? asi.error

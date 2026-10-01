@@ -12,13 +12,15 @@
  *      un equipo y que ya se asignó, al secretario por ejemplo, no es un hueco.)
  *   2. ¿Quién figura en el Excel y todavía no tiene usuario? Son los que no se
  *      pueden habilitar hasta que se les cree uno.
- *   3. ¿Quiénes son las personas de la plataforma y cómo están de carga? Todos
+ *   3. ¿Qué grupos hay? Personas que responden juntas por varios indicadores,
+ *      con un líder que responde por todos. Aquí se crean, se editan y se disuelven.
+ *   4. ¿Quiénes son las personas de la plataforma y cómo están de carga? Todos
  *      los usuarios de Contratista Digital, con su foto, su secretaría y su
  *      contrato: el contrato vencido junto a indicadores a su nombre es lo que
  *      más conviene ver.
  *
- * Es solo lectura, y a propósito no tiene botón de «Asignar» todavía: la pantalla
- * de asignación es el paso que sigue. Un botón que no hace nada es ruido.
+ * Los grupos se pueden crear y editar aquí. Asignar indicadores a una persona o a un
+ * grupo se hace desde Indicadores, que es donde se ven los indicadores.
  *
  * «Quién lleva qué» sale de las asignaciones de la base; lo que el Excel decía en
  * «Funcionario Responsable» se conserva aparte, para saber a qué equipo u oficina
@@ -37,6 +39,9 @@ import type { Directorio, MotivoSinVincular, PersonaDirectorio } from '@/lib/pdm
 import EncabezadoSeccion from './EncabezadoSeccion'
 import { BarraEstados } from './Barras'
 import { Avatar, LineaContrato } from './PersonaVista'
+import GruposPdm from './GruposPdm'
+import { ACCIONES_REALES } from './acciones-reales'
+import type { AccionesPdm } from '@/lib/pdm/acciones'
 
 const MOTIVO: Record<MotivoSinVincular, string> = {
   planta: 'Personal de planta · aún sin usuario',
@@ -106,7 +111,12 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
   )
 }
 
-export default function ResponsablesPdm({ directorio, indicadores }: { directorio: Directorio; indicadores: Indicador[] }) {
+export default function ResponsablesPdm({ directorio, indicadores, acciones = ACCIONES_REALES }: {
+  directorio: Directorio
+  indicadores: Indicador[]
+  /** Lo que el administrador puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
+  acciones?: AccionesPdm
+}) {
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [secretaria, setSecretaria] = useState('')
@@ -231,7 +241,12 @@ export default function ResponsablesPdm({ directorio, indicadores }: { directori
         </section>
       )}
 
-      {/* 3 · Las personas de la plataforma */}
+      {/* 3 · Los grupos */}
+      {directorio.ok && (
+        <GruposPdm grupos={directorio.grupos} personas={directorio.personas} secretarias={directorio.secretarias} acciones={acciones} />
+      )}
+
+      {/* 4 · Las personas de la plataforma */}
       {directorio.ok && (
         <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
           <div className="flex items-baseline gap-3">

@@ -35,6 +35,7 @@ import {
 import { BarraAvance } from './Barras'
 import { Avatar, LineaContrato } from './PersonaVista'
 import type { MotivoSinVincular, PersonaFicha } from '@/lib/pdm/personas'
+import type { AsignadoVista } from '@/lib/pdm/asignados'
 
 const fechaHora = (t: number) =>
   new Date(t).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
@@ -55,7 +56,7 @@ const NOTA_SIN_USUARIO: Record<MotivoSinVincular, string> = {
 }
 
 export default function IndicadorModal({
-  indicador, reportes, puedeReportar, onCerrar, onReportar, persona,
+  indicador, reportes, puedeReportar, onCerrar, onReportar, persona, asignados, onAsignar, onQuitarApoyo,
 }: {
   indicador: Indicador | null
   reportes: Reporte[]
@@ -64,11 +65,19 @@ export default function IndicadorModal({
   onReportar: (id: number, r: Omit<Reporte, 'fecha' | 'autor' | 'anterior'>) => void
   /** Quién es el responsable en la plataforma, si se sabe. Sin él se muestra el texto del archivo. */
   persona?: PersonaFicha
+  /** Principal y apoyos, con nombre. Sin esto la ficha solo muestra al principal. */
+  asignados?: AsignadoVista[]
+  /** Con esto la ficha deja repartir el indicador. Sin esto no hay botón: lo ven quienes no pueden asignar. */
+  onAsignar?: () => void
+  /** Devuelve el mensaje de error, o `null` si salió bien. */
+  onQuitarApoyo?: (usuarioId: string) => Promise<string | null>
 }) {
   const [valor, setValor] = useState('')
   const [texto, setTexto] = useState('')
   const [archivo, setArchivo] = useState('')
   const [enviado, setEnviado] = useState(false)
+  const [quitando, setQuitando] = useState<string | null>(null)
+  const [errorApoyo, setErrorApoyo] = useState<string | null>(null)
   const cerrarRef = useRef<HTMLButtonElement>(null)
 
   // Escape, bloqueo del fondo y foco al abrir. Depende del id: que el padre se
@@ -103,6 +112,18 @@ export default function IndicadorModal({
   const numero = Number(valor.replace(',', '.'))
   const valido = valor.trim() !== '' && Number.isFinite(numero) && numero >= 0
     && texto.trim().length >= 10 && archivo !== ''
+
+  const principalVista = asignados?.find(a => a.principal)
+  const apoyos = asignados?.filter(a => !a.principal) ?? []
+
+  async function quitar(usuarioId: string) {
+    if (!onQuitarApoyo) return
+    setQuitando(usuarioId)
+    setErrorApoyo(null)
+    const e = await onQuitarApoyo(usuarioId)
+    setQuitando(null)
+    if (e) setErrorApoyo(e)
+  }
 
   function enviar() {
     if (!valido || !indicador) return
@@ -166,7 +187,18 @@ export default function IndicadorModal({
 
           {/* Responsable */}
           <section className={`rounded-xl border px-4 py-3 ${huerfano ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Responsable</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Responsable</p>
+              {onAsignar && (
+                <button
+                  id="pdm-ficha-asignar"
+                  onClick={onAsignar}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+                >
+                  Asignar…
+                </button>
+              )}
+            </div>
             {!huerfano && persona && 'nombre' in persona ? (
               <div className="mt-2 flex items-center gap-3">
                 <Avatar nombre={persona.nombre} fotoUrl={persona.fotoUrl} />
@@ -194,6 +226,37 @@ export default function IndicadorModal({
                   </p>
                 )}
               </>
+            )}
+            {asignados && (principalVista?.grupo || apoyos.length > 0 || errorApoyo) && (
+              <div className="mt-3 border-t border-gray-200 pt-3">
+                {principalVista?.grupo && <p className="text-xs text-gray-500">Por el grupo «{principalVista.grupo}»</p>}
+                {apoyos.length > 0 && (
+                  <>
+                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{apoyos.length === 1 ? 'Apoyo' : 'Apoyos'}</p>
+                    <ul className="mt-2 space-y-2">
+                      {apoyos.map(a => (
+                        <li key={a.usuarioId} className="flex items-center gap-3">
+                          <Avatar nombre={a.nombre} fotoUrl={a.fotoUrl} tamano="sm" apagado={!a.activo} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-gray-900">{a.nombre}</span>
+                            {a.grupo && <span className="block truncate text-xs text-gray-500">Por el grupo «{a.grupo}»</span>}
+                          </span>
+                          {onQuitarApoyo && !a.grupo && (
+                            <button
+                              onClick={() => quitar(a.usuarioId)}
+                              disabled={quitando !== null}
+                              className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50"
+                            >
+                              {quitando === a.usuarioId ? 'Quitando…' : 'Quitar'}
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {errorApoyo && <p role="alert" className="mt-2 text-xs font-medium text-red-700">{errorApoyo}</p>}
+              </div>
             )}
           </section>
 

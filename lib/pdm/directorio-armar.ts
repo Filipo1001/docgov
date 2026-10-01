@@ -3,7 +3,8 @@ import { VINCULOS } from './vinculos'
 import { resumirContratos, type ContratoFila } from './contrato'
 import {
   nombrePropio,
-  type Directorio, type MotivoSinVincular, type PersonaDirectorio, type PersonaFicha, type SinUsuario,
+  type Directorio, type GrupoVista, type MotivoSinVincular, type PersonaDirectorio, type PersonaFicha,
+  type SecretariaPlan, type SinUsuario,
 } from './personas'
 
 /**
@@ -54,6 +55,8 @@ export function armarDirectorio(
   contratos: FilaContrato[],
   indicadores: Indicador[],
   hoy: string,
+  grupos: GrupoVista[] = [],
+  secretarias: SecretariaPlan[] = [],
 ): Directorio {
   const contratosDe = new Map<string, ContratoFila[]>()
   for (const c of contratos) {
@@ -126,5 +129,5 @@ export function armarDirectorio(
     .map(([nombre, { motivo, lista }]) => ({ nombre, motivo, indicadores: lista.length, resumen: resumir(lista) }))
     .sort((a, b) => b.indicadores - a.indicadores || a.nombre.localeCompare(b.nombre, 'es'))
 
-  return { ok: true, personas, sinUsuario, fichas }
+  return { ok: true, personas, sinUsuario, fichas, grupos, secretarias }
 }
