@@ -90,12 +90,12 @@ export interface Reporte {
 // ─── Responsable ──────────────────────────────────────────────────────────────
 
 /**
- * Qué hay escrito en la casilla «Funcionario Responsable».
+ * Qué hay escrito en la casilla «Funcionario Responsable» del Excel.
  *
- * En el archivo es texto libre. De 257 indicadores, 182 tienen una persona;
- * los otros 75 tienen un equipo, una oficina, varias personas o nada. Ninguno
- * de esos 75 tiene a quién exigirle el reporte, ni a quién preguntarle cuando
- * falta.
+ * En el archivo es texto libre. De 257 indicadores, 182 nombran a una persona;
+ * los otros 75 nombran un equipo, una oficina, varias personas o nada. Eso dice
+ * qué quiso decir el archivo; NO dice quién responde hoy. Eso lo dicen las
+ * asignaciones de la base (`Indicador.asignados`), y de ahí sale `sinAsignar`.
  */
 export type TipoResponsable = 'persona' | 'varios' | 'equipo' | 'oficina' | 'ninguno'
 
@@ -108,16 +108,14 @@ export function tipoResponsable(crudo: string): TipoResponsable {
   return 'persona'
 }
 
-/** Sin una persona única a quien pedirle cuentas. */
-export const sinResponsableUnico = (i: Indicador) => tipoResponsable(i.responsable) !== 'persona'
-
-export const ROTULO_RESPONSABLE: Record<TipoResponsable, string> = {
-  persona: 'Persona',
-  varios: 'Varias personas, sin un responsable principal',
-  equipo: 'Equipo, sin persona que responda',
-  oficina: 'Oficina, sin persona que responda',
-  ninguno: 'Sin responsable',
-}
+/**
+ * Nadie lo tiene asignado en la plataforma: no hay a quién exigirle el reporte.
+ *
+ * Se decide por las asignaciones reales, no por lo que decía el Excel: un
+ * indicador que el archivo ponía a nombre de un equipo y que el administrador ya
+ * asignó (al secretario, por ejemplo) SÍ tiene quien responda.
+ */
+export const sinAsignar = (i: Indicador) => i.asignados.length === 0
 
 const sinTildes = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -188,7 +186,7 @@ export function resumir(lista: Indicador[], reportado: Record<number, number> = 
     criticos: 0, sinReporte: 0, sinMeta: 0, sinResponsable: 0, cumplimiento: null,
   }
   for (const i of lista) {
-    if (sinResponsableUnico(i)) r.sinResponsable++
+    if (sinAsignar(i)) r.sinResponsable++
     switch (estadoDe(i, reportado[i.id])) {
       case 'sin_meta':    r.sinMeta++; break
       case 'sin_reporte': r.medibles++; r.sinReporte++; break

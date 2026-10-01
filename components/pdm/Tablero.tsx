@@ -16,8 +16,7 @@
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, ROTULO_RESPONSABLE, agrupar, estadoDe, fmt, fmtPct, haySeguimiento, resumir,
-  sinResponsableUnico, tipoResponsable,
+  ESTADOS, agrupar, estadoDe, fmt, fmtPct, haySeguimiento, resumir, sinAsignar,
   type Indicador, type Resumen,
 } from '@/lib/pdm/plan'
 import { BarraEstados, Leyenda } from './Barras'
@@ -52,7 +51,7 @@ function FilaGrupo({ nombre, r, conSeguimiento, onClick }: { nombre: string; r: 
         {r.sinResponsable > 0 && (
           <span className="inline-flex items-center gap-1 font-medium text-red-700">
             <Icono glifo={Iconos.estado.advertencia} tamano="sm" />
-            {r.sinResponsable} sin responsable único
+            {r.sinResponsable} sin responsable
           </span>
         )}
       </div>
@@ -85,12 +84,11 @@ export default function Tablero({
 
   const peso = (i: Indicador) => {
     const e = estadoDe(i, reportado[i.id])
-    return (e === 'critico' ? 0 : e === 'atrasado' ? 1 : 2) + (sinResponsableUnico(i) ? 0 : 0.5)
+    return (e === 'critico' ? 0 : e === 'atrasado' ? 1 : 2) + (sinAsignar(i) ? 0 : 0.5)
   }
   const atencion = lista
-    .filter(i => sinResponsableUnico(i) || ['critico', 'atrasado'].includes(estadoDe(i, reportado[i.id])))
+    .filter(i => sinAsignar(i) || ['critico', 'atrasado'].includes(estadoDe(i, reportado[i.id])))
     .sort((a, b) => peso(a) - peso(b))
-  const porTipo = agrupar(lista.filter(sinResponsableUnico), i => tipoResponsable(i.responsable))
 
   return (
     <div className="space-y-5">
@@ -105,9 +103,9 @@ export default function Tablero({
             : `Aún no hay seguimiento: ${r.medibles} indicadores tienen meta 2026 y ninguno ha reportado`}
         />
         <Cifra
-          titulo="Sin responsable único"
+          titulo="Sin responsable"
           valor={String(r.sinResponsable)}
-          nota={`de ${r.total}: a nombre de un equipo, una oficina, varias personas o de nadie`}
+          nota={`de ${r.total}: nadie los tiene asignado en la plataforma`}
           tono={r.sinResponsable ? 'alerta' : 'neutro'}
         />
         <Cifra
@@ -184,12 +182,6 @@ export default function Tablero({
               <dt className="text-gray-600">Indicadores sin persona que responda</dt>
               <dd className="font-bold tabular-nums text-gray-900">{r.sinResponsable}</dd>
             </div>
-            {porTipo.map(([tipo, l]) => (
-              <div key={tipo} className="flex items-baseline justify-between gap-4 py-2 pl-4">
-                <dt className="text-xs text-gray-500">{ROTULO_RESPONSABLE[tipo as keyof typeof ROTULO_RESPONSABLE]}</dt>
-                <dd className="text-xs font-semibold tabular-nums text-gray-700">{l.length}</dd>
-              </div>
-            ))}
             <div className="flex items-baseline justify-between gap-4 py-2.5">
               <dt className="text-gray-600">Sin reporte en el corte</dt>
               <dd className="font-bold tabular-nums text-gray-900">{r.sinReporte}</dd>
@@ -226,7 +218,7 @@ export default function Tablero({
                     <span className="block text-sm font-medium leading-snug text-gray-900">{i.indicador}</span>
                     <span className="mt-0.5 block text-xs text-gray-500">
                       {i.dependencia}
-                      {sinResponsableUnico(i) && <span className="font-medium text-red-700"> · {ROTULO_RESPONSABLE[tipoResponsable(i.responsable)]}</span>}
+                      {sinAsignar(i) && <span className="font-medium text-red-700"> · Sin responsable</span>}
                       {e === 'critico' || e === 'atrasado' ? ` · ${ESTADOS[e].rotulo}: ${fmt(i.avance)} de ${fmt(i.meta2026)}` : ''}
                     </span>
                   </span>

@@ -6,9 +6,10 @@
  * Tres preguntas del administrador, en el orden en que las hace, con lo que
  * hay que resolver primero arriba:
  *
- *   1. ¿Dónde están los huecos? Los indicadores a nombre de un equipo, una
- *      oficina, varias personas o de nadie no tienen a quién exigirle el
- *      reporte. Se ven por secretaría, y cada una lleva a su lista.
+ *   1. ¿Dónde están los huecos? Los indicadores que nadie tiene asignado en la
+ *      plataforma no tienen a quién exigirle el reporte. Se ven por secretaría,
+ *      y cada una lleva a su lista. (Un indicador que el Excel ponía a nombre de
+ *      un equipo y que ya se asignó, al secretario por ejemplo, no es un hueco.)
  *   2. ¿Quién figura en el Excel y todavía no tiene usuario? Son los que no se
  *      pueden habilitar hasta que se les cree uno.
  *   3. ¿Quiénes son las personas de la plataforma y cómo están de carga? Todos
@@ -29,22 +30,13 @@ import Link from 'next/link'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  agrupar, coincideNombre, haySeguimiento, sinResponsableUnico, tipoResponsable,
-  type Indicador, type TipoResponsable,
+  agrupar, coincideNombre, haySeguimiento, sinAsignar, type Indicador,
 } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import type { Directorio, MotivoSinVincular, PersonaDirectorio } from '@/lib/pdm/personas'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import { BarraEstados } from './Barras'
 import { Avatar, LineaContrato } from './PersonaVista'
-
-/** Cómo se dice, en una línea, a qué está a nombre un indicador sin persona. */
-const A_NOMBRE_DE: Record<Exclude<TipoResponsable, 'persona'>, string> = {
-  equipo: 'de un equipo',
-  varios: 'de varias personas',
-  oficina: 'de una oficina',
-  ninguno: 'de nadie',
-}
 
 const MOTIVO: Record<MotivoSinVincular, string> = {
   planta: 'Personal de planta · aún sin usuario',
@@ -121,8 +113,7 @@ export default function ResponsablesPdm({ directorio, indicadores }: { directori
   const [limite, setLimite] = useState(PAGINA)
 
   const conSeguimiento = useMemo(() => haySeguimiento(indicadores), [indicadores])
-  const huerfanos = useMemo(() => indicadores.filter(sinResponsableUnico), [indicadores])
-  const porTipo = useMemo(() => agrupar(huerfanos, i => tipoResponsable(i.responsable)), [huerfanos])
+  const huerfanos = useMemo(() => indicadores.filter(sinAsignar), [indicadores])
   const porSecretaria = useMemo(() => {
     const total = new Map(agrupar(indicadores, i => i.dependencia).map(([d, l]) => [d, l.length]))
     return agrupar(huerfanos, i => i.dependencia).map(([d, l]) => ({ dependencia: d, sin: l.length, total: total.get(d) ?? l.length }))
@@ -165,45 +156,40 @@ export default function ResponsablesPdm({ directorio, indicadores }: { directori
     <div className="mx-auto max-w-7xl space-y-5">
       <EncabezadoSeccion titulo="Responsables" detalle="Quién responde por cada indicador, y dónde nadie responde." />
 
-      {/* 1 · Los huecos */}
-      <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 className="text-sm font-bold text-gray-900">Sin una persona que responda</h2>
-          <p className="text-xs text-gray-500">
-            <b className="tabular-nums text-red-600">{huerfanos.length}</b> de {indicadores.length} indicadores
-          </p>
-        </div>
-        <p className="mt-1 text-xs text-gray-500">
-          {porTipo.map(([tipo, l], k) => (
-            <span key={tipo}>
-              {k > 0 && ' · '}
-              <b className="tabular-nums text-gray-700">{l.length}</b> a nombre {A_NOMBRE_DE[tipo as Exclude<TipoResponsable, 'persona'>]}
-            </span>
-          ))}
-        </p>
+      {/* 1 · Los huecos (si no hay ninguno, no se pinta nada) */}
+      {huerfanos.length > 0 && (
+        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="text-sm font-bold text-gray-900">Sin una persona que responda</h2>
+            <p className="text-xs text-gray-500">
+              <b className="tabular-nums text-red-600">{huerfanos.length}</b> de {indicadores.length} indicadores
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">Nadie los tiene asignado todavía en la plataforma.</p>
 
-        <ul className="mt-2 divide-y divide-gray-100">
-          {porSecretaria.map(s => (
-            <li key={s.dependencia}>
-              <Link
-                href={`${HREF_INDICADORES}?dependencia=${encodeURIComponent(s.dependencia)}&filtro=sin_responsable`}
-                className="flex items-center gap-4 py-3 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold leading-snug text-gray-900">{s.dependencia}</p>
-                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100" aria-hidden>
-                    <div className="h-full rounded-full bg-red-400" style={{ width: `${(100 * s.sin) / s.total}%` }} />
+          <ul className="mt-2 divide-y divide-gray-100">
+            {porSecretaria.map(s => (
+              <li key={s.dependencia}>
+                <Link
+                  href={`${HREF_INDICADORES}?dependencia=${encodeURIComponent(s.dependencia)}&filtro=sin_responsable`}
+                  className="flex items-center gap-4 py-3 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold leading-snug text-gray-900">{s.dependencia}</p>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100" aria-hidden>
+                      <div className="h-full rounded-full bg-red-400" style={{ width: `${(100 * s.sin) / s.total}%` }} />
+                    </div>
                   </div>
-                </div>
-                <p className="shrink-0 text-right text-xs text-gray-500">
-                  <b className="text-sm tabular-nums text-gray-900">{s.sin}</b> de {s.total}
-                </p>
-                <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+                  <p className="shrink-0 text-right text-xs text-gray-500">
+                    <b className="text-sm tabular-nums text-gray-900">{s.sin}</b> de {s.total}
+                  </p>
+                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {!directorio.ok && (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">

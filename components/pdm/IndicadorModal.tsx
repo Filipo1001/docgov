@@ -29,7 +29,7 @@ import { createPortal } from 'react-dom'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, ROTULO_RESPONSABLE, estadoDe, fmt, fmtRazon, razon, sinResponsableUnico, tipoResponsable,
+  ESTADOS, coincideNombre, estadoDe, fmt, fmtRazon, razon, sinAsignar, tipoResponsable,
   type Indicador, type Reporte,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
@@ -96,7 +96,10 @@ export default function IndicadorModal({
   const vigente = reportes[0]?.nuevo
   const estado = estadoDe(indicador, vigente)
   const r = razon(indicador, vigente)
-  const huerfano = sinResponsableUnico(indicador)
+  // Nadie asignado Y el Excel tampoco nombraba a una persona: no hay a quién preguntarle.
+  // (Si el Excel nombraba a alguien que aún no tiene usuario, se muestra su nombre y por qué.)
+  const huerfano = sinAsignar(indicador) && tipoResponsable(indicador.responsable) !== 'persona'
+  const nombraAlgo = /\p{L}/u.test(indicador.responsable)
   const numero = Number(valor.replace(',', '.'))
   const valido = valor.trim() !== '' && Number.isFinite(numero) && numero >= 0
     && texto.trim().length >= 10 && archivo !== ''
@@ -171,12 +174,15 @@ export default function IndicadorModal({
                   <p className="text-sm font-semibold text-gray-900">{persona.nombre}</p>
                   <p className="text-xs text-gray-500">{persona.secretaria ?? 'Sin secretaría'}</p>
                   <LineaContrato contrato={persona.contrato} />
+                  {nombraAlgo && (tipoResponsable(indicador.responsable) !== 'persona' || !coincideNombre(persona.nombre, indicador.responsable)) && (
+                    <p className="mt-0.5 text-[11px] text-gray-400">En el archivo figuraba «{indicador.responsable}»</p>
+                  )}
                 </div>
               </div>
             ) : (
               <>
                 <p className={`mt-1 text-sm font-semibold ${huerfano ? 'text-red-800' : 'text-gray-900'}`}>
-                  {huerfano ? ROTULO_RESPONSABLE[tipoResponsable(indicador.responsable)] : indicador.responsable}
+                  {huerfano ? 'Sin responsable' : indicador.responsable}
                 </p>
                 {!huerfano && persona && 'sinUsuario' in persona && (
                   <p className="mt-1 text-xs text-gray-500">{NOTA_SIN_USUARIO[persona.sinUsuario]}</p>

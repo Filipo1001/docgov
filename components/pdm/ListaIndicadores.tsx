@@ -13,8 +13,7 @@ import { useMemo, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, ROTULO_RESPONSABLE, agrupar, estadoDe, fmt, fmtRazon, razon,
-  sinResponsableUnico, tipoResponsable, type Indicador,
+  ESTADOS, agrupar, estadoDe, fmt, fmtRazon, razon, sinAsignar, tipoResponsable, type Indicador,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
 import type { Filtro } from '@/lib/pdm/filtros'
@@ -32,7 +31,7 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado }: 
 }) {
   const estado = estadoDe(i, reportado)
   const r = razon(i, reportado)
-  const huerfano = sinResponsableUnico(i)
+  const huerfano = sinAsignar(i)
   return (
     <button
       onClick={onAbrir}
@@ -64,7 +63,11 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado }: 
       <div className="mt-3.5 flex items-center justify-between gap-3 text-xs">
         <span className={`inline-flex min-w-0 items-center gap-1.5 ${huerfano ? 'font-medium text-red-700' : 'text-gray-600'}`}>
           <Icono glifo={huerfano ? Iconos.estado.advertencia : Iconos.navegacion.usuarios} tamano="sm" className="shrink-0" />
-          <span className="truncate">{huerfano ? ROTULO_RESPONSABLE[tipoResponsable(i.responsable)] : (asignado ?? i.responsable)}</span>
+          <span className="truncate">
+            {huerfano
+              ? (tipoResponsable(i.responsable) === 'persona' ? `${i.responsable} · sin usuario` : 'Sin responsable')
+              : (asignado ?? i.responsable)}
+          </span>
         </span>
         {conBoton
           ? <span className="shrink-0 rounded-lg bg-[#192031] px-3 py-1.5 font-semibold text-white">Reportar</span>
@@ -105,7 +108,7 @@ export default function ListaIndicadores({
     const c: Record<Filtro, number> = { todos: delAlcance.length, sin_responsable: 0, atencion: 0, sin_reporte: 0 }
     for (const i of delAlcance) {
       const e = estadoDe(i, reportado[i.id])
-      if (sinResponsableUnico(i)) c.sin_responsable++
+      if (sinAsignar(i)) c.sin_responsable++
       if (e === 'critico' || e === 'atrasado') c.atencion++
       if (e === 'sin_reporte') c.sin_reporte++
     }
@@ -116,7 +119,7 @@ export default function ListaIndicadores({
     const t = q.trim().toLowerCase()
     return delAlcance.filter(i => {
       const e = estadoDe(i, reportado[i.id])
-      if (filtro === 'sin_responsable' && !sinResponsableUnico(i)) return false
+      if (filtro === 'sin_responsable' && !sinAsignar(i)) return false
       if (filtro === 'atencion' && e !== 'critico' && e !== 'atrasado') return false
       if (filtro === 'sin_reporte' && e !== 'sin_reporte') return false
       if (!t) return true
