@@ -13,6 +13,8 @@ import { useState } from 'react'
 import { fechaLarga, MODOS, claveModo, type AvanceModo, type Corte, type Seguimiento } from '@/lib/pdm/seguimiento'
 import { MAX_PERIODICIDAD, type AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import EncabezadoSeccion from './EncabezadoSeccion'
+import { Marcador, Panel } from './ui'
+import { T } from './tema'
 import EditorCorte from './EditorCorte'
 import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
 import Icono from '@/components/ui/Icono'
@@ -81,11 +83,17 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <EncabezadoSeccion titulo="Ajustes" detalle="Cómo se mide el avance y cuándo se reporta" />
+      <EncabezadoSeccion
+        titulo="Ajustes"
+        detalle="Cómo se mide el avance y cuándo se reporta."
+        datos={[
+          { rotulo: 'Criterio de avance', valor: MODOS[claveModo(ajustes.avanceModo)].titulo },
+          { rotulo: 'Corte abierto', valor: abierto ? abierto.nombre : 'Ninguno' },
+        ]}
+      />
 
-      <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-        <h2 className="text-sm font-bold text-gray-900">Cómo se mide el avance</h2>
-        <p className="mt-1 text-xs leading-relaxed text-gray-500">
+      <Panel titulo="Cómo se mide el avance">
+        <p className="text-xs leading-relaxed text-[#667085]">
           Define qué significa el valor que reportan los responsables. Cambiarlo recalcula el cumplimiento de todos los
           indicadores; los reportes ya hechos no se tocan.
         </p>
@@ -94,8 +102,8 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
           {CLAVES.map(c => (
             <label
               key={c}
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors ${
-                criterio === c ? 'border-teal-600 bg-teal-50/50' : 'border-gray-200 hover:border-gray-300'
+              className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors ${
+                criterio === c ? 'border-[#192031] bg-[#F4F5F8]' : 'border-[#DCE0E8] hover:border-[#9AA3B5]'
               }`}
             >
               <input
@@ -104,18 +112,18 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
                 id={`pdm-criterio-${c}`}
                 checked={criterio === c}
                 onChange={() => { setCriterio(c); setAvisoAjustes(null) }}
-                className="mt-0.5 h-4 w-4 border-gray-300 text-teal-700 focus:ring-teal-600"
+                className="mt-0.5 h-4 w-4 accent-[#192031]"
               />
               <span className="min-w-0">
-                <span className="block text-sm font-semibold text-gray-900">{MODOS[c].titulo}</span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-gray-600">{MODOS[c].nota}</span>
+                <span className="block text-sm font-semibold text-[#192031]">{MODOS[c].titulo}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-[#556072]">{MODOS[c].nota}</span>
               </span>
             </label>
           ))}
         </fieldset>
 
         <label className="mt-4 block">
-          <span className="text-xs font-semibold text-gray-600">Cada cuánto se hacen los cortes <span className="font-normal text-gray-500">(opcional, solo informativo)</span></span>
+          <span className={T.rotulo}>Cada cuánto se hacen los cortes <span className="font-normal normal-case tracking-normal">(opcional, solo informativo)</span></span>
           <input
             id="pdm-periodicidad"
             type="text"
@@ -124,84 +132,68 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
             placeholder="Por ejemplo: cada mes, o cada trimestre"
             onChange={e => { setPeriodicidad(e.target.value); setAvisoAjustes(null) }}
             disabled={guardando}
-            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+            className={`${T.campo} mt-1.5`}
           />
         </label>
 
-        {errorAjustes && <p role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-800">{errorAjustes}</p>}
-        <div className="mt-3 flex items-center justify-end gap-3">
-          {avisoAjustes && !cambiado && <p role="status" className="text-xs font-medium text-emerald-700">{avisoAjustes}</p>}
-          <button
-            id="pdm-ajustes-guardar"
-            onClick={guardarAjustes}
-            disabled={!cambiado || guardando}
-            className="rounded-xl bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
-          >
+        {errorAjustes && <p role="alert" className={`mt-3 ${T.avisoMal}`}>{errorAjustes}</p>}
+        <div className="mt-4 flex items-center justify-end gap-3">
+          {avisoAjustes && !cambiado && <p role="status" className="text-xs font-medium text-[#1F5D43]">{avisoAjustes}</p>}
+          <button id="pdm-ajustes-guardar" onClick={guardarAjustes} disabled={!cambiado || guardando} className={T.boton}>
             {guardando ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
-      </section>
+      </Panel>
 
-      <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="flex items-baseline gap-3">
-            <h2 className="text-sm font-bold text-gray-900">Cortes</h2>
-            <span className="text-xs text-gray-500">{plural(cortes.length, 'corte', 'cortes')}</span>
-          </div>
-          <button
-            id="pdm-corte-nuevo"
-            onClick={() => { setAvisoCortes(null); setErrorCortes(null); setEditando(null) }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
-          >
+      <Panel
+        titulo="Cortes"
+        nota={plural(cortes.length, 'corte', 'cortes')}
+        acciones={
+          <button id="pdm-corte-nuevo" onClick={() => { setAvisoCortes(null); setErrorCortes(null); setEditando(null) }} className={T.botonChico}>
             <Icono glifo={Iconos.accion.agregar} tamano="sm" />
             Nuevo corte
           </button>
-        </div>
-
+        }
+      >
         {avisoCortes && (
-          <p role="status" className="mt-3 flex items-start justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+          <p role="status" className={`mb-3 flex items-start justify-between gap-3 ${T.avisoBien}`}>
             <span>{avisoCortes}</span>
-            <button onClick={() => setAvisoCortes(null)} className="shrink-0 text-emerald-700 hover:text-emerald-900">
+            <button onClick={() => setAvisoCortes(null)} className="shrink-0 text-[#1F5D43] hover:text-[#144432]">
               <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" />
             </button>
           </p>
         )}
-        {errorCortes && <p role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-sm font-medium text-red-800">{errorCortes}</p>}
+        {errorCortes && <p role="alert" className={`mb-3 ${T.avisoMal}`}>{errorCortes}</p>}
 
         {cortes.length === 0 ? (
-          <p className="mt-3 text-xs leading-relaxed text-gray-500">
+          <p className="text-xs leading-relaxed text-[#667085]">
             Aún no hay cortes. Crea el primero y ábrelo para que los responsables empiecen a reportar el avance de sus indicadores.
           </p>
         ) : (
-          <ul className="mt-2 divide-y divide-gray-100">
+          <ul className={`-my-1 divide-y ${T.divide}`}>
             {cortes.map(c => {
               const n = reportesPorCorte?.[c.id]
               const ocupado = trabajando === c.id
               const aqui = confirmando?.id === c.id ? confirmando.que : null
               return (
-                <li key={c.id} className="py-3">
+                <li key={c.id} className="py-3.5">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="min-w-[14rem] flex-1">
-                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-gray-900">
+                      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-[#192031]">
                         <span className="min-w-0 break-words">{c.nombre}</span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                          c.abierto ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-gray-100 text-gray-600'
-                        }`}>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+                          <Marcador clase={c.abierto ? 'bg-[#2E7D5B]' : 'bg-[#98A2B3]'} />
                           {c.abierto ? 'Abierto' : 'Cerrado'}
                         </span>
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="mt-0.5 text-xs text-[#667085]">
                         {fechaLarga(c.fecha)}{n !== undefined ? ` · ${plural(n, 'reporte', 'reportes')}` : ''}
                       </p>
                     </div>
                     {!aqui && (
                       <div className="flex shrink-0 flex-wrap items-center gap-2">
                         {c.abierto ? (
-                          <button
-                            onClick={() => setConfirmando({ id: c.id, que: 'cerrar' })}
-                            disabled={trabajando !== null}
-                            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                          >
+                          <button onClick={() => setConfirmando({ id: c.id, que: 'cerrar' })} disabled={trabajando !== null} className={T.botonSecChico}>
                             Cerrar
                           </button>
                         ) : (
@@ -209,7 +201,7 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
                             onClick={() => cambiarEstado(c, 'abierto')}
                             disabled={trabajando !== null || abierto !== null}
                             title={abierto ? `Cierra «${abierto.nombre}» para abrir este corte` : undefined}
-                            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            className={T.botonSecChico}
                           >
                             {ocupado ? 'Abriendo…' : 'Abrir'}
                           </button>
@@ -217,7 +209,7 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
                         <button
                           onClick={() => { setAvisoCortes(null); setErrorCortes(null); setEditando(c) }}
                           disabled={trabajando !== null}
-                          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                          className={T.botonSecChico}
                         >
                           Editar
                         </button>
@@ -225,7 +217,7 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
                           <button
                             onClick={() => setConfirmando({ id: c.id, que: 'eliminar' })}
                             disabled={trabajando !== null}
-                            className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
+                            className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#B42318] transition-colors hover:bg-[#FDF3F2] disabled:opacity-50"
                           >
                             Eliminar
                           </button>
@@ -234,24 +226,18 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
                     )}
                   </div>
                   {aqui && (
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5">
-                      <p className="text-xs leading-relaxed text-gray-700">
+                    <div className={`mt-2.5 flex flex-wrap items-center justify-between gap-2 ${T.avisoNota}`}>
+                      <p className="text-xs leading-relaxed">
                         {aqui === 'cerrar'
                           ? 'Al cerrarlo, nadie más podrá reportar en este corte. Lo ya reportado se conserva.'
                           : 'Este corte no tiene reportes: se elimina sin dejar nada.'}
                       </p>
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => setConfirmando(null)}
-                          disabled={ocupado}
-                          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Cancelar
-                        </button>
+                        <button onClick={() => setConfirmando(null)} disabled={ocupado} className={T.botonSecChico}>Cancelar</button>
                         <button
                           onClick={() => (aqui === 'cerrar' ? cambiarEstado(c, 'cerrado') : eliminar(c))}
                           disabled={ocupado}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${aqui === 'eliminar' ? 'bg-red-700 hover:bg-red-800' : 'bg-[#192031] hover:bg-[#242F45]'}`}
+                          className={aqui === 'eliminar' ? T.botonPeligro : T.botonChico}
                         >
                           {ocupado ? 'Un momento…' : aqui === 'cerrar' ? 'Cerrar el corte' : 'Eliminar el corte'}
                         </button>
@@ -265,9 +251,9 @@ export default function AjustesPdm({ seguimiento, reportesPorCorte, acciones = A
         )}
 
         {abierto && cortes.some(c => !c.abierto) && (
-          <p className="mt-2 text-xs text-gray-500">Para abrir otro corte, primero cierra «{abierto.nombre}»: solo se reporta en uno a la vez.</p>
+          <p className="mt-3 text-xs text-[#667085]">Para abrir otro corte, primero cierra «{abierto.nombre}»: solo se reporta en uno a la vez.</p>
         )}
-      </section>
+      </Panel>
 
       {editando !== undefined && (
         <EditorCorte

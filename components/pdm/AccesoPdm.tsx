@@ -63,16 +63,16 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
       onCerrar={onCerrar}
       pie={
         <div className="space-y-3">
-          {error && <p role="alert" className="text-sm font-medium text-red-700">{error}</p>}
+          {error && <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p>}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button onClick={onCerrar} className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50">
+            <button onClick={onCerrar} className="rounded-lg border border-[#DCE0E8] bg-white px-5 py-2.5 text-sm font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]">
               Cancelar
             </button>
             <button
               id="pdm-habilitar"
               onClick={habilitar}
               disabled={!persona || enviando}
-              className="rounded-xl bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {enviando ? 'Habilitando…' : persona ? `Habilitar a ${persona.nombre}` : 'Habilitar'}
             </button>
@@ -82,25 +82,25 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
     >
       <label className="relative block">
         <span className="sr-only">Buscar persona</span>
-        <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
         <input
           id="pdm-habilitar-buscar"
           type="search"
           value={q}
           onChange={e => setQ(e.target.value)}
           placeholder="Buscar persona"
-          className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+          className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
 
       {candidatas.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+        <p className="rounded-lg border border-dashed border-[#C5CBD6] px-4 py-8 text-center text-sm text-[#667085]">
           Todas las personas que puedes habilitar ya tienen acceso.
         </p>
       ) : visibles.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">Nadie coincide con lo que buscas.</p>
+        <p className="rounded-lg border border-dashed border-[#C5CBD6] px-4 py-8 text-center text-sm text-[#667085]">Nadie coincide con lo que buscas.</p>
       ) : (
-        <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+        <ul className="max-h-64 divide-y divide-[#E6E9EF] overflow-y-auto rounded-lg border border-[#DCE0E8]">
           {visibles.map(p => {
             const activa = p.id === elegida
             return (
@@ -108,18 +108,18 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
                 <button
                   onClick={() => { setElegida(p.id); setError(null) }}
                   aria-pressed={activa}
-                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 ${activa ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#192031] ${activa ? 'bg-[#EDF0F5]' : 'hover:bg-[#F4F5F8]'}`}
                 >
                   <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} tamano="sm" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-gray-900">{p.nombre}</span>
-                    <span className="block truncate text-xs text-gray-500">
+                    <span className="block truncate text-sm font-semibold text-[#192031]">{p.nombre}</span>
+                    <span className="block truncate text-xs text-[#667085]">
                       {p.secretaria ?? 'Sin secretaría'}
                       {p.indicadores > 0 && ` · ${plural(p.indicadores, 'indicador', 'indicadores')}`}
                     </span>
                     <LineaContrato contrato={p.contrato} />
                   </span>
-                  {activa && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-teal-700" etiqueta="Elegida" />}
+                  {activa && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-[#192031]" etiqueta="Elegida" />}
                 </button>
               </li>
             )
@@ -129,29 +129,29 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
 
       {niveles.length > 1 ? (
         <fieldset className="space-y-2">
-          <legend className="text-xs font-semibold text-gray-600">Qué puede hacer</legend>
+          <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Qué puede hacer</legend>
           {niveles.map(n => (
-            <label key={n} className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 px-3 py-2.5 has-[:checked]:border-teal-300 has-[:checked]:bg-teal-50/60">
-              <input type="radio" name="pdm-nivel" checked={nivel === n} onChange={() => setNivel(n)} className="mt-0.5 h-4 w-4 accent-teal-700" />
-              <span className="text-sm text-gray-900"><b className="font-semibold">{ETIQUETA_NIVEL[n]}</b><span className="block text-xs text-gray-500">{AYUDA_NIVEL[n]}</span></span>
+            <label key={n} className="flex cursor-pointer items-start gap-3 rounded-lg border border-[#DCE0E8] px-3 py-2.5 has-[:checked]:border-[#192031] has-[:checked]:bg-[#F4F5F8]">
+              <input type="radio" name="pdm-nivel" checked={nivel === n} onChange={() => setNivel(n)} className="mt-0.5 h-4 w-4 accent-[#192031]" />
+              <span className="text-sm text-[#192031]"><b className="font-semibold">{ETIQUETA_NIVEL[n]}</b><span className="block text-xs text-[#667085]">{AYUDA_NIVEL[n]}</span></span>
             </label>
           ))}
         </fieldset>
       ) : (
-        <p className="rounded-xl bg-gray-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
+        <p className="rounded-lg bg-[#F7F8FA] px-3 py-2.5 text-xs leading-relaxed text-[#556072]">
           Entrará como <b className="font-semibold">{ETIQUETA_NIVEL[niveles[0]].toLowerCase()}</b>: {AYUDA_NIVEL[niveles[0]].charAt(0).toLowerCase() + AYUDA_NIVEL[niveles[0]].slice(1)}
         </p>
       )}
 
       <label className="block">
-        <span className="text-xs font-semibold text-gray-600">Motivo <span className="font-normal text-gray-500">(opcional; queda en el historial)</span></span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Motivo <span className="font-normal text-[#667085]">(opcional; queda en el historial)</span></span>
         <input
           id="pdm-habilitar-motivo"
           type="text"
           value={motivo}
           onChange={e => setMotivo(e.target.value)}
           maxLength={500}
-          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+          className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
     </Dialogo>
@@ -206,17 +206,17 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
   }
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <section className="overflow-hidden rounded-lg border border-[#DCE0E8] bg-white px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mx-4 -mt-4 mb-3 border-b border-[#E6E9EF] px-4 py-3 sm:-mx-5 sm:px-5">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-sm font-bold text-gray-900">Acceso al módulo</h2>
-          <span className="text-xs text-gray-500">{plural(habilitados.length, 'persona', 'personas')} además del administrador</span>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Acceso al módulo</h2>
+          <span className="text-xs text-[#667085]">{plural(habilitados.length, 'persona', 'personas')} además del administrador</span>
         </div>
         {puede && (
           <button
             id="pdm-habilitar-abrir"
             onClick={() => { setAviso(null); setError(null); setAbierto(true) }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
           >
             <Icono glifo={Iconos.accion.agregar} tamano="sm" />
             Habilitar a alguien
@@ -225,20 +225,20 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
       </div>
 
       {aviso && (
-        <p role="status" className="mt-3 flex items-start justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+        <p role="status" className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-[#B7DEC9] bg-[#F1F8F4] px-3 py-2.5 text-sm text-[#1F5D43]">
           <span>{aviso}</span>
-          <button onClick={() => setAviso(null)} className="shrink-0 text-emerald-700 hover:text-emerald-900"><Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" /></button>
+          <button onClick={() => setAviso(null)} className="shrink-0 text-[#1F5D43] hover:text-[#144432]"><Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" /></button>
         </p>
       )}
-      {error && <p role="alert" className="mt-3 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm font-medium text-[#B42318]">{error}</p>}
 
       {habilitados.length === 0 ? (
-        <p className="mt-3 text-xs leading-relaxed text-gray-500">
+        <p className="mt-3 text-xs leading-relaxed text-[#667085]">
           Solo el administrador entra al módulo por ahora. Habilita a las secretarías para que repartan sus indicadores,
           y a quien deba verlos o reportarlos. Habilitar no asigna indicadores: son dos pasos.
         </p>
       ) : (
-        <ul className="mt-2 divide-y divide-gray-100">
+        <ul className="mt-2 divide-y divide-[#E6E9EF]">
           {habilitados.map(p => {
             const a = p.acceso!
             const esYo = p.id === yoId
@@ -248,9 +248,9 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
               <li key={p.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-2 py-3">
                 <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
                 <div className="min-w-0 flex-1 basis-48">
-                  <p className="truncate text-sm font-semibold text-gray-900">{p.nombre}</p>
-                  <p className="truncate text-xs text-gray-500">{p.secretaria ?? 'Sin secretaría'}</p>
-                  <p className="truncate text-[11px] text-gray-400">
+                  <p className="truncate text-sm font-semibold text-[#192031]">{p.nombre}</p>
+                  <p className="truncate text-xs text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</p>
+                  <p className="truncate text-[11px] text-[#98A2B3]">
                     {a.por ? `Habilitada por ${a.por}` : 'Habilitada'}{a.desde ? ` · ${fechaCorta(a.desde.slice(0, 10))}` : ''}
                   </p>
                 </div>
@@ -260,23 +260,23 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
                     value={a.nivel}
                     disabled={trabajando !== null}
                     onChange={e => cambiarNivel(p, e.target.value as NivelHabilitable)}
-                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:opacity-50"
+                    className="rounded-lg border border-[#DCE0E8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#192031] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031] disabled:opacity-50"
                   >
                     {NIVELES_HABILITABLES.map(n => <option key={n} value={n}>{ETIQUETA_NIVEL[n]}</option>)}
                   </select>
                 ) : (
-                  <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-100">{ETIQUETA_NIVEL[a.nivel]}</span>
+                  <span className="rounded-md bg-[#EDF0F5] px-3 py-1 text-xs font-semibold text-[#192031] ring-1 ring-inset ring-[#DCE0E8]">{ETIQUETA_NIVEL[a.nivel]}</span>
                 )}
                 {toca && (
                   confirmaQuitar === p.id ? (
                     <span className="flex items-center gap-2">
-                      <button onClick={() => quitar(p)} disabled={trabajando !== null} className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                      <button onClick={() => quitar(p)} disabled={trabajando !== null} className="rounded-lg bg-[#B42318] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
                         {trabajando === p.id ? 'Quitando…' : 'Sí, quitar'}
                       </button>
-                      <button onClick={() => setConfirmaQuitar(null)} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100">No</button>
+                      <button onClick={() => setConfirmaQuitar(null)} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#556072] hover:bg-[#E6E9EF]">No</button>
                     </span>
                   ) : (
-                    <button onClick={() => { setError(null); setConfirmaQuitar(p.id) }} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                    <button onClick={() => { setError(null); setConfirmaQuitar(p.id) }} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031]">
                       Quitar acceso
                     </button>
                   )

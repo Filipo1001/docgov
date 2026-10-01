@@ -48,31 +48,31 @@ export default function Dialogo({ titulo, subtitulo, onCerrar, pie, ancho = 'sm:
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-4"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-[#192031]/55 sm:items-center sm:p-4"
       onClick={onCerrar}
       role="dialog"
       aria-modal="true"
       aria-label={titulo}
     >
       <div
-        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl ${ancho}`}
+        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-xl bg-white shadow-xl sm:max-h-[88vh] sm:rounded-lg ${ancho}`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-start gap-3 border-b border-gray-100 px-5 pb-4 pt-5 sm:px-6">
+        <div className="flex shrink-0 items-start gap-3 border-b border-[#E6E9EF] px-5 pb-4 pt-5 sm:px-6">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold leading-snug tracking-tight text-[#192031]">{titulo}</h2>
-            {subtitulo && <p className="mt-0.5 text-sm leading-snug text-gray-500">{subtitulo}</p>}
+            <h2 className="text-lg font-semibold leading-snug tracking-tight text-[#192031]">{titulo}</h2>
+            {subtitulo && <p className="mt-0.5 text-sm leading-snug text-[#556072]">{subtitulo}</p>}
           </div>
           <button
             ref={cerrarRef}
             onClick={onCerrar}
-            className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+            className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031]"
           >
             <Icono glifo={Iconos.accion.cerrar} tamano="md" etiqueta="Cerrar" />
           </button>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">{children}</div>
-        {pie && <div className="shrink-0 border-t border-gray-100 bg-white px-5 py-4 sm:px-6">{pie}</div>}
+        {pie && <div className="shrink-0 border-t border-[#E6E9EF] bg-white px-5 py-4 sm:px-6">{pie}</div>}
       </div>
     </div>,
     document.body,

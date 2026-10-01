@@ -42,6 +42,7 @@ import { usePathname } from 'next/navigation'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { avatarThumb } from '@/lib/avatar'
+import { LogoCD } from '@/components/Logo'
 import { useUsuario } from '@/lib/user-context'
 import { PLAN, VISTA_PREVIA } from '@/lib/pdm/identidad'
 import { useQuery } from '@tanstack/react-query'
@@ -55,8 +56,14 @@ function iniciales(nombre: string): string {
 }
 
 /**
- * La barra superior: salida, identidad del plan, secciones y persona.
+ * La barra superior: salida, identidad, secciones y persona.
  * Recibe todo por props —no sabe de dónde salen— y por eso se puede mirar sola.
+ *
+ * Es una banda de tinta (`#192031`, el grafito del logotipo) con el isotipo oficial en blanco: lo
+ * primero que se ve es que esto es Contratista Digital. El nombre del plan va debajo del de la
+ * plataforma, compuesto con tipografía —rótulo en mayúscula espaciada y el nombre del plan en
+ * grueso—, como el membrete de un formato oficial. Las pestañas viven en la misma banda: un solo
+ * bloque de navegación, no dos.
  */
 export function BarraPdm({
   usuario,
@@ -71,34 +78,28 @@ export function BarraPdm({
   const activa = seccionActiva(ruta)
 
   return (
-    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
-      <div className="mx-auto flex h-12 max-w-7xl items-center gap-3 px-4 md:h-14 md:px-8">
+    <header className="sticky top-0 z-30 bg-[#192031] text-white">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 md:px-8">
         <Link
           href="/dashboard"
-          className="-ml-2 flex shrink-0 items-center gap-1 rounded-lg px-2 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+          className="-ml-2 flex shrink-0 items-center gap-1 rounded-lg px-2 py-2 text-sm font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <Icono glifo={Iconos.accion.retroceder} tamano="sm" />
           <span className="hidden sm:inline">Contratista Digital</span>
           <span className="sm:hidden">Panel</span>
         </Link>
 
-        <span aria-hidden className="h-6 w-px shrink-0 bg-gray-200" />
+        <span aria-hidden className="h-7 w-px shrink-0 bg-white/20" />
 
-        {/* El nombre del plan. Va compuesto: es el eslogan de la administración, no un logotipo. */}
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-700 text-white">
-            <Icono glifo={Iconos.navegacion.planDesarrollo} tamano="md" />
-          </span>
+        <div className="flex min-w-0 items-center gap-3">
+          <LogoCD size={30} color="#FFFFFF" className="shrink-0" />
           <div className="min-w-0 leading-tight">
-            <p
-              className="truncate text-[10px] font-semibold uppercase text-teal-700"
-              style={{ letterSpacing: '0.18em' }}
-            >
+            <p className="truncate text-[10px] font-semibold uppercase text-white/60" style={{ letterSpacing: '0.2em' }}>
               {PLAN.nombre}
             </p>
-            <p className="truncate text-sm font-bold text-[#192031]">
+            <p className="truncate text-[15px] font-semibold tracking-tight">
               {PLAN.denominacion}
-              <span className="hidden font-medium text-gray-400 sm:inline"> {PLAN.periodo}</span>
+              <span className="hidden font-normal text-white/55 sm:inline"> · {PLAN.periodo}</span>
             </p>
           </div>
         </div>
@@ -107,7 +108,7 @@ export function BarraPdm({
           <Link
             href="/dashboard/perfil"
             aria-label="Mi perfil"
-            className="ml-auto flex shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-1 transition-colors hover:bg-gray-100 sm:pr-3"
+            className="ml-auto flex shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-1 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:pr-3"
           >
             {usuario.foto_url ? (
               <img
@@ -115,14 +116,14 @@ export function BarraPdm({
                 alt=""
                 loading="lazy"
                 decoding="async"
-                className="h-8 w-8 rounded-full object-cover"
+                className="h-8 w-8 rounded-full object-cover ring-1 ring-white/25"
               />
             ) : (
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold leading-none text-teal-800">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-xs font-semibold leading-none text-white">
                 {iniciales(usuario.nombre_completo)}
               </span>
             )}
-            <span className="hidden text-sm font-medium text-gray-700 sm:inline">
+            <span className="hidden text-sm font-medium text-white/85 sm:inline">
               {usuario.nombre_completo.split(' ')[0]}
             </span>
           </Link>
@@ -130,7 +131,7 @@ export function BarraPdm({
       </div>
 
       <nav aria-label="Secciones del plan" className="mx-auto max-w-7xl px-4 md:px-8">
-        <ul className="-mb-px flex gap-1 overflow-x-auto">
+        <ul className="flex gap-1 overflow-x-auto">
           {secciones.map(s => {
             const esta = s.href === activa
             return (
@@ -138,10 +139,10 @@ export function BarraPdm({
                 <Link
                   href={s.href}
                   aria-current={esta ? 'page' : undefined}
-                  className={`block border-b-2 px-3 py-2.5 text-sm transition-colors ${
+                  className={`block border-b-2 px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:bg-white/10 ${
                     esta
-                      ? 'border-teal-600 font-semibold text-[#192031]'
-                      : 'border-transparent font-medium text-gray-500 hover:text-gray-800'
+                      ? 'border-white font-semibold text-white'
+                      : 'border-transparent font-medium text-white/60 hover:text-white'
                   }`}
                 >
                   {s.rotulo}
@@ -162,9 +163,10 @@ export function BarraPdm({
 export function AvisoVistaPrevia() {
   if (!VISTA_PREVIA.activa) return null
   return (
-    <div className="border-b border-amber-200 bg-amber-50">
-      <p className="mx-auto max-w-7xl px-4 py-1.5 text-xs text-amber-900 md:px-8">
-        <b>Vista previa.</b> {VISTA_PREVIA.texto}
+    <div className="border-b border-[#DCE0E8] bg-white">
+      <p className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-0.5 px-4 py-1.5 text-xs text-[#556072] md:px-8">
+        <span className="font-semibold uppercase text-[#192031]" style={{ letterSpacing: '0.14em' }}>Vista previa</span>
+        <span>{VISTA_PREVIA.texto}</span>
       </p>
     </div>
   )
@@ -182,7 +184,7 @@ export default function MarcoPdm({ children }: { children: React.ReactNode }) {
   })
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F4F5F8]">
       <BarraPdm usuario={usuario} ruta={ruta} secciones={seccionesPara(nivel)} />
 
       <AvisoVistaPrevia />

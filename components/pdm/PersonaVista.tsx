@@ -37,7 +37,7 @@ export function Avatar({ nombre, fotoUrl, tamano = 'md', apagado = false }: {
     <span
       aria-hidden
       className={`${dim} flex shrink-0 items-center justify-center rounded-full font-semibold leading-none ${
-        apagado ? 'bg-gray-100 text-gray-500' : 'bg-teal-100 text-teal-800'
+        apagado ? 'bg-[#E6E9EF] text-[#667085]' : 'bg-[#E6E9EF] text-[#192031]'
       }`}
     >
       {iniciales(nombre)}
@@ -46,10 +46,10 @@ export function Avatar({ nombre, fotoUrl, tamano = 'md', apagado = false }: {
 }
 
 const TONO: Record<TonoContrato, string> = {
-  ok: 'text-gray-500',
-  pronto: 'font-medium text-amber-700',
-  vencido: 'font-medium text-red-700',
-  neutro: 'text-gray-500',
+  ok: 'text-[#667085]',
+  pronto: 'font-medium text-[#8A5A12]',
+  vencido: 'font-medium text-[#B42318]',
+  neutro: 'text-[#667085]',
 }
 
 /** «Contrato 224 de 2026 · vence el 31 dic 2026». El color avisa: ámbar si vence en 30 días, rojo si ya terminó. */

@@ -41,7 +41,11 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, seguimien
     <div className="mx-auto max-w-7xl space-y-5">
       <EncabezadoSeccion
         titulo="Resumen"
-        detalle={`${indicadores.length} indicadores de producto · ${lineas} líneas estratégicas · ${secretarias} secretarías`}
+        datos={[
+          { rotulo: 'Indicadores', valor: String(indicadores.length) },
+          { rotulo: 'Estructura', valor: `${lineas} líneas · ${secretarias} secretarías` },
+          { rotulo: 'Corte', valor: seguimiento.abierto ? seguimiento.abierto.nombre : 'Sin corte abierto' },
+        ]}
       />
 
       <Tablero

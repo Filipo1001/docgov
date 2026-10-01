@@ -129,13 +129,18 @@ export function coincideNombre(nombreUsuario: string, nombreExcel: string): bool
 
 export type Estado = 'cumplido' | 'en_ruta' | 'atrasado' | 'critico' | 'sin_reporte' | 'sin_meta'
 
-export const ESTADOS: Record<Estado, { rotulo: string; punto: string; chip: string; barra: string }> = {
-  cumplido:    { rotulo: 'Cumplido',      punto: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-800 border-emerald-200', barra: 'bg-emerald-500' },
-  en_ruta:     { rotulo: 'En ruta',       punto: 'bg-amber-400',   chip: 'bg-amber-50 text-amber-800 border-amber-200',       barra: 'bg-amber-400' },
-  atrasado:    { rotulo: 'Atrasado',      punto: 'bg-orange-500',  chip: 'bg-orange-50 text-orange-800 border-orange-200',    barra: 'bg-orange-500' },
-  critico:     { rotulo: 'Crítico',       punto: 'bg-red-500',     chip: 'bg-red-50 text-red-800 border-red-200',             barra: 'bg-red-500' },
-  sin_reporte: { rotulo: 'Sin avance validado', punto: 'bg-gray-400',    chip: 'bg-gray-100 text-gray-700 border-gray-200',         barra: 'bg-gray-300' },
-  sin_meta:    { rotulo: 'Sin meta', punto: 'bg-gray-300',    chip: 'bg-white text-gray-500 border-gray-200',            barra: 'bg-gray-200' },
+/**
+ * Un color por estado, y siempre con su palabra al lado (el color solo no basta: hay quien no
+ * distingue el naranja del rojo). `punto` pinta el marcador y `barra` el relleno de la barra de
+ * avance; son el mismo tono, separados por claridad de lectura.
+ */
+export const ESTADOS: Record<Estado, { rotulo: string; punto: string; barra: string }> = {
+  cumplido:    { rotulo: 'Cumplido',            punto: 'bg-[#2E7D5B]', barra: 'bg-[#2E7D5B]' },
+  en_ruta:     { rotulo: 'En ruta',             punto: 'bg-[#B7791F]', barra: 'bg-[#B7791F]' },
+  atrasado:    { rotulo: 'Atrasado',            punto: 'bg-[#C2570C]', barra: 'bg-[#C2570C]' },
+  critico:     { rotulo: 'Crítico',             punto: 'bg-[#B42318]', barra: 'bg-[#B42318]' },
+  sin_reporte: { rotulo: 'Sin avance validado', punto: 'bg-[#98A2B3]', barra: 'bg-[#98A2B3]' },
+  sin_meta:    { rotulo: 'Sin meta',            punto: 'bg-[#CBD2DC]', barra: 'bg-[#CBD2DC]' },
 }
 
 /** Umbrales del semáforo. Provisionales, como el criterio de cumplido. */

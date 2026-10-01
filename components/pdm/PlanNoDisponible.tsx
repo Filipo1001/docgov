@@ -26,9 +26,9 @@ export default function PlanNoDisponible({ seLeyo, nivel }: { seLeyo: boolean; n
         : 'Cuando se cargue, aparecerá aquí.'
 
   return (
-    <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
-      <p className="text-sm font-semibold text-gray-800">{titulo}</p>
-      <p className="mt-1.5 text-sm leading-relaxed text-gray-500">{detalle}</p>
+    <div className="mx-auto max-w-2xl rounded-lg border border-dashed border-[#C5CBD6] bg-white px-6 py-12 text-center">
+      <p className="text-sm font-semibold text-[#192031]">{titulo}</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-[#667085]">{detalle}</p>
     </div>
   )
 }

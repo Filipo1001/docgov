@@ -77,11 +77,12 @@ export interface EstadoEnCorte {
   reporte: ReporteCorte | null
 }
 
-export const SITUACIONES: Record<SituacionCorte, { rotulo: string; chip: string; punto: string }> = {
-  falta:     { rotulo: 'Falta reportar',          chip: 'bg-sky-50 text-sky-800 border-sky-200',             punto: 'bg-sky-500' },
-  pendiente: { rotulo: 'Reportado · sin validar', chip: 'bg-amber-50 text-amber-800 border-amber-200',       punto: 'bg-amber-400' },
-  devuelto:  { rotulo: 'Devuelto',                chip: 'bg-red-50 text-red-800 border-red-200',             punto: 'bg-red-500' },
-  aprobado:  { rotulo: 'Aprobado',                chip: 'bg-emerald-50 text-emerald-800 border-emerald-200', punto: 'bg-emerald-500' },
+export const SITUACIONES: Record<SituacionCorte, { rotulo: string; punto: string }> = {
+  // «Falta reportar» no es un estado sino un pendiente: se dibuja con un marcador hueco (ver `ui.tsx`).
+  falta:     { rotulo: 'Falta reportar',          punto: 'bg-[#192031]' },
+  pendiente: { rotulo: 'Reportado · sin validar', punto: 'bg-[#B7791F]' },
+  devuelto:  { rotulo: 'Devuelto',                punto: 'bg-[#B42318]' },
+  aprobado:  { rotulo: 'Aprobado',                punto: 'bg-[#2E7D5B]' },
 }
 
 /**

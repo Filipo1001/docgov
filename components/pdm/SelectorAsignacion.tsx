@@ -113,11 +113,11 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
       onCerrar={onCerrar}
       pie={
         <div className="space-y-3">
-          {error && <p role="alert" className="text-sm font-medium text-red-700">{error}</p>}
+          {error && <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p>}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               onClick={onCerrar}
-              className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              className="rounded-lg border border-[#DCE0E8] bg-white px-5 py-2.5 text-sm font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]"
             >
               Cancelar
             </button>
@@ -125,7 +125,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
               id="pdm-asignar"
               onClick={asignar}
               disabled={!puede}
-              className="rounded-xl bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {enviando ? 'Asignando…' : etiqueta ? `Asignar a ${etiqueta}` : 'Asignar'}
             </button>
@@ -134,7 +134,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
       }
     >
       {/* Una persona o un grupo */}
-      <div role="tablist" aria-label="A quién asignar" className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
+      <div role="tablist" aria-label="A quién asignar" className="grid grid-cols-2 gap-1 rounded-lg bg-[#E6E9EF] p-1">
         {(['persona', 'grupo'] as const).map(m => (
           <button
             key={m}
@@ -142,7 +142,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
             aria-selected={modo === m}
             onClick={() => { setModo(m); setError(null) }}
             className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-              modo === m ? 'bg-white text-[#192031] shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              modo === m ? 'bg-white text-[#192031] ring-1 ring-inset ring-[#DCE0E8]' : 'text-[#556072] hover:text-[#192031]'
             }`}
           >
             {m === 'persona' ? 'Una persona' : 'Un grupo'}
@@ -154,23 +154,23 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
         <section className="space-y-3">
           <label className="relative block">
             <span className="sr-only">Buscar persona</span>
-            <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
             <input
               id="pdm-buscar-persona"
               type="search"
               value={q}
               onChange={e => setQ(e.target.value)}
               placeholder="Buscar persona"
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+              className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
             />
           </label>
 
           {unaSecretaria && !t && (
-            <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-gray-500">
+            <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#667085]">
               <span>{todas ? 'Personas de todas las secretarías' : `Personas de ${unaSecretaria}`}</span>
               <button
                 onClick={() => setTodas(v => !v)}
-                className="font-semibold text-teal-700 underline-offset-2 hover:underline"
+                className="font-semibold text-[#192031] underline-offset-2 hover:underline"
               >
                 {todas ? `Solo ${unaSecretaria}` : 'Ver todas las secretarías'}
               </button>
@@ -178,11 +178,11 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
           )}
 
           {visibles.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+            <p className="rounded-lg border border-dashed border-[#C5CBD6] px-4 py-8 text-center text-sm text-[#667085]">
               Nadie coincide con lo que buscas.
             </p>
           ) : (
-            <ul className="max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+            <ul className="max-h-72 divide-y divide-[#E6E9EF] overflow-y-auto rounded-lg border border-[#DCE0E8]">
               {visibles.map(p => {
                 const activo = p.id === personaId
                 return (
@@ -190,20 +190,20 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
                     <button
                       onClick={() => { setPersonaId(p.id); setError(null) }}
                       aria-pressed={activo}
-                      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 ${
-                        activo ? 'bg-teal-50' : 'hover:bg-gray-50'
+                      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#192031] ${
+                        activo ? 'bg-[#EDF0F5]' : 'hover:bg-[#F4F5F8]'
                       }`}
                     >
                       <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} tamano="sm" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-gray-900">{p.nombre}</span>
-                        <span className="block truncate text-xs text-gray-500">
+                        <span className="block truncate text-sm font-semibold text-[#192031]">{p.nombre}</span>
+                        <span className="block truncate text-xs text-[#667085]">
                           {p.secretaria ?? 'Sin secretaría'}
                           {p.indicadores > 0 && ` · ${plural(p.indicadores, 'indicador', 'indicadores')}`}
                         </span>
                         <LineaContrato contrato={p.contrato} />
                       </span>
-                      {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-teal-700" etiqueta="Elegida" />}
+                      {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-[#192031]" etiqueta="Elegida" />}
                     </button>
                   </li>
                 )
@@ -212,7 +212,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
           )}
 
           {persona && (persona.contrato.estado === 'vencido' || (persona.contrato.dias !== null && persona.contrato.dias <= 30 && persona.contrato.estado === 'en_fecha')) && (
-            <p role="status" className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+            <p role="status" className="flex items-start gap-2 rounded-lg border border-[#EBD9A8] bg-[#FBF6E7] px-3 py-2.5 text-xs leading-relaxed text-[#7A5410]">
               <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0" />
               {persona.contrato.estado === 'vencido'
                 ? 'Su contrato ya terminó. Puedes asignarle de todos modos; conviene confirmar que sigue vinculado.'
@@ -221,31 +221,31 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
           )}
 
           {persona && persona.acceso === null && persona.rol !== 'admin' && (
-            <p role="status" className="flex items-start gap-2 rounded-xl bg-gray-100 px-3 py-2.5 text-xs leading-relaxed text-gray-700">
+            <p role="status" className="flex items-start gap-2 rounded-lg bg-[#E6E9EF] px-3 py-2.5 text-xs leading-relaxed text-[#2D3648]">
               <Icono glifo={Iconos.estado.informacion} tamano="sm" className="mt-0.5 shrink-0" />
               Esta persona aún no tiene acceso al módulo. Asignarle indicadores no se lo da: se habilita en Responsables.
             </p>
           )}
 
           <fieldset className="space-y-2">
-            <legend className="text-xs font-semibold text-gray-600">Cómo participa</legend>
+            <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Cómo participa</legend>
             {([
               ['principal', 'Responsable principal', 'Responde por el indicador y por su reporte.'],
               ['apoyo', 'Apoyo', 'Colabora; el principal sigue siendo quien es.'],
             ] as const).map(([valor, rotulo, ayuda]) => (
-              <label key={valor} className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 px-3 py-2.5 has-[:checked]:border-teal-300 has-[:checked]:bg-teal-50/60">
+              <label key={valor} className="flex cursor-pointer items-start gap-3 rounded-lg border border-[#DCE0E8] px-3 py-2.5 has-[:checked]:border-[#192031] has-[:checked]:bg-[#F4F5F8]">
                 <input
                   type="radio"
                   name="pdm-como"
                   checked={como === valor}
                   onChange={() => { setComo(valor); setError(null) }}
-                  className="mt-0.5 h-4 w-4 accent-teal-700"
+                  className="mt-0.5 h-4 w-4 accent-[#192031]"
                 />
-                <span className="text-sm text-gray-900"><b className="font-semibold">{rotulo}</b><span className="block text-xs text-gray-500">{ayuda}</span></span>
+                <span className="text-sm text-[#192031]"><b className="font-semibold">{rotulo}</b><span className="block text-xs text-[#667085]">{ayuda}</span></span>
               </label>
             ))}
             {apoyoImposible && (
-              <p role="status" className="text-xs font-medium text-amber-800">
+              <p role="status" className="text-xs font-medium text-[#8A5A12]">
                 {plural(sinPrincipal, 'indicador no tiene', 'indicadores no tienen')} responsable principal. Asígnalos primero a su responsable.
               </p>
             )}
@@ -254,15 +254,15 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
       ) : (
         <section className="space-y-3">
           {!unaSecretaria ? (
-            <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+            <p className="rounded-lg border border-dashed border-[#C5CBD6] px-4 py-8 text-center text-sm text-[#667085]">
               Un grupo solo trabaja en los indicadores de su secretaría. Selecciona indicadores de una sola secretaría para asignarlos a un grupo.
             </p>
           ) : gruposPosibles.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+            <p className="rounded-lg border border-dashed border-[#C5CBD6] px-4 py-8 text-center text-sm text-[#667085]">
               {unaSecretaria} aún no tiene grupos. Se crean en la sección Responsables.
             </p>
           ) : (
-            <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+            <ul className="divide-y divide-[#E6E9EF] rounded-lg border border-[#DCE0E8]">
               {gruposPosibles.map(g => {
                 const activo = g.id === grupoId
                 const lider = personas.find(p => p.id === g.liderId)
@@ -271,21 +271,21 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
                     <button
                       onClick={() => { setGrupoId(g.id); setError(null) }}
                       aria-pressed={activo}
-                      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 ${
-                        activo ? 'bg-teal-50' : 'hover:bg-gray-50'
+                      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#192031] ${
+                        activo ? 'bg-[#EDF0F5]' : 'hover:bg-[#F4F5F8]'
                       }`}
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E6E9EF] text-[#556072]">
                         <Icono glifo={Iconos.navegacion.usuarios} tamano="sm" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-gray-900">{g.nombre}</span>
-                        <span className="block truncate text-xs text-gray-500">
+                        <span className="block truncate text-sm font-semibold text-[#192031]">{g.nombre}</span>
+                        <span className="block truncate text-xs text-[#667085]">
                           {g.liderId === null ? 'Sin líder: entra como apoyo' : `Líder: ${lider?.nombre ?? 'persona que ya no está activa'}`}
                           {' · '}{plural(g.miembros.length, 'persona', 'personas')}
                         </span>
                       </span>
-                      {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-teal-700" etiqueta="Elegido" />}
+                      {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-[#192031]" etiqueta="Elegido" />}
                     </button>
                   </li>
                 )
@@ -293,7 +293,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
             </ul>
           )}
           {grupo && (
-            <p className="text-xs leading-relaxed text-gray-500">
+            <p className="text-xs leading-relaxed text-[#667085]">
               {grupo.liderId === null
                 ? `Sin líder, ${plural(grupo.miembros.length, 'persona entra', 'personas entran')} como apoyo; el responsable principal de cada indicador no cambia.`
                 : `El líder queda como responsable principal${grupo.miembros.length <= 1 ? '.' : grupo.miembros.length === 2 ? ' y la otra persona, como apoyo.' : ` y las otras ${grupo.miembros.length - 1} personas, como apoyo.`}`}
@@ -301,7 +301,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
             </p>
           )}
           {apoyoImposible && modo === 'grupo' && (
-            <p role="status" className="text-xs font-medium text-amber-800">
+            <p role="status" className="text-xs font-medium text-[#8A5A12]">
               {plural(sinPrincipal, 'indicador no tiene', 'indicadores no tienen')} responsable principal. Asígnalos primero a su responsable, o dale un líder al grupo.
             </p>
           )}
@@ -311,29 +311,29 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
       {/* Qué hacer con el responsable anterior: solo si hay alguien a quien desplazar */}
       {desplazados > 0 && (
         <fieldset className="space-y-2">
-          <legend className="text-xs font-semibold text-gray-600">
+          <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">
             {plural(desplazados, 'indicador ya tiene', 'indicadores ya tienen')} otro responsable principal
           </legend>
           {([
             ['apoyo', 'Dejarlo como apoyo', 'Sigue participando; no se pierde.'],
             ['quitar', 'Quitarlo', 'Deja de estar en el indicador. Queda en el historial.'],
           ] as const).map(([valor, rotulo, ayuda]) => (
-            <label key={valor} className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 px-3 py-2.5 has-[:checked]:border-teal-300 has-[:checked]:bg-teal-50/60">
+            <label key={valor} className="flex cursor-pointer items-start gap-3 rounded-lg border border-[#DCE0E8] px-3 py-2.5 has-[:checked]:border-[#192031] has-[:checked]:bg-[#F4F5F8]">
               <input
                 type="radio"
                 name="pdm-anterior"
                 checked={anterior === valor}
                 onChange={() => setAnterior(valor)}
-                className="mt-0.5 h-4 w-4 accent-teal-700"
+                className="mt-0.5 h-4 w-4 accent-[#192031]"
               />
-              <span className="text-sm text-gray-900"><b className="font-semibold">{rotulo}</b><span className="block text-xs text-gray-500">{ayuda}</span></span>
+              <span className="text-sm text-[#192031]"><b className="font-semibold">{rotulo}</b><span className="block text-xs text-[#667085]">{ayuda}</span></span>
             </label>
           ))}
         </fieldset>
       )}
 
       <label className="block">
-        <span className="text-xs font-semibold text-gray-600">Motivo <span className="font-normal text-gray-500">(opcional; queda en el historial)</span></span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Motivo <span className="font-normal text-[#667085]">(opcional; queda en el historial)</span></span>
         <input
           id="pdm-motivo"
           type="text"
@@ -341,7 +341,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
           onChange={e => setMotivo(e.target.value)}
           maxLength={MAX_MOTIVO}
           placeholder="Por ejemplo: acordado con la secretaria"
-          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+          className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
     </Dialogo>

@@ -68,17 +68,17 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
     <>
       <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-gray-900">{p.nombre}</p>
-        <p className="truncate text-xs text-gray-500">{p.secretaria ?? 'Sin secretaría'}</p>
+        <p className="truncate text-sm font-semibold text-[#192031]">{p.nombre}</p>
+        <p className="truncate text-xs text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</p>
         <LineaContrato contrato={p.contrato} />
         {p.acceso && (
-          <p className="text-[11px] font-semibold text-teal-700">Con acceso al módulo · {ETIQUETA_NIVEL[p.acceso.nivel]}</p>
+          <p className="text-[11px] font-semibold text-[#192031]">Con acceso al módulo · {ETIQUETA_NIVEL[p.acceso.nivel]}</p>
         )}
         {p.excel && !coincideNombre(p.nombre, p.excel) && (
-          <p className="text-[11px] text-gray-400">En el Excel figura como «{p.excel}»</p>
+          <p className="text-[11px] text-[#98A2B3]">En el Excel figura como «{p.excel}»</p>
         )}
         {atencion > 0 && (
-          <p className="mt-0.5 text-xs font-medium text-red-700">
+          <p className="mt-0.5 text-xs font-medium text-[#B42318]">
             {atencion} {atencion === 1 ? 'atrasado o crítico' : 'atrasados o críticos'}
           </p>
         )}
@@ -91,15 +91,15 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
       <p className="w-16 shrink-0 text-right">
         {p.indicadores > 0 ? (
           <>
-            <b className="block text-sm tabular-nums text-gray-900">{p.indicadores}</b>
-            <span className="text-[11px] text-gray-500">{p.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
+            <b className="block text-sm tabular-nums text-[#192031]">{p.indicadores}</b>
+            <span className="text-[11px] text-[#667085]">{p.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
           </>
         ) : (
-          <span className="text-xs text-gray-400">Ninguno</span>
+          <span className="text-xs text-[#98A2B3]">Ninguno</span>
         )}
       </p>
       {enlace
-        ? <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
+        ? <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-[#B8BFCC]" />
         : <span className="w-4 shrink-0" aria-hidden />}
     </>
   )
@@ -107,7 +107,7 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
   return enlace ? (
     <Link
       href={hrefUsuario(p.id)}
-      className={`${clase} transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none`}
+      className={`${clase} transition-colors hover:bg-[#F4F5F8] focus-visible:bg-[#F7F8FA] focus-visible:outline-none`}
     >
       {contenido}
     </Link>
@@ -173,36 +173,44 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
-      <EncabezadoSeccion titulo="Responsables" detalle="Quién responde por cada indicador, y dónde nadie responde." />
+      <EncabezadoSeccion
+        titulo="Responsables"
+        detalle="Quién responde por cada indicador, y dónde nadie responde."
+        datos={[
+          { rotulo: 'Personas', valor: String(directorio.personas.length) },
+          { rotulo: 'Con indicadores', valor: String(directorio.personas.filter(p => p.indicadores > 0).length) },
+          { rotulo: 'Grupos', valor: String(directorio.grupos.length) },
+        ]}
+      />
 
       {/* 1 · Los huecos (si no hay ninguno, no se pinta nada) */}
       {huerfanos.length > 0 && (
-        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="text-sm font-bold text-gray-900">Sin una persona que responda</h2>
-            <p className="text-xs text-gray-500">
-              <b className="tabular-nums text-red-600">{huerfanos.length}</b> de {indicadores.length} indicadores
+        <section className="overflow-hidden rounded-lg border border-[#DCE0E8] bg-white px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 -mx-4 -mt-4 mb-3 border-b border-[#E6E9EF] px-4 py-3 sm:-mx-5 sm:px-5">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Sin una persona que responda</h2>
+            <p className="text-xs text-[#667085]">
+              <b className="tabular-nums text-[#B42318]">{huerfanos.length}</b> de {indicadores.length} indicadores
             </p>
           </div>
-          <p className="mt-1 text-xs text-gray-500">Nadie los tiene asignado todavía en la plataforma.</p>
+          <p className="mt-1 text-xs text-[#667085]">Nadie los tiene asignado todavía en la plataforma.</p>
 
-          <ul className="mt-2 divide-y divide-gray-100">
+          <ul className="mt-2 divide-y divide-[#E6E9EF]">
             {porSecretaria.map(s => (
               <li key={s.dependencia}>
                 <Link
                   href={`${HREF_INDICADORES}?dependencia=${encodeURIComponent(s.dependencia)}&filtro=sin_responsable`}
-                  className="flex items-center gap-4 py-3 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+                  className="flex items-center gap-4 py-3 transition-colors hover:bg-[#F4F5F8] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold leading-snug text-gray-900">{s.dependencia}</p>
-                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100" aria-hidden>
-                      <div className="h-full rounded-full bg-red-400" style={{ width: `${(100 * s.sin) / s.total}%` }} />
+                    <p className="text-sm font-semibold leading-snug text-[#192031]">{s.dependencia}</p>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-[3px] bg-[#E6E9EF]" aria-hidden>
+                      <div className="h-full bg-[#B42318]" style={{ width: `${(100 * s.sin) / s.total}%` }} />
                     </div>
                   </div>
-                  <p className="shrink-0 text-right text-xs text-gray-500">
-                    <b className="text-sm tabular-nums text-gray-900">{s.sin}</b> de {s.total}
+                  <p className="shrink-0 text-right text-xs text-[#667085]">
+                    <b className="text-sm tabular-nums text-[#192031]">{s.sin}</b> de {s.total}
                   </p>
-                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
+                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-[#B8BFCC]" />
                 </Link>
               </li>
             ))}
@@ -211,9 +219,9 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
       )}
 
       {!directorio.ok && (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0 text-amber-700" />
-          <p className="text-sm text-amber-900">
+        <div role="alert" className="flex items-start gap-3 rounded-lg border border-[#EBD9A8] bg-[#FBF6E7] px-4 py-3">
+          <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0 text-[#8A5A12]" />
+          <p className="text-sm text-[#7A5410]">
             No se pudo leer la lista de usuarios de Contratista Digital. Recarga la página; si sigue igual, el resto del módulo funciona con los datos del archivo.
           </p>
         </div>
@@ -221,28 +229,28 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
 
       {/* 2 · Figuran en el Excel y no tienen usuario */}
       {sinUsuario.length > 0 && (
-        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="text-sm font-bold text-gray-900">Figuran en el Excel y no tienen usuario</h2>
-            <p className="text-xs text-gray-500">{sinUsuario.length} personas</p>
+        <section className="overflow-hidden rounded-lg border border-[#DCE0E8] bg-white px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 -mx-4 -mt-4 mb-3 border-b border-[#E6E9EF] px-4 py-3 sm:-mx-5 sm:px-5">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Figuran en el Excel y no tienen usuario</h2>
+            <p className="text-xs text-[#667085]">{sinUsuario.length} personas</p>
           </div>
-          <ul className="mt-2 divide-y divide-gray-100">
+          <ul className="mt-2 divide-y divide-[#E6E9EF]">
             {sinUsuario.map(s => (
               <li key={s.nombre}>
                 <Link
                   href={hrefOrigen(s.nombre)}
-                  className="flex items-center gap-3.5 py-3 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+                  className="flex items-center gap-3.5 py-3 transition-colors hover:bg-[#F4F5F8] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
                 >
                   <Avatar nombre={s.nombre} apagado />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">{s.nombre}</p>
-                    <p className="text-xs text-gray-500">{MOTIVO[s.motivo]}</p>
+                    <p className="truncate text-sm font-semibold text-[#192031]">{s.nombre}</p>
+                    <p className="text-xs text-[#667085]">{MOTIVO[s.motivo]}</p>
                   </div>
                   <p className="w-16 shrink-0 text-right">
-                    <b className="block text-sm tabular-nums text-gray-900">{s.indicadores}</b>
-                    <span className="text-[11px] text-gray-500">{s.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
+                    <b className="block text-sm tabular-nums text-[#192031]">{s.indicadores}</b>
+                    <span className="text-[11px] text-[#667085]">{s.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
                   </p>
-                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
+                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-[#B8BFCC]" />
                 </Link>
               </li>
             ))}
@@ -266,23 +274,23 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
 
       {/* 4 · Las personas de la plataforma */}
       {directorio.ok && (
-        <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-          <div className="flex items-baseline gap-3">
-            <h2 className="text-sm font-bold text-gray-900">Personas</h2>
-            <span className="text-xs text-gray-500">{personas.length} usuarios de Contratista Digital</span>
+        <section className="overflow-hidden rounded-lg border border-[#DCE0E8] bg-white px-4 py-4 sm:px-5">
+          <div className="flex items-baseline gap-3 -mx-4 -mt-4 mb-3 border-b border-[#E6E9EF] px-4 py-3 sm:-mx-5 sm:px-5">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Personas</h2>
+            <span className="text-xs text-[#667085]">{personas.length} usuarios de Contratista Digital</span>
           </div>
 
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <label className="relative block flex-1">
               <span className="sr-only">Buscar persona</span>
-              <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
               <input
                 id="pdm-persona"
                 type="search"
                 value={q}
                 onChange={e => { setQ(e.target.value); setLimite(PAGINA) }}
                 placeholder="Buscar persona"
-                className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+                className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
               />
             </label>
             <select
@@ -290,7 +298,7 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
               aria-label="Secretaría"
               value={secretaria}
               onChange={e => { setSecretaria(e.target.value); setLimite(PAGINA) }}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 sm:w-72"
+              className="rounded-lg border border-[#DCE0E8] bg-white px-3 py-2 text-sm text-[#192031] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031] sm:w-72"
             >
               <option value="">Todas las secretarías</option>
               {secretarias.map(s => <option key={s} value={s}>{s}</option>)}
@@ -303,10 +311,10 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
                 key={f.k}
                 onClick={() => { setFiltro(f.k); setLimite(PAGINA) }}
                 aria-pressed={filtro === f.k}
-                className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                className={`shrink-0 rounded-md border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
                   filtro === f.k
                     ? 'border-[#192031] bg-[#192031] text-white'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    : 'border-[#DCE0E8] bg-white text-[#556072] hover:border-[#C5CBD6]'
                 }`}
               >
                 {f.rotulo} <span className="ml-1 tabular-nums opacity-70">{cuenta[f.k]}</span>
@@ -315,10 +323,10 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
           </div>
 
           {visibles.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500">Nadie coincide con lo que buscas.</p>
+            <p className="py-8 text-center text-sm text-[#667085]">Nadie coincide con lo que buscas.</p>
           ) : (
             <>
-              <ul className="mt-2 divide-y divide-gray-100">
+              <ul className="mt-2 divide-y divide-[#E6E9EF]">
                 {visibles.slice(0, limite).map(p => (
                   <li key={p.id}><FilaPersona p={p} conSeguimiento={conSeguimiento} /></li>
                 ))}
@@ -326,7 +334,7 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
               {visibles.length > limite && (
                 <button
                   onClick={() => setLimite(l => l + PAGINA)}
-                  className="mx-auto mt-3 block rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                  className="mx-auto mt-3 block rounded-lg border border-[#DCE0E8] bg-white px-5 py-2.5 text-sm font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]"
                 >
                   Mostrar {Math.min(PAGINA, visibles.length - limite)} más · {visibles.length - limite} restantes
                 </button>

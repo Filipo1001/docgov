@@ -26,6 +26,8 @@ import {
   type AccionesSeguimiento, type ReporteDetalle,
 } from '@/lib/pdm/seguimiento-acciones'
 import { ErrorDeSubida, subirArchivo } from '@/lib/pdm/subir'
+import { Seccion } from './ui'
+import { T } from './tema'
 
 type Fase = 'subiendo' | 'registrando' | null
 
@@ -52,29 +54,25 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
 
   if (modo === 'aprobado') {
     return (
-      <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5">
-        <h3 className="text-sm font-bold text-emerald-900">Reporte aprobado</h3>
-        <p className="mt-1 text-xs leading-relaxed text-emerald-800">
-          La secretaría aprobó el reporte de «{corte.nombre}». Si hay que cambiarlo, tiene que devolverlo antes.
-        </p>
-      </section>
+      <Seccion rotulo="Reporte del corte">
+        <div className={T.avisoBien}>
+          <p className="text-sm font-semibold">Reporte aprobado</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            La secretaría aprobó el reporte de «{corte.nombre}». Si hay que cambiarlo, tiene que devolverlo antes.
+          </p>
+        </div>
+      </Seccion>
     )
   }
 
   if (!abierto) {
     return (
-      <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-gray-700">¿Hay que corregir lo que reportaste en «{corte.nombre}»?</p>
-          <button
-            id="pdm-corregir"
-            onClick={() => setAbierto(true)}
-            className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50"
-          >
-            Corregir el reporte
-          </button>
+      <Seccion rotulo="Reporte del corte">
+        <div className={`flex flex-wrap items-center justify-between gap-3 ${T.avisoNota}`}>
+          <p>¿Hay que corregir lo que reportaste en «{corte.nombre}»?</p>
+          <button id="pdm-corregir" onClick={() => setAbierto(true)} className={T.botonSecChico}>Corregir el reporte</button>
         </div>
-      </section>
+      </Seccion>
     )
   }
 
@@ -139,19 +137,17 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
   const titulo = modo === 'nuevo' ? `Reportar avance · ${corte.nombre}` : modo === 'responder' ? 'Responder a la devolución' : 'Corregir el reporte'
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
-      <h3 className="text-sm font-bold text-gray-900">{titulo}</h3>
-
+    <Seccion rotulo={titulo}>
       {modo === 'responder' && vigente && (
-        <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800">
+        <p className={`mb-3 text-xs leading-relaxed ${T.avisoMal}`}>
           <b>La secretaría lo devolvió{vigente.validaciones.at(-1)?.validadorNombre ? ` (${vigente.validaciones.at(-1)!.validadorNombre})` : ''}:</b>{' '}
           {vigente.validaciones.at(-1)?.comentario ?? 'sin comentario'}
         </p>
       )}
 
-      <div className="mt-3 space-y-3">
+      <div className="space-y-4">
         <label className="block">
-          <span className="text-xs font-semibold text-gray-600">Valor del avance ({indicador.unidad.toLowerCase()})</span>
+          <span className={T.rotulo}>Valor del avance <span className="font-normal normal-case tracking-normal">({indicador.unidad.toLowerCase()})</span></span>
           <input
             id="pdm-valor"
             type="text"
@@ -160,22 +156,22 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
             value={valor}
             disabled={enviando}
             onChange={e => setValor(e.target.value.replace(/[^\d.,]/g, '').slice(0, 14))}
-            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm tabular-nums text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:opacity-60"
+            className={`${T.campo} mt-1.5 tabular-nums`}
           />
           {valor.trim() !== '' && (
-            <span className={`mt-1 block text-[11px] ${numero === null ? 'text-red-700' : 'text-gray-500'}`}>
+            <span className={`mt-1 block text-[11px] ${numero === null ? 'text-[#B42318]' : 'text-[#667085]'}`}>
               {numero === null ? 'No se entiende ese número.' : `Se registrará ${fmt(numero)}`}
             </span>
           )}
           {indicador.criterio === null && (
-            <span className="mt-1 block text-[11px] text-gray-500">
+            <span className="mt-1 block text-[11px] text-[#667085]">
               La Alcaldía aún define si el avance es del año o acumulado: el valor queda guardado tal como lo reportas.
             </span>
           )}
         </label>
 
         <label className="block">
-          <span className="text-xs font-semibold text-gray-600">¿Qué se hizo?</span>
+          <span className={T.rotulo}>¿Qué se hizo?</span>
           <textarea
             id="pdm-texto"
             value={texto}
@@ -183,13 +179,13 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
             onChange={e => setTexto(e.target.value)}
             rows={3}
             maxLength={MAX_TEXTO_REPORTE}
-            className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:opacity-60"
+            className={`${T.campo} mt-1.5 resize-none`}
           />
         </label>
 
         {correccion && (
           <label className="block">
-            <span className="text-xs font-semibold text-gray-600">{modo === 'responder' ? '¿Cómo respondes a la devolución?' : '¿Qué corriges?'}</span>
+            <span className={T.rotulo}>{modo === 'responder' ? '¿Cómo respondes a la devolución?' : '¿Qué corriges?'}</span>
             <textarea
               id="pdm-motivo"
               value={motivo}
@@ -197,26 +193,26 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
               onChange={e => setMotivo(e.target.value)}
               rows={2}
               maxLength={MAX_MOTIVO_CORRECCION}
-              className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:opacity-60"
+              className={`${T.campo} mt-1.5 resize-none`}
             />
           </label>
         )}
 
         <div>
-          <span className="text-xs font-semibold text-gray-600">
-            Evidencia <span className="font-normal text-gray-500">(obligatoria · hasta {MAX_EVIDENCIAS} archivos · {TEXTO_TIPOS_EVIDENCIA})</span>
+          <span className={T.rotulo}>
+            Evidencia <span className="font-normal normal-case tracking-normal">· obligatoria · hasta {MAX_EVIDENCIAS} archivos · {TEXTO_TIPOS_EVIDENCIA}</span>
           </span>
           {archivos.length > 0 && (
             <ul className="mt-1.5 space-y-1.5">
               {archivos.map(f => (
-                <li key={`${f.name}:${f.size}:${f.lastModified}`} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                  <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0 text-gray-500" />
-                  <span className="min-w-0 flex-1 truncate text-gray-800">{f.name}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-gray-500">{describirTamano(f.size)}</span>
+                <li key={`${f.name}:${f.size}:${f.lastModified}`} className="flex items-center gap-2 rounded-lg border border-[#DCE0E8] bg-white px-3 py-2 text-sm">
+                  <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0 text-[#667085]" />
+                  <span className="min-w-0 flex-1 truncate text-[#192031]">{f.name}</span>
+                  <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(f.size)}</span>
                   {!enviando && (
                     <button
                       onClick={() => setArchivos(a => a.filter(x => x !== f))}
-                      className="shrink-0 rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                      className="shrink-0 rounded p-1 text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031]"
                     >
                       <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta={`Quitar ${f.name}`} />
                     </button>
@@ -226,8 +222,8 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
             </ul>
           )}
           {archivos.length < MAX_EVIDENCIAS && (
-            <label className={`mt-1.5 flex items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-white px-3 py-3 text-sm text-gray-600 transition-colors ${enviando ? 'opacity-60' : 'cursor-pointer hover:border-gray-400'}`}>
-              <Icono glifo={Iconos.documentos.subir} tamano="sm" className="shrink-0 text-gray-500" />
+            <label className={`mt-1.5 flex items-center gap-3 rounded-lg border border-dashed border-[#AEB6C4] bg-white px-3 py-3 text-sm text-[#556072] transition-colors ${enviando ? 'opacity-60' : 'cursor-pointer hover:border-[#192031] hover:text-[#192031]'}`}>
+              <Icono glifo={Iconos.documentos.subir} tamano="sm" className="shrink-0" />
               <span className="min-w-0 truncate">{archivos.length === 0 ? 'Adjuntar foto, acta o documento' : 'Adjuntar otro archivo'}</span>
               <input
                 ref={entrada}
@@ -243,30 +239,20 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
           )}
         </div>
 
-        {error && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-800">{error}</p>}
+        {error && <p role="alert" className={`text-xs font-medium ${T.avisoMal}`}>{error}</p>}
 
         <div className="flex gap-2">
           {modo === 'corregir' && !enviando && (
-            <button
-              onClick={() => { setAbierto(false); setError(null) }}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
+            <button onClick={() => { setAbierto(false); setError(null) }} className={T.botonSec}>Cancelar</button>
           )}
-          <button
-            id="pdm-enviar"
-            onClick={enviar}
-            disabled={!listo || enviando}
-            className="flex-1 rounded-xl bg-[#192031] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <button id="pdm-enviar" onClick={enviar} disabled={!listo || enviando} className={`${T.boton} flex-1`}>
             {fase === 'subiendo' ? 'Subiendo archivos…' : fase === 'registrando' ? 'Enviando…' : correccion ? 'Enviar corrección' : 'Enviar reporte'}
           </button>
         </div>
-        <p className="text-center text-xs text-gray-500">
+        <p className="text-center text-xs text-[#667085]">
           Tu reporte cuenta en el cumplimiento cuando la secretaría lo apruebe.
         </p>
       </div>
-    </section>
+    </Seccion>
   )
 }

@@ -10,6 +10,8 @@ import { useState } from 'react'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import { ETIQUETA_NIVEL } from '@/lib/pdm/niveles'
 import { MAX_COMENTARIO, errorEnComentario, type AccionesSeguimiento, type ComentarioVista } from '@/lib/pdm/seguimiento-acciones'
+import { Seccion } from './ui'
+import { T } from './tema'
 
 export default function ComentariosIndicador({ indicadorUuid, comentarios, acciones, onHecho }: {
   indicadorUuid: string
@@ -35,18 +37,17 @@ export default function ComentariosIndicador({ indicadorUuid, comentarios, accio
   }
 
   return (
-    <section>
-      <h3 className="text-sm font-bold text-gray-900">Comentarios</h3>
+    <Seccion rotulo="Comentarios">
       {comentarios.length === 0 ? (
-        <p className="mt-2 text-xs text-gray-500">Nadie ha comentado este indicador.</p>
+        <p className="text-xs text-[#667085]">Nadie ha comentado este indicador.</p>
       ) : (
-        <ul className="mt-3 space-y-3">
+        <ul className="space-y-2.5">
           {comentarios.map(c => (
-            <li key={c.id} className="rounded-xl bg-gray-50 px-3.5 py-2.5">
-              <p className="text-xs text-gray-500">
-                <span className="font-semibold text-gray-700">{c.autorNombre}</span> · {ETIQUETA_NIVEL[c.autorNivel]} · {fechaHoraBogota(c.creado)}
+            <li key={c.id} className="rounded-lg border border-[#E6E9EF] bg-[#F7F8FA] px-3.5 py-2.5">
+              <p className="text-xs text-[#667085]">
+                <span className="font-semibold text-[#192031]">{c.autorNombre}</span> · {ETIQUETA_NIVEL[c.autorNivel]} · {fechaHoraBogota(c.creado)}
               </p>
-              <p className="mt-1 whitespace-pre-line text-sm leading-snug text-gray-800">{c.texto}</p>
+              <p className="mt-1 whitespace-pre-line text-sm leading-snug text-[#2D3648]">{c.texto}</p>
             </li>
           ))}
         </ul>
@@ -63,21 +64,16 @@ export default function ComentariosIndicador({ indicadorUuid, comentarios, accio
             rows={2}
             maxLength={MAX_COMENTARIO}
             placeholder="Escribe un comentario"
-            className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:opacity-60"
+            className={`${T.campo} resize-none`}
           />
         </label>
-        {error && <p role="alert" className="text-xs font-medium text-red-700">{error}</p>}
+        {error && <p role="alert" className="text-xs font-medium text-[#B42318]">{error}</p>}
         <div className="flex justify-end">
-          <button
-            id="pdm-comentar"
-            onClick={enviar}
-            disabled={enviando || texto.trim() === ''}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <button id="pdm-comentar" onClick={enviar} disabled={enviando || texto.trim() === ''} className={T.botonSecChico}>
             {enviando ? 'Comentando…' : 'Comentar'}
           </button>
         </div>
       </div>
-    </section>
+    </Seccion>
   )
 }

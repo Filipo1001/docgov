@@ -17,6 +17,7 @@ import { Iconos } from '@/lib/iconos'
 import type { Indicador } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import EncabezadoSeccion from './EncabezadoSeccion'
+import { T } from './tema'
 import ListaIndicadores from './ListaIndicadores'
 import type { Filtro } from '@/lib/pdm/filtros'
 import type { GrupoVista, PersonaDirectorio, PersonaFicha } from '@/lib/pdm/personas'
@@ -90,25 +91,21 @@ export default function IndicadoresPdm({
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
+      {/* El cuadro de datos dice de qué corte se habla: quien reporta necesita saber por qué hay (o no) con qué hacerlo. */}
       <EncabezadoSeccion
         titulo="Indicadores"
-        detalle={restringirA ? `${lista.length} de ${indicadores.length}` : `${indicadores.length} indicadores de producto`}
+        detalle={!seguimiento.abierto && (nivel === 'responsable' || nivel === 'coordinador') ? 'No hay un corte abierto: por ahora no hay nada que reportar.' : undefined}
+        datos={[
+          { rotulo: 'Corte', valor: seguimiento.abierto ? seguimiento.abierto.nombre : 'Sin corte abierto' },
+          ...(seguimiento.abierto ? [{ rotulo: 'Fecha de corte', valor: fechaCorta(seguimiento.abierto.fecha) }] : []),
+          { rotulo: 'Indicadores', valor: restringirA ? `${lista.length} de ${indicadores.length}` : String(indicadores.length) },
+        ]}
       />
 
-      {/* En qué punto está el seguimiento. Quien reporta necesita saber por qué hay (o no) un botón para hacerlo. */}
-      {seguimiento.abierto ? (
-        <p className="inline-flex flex-wrap items-center gap-x-2 rounded-full bg-teal-50 px-3.5 py-1 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-100">
-          <span>Corte abierto · {seguimiento.abierto.nombre}</span>
-          <span className="font-medium text-teal-700">al {fechaCorta(seguimiento.abierto.fecha)}</span>
-        </p>
-      ) : (nivel === 'responsable' || nivel === 'coordinador') && (
-        <p className="text-xs text-gray-500">No hay un corte abierto: por ahora no hay nada que reportar.</p>
-      )}
-
       {aviso && (
-        <p role="status" className="flex items-start justify-between gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <p role="status" className={`flex items-start justify-between gap-3 ${T.avisoBien}`}>
           <span>{aviso}</span>
-          <button onClick={() => setAviso(null)} className="shrink-0 text-emerald-700 hover:text-emerald-900">
+          <button onClick={() => setAviso(null)} className="shrink-0 text-[#1F5D43] hover:text-[#144432]">
             <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" />
           </button>
         </p>
@@ -116,11 +113,11 @@ export default function IndicadoresPdm({
 
       {restringirA && (
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full bg-teal-50 py-1 pl-3.5 pr-1.5 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-100">
+          <span className="inline-flex items-center gap-2 rounded-md border border-[#C5CBD6] bg-white py-1 pl-3 pr-1 text-xs font-semibold text-[#192031]">
             A nombre de {restringirA.etiqueta}
             <Link
               href={HREF_INDICADORES}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-teal-700 transition-colors hover:bg-teal-100"
+              className="flex h-6 w-6 items-center justify-center rounded text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031]"
             >
               <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Quitar este filtro" />
             </Link>
@@ -147,25 +144,14 @@ export default function IndicadoresPdm({
       {puedeAsignar && seleccionActiva && marcados.length > 0 && (
         <>
           <div className="h-16" aria-hidden />
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur">
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#DCE0E8] bg-white px-4 py-3">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-sm font-semibold text-[#192031]">
                 <span className="tabular-nums">{marcados.length}</span> {marcados.length === 1 ? 'seleccionado' : 'seleccionados'}
               </p>
               <div className="flex gap-2">
-                <button
-                  onClick={terminarSeleccion}
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  id="pdm-asignar-seleccion"
-                  onClick={() => setSelectorPara(marcados)}
-                  className="rounded-xl bg-[#192031] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#242F45]"
-                >
-                  Asignar…
-                </button>
+                <button onClick={terminarSeleccion} className={T.botonSec}>Cancelar</button>
+                <button id="pdm-asignar-seleccion" onClick={() => setSelectorPara(marcados)} className={T.boton}>Asignar…</button>
               </div>
             </div>
           </div>

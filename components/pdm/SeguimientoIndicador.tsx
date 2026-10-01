@@ -24,7 +24,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
-import { SITUACIONES, type Corte } from '@/lib/pdm/seguimiento'
+import type { Corte } from '@/lib/pdm/seguimiento'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import type { NivelPdm } from '@/lib/pdm/niveles'
 import {
@@ -33,6 +33,8 @@ import {
 } from '@/lib/pdm/seguimiento-acciones'
 import FormularioReporte from './FormularioReporte'
 import ComentariosIndicador from './ComentariosIndicador'
+import { Seccion, SituacionTexto } from './ui'
+import { T } from './tema'
 
 /** Lo que la ficha necesita saber del seguimiento. Sin esto, la ficha no muestra esta parte. */
 export interface ContextoSeguimiento {
@@ -50,6 +52,15 @@ function abrirVentana(): Window | null {
   const w = window.open('about:blank', '_blank')
   if (w) w.opener = null
   return w
+}
+
+/** Un sello pequeño con borde, para marcar una versión («Corrección», «Versión anterior»). */
+function Sello({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-[4px] border border-[#C5CBD6] bg-white px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.1em] text-[#556072]">
+      {children}
+    </span>
+  )
 }
 
 function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: AccionesSeguimiento }) {
@@ -70,23 +81,23 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
 
   if (lista.length === 0) return null
   return (
-    <div className="mt-1.5">
+    <div className="mt-2">
       <ul className="flex flex-wrap gap-1.5">
         {lista.map(e => (
           <li key={e.id}>
             <button
               onClick={() => abrir(e.id)}
               disabled={abriendo !== null}
-              className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-[#DCE0E8] bg-white px-2.5 py-1 text-xs font-medium text-[#192031] transition-colors hover:border-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] disabled:opacity-60"
             >
-              <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0 text-gray-500" />
+              <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0 text-[#667085]" />
               <span className="truncate">{e.nombre}</span>
-              <span className="shrink-0 tabular-nums text-gray-400">{describirTamano(e.bytes)}</span>
+              <span className="shrink-0 tabular-nums text-[#667085]">{describirTamano(e.bytes)}</span>
             </button>
           </li>
         ))}
       </ul>
-      {error && <p role="alert" className="mt-1 text-xs font-medium text-red-700">{error}</p>}
+      {error && <p role="alert" className="mt-1 text-xs font-medium text-[#B42318]">{error}</p>}
     </div>
   )
 }
@@ -118,16 +129,11 @@ function Validar({ reporte, acciones, onHecho }: {
   if (reporte.estado === 'devuelto') return null
 
   return (
-    <div className="mt-2.5">
+    <div className="mt-3">
       {!devolviendo ? (
         <div className="flex flex-wrap gap-2">
           {reporte.estado === 'pendiente' && (
-            <button
-              id="pdm-aprobar"
-              onClick={() => enviar('aprobado')}
-              disabled={enviando !== null}
-              className="rounded-lg bg-[#192031] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#242F45] disabled:opacity-50"
-            >
+            <button id="pdm-aprobar" onClick={() => enviar('aprobado')} disabled={enviando !== null} className={T.botonChico}>
               {enviando === 'aprobado' ? 'Aprobando…' : 'Aprobar'}
             </button>
           )}
@@ -135,7 +141,7 @@ function Validar({ reporte, acciones, onHecho }: {
             id="pdm-devolver"
             onClick={() => { setDevolviendo(true); setError(null) }}
             disabled={enviando !== null}
-            className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            className={T.botonSecChico}
           >
             Devolver…
           </button>
@@ -143,21 +149,21 @@ function Validar({ reporte, acciones, onHecho }: {
       ) : (
         <div className="space-y-2">
           <label className="block">
-            <span className="text-xs font-semibold text-gray-600">¿Qué falta o qué está mal?</span>
+            <span className={T.rotulo}>¿Qué falta o qué está mal?</span>
             <textarea
               id="pdm-devolver-comentario"
               value={comentario}
               onChange={e => setComentario(e.target.value)}
               rows={2}
               maxLength={MAX_COMENTARIO_VALIDACION}
-              className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+              className={`${T.campo} mt-1.5 resize-none`}
             />
           </label>
           <div className="flex gap-2">
             <button
               onClick={() => { setDevolviendo(false); setComentario(''); setError(null) }}
               disabled={enviando !== null}
-              className="rounded-lg border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              className={T.botonSecChico}
             >
               Cancelar
             </button>
@@ -165,41 +171,39 @@ function Validar({ reporte, acciones, onHecho }: {
               id="pdm-devolver-confirmar"
               onClick={() => enviar('devuelto')}
               disabled={enviando !== null || comentario.trim().length < 10}
-              className="rounded-lg bg-red-700 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className={T.botonPeligro}
             >
               {enviando === 'devuelto' ? 'Devolviendo…' : 'Devolver el reporte'}
             </button>
           </div>
         </div>
       )}
-      {error && <p role="alert" className="mt-1.5 text-xs font-medium text-red-700">{error}</p>}
+      {error && <p role="alert" className="mt-1.5 text-xs font-medium text-[#B42318]">{error}</p>}
     </div>
   )
 }
 
 function Version({ r, acciones, onHecho }: { r: ReporteDetalle; acciones: AccionesSeguimiento; onHecho: () => void }) {
   return (
-    <li className={`relative border-l-2 border-gray-200 pb-5 pl-5 last:pb-1 ${r.vigente ? '' : 'opacity-70'}`}>
-      <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${r.vigente ? 'bg-[#192031]' : 'bg-gray-300'}`} />
-      <p className="text-xs text-gray-500">
-        <span className="font-medium text-gray-700">{r.corteNombre}</span> · {fechaHoraBogota(r.creado)} · {r.autorNombre}
+    <li className={`relative border-l-2 border-[#DCE0E8] pb-6 pl-5 last:pb-1 ${r.vigente ? '' : 'opacity-70'}`}>
+      <span className={`absolute -left-[6px] top-1 h-2.5 w-2.5 rounded-[2px] ${r.vigente ? 'bg-[#192031]' : 'bg-[#B8BFCC]'}`} />
+      <p className="text-xs text-[#667085]">
+        <span className="font-semibold text-[#192031]">{r.corteNombre}</span> · {fechaHoraBogota(r.creado)} · {r.autorNombre}
       </p>
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className="text-sm font-semibold text-gray-900">
-          {fmt(r.valorAnterior)} <span className="text-gray-400">→</span> {fmt(r.valor)}
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="text-sm font-semibold tabular-nums text-[#192031]">
+          {fmt(r.valorAnterior)} <span className="font-normal text-[#98A2B3]">→</span> {fmt(r.valor)}
         </p>
-        {r.vigente
-          ? <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${SITUACIONES[r.estado].chip}`}>{SITUACIONES[r.estado].rotulo}</span>
-          : <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-600">Versión anterior</span>}
-        {r.corrigeA && <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-600">Corrección</span>}
+        {r.vigente ? <SituacionTexto situacion={r.estado} /> : <Sello>Versión anterior</Sello>}
+        {r.corrigeA && <Sello>Corrección</Sello>}
       </div>
-      {r.motivoCorreccion && <p className="mt-1 text-xs italic text-gray-500">«{r.motivoCorreccion}»</p>}
-      <p className="mt-1 whitespace-pre-line text-sm leading-snug text-gray-700">{r.texto}</p>
+      {r.motivoCorreccion && <p className="mt-1 text-xs italic text-[#667085]">«{r.motivoCorreccion}»</p>}
+      <p className="mt-1.5 whitespace-pre-line text-sm leading-snug text-[#2D3648]">{r.texto}</p>
       <Evidencias lista={r.evidencias} acciones={acciones} />
       {r.validaciones.map((v, k) => (
         <p
           key={k}
-          className={`mt-1.5 text-xs leading-snug ${v.estado === 'aprobado' ? 'text-emerald-800' : 'text-red-700'} ${k < r.validaciones.length - 1 ? 'opacity-70' : ''}`}
+          className={`mt-2 text-xs leading-snug ${v.estado === 'aprobado' ? 'text-[#1F5D43]' : 'text-[#912018]'} ${k < r.validaciones.length - 1 ? 'opacity-70' : ''}`}
         >
           <b>{v.estado === 'aprobado' ? 'Aprobado' : 'Devuelto'}</b> por {v.validadorNombre} · {fechaHoraBogota(v.creado)}
           {v.comentario ? `: «${v.comentario}»` : ''}
@@ -243,37 +247,31 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
 
   return (
     <>
-      <section>
-        <h3 className="text-sm font-bold text-gray-900">Trazabilidad</h3>
-        {aviso && <p role="status" className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900">{aviso}</p>}
+      <Seccion rotulo="Trazabilidad">
+        {aviso && <p role="status" className={`mb-3 ${T.avisoBien} text-xs font-medium`}>{aviso}</p>}
         {errorCarga ? (
-          <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-3 py-2.5">
-            <p role="alert" className="text-xs font-medium text-red-800">{errorCarga}</p>
-            <button
-              onClick={() => { setErrorCarga(null); recargar() }}
-              className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-800 hover:bg-red-50"
-            >
-              Reintentar
-            </button>
+          <div className={`flex items-center justify-between gap-3 ${T.avisoMal}`}>
+            <p role="alert" className="text-xs font-medium">{errorCarga}</p>
+            <button onClick={() => { setErrorCarga(null); recargar() }} className={T.botonSecChico}>Reintentar</button>
           </div>
         ) : detalle === null ? (
-          <p className="mt-2 text-xs text-gray-500">Cargando el seguimiento…</p>
+          <p className="text-xs text-[#667085]">Cargando el seguimiento…</p>
         ) : detalle.reportes.length === 0 ? (
-          <ol className="mt-3">
+          <ol>
             <li className="relative border-l-2 border-transparent pl-5">
-              <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full bg-gray-300" />
-              <p className="text-sm font-semibold text-gray-900">Sin seguimiento todavía</p>
-              <p className="mt-1 text-xs leading-relaxed text-gray-500">
+              <span className="absolute -left-[6px] top-1 h-2.5 w-2.5 rounded-[2px] bg-[#B8BFCC]" />
+              <p className="text-sm font-semibold text-[#192031]">Sin seguimiento todavía</p>
+              <p className="mt-1 text-xs leading-relaxed text-[#667085]">
                 El primer reporte quedará aquí, con su autor, su fecha y su evidencia.
               </p>
             </li>
           </ol>
         ) : (
-          <ol className="mt-3 space-y-0">
+          <ol className="space-y-0">
             {detalle.reportes.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={() => recargar()} />)}
           </ol>
         )}
-      </section>
+      </Seccion>
 
       {puedeReportar && corteAbierto && detalle && (
         <FormularioReporte

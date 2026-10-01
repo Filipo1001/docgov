@@ -31,26 +31,18 @@ import { createPortal } from 'react-dom'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, coincideNombre, estadoDe, fmt, fmtRazon, razon, rotuloMeta, sinAsignar, tipoResponsable,
+  coincideNombre, estadoDe, fmt, fmtRazon, razon, rotuloMeta, sinAsignar, tipoResponsable,
   type Indicador,
 } from '@/lib/pdm/plan'
-import { SITUACIONES } from '@/lib/pdm/seguimiento'
 import { BarraAvance } from './Barras'
+import { EstadoTexto, Rotulo, Seccion, SituacionTexto } from './ui'
+import { T } from './tema'
 import SeguimientoIndicador, { type ContextoSeguimiento } from './SeguimientoIndicador'
 import { Avatar, LineaContrato } from './PersonaVista'
 import type { MotivoSinVincular, PersonaFicha } from '@/lib/pdm/personas'
 import type { AsignadoVista } from '@/lib/pdm/asignados'
 import type { Resultado } from '@/lib/pdm/acciones'
 import { fechaHoraBogota, type EntradaHistorial } from '@/lib/pdm/historial'
-
-function Dato({ rotulo, valor }: { rotulo: string; valor: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{rotulo}</dt>
-      <dd className="mt-0.5 text-sm font-medium leading-snug text-gray-900">{valor}</dd>
-    </div>
-  )
-}
 
 const NOTA_SIN_USUARIO: Record<MotivoSinVincular, string> = {
   planta: 'Personal de planta. Aún no tiene usuario en la plataforma.',
@@ -147,209 +139,202 @@ export default function IndicadorModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-4"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-[#192031]/55 sm:items-center sm:p-4"
       onClick={onCerrar}
       role="dialog"
       aria-modal="true"
       aria-label={indicador.indicador}
     >
       <div
-        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-2xl"
+        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-xl bg-white shadow-xl sm:max-h-[88vh] sm:max-w-3xl sm:rounded-lg"
         onClick={e => e.stopPropagation()}
       >
-        {/* Encabezado */}
-        <div className="shrink-0 border-b border-gray-100 px-5 pb-4 pt-5 sm:px-7">
+        {/* Encabezado: código y estado a una línea, el indicador debajo */}
+        <div className={`shrink-0 border-b ${T.regla} px-5 pb-4 pt-5 sm:px-7`}>
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">{indicador.codigo}</span>
-                {(estado !== 'sin_reporte' || !corte) && (
-                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${ESTADOS[estado].chip}`}>{ESTADOS[estado].rotulo}</span>
-                )}
-                {corte && (
-                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${SITUACIONES[corte.situacion].chip}`}>
-                    {SITUACIONES[corte.situacion].rotulo}
-                  </span>
-                )}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="text-xs font-semibold tabular-nums text-[#667085]">Indicador {indicador.codigo}</span>
+                {(estado !== 'sin_reporte' || !corte) && <EstadoTexto estado={estado} />}
+                {corte && <SituacionTexto situacion={corte.situacion} />}
               </div>
-              <h2 className="mt-2 text-lg font-bold leading-snug tracking-tight text-[#192031] sm:text-xl">{indicador.indicador}</h2>
+              <h2 className="mt-2 text-xl font-semibold leading-snug tracking-tight text-[#192031]">{indicador.indicador}</h2>
             </div>
             <button
               ref={cerrarRef}
               onClick={onCerrar}
-              className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+              className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031]"
             >
               <Icono glifo={Iconos.accion.cerrar} tamano="md" etiqueta="Cerrar" />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
+        <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
 
           {/* Avance: el último reporte aprobado */}
-          <section>
+          <Seccion rotulo="Avance validado">
             <div className="flex items-end justify-between gap-4">
               {indicador.avance === null ? (
-                <p className="text-2xl font-bold leading-none text-gray-400">
+                <p className="text-2xl font-semibold leading-none tracking-tight text-[#98A2B3]">
                   Sin avance validado
                   <span className="ml-2 text-base font-medium">· meta {fmt(indicador.metaMedida)}</span>
                 </p>
               ) : (
-                <p className="text-4xl font-bold tabular-nums leading-none text-gray-900">
+                <p className="text-[40px] font-semibold tabular-nums leading-none tracking-tight text-[#192031]">
                   {fmt(indicador.avance)}
-                  <span className="ml-2 text-base font-medium text-gray-400">de {fmt(indicador.metaMedida)}</span>
+                  <span className="ml-2 text-base font-medium text-[#667085]">de {fmt(indicador.metaMedida)}</span>
                 </p>
               )}
-              {r !== null && <p className="text-2xl font-bold tabular-nums text-gray-700">{fmtRazon(r, indicador.criterio !== null)}</p>}
+              {r !== null && <p className="text-2xl font-semibold tabular-nums text-[#192031]">{fmtRazon(r, indicador.criterio !== null)}</p>}
             </div>
             <div className="mt-3"><BarraAvance razon={r} estado={estado} /></div>
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-[#667085]">
               {indicador.unidad} · {rotuloMeta(indicador)}
               {indicador.avanceCorte ? ` · validado en «${indicador.avanceCorte}»` : ''}
             </p>
             {indicador.criterio === null && (
-              <p className="mt-1 text-[11px] leading-snug text-gray-400">
+              <p className="mt-1 text-[11px] leading-snug text-[#667085]">
                 La Alcaldía aún define si el avance es del año o acumulado: el porcentaje es provisional.
               </p>
             )}
-          </section>
+          </Seccion>
 
           {/* Responsable */}
-          <section className={`rounded-xl border px-4 py-3 ${huerfano ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Responsable</p>
-              {(onAsignar || (onQuitar && puedeQuitarPrincipal)) && (
-                <div className="flex shrink-0 items-center gap-2">
-                  {onQuitar && puedeQuitarPrincipal && principalVista && (
-                    <button
-                      id="pdm-ficha-quitar"
-                      onClick={() => quitar(principalVista.usuarioId)}
-                      disabled={quitando !== null}
-                      className="rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50"
-                    >
-                      {quitando === principalVista.usuarioId ? 'Quitando…' : 'Quitar'}
-                    </button>
+          <Seccion
+            rotulo="Responsable"
+            acciones={(onAsignar || (onQuitar && puedeQuitarPrincipal)) && (
+              <div className="flex shrink-0 items-center gap-2">
+                {onQuitar && puedeQuitarPrincipal && principalVista && (
+                  <button
+                    id="pdm-ficha-quitar"
+                    onClick={() => quitar(principalVista.usuarioId)}
+                    disabled={quitando !== null}
+                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031] disabled:opacity-50"
+                  >
+                    {quitando === principalVista.usuarioId ? 'Quitando…' : 'Quitar'}
+                  </button>
+                )}
+                {onAsignar && <button id="pdm-ficha-asignar" onClick={onAsignar} className={T.botonSecChico}>Asignar…</button>}
+              </div>
+            )}
+          >
+            <div className={`rounded-lg border px-4 py-3 ${huerfano ? 'border-[#F1C0BB] bg-[#FDF3F2]' : 'border-[#DCE0E8] bg-[#F7F8FA]'}`}>
+              {!huerfano && persona && 'nombre' in persona ? (
+                <div className="flex items-center gap-3">
+                  <Avatar nombre={persona.nombre} fotoUrl={persona.fotoUrl} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#192031]">{persona.nombre}</p>
+                    <p className="text-xs text-[#667085]">{persona.secretaria ?? 'Sin secretaría'}</p>
+                    <LineaContrato contrato={persona.contrato} />
+                    {nombraAlgo && (tipoResponsable(indicador.responsable) !== 'persona' || !coincideNombre(persona.nombre, indicador.responsable)) && (
+                      <p className="mt-0.5 text-[11px] text-[#667085]">En el archivo figuraba «{indicador.responsable}»</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className={`text-sm font-semibold ${huerfano ? 'text-[#912018]' : 'text-[#192031]'}`}>
+                    {huerfano ? 'Sin responsable' : indicador.responsable}
+                  </p>
+                  {!huerfano && persona && 'sinUsuario' in persona && (
+                    <p className="mt-1 text-xs text-[#667085]">{NOTA_SIN_USUARIO[persona.sinUsuario]}</p>
                   )}
-                  {onAsignar && (
-                    <button
-                      id="pdm-ficha-asignar"
-                      onClick={onAsignar}
-                      className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50"
-                    >
-                      Asignar…
-                    </button>
+                  {huerfano && (
+                    <p className="mt-1 text-xs leading-relaxed text-[#912018]">
+                      {indicador.responsable && indicador.responsable !== '-' ? `En el archivo figura «${indicador.responsable}». ` : ''}
+                      Nadie tiene la obligación de reportar este indicador ni de responder por él. Asignarle una persona lo resuelve.
+                    </p>
                   )}
+                </>
+              )}
+              {asignados && (principalVista?.grupo || apoyos.length > 0 || errorApoyo) && (
+                <div className={`mt-3 border-t ${T.reglaFuerte} pt-3`}>
+                  {principalVista?.grupo && <p className="text-xs text-[#667085]">Por el grupo «{principalVista.grupo}»</p>}
+                  {apoyos.length > 0 && (
+                    <>
+                      <Rotulo className="mt-1">{apoyos.length === 1 ? 'Apoyo' : 'Apoyos'}</Rotulo>
+                      <ul className="mt-2 space-y-2">
+                        {apoyos.map(a => (
+                          <li key={a.usuarioId} className="flex items-center gap-3">
+                            <Avatar nombre={a.nombre} fotoUrl={a.fotoUrl} tamano="sm" apagado={!a.activo} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-[#192031]">{a.nombre}</span>
+                              {a.grupo && <span className="block truncate text-xs text-[#667085]">Por el grupo «{a.grupo}»</span>}
+                            </span>
+                            {onQuitar && !a.grupo && (
+                              <button
+                                onClick={() => quitar(a.usuarioId)}
+                                disabled={quitando !== null}
+                                className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031] disabled:opacity-50"
+                              >
+                                {quitando === a.usuarioId ? 'Quitando…' : 'Quitar'}
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {errorApoyo && <p role="alert" className="mt-2 text-xs font-medium text-[#B42318]">{errorApoyo}</p>}
                 </div>
               )}
             </div>
-            {!huerfano && persona && 'nombre' in persona ? (
-              <div className="mt-2 flex items-center gap-3">
-                <Avatar nombre={persona.nombre} fotoUrl={persona.fotoUrl} />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">{persona.nombre}</p>
-                  <p className="text-xs text-gray-500">{persona.secretaria ?? 'Sin secretaría'}</p>
-                  <LineaContrato contrato={persona.contrato} />
-                  {nombraAlgo && (tipoResponsable(indicador.responsable) !== 'persona' || !coincideNombre(persona.nombre, indicador.responsable)) && (
-                    <p className="mt-0.5 text-[11px] text-gray-400">En el archivo figuraba «{indicador.responsable}»</p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className={`mt-1 text-sm font-semibold ${huerfano ? 'text-red-800' : 'text-gray-900'}`}>
-                  {huerfano ? 'Sin responsable' : indicador.responsable}
-                </p>
-                {!huerfano && persona && 'sinUsuario' in persona && (
-                  <p className="mt-1 text-xs text-gray-500">{NOTA_SIN_USUARIO[persona.sinUsuario]}</p>
-                )}
-                {huerfano && (
-                  <p className="mt-1 text-xs leading-relaxed text-red-700">
-                    {indicador.responsable && indicador.responsable !== '-' ? `En el archivo figura «${indicador.responsable}». ` : ''}
-                    Nadie tiene la obligación de reportar este indicador ni de responder por él. Asignarle una persona lo resuelve.
-                  </p>
-                )}
-              </>
-            )}
-            {asignados && (principalVista?.grupo || apoyos.length > 0 || errorApoyo) && (
-              <div className="mt-3 border-t border-gray-200 pt-3">
-                {principalVista?.grupo && <p className="text-xs text-gray-500">Por el grupo «{principalVista.grupo}»</p>}
-                {apoyos.length > 0 && (
-                  <>
-                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{apoyos.length === 1 ? 'Apoyo' : 'Apoyos'}</p>
-                    <ul className="mt-2 space-y-2">
-                      {apoyos.map(a => (
-                        <li key={a.usuarioId} className="flex items-center gap-3">
-                          <Avatar nombre={a.nombre} fotoUrl={a.fotoUrl} tamano="sm" apagado={!a.activo} />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium text-gray-900">{a.nombre}</span>
-                            {a.grupo && <span className="block truncate text-xs text-gray-500">Por el grupo «{a.grupo}»</span>}
-                          </span>
-                          {onQuitar && !a.grupo && (
-                            <button
-                              onClick={() => quitar(a.usuarioId)}
-                              disabled={quitando !== null}
-                              className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50"
-                            >
-                              {quitando === a.usuarioId ? 'Quitando…' : 'Quitar'}
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {errorApoyo && <p role="alert" className="mt-2 text-xs font-medium text-red-700">{errorApoyo}</p>}
-              </div>
-            )}
-          </section>
+          </Seccion>
 
-          {/* Qué es */}
-          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Dato rotulo="Secretaría" valor={indicador.dependencia} />
-            <Dato rotulo="Línea estratégica" valor={indicador.linea} />
-            <Dato rotulo="Programa" valor={indicador.programa} />
-            <Dato rotulo="Sector" valor={indicador.sector} />
-            <Dato rotulo="Producto" valor={indicador.producto} />
-            <Dato rotulo="Línea base · Meta cuatrienio" valor={`${fmt(indicador.lineaBase)} · ${fmt(indicador.metaCuatrienio)}`} />
-          </dl>
+          {/* Ficha técnica: un cuadro de datos, como el de un formato oficial */}
+          <Seccion rotulo="Ficha técnica">
+            <dl className={`divide-y ${T.divide} overflow-hidden rounded-lg border ${T.reglaFuerte}`}>
+              {([
+                ['Secretaría', indicador.dependencia],
+                ['Línea estratégica', indicador.linea],
+                ['Sector', indicador.sector],
+                ['Programa', indicador.programa],
+                ['Producto', indicador.producto],
+                ['Línea base · Meta cuatrienio', `${fmt(indicador.lineaBase)} · ${fmt(indicador.metaCuatrienio)}`],
+              ] as const).map(([rotulo, valor]) => (
+                <div key={rotulo} className="grid grid-cols-1 sm:grid-cols-[11.5rem_1fr]">
+                  <dt className={`bg-[#F7F8FA] px-3.5 py-2 ${T.rotulo} sm:py-2.5`}>{rotulo}</dt>
+                  <dd className="px-3.5 py-2 text-sm leading-snug text-[#192031] sm:py-2.5">{valor}</dd>
+                </div>
+              ))}
+            </dl>
+          </Seccion>
 
           {/* Trazabilidad, reportar, validar y comentar */}
           {seguimiento && <SeguimientoIndicador indicador={indicador} ctx={seguimiento} />}
 
           {/* Cambios de responsable (solo el administrador): quién cambió qué y cuándo */}
           {onCargarHistorial && (
-            <section>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-bold text-gray-900">Cambios de responsable</h3>
-                {historial === null && (
-                  <button
-                    id="pdm-ficha-historial"
-                    onClick={cargarHistorial}
-                    disabled={cargandoHistorial}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {cargandoHistorial ? 'Cargando…' : 'Ver historial'}
-                  </button>
-                )}
-              </div>
-              {errorHistorial && <p role="alert" className="mt-2 text-xs font-medium text-red-700">{errorHistorial}</p>}
+            <Seccion
+              rotulo="Cambios de responsable"
+              acciones={historial === null && (
+                <button id="pdm-ficha-historial" onClick={cargarHistorial} disabled={cargandoHistorial} className={T.botonSecChico}>
+                  {cargandoHistorial ? 'Cargando…' : 'Ver historial'}
+                </button>
+              )}
+            >
+              {errorHistorial && <p role="alert" className="text-xs font-medium text-[#B42318]">{errorHistorial}</p>}
+              {historial === null && !errorHistorial && (
+                <p className="text-xs text-[#667085]">Quién asignó o quitó a cada persona, y cuándo.</p>
+              )}
               {historial !== null && (
                 historial.length === 0 ? (
-                  <p className="mt-2 text-xs text-gray-500">Nadie ha cambiado a los responsables de este indicador desde que se cargó el plan.</p>
+                  <p className="text-xs text-[#667085]">Nadie ha cambiado a los responsables de este indicador desde que se cargó el plan.</p>
                 ) : (
-                  <ol className="mt-3 space-y-3">
+                  <ol className="space-y-3">
                     {historial.map(h => (
-                      <li key={h.id} className="relative border-l-2 border-gray-200 pl-4">
-                        <span className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-gray-300" />
-                        <p className="text-sm leading-snug text-gray-900">{h.texto}</p>
-                        <p className="mt-0.5 text-xs text-gray-500">{fechaHoraBogota(h.cuando)} · {h.quien}</p>
-                        {h.motivo && <p className="mt-0.5 text-xs italic text-gray-500">«{h.motivo}»</p>}
+                      <li key={h.id} className="relative border-l-2 border-[#DCE0E8] pl-4">
+                        <span className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-[2px] bg-[#98A2B3]" />
+                        <p className="text-sm leading-snug text-[#192031]">{h.texto}</p>
+                        <p className="mt-0.5 text-xs text-[#667085]">{fechaHoraBogota(h.cuando)} · {h.quien}</p>
+                        {h.motivo && <p className="mt-0.5 text-xs italic text-[#667085]">«{h.motivo}»</p>}
                       </li>
                     ))}
                   </ol>
                 )
               )}
-            </section>
+            </Seccion>
           )}
         </div>
       </div>

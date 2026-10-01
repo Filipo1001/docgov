@@ -115,19 +115,19 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
       ancho="sm:max-w-2xl"
       pie={
         <div className="space-y-3">
-          {error && <p role="alert" className="text-sm font-medium text-red-700">{error}</p>}
-          {!error && falta && <p className="text-xs text-gray-500">{falta}</p>}
+          {error && <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p>}
+          {!error && falta && <p className="text-xs text-[#667085]">{falta}</p>}
           {confirmaDisolver ? (
-            <div className="space-y-2 rounded-xl bg-red-50 px-3 py-3">
-              <p className="text-sm text-red-900">
+            <div className="space-y-2 rounded-lg border border-[#F1C0BB] bg-[#FDF3F2] px-3 py-3">
+              <p className="text-sm text-[#912018]">
                 ¿Disolver «{grupo?.nombre}»?{' '}
                 {(grupo?.indicadores ?? 0) === 0
                   ? 'No tiene indicadores asignados.'
                   : `Sus ${plural(grupo?.indicadores ?? 0, 'indicador', 'indicadores')} siguen a cargo de cada persona, pero ya no se actualizan en conjunto.`}
               </p>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button onClick={() => setConfirmaDisolver(false)} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">No, conservarlo</button>
-                <button onClick={disolver} disabled={enviando} className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                <button onClick={() => setConfirmaDisolver(false)} className="rounded-lg border border-[#DCE0E8] bg-white px-4 py-2 text-sm font-semibold text-[#2D3648] hover:bg-[#F4F5F8]">No, conservarlo</button>
+                <button onClick={disolver} disabled={enviando} className="rounded-lg bg-[#B42318] px-4 py-2 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
                   {enviando ? 'Disolviendo…' : 'Sí, disolver'}
                 </button>
               </div>
@@ -135,19 +135,19 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
           ) : (
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
               {grupo ? (
-                <button onClick={() => setConfirmaDisolver(true)} className="text-left text-sm font-semibold text-red-700 underline-offset-2 hover:underline">
+                <button onClick={() => setConfirmaDisolver(true)} className="text-left text-sm font-semibold text-[#B42318] underline-offset-2 hover:underline">
                   Disolver grupo
                 </button>
               ) : <span />}
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                <button onClick={onCerrar} className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50">
+                <button onClick={onCerrar} className="rounded-lg border border-[#DCE0E8] bg-white px-5 py-2.5 text-sm font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]">
                   Cancelar
                 </button>
                 <button
                   id="pdm-guardar-grupo"
                   onClick={guardar}
                   disabled={!puede}
-                  className="rounded-xl bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {enviando ? 'Guardando…' : grupo ? 'Guardar cambios' : 'Crear grupo'}
                 </button>
@@ -159,7 +159,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="text-xs font-semibold text-gray-600">Nombre del grupo</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Nombre del grupo</span>
           <input
             id="pdm-grupo-nombre"
             type="text"
@@ -167,26 +167,26 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
             onChange={e => { setNombre(e.target.value); setError(null) }}
             maxLength={MAX_NOMBRE_GRUPO}
             placeholder="Por ejemplo: Equipo de desarrollo rural"
-            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+            className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
           />
         </label>
         <label className="block">
-          <span className="text-xs font-semibold text-gray-600">Secretaría</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Secretaría</span>
           <select
             id="pdm-grupo-secretaria"
             value={secretariaId}
             onChange={e => { setSecretariaId(e.target.value); setTodas(false) }}
             disabled={bloqueaSecretaria}
-            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:bg-gray-50 disabled:text-gray-500"
+            className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031] disabled:bg-[#F7F8FA] disabled:text-[#667085]"
           >
             {secretarias.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
-          {bloqueaSecretaria && <span className="mt-1 block text-xs text-gray-500">No se cambia: el grupo ya lleva indicadores.</span>}
+          {bloqueaSecretaria && <span className="mt-1 block text-xs text-[#667085]">No se cambia: el grupo ya lleva indicadores.</span>}
         </label>
       </div>
 
       <label className="block">
-        <span className="text-xs font-semibold text-gray-600">Descripción <span className="font-normal text-gray-500">(opcional)</span></span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Descripción <span className="font-normal text-[#667085]">(opcional)</span></span>
         <textarea
           id="pdm-grupo-descripcion"
           value={descripcion}
@@ -194,80 +194,80 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
           maxLength={MAX_DESCRIPCION}
           rows={2}
           placeholder="Para qué existe este grupo"
-          className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+          className="mt-1 w-full resize-none rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
 
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-sm font-bold text-gray-900">Quiénes lo forman</h3>
-          <span className="text-xs text-gray-500">{plural(miembros.length, 'persona', 'personas')}{miembros.length >= MAX_MIEMBROS ? ' (máximo)' : ''}</span>
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Quiénes lo forman</h3>
+          <span className="text-xs text-[#667085]">{plural(miembros.length, 'persona', 'personas')}{miembros.length >= MAX_MIEMBROS ? ' (máximo)' : ''}</span>
         </div>
-        <p className="text-xs leading-relaxed text-gray-500">
+        <p className="text-xs leading-relaxed text-[#667085]">
           El líder es opcional. Con líder, él es el responsable principal de lo que el grupo lleve y los demás apoyan.
           Sin líder, el grupo entra solo como apoyo y el principal sigue siendo quien ya era.
           {liderId !== null && (
-            <button onClick={() => setLiderId(null)} className="ml-1.5 font-semibold text-teal-700 underline-offset-2 hover:underline">
+            <button onClick={() => setLiderId(null)} className="ml-1.5 font-semibold text-[#192031] underline-offset-2 hover:underline">
               Quitar el líder
             </button>
           )}
         </p>
         <label className="relative block">
           <span className="sr-only">Buscar persona</span>
-          <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
           <input
             id="pdm-grupo-buscar"
             type="search"
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Buscar persona"
-            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+            className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
           />
         </label>
         {secretaria && !t && (
-          <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-gray-500">
+          <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#667085]">
             <span>{todas ? 'Personas de todas las secretarías' : `Personas de ${secretaria.nombre}`}</span>
-            <button onClick={() => setTodas(v => !v)} className="font-semibold text-teal-700 underline-offset-2 hover:underline">
+            <button onClick={() => setTodas(v => !v)} className="font-semibold text-[#192031] underline-offset-2 hover:underline">
               {todas ? `Solo ${secretaria.nombre}` : 'Ver todas las secretarías'}
             </button>
           </p>
         )}
 
         {visibles.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">Nadie coincide con lo que buscas.</p>
+          <p className="rounded-lg border border-dashed border-[#C5CBD6] px-4 py-8 text-center text-sm text-[#667085]">Nadie coincide con lo que buscas.</p>
         ) : (
-          <ul className="max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+          <ul className="max-h-72 divide-y divide-[#E6E9EF] overflow-y-auto rounded-lg border border-[#DCE0E8]">
             {visibles.map(p => {
               const dentro = elegidos.has(p.id)
               const esLider = p.id === liderId
               return (
-                <li key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${dentro ? 'bg-teal-50/60' : ''}`}>
+                <li key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${dentro ? 'bg-[#EDF0F5]/60' : ''}`}>
                   <button
                     onClick={() => alternar(p.id)}
                     aria-pressed={dentro}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded-lg"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] rounded-lg"
                   >
                     <span
                       aria-hidden
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${dentro ? 'border-teal-700 bg-teal-700 text-white' : 'border-gray-300 bg-white'}`}
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${dentro ? 'border-[#192031] bg-[#192031] text-white' : 'border-[#C5CBD6] bg-white'}`}
                     >
                       {dentro && <Icono glifo={Iconos.estado.ok} tamano="sm" className="h-3.5 w-3.5" />}
                     </span>
                     <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} tamano="sm" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-gray-900">{p.nombre}</span>
-                      <span className="block truncate text-xs text-gray-500">{p.secretaria ?? 'Sin secretaría'}</span>
+                      <span className="block truncate text-sm font-semibold text-[#192031]">{p.nombre}</span>
+                      <span className="block truncate text-xs text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</span>
                       <LineaContrato contrato={p.contrato} />
                     </span>
                   </button>
                   {dentro && (
-                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-700">
+                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-[#2D3648]">
                       <input
                         type="radio"
                         name="pdm-lider"
                         checked={esLider}
                         onChange={() => { setLiderId(p.id); setError(null) }}
-                        className="h-4 w-4 accent-teal-700"
+                        className="h-4 w-4 accent-[#192031]"
                       />
                       Líder
                     </label>
@@ -280,7 +280,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
       </section>
 
       {grupo && (cambiaLider || salen > 0) && (
-        <p role="status" className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+        <p role="status" className="flex items-start gap-2 rounded-lg border border-[#EBD9A8] bg-[#FBF6E7] px-3 py-2.5 text-xs leading-relaxed text-[#7A5410]">
           <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0" />
           <span>
             Este grupo lleva {plural(grupo.indicadores, 'indicador', 'indicadores')}.
@@ -294,14 +294,14 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
       )}
 
       <label className="block">
-        <span className="text-xs font-semibold text-gray-600">Motivo <span className="font-normal text-gray-500">(opcional; queda en el historial)</span></span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Motivo <span className="font-normal text-[#667085]">(opcional; queda en el historial)</span></span>
         <input
           id="pdm-grupo-motivo"
           type="text"
           value={motivo}
           onChange={e => setMotivo(e.target.value)}
           maxLength={500}
-          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+          className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
     </Dialogo>

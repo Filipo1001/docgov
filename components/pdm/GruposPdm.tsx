@@ -34,17 +34,17 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
   const nombreDe = new Map(personas.map(p => [p.id, p.nombre]))
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <section className="overflow-hidden rounded-lg border border-[#DCE0E8] bg-white px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mx-4 -mt-4 mb-3 border-b border-[#E6E9EF] px-4 py-3 sm:-mx-5 sm:px-5">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-sm font-bold text-gray-900">Grupos</h2>
-          <span className="text-xs text-gray-500">{plural(grupos.length, 'grupo', 'grupos')}</span>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Grupos</h2>
+          <span className="text-xs text-[#667085]">{plural(grupos.length, 'grupo', 'grupos')}</span>
         </div>
         {puedeGestionar && (
           <button
             id="pdm-crear-grupo"
             onClick={() => { setAviso(null); setEditando(null) }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
           >
             <Icono glifo={Iconos.accion.agregar} tamano="sm" />
             Crear grupo
@@ -53,50 +53,50 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
       </div>
 
       {aviso && (
-        <p role="status" className="mt-3 flex items-start justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+        <p role="status" className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-[#B7DEC9] bg-[#F1F8F4] px-3 py-2.5 text-sm text-[#1F5D43]">
           <span>{aviso}</span>
-          <button onClick={() => setAviso(null)} className="shrink-0 text-emerald-700 hover:text-emerald-900">
+          <button onClick={() => setAviso(null)} className="shrink-0 text-[#1F5D43] hover:text-[#144432]">
             <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" />
           </button>
         </p>
       )}
 
       {grupos.length === 0 ? (
-        <p className="mt-3 text-xs leading-relaxed text-gray-500">
+        <p className="mt-3 text-xs leading-relaxed text-[#667085]">
           Un grupo reúne personas que responden juntas por varios indicadores. Si tiene líder, él queda como
           responsable principal y las demás personas como apoyo; sin líder, el grupo entra como apoyo. Si el grupo
           cambia, sus indicadores se actualizan solos.
         </p>
       ) : (
-        <ul className="mt-2 divide-y divide-gray-100">
+        <ul className="mt-2 divide-y divide-[#E6E9EF]">
           {grupos.map(g => (
             <li key={g.id} className="flex items-center gap-3.5 py-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E6E9EF] text-[#556072]">
                 <Icono glifo={Iconos.navegacion.usuarios} tamano="sm" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-gray-900">{g.nombre}</p>
-                <p className="truncate text-xs text-gray-500">
+                <p className="truncate text-sm font-semibold text-[#192031]">{g.nombre}</p>
+                <p className="truncate text-xs text-[#667085]">
                   {g.secretaria} · {g.liderId ? `Líder: ${nombreDe.get(g.liderId) ?? 'persona que ya no está activa'}` : 'Sin líder'}
                   {' · '}{plural(g.miembros.length, 'persona', 'personas')}
                 </p>
-                {g.descripcion && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-gray-500">{g.descripcion}</p>}
+                {g.descripcion && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-[#667085]">{g.descripcion}</p>}
               </div>
               {g.indicadores > 0 ? (
                 <Link
                   href={`${HREF_INDICADORES}?grupo=${encodeURIComponent(g.id)}`}
-                  className="w-20 shrink-0 text-right transition-colors hover:text-teal-700"
+                  className="w-20 shrink-0 text-right transition-colors hover:text-[#192031]"
                 >
-                  <b className="block text-sm tabular-nums text-gray-900">{g.indicadores}</b>
-                  <span className="text-[11px] text-gray-500">{g.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
+                  <b className="block text-sm tabular-nums text-[#192031]">{g.indicadores}</b>
+                  <span className="text-[11px] text-[#667085]">{g.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
                 </Link>
               ) : (
-                <span className="w-20 shrink-0 text-right text-xs text-gray-400">Ninguno</span>
+                <span className="w-20 shrink-0 text-right text-xs text-[#98A2B3]">Ninguno</span>
               )}
               {puedeGestionar && (
                 <button
                   onClick={() => { setAviso(null); setEditando(g) }}
-                  className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                  className="shrink-0 rounded-lg border border-[#DCE0E8] px-3 py-1.5 text-xs font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]"
                 >
                   Editar
                 </button>
