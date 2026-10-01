@@ -5,7 +5,8 @@
  * indicadores llevan. Desde aquí se crean, se editan y se disuelven.
  *
  * El botón de crear siempre está: es la puerta de entrada, y sin ningún grupo la
- * sección dice para qué sirve uno en lugar de quedarse vacía.
+ * sección dice para qué sirve uno en lugar de quedarse vacía. El líder es opcional:
+ * un grupo sin líder se muestra como tal, no como un error.
  */
 
 import { useState } from 'react'
@@ -58,8 +59,9 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones }: {
 
       {grupos.length === 0 ? (
         <p className="mt-3 text-xs leading-relaxed text-gray-500">
-          Un grupo reúne personas que responden juntas por varios indicadores. Su líder queda como responsable
-          principal y las demás como apoyo; si cambia el grupo, sus indicadores se actualizan solos.
+          Un grupo reúne personas que responden juntas por varios indicadores. Si tiene líder, él queda como
+          responsable principal y las demás personas como apoyo; sin líder, el grupo entra como apoyo. Si el grupo
+          cambia, sus indicadores se actualizan solos.
         </p>
       ) : (
         <ul className="mt-2 divide-y divide-gray-100">
@@ -71,9 +73,10 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones }: {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-gray-900">{g.nombre}</p>
                 <p className="truncate text-xs text-gray-500">
-                  {g.secretaria} · {g.liderId ? `Líder: ${nombreDe.get(g.liderId) ?? 'persona que ya no está activa'}` : <span className="font-medium text-red-700">Sin líder</span>}
+                  {g.secretaria} · {g.liderId ? `Líder: ${nombreDe.get(g.liderId) ?? 'persona que ya no está activa'}` : 'Sin líder'}
                   {' · '}{plural(g.miembros.length, 'persona', 'personas')}
                 </p>
+                {g.descripcion && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-gray-500">{g.descripcion}</p>}
               </div>
               {g.indicadores > 0 ? (
                 <Link

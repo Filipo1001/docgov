@@ -53,7 +53,9 @@ export interface GrupoVista {
   nombre: string
   secretariaId: string
   secretaria: string
-  /** `null` si el líder ya no existe: el grupo queda sin líder hasta que se le ponga uno. */
+  /** Para qué existe el grupo (opcional). */
+  descripcion: string | null
+  /** El líder es opcional: sin él, el grupo entra a los indicadores como apoyo y el principal no cambia. */
   liderId: string | null
   /** Ids de usuario, el líder incluido. */
   miembros: string[]

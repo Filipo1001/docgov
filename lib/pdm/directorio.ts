@@ -50,7 +50,7 @@ export const cargarDirectorio = cache(async (): Promise<Directorio> => {
         .from('contratos')
         .select('contratista_id, numero, anio, estado, fecha_fin')
         .not('contratista_id', 'is', null),
-      supabase.from('pdm_grupos').select('id, nombre, dependencia_id, dependencia:dependencias(nombre)'),
+      supabase.from('pdm_grupos').select('id, nombre, descripcion, dependencia_id, dependencia:dependencias(nombre)'),
       supabase.from('pdm_grupo_miembros').select('grupo_id, usuario_id, es_lider'),
       supabase.from('dependencias').select('id, nombre'),
     ])

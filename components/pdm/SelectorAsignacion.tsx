@@ -8,7 +8,8 @@
  *
  *   · «Como apoyo» solo se puede si cada indicador ya tiene un principal; si no,
  *     el botón se apaga y se explica por qué (la base lo rechazaría de todos modos).
- *   · Un grupo solo trabaja en indicadores de SU secretaría y necesita un líder.
+ *   · Un grupo solo trabaja en indicadores de SU secretaría. Sin líder entra como
+ *     apoyo, así que también necesita que cada indicador ya tenga principal.
  *   · Si algún indicador ya tiene otro responsable principal, se pregunta qué hacer
  *     con él: dejarlo de apoyo (lo normal) o quitarlo. Si ninguno lo tiene, la
  *     pregunta no aparece.
@@ -80,10 +81,11 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
   }, [indicadores, principalNuevo, modo, grupo])
 
   const sinPrincipal = indicadores.filter(i => principalDe(i) === null).length
-  const apoyoImposible = modo === 'persona' && como === 'apoyo' && sinPrincipal > 0
+  const apoyoImposible = (modo === 'persona' && como === 'apoyo' && sinPrincipal > 0)
+    || (modo === 'grupo' && grupo !== null && grupo.liderId === null && sinPrincipal > 0)
 
   const etiqueta = modo === 'persona' ? persona?.nombre ?? '' : grupo ? `${grupo.nombre} (grupo)` : ''
-  const elegido = modo === 'persona' ? personaId !== null : grupo !== null && grupo.liderId !== null
+  const elegido = modo === 'persona' ? personaId !== null : grupo !== null
   const puede = elegido && !apoyoImposible && !enviando
 
   async function asignar() {
@@ -257,14 +259,12 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
               {gruposPosibles.map(g => {
                 const activo = g.id === grupoId
                 const lider = personas.find(p => p.id === g.liderId)
-                const sinLider = g.liderId === null
                 return (
                   <li key={g.id}>
                     <button
-                      onClick={() => { if (!sinLider) { setGrupoId(g.id); setError(null) } }}
-                      disabled={sinLider}
+                      onClick={() => { setGrupoId(g.id); setError(null) }}
                       aria-pressed={activo}
-                      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 ${
                         activo ? 'bg-teal-50' : 'hover:bg-gray-50'
                       }`}
                     >
@@ -274,7 +274,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-gray-900">{g.nombre}</span>
                         <span className="block truncate text-xs text-gray-500">
-                          {sinLider ? 'Sin líder: asígnale uno en Responsables' : `Líder: ${lider?.nombre ?? 'persona que ya no está activa'}`}
+                          {g.liderId === null ? 'Sin líder: entra como apoyo' : `Líder: ${lider?.nombre ?? 'persona que ya no está activa'}`}
                           {' · '}{plural(g.miembros.length, 'persona', 'personas')}
                         </span>
                       </span>
@@ -287,9 +287,15 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
           )}
           {grupo && (
             <p className="text-xs leading-relaxed text-gray-500">
-              El líder queda como responsable principal
-              {grupo.miembros.length <= 1 ? '.' : grupo.miembros.length === 2 ? ' y la otra persona, como apoyo.' : ` y las otras ${grupo.miembros.length - 1} personas, como apoyo.`}
+              {grupo.liderId === null
+                ? `Sin líder, ${plural(grupo.miembros.length, 'persona entra', 'personas entran')} como apoyo; el responsable principal de cada indicador no cambia.`
+                : `El líder queda como responsable principal${grupo.miembros.length <= 1 ? '.' : grupo.miembros.length === 2 ? ' y la otra persona, como apoyo.' : ` y las otras ${grupo.miembros.length - 1} personas, como apoyo.`}`}
               {' '}Si luego cambias a los miembros o al líder, estos indicadores se ponen al día solos.
+            </p>
+          )}
+          {apoyoImposible && modo === 'grupo' && (
+            <p role="status" className="text-xs font-medium text-amber-800">
+              {plural(sinPrincipal, 'indicador no tiene', 'indicadores no tienen')} responsable principal. Asígnalos primero a su responsable, o dale un líder al grupo.
             </p>
           )}
         </section>

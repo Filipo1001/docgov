@@ -23,7 +23,7 @@ import { pdmHabilitado } from '@/lib/pdm/habilitado'
 import { revalidatePath } from 'next/cache'
 import {
   errorEnLista, errorEnMotivo, esUuid, traducirErrorPdm,
-  MAX_INDICADORES, MAX_MIEMBROS, MAX_NOMBRE_GRUPO,
+  MAX_DESCRIPCION, MAX_INDICADORES, MAX_MIEMBROS, MAX_NOMBRE_GRUPO,
   type EntradaAsignarGrupo, type EntradaAsignarPersona, type EntradaEliminarGrupo,
   type EntradaGuardarGrupo, type EntradaQuitarApoyo, type Resultado, type ResumenCambio,
 } from '@/lib/pdm/acciones'
@@ -163,14 +163,17 @@ export async function guardarGrupo(e: EntradaGuardarGrupo): Promise<Resultado<{ 
       ?? (nombre === '' ? 'El grupo necesita un nombre.' : null)
       ?? (nombre.length > MAX_NOMBRE_GRUPO ? `El nombre no puede pasar de ${MAX_NOMBRE_GRUPO} caracteres.` : null)
       ?? (!esUuid(e.secretaria) ? 'Falta elegir la secretaría.' : null)
-      ?? (!esUuid(e.lider) ? 'El grupo necesita un líder.' : null)
+      // El líder es opcional; si viene, tiene que ser una persona válida.
+      ?? (e.lider != null && !esUuid(e.lider) ? 'Algo de lo elegido no es válido.' : null)
       ?? errorEnLista(e.miembros, MAX_MIEMBROS, 'a quienes forman el grupo')
+      ?? (e.descripcion !== undefined && typeof e.descripcion !== 'string' ? 'La descripción no es válida.' : null)
+      ?? (typeof e.descripcion === 'string' && e.descripcion.trim().length > MAX_DESCRIPCION ? `La descripción no puede pasar de ${MAX_DESCRIPCION} caracteres.` : null)
       ?? errorEnMotivo(e.motivo)
     if (mal) return { ok: false, error: mal }
 
     const { data, error } = await supabase.rpc('pdm_grupo_guardar', {
-      p_grupo: e.grupo ?? null, p_nombre: nombre, p_dependencia: e.secretaria, p_lider: e.lider,
-      p_miembros: e.miembros, p_motivo: motivoDe(e.motivo),
+      p_grupo: e.grupo ?? null, p_nombre: nombre, p_dependencia: e.secretaria, p_lider: e.lider ?? null,
+      p_miembros: e.miembros, p_motivo: motivoDe(e.motivo), p_descripcion: e.descripcion?.trim() || null,
     })
     if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
     if (!esUuid(data)) return { ok: false, error: traducirErrorPdm() }

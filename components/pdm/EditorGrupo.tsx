@@ -3,9 +3,11 @@
 /**
  * Crear o editar un grupo: nombre, secretaría, quiénes lo forman y quién lo lidera.
  *
- * El líder es obligatorio y es quien queda como responsable principal de lo que el
- * grupo lleve; los demás, de apoyo. Por eso el botón de guardar se apaga mientras
- * falte el nombre, la secretaría o el líder, y se dice cuál falta.
+ * El líder es OPCIONAL. Con líder, él queda como responsable principal de lo que el
+ * grupo lleve y los demás de apoyo. Sin líder, el grupo entra a los indicadores solo
+ * como apoyo y el principal sigue siendo quien ya era (por ejemplo, el secretario).
+ * El botón de guardar se apaga mientras falte el nombre o las personas, y se dice
+ * cuál falta.
  *
  * Al EDITAR, lo que el grupo ya lleva se actualiza solo (la base lo sincroniza en
  * la misma operación): quien sale pierde sus filas, quien entra recibe apoyo, y si
@@ -20,7 +22,7 @@ import { useMemo, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { sinTildes } from '@/lib/pdm/texto'
-import { MAX_MIEMBROS, MAX_NOMBRE_GRUPO, type AccionesPdm } from '@/lib/pdm/acciones'
+import { MAX_DESCRIPCION, MAX_MIEMBROS, MAX_NOMBRE_GRUPO, type AccionesPdm } from '@/lib/pdm/acciones'
 import type { GrupoVista, PersonaDirectorio, SecretariaPlan } from '@/lib/pdm/personas'
 import Dialogo from './Dialogo'
 import { Avatar, LineaContrato } from './PersonaVista'
@@ -37,6 +39,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
   onHecho: (mensaje: string) => void
 }) {
   const [nombre, setNombre] = useState(grupo?.nombre ?? '')
+  const [descripcion, setDescripcion] = useState(grupo?.descripcion ?? '')
   const [secretariaId, setSecretariaId] = useState(grupo?.secretariaId ?? secretarias[0]?.id ?? '')
   const [miembros, setMiembros] = useState<string[]>(grupo?.miembros ?? [])
   const [liderId, setLiderId] = useState<string | null>(grupo?.liderId ?? null)
@@ -67,8 +70,6 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
       setMiembros(miembros.filter(x => x !== id))
       if (id === liderId) setLiderId(null)
     } else {
-      // El primero que se añade queda de líder: lo más común es que el grupo nazca con una cabeza visible.
-      if (miembros.length === 0 && liderId === null) setLiderId(id)
       setMiembros([...miembros, id])
     }
   }
@@ -77,19 +78,19 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
   const falta = nombreLimpio === '' ? 'Falta el nombre del grupo.'
     : !secretaria ? 'Falta la secretaría.'
     : miembros.length === 0 ? 'Elige a quienes forman el grupo.'
-    : liderId === null ? 'Elige quién lidera el grupo.'
     : null
   const puede = falta === null && !enviando
 
-  const cambiaLider = grupo !== undefined && grupo.indicadores > 0 && liderId !== null && liderId !== grupo.liderId
+  const cambiaLider = grupo !== undefined && grupo.indicadores > 0 && liderId !== grupo.liderId
   const salen = grupo ? grupo.miembros.filter(id => !elegidos.has(id)).length : 0
 
   async function guardar() {
-    if (!puede || !secretaria || liderId === null) return
+    if (!puede || !secretaria) return
     setEnviando(true)
     setError(null)
     const r = await acciones.guardarGrupo({
-      grupo: grupo?.id, nombre: nombreLimpio, secretaria: secretaria.id, lider: liderId, miembros, motivo,
+      grupo: grupo?.id, nombre: nombreLimpio, secretaria: secretaria.id, lider: liderId, miembros,
+      descripcion: descripcion.trim(), motivo,
     })
     setEnviando(false)
     if (!r.ok) { setError(r.error); return }
@@ -109,7 +110,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
   return (
     <Dialogo
       titulo={grupo ? 'Editar grupo' : 'Crear grupo'}
-      subtitulo={grupo ? undefined : 'Personas que responden juntas por varios indicadores. El líder responde por todos.'}
+      subtitulo={grupo ? undefined : 'Personas que responden juntas por varios indicadores.'}
       onCerrar={onCerrar}
       ancho="sm:max-w-2xl"
       pie={
@@ -184,11 +185,33 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
         </label>
       </div>
 
+      <label className="block">
+        <span className="text-xs font-semibold text-gray-600">Descripción <span className="font-normal text-gray-500">(opcional)</span></span>
+        <textarea
+          id="pdm-grupo-descripcion"
+          value={descripcion}
+          onChange={e => setDescripcion(e.target.value)}
+          maxLength={MAX_DESCRIPCION}
+          rows={2}
+          placeholder="Para qué existe este grupo"
+          className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
+        />
+      </label>
+
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="text-sm font-bold text-gray-900">Quiénes lo forman</h3>
           <span className="text-xs text-gray-500">{plural(miembros.length, 'persona', 'personas')}{miembros.length >= MAX_MIEMBROS ? ' (máximo)' : ''}</span>
         </div>
+        <p className="text-xs leading-relaxed text-gray-500">
+          El líder es opcional. Con líder, él es el responsable principal de lo que el grupo lleve y los demás apoyan.
+          Sin líder, el grupo entra solo como apoyo y el principal sigue siendo quien ya era.
+          {liderId !== null && (
+            <button onClick={() => setLiderId(null)} className="ml-1.5 font-semibold text-teal-700 underline-offset-2 hover:underline">
+              Quitar el líder
+            </button>
+          )}
+        </p>
         <label className="relative block">
           <span className="sr-only">Buscar persona</span>
           <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -261,7 +284,9 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
           <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0" />
           <span>
             Este grupo lleva {plural(grupo.indicadores, 'indicador', 'indicadores')}.
-            {cambiaLider && ' Al cambiar de líder, el responsable principal de los que el grupo sostiene pasa al nuevo líder.'}
+            {cambiaLider && (liderId === null
+              ? ' Sin líder, el responsable principal de los que el grupo sostiene no cambia: sigue siendo quien es.'
+              : ' Al cambiar de líder, el responsable principal de los que el grupo sostiene pasa al nuevo líder.')}
             {salen > 0 && ` ${plural(salen, 'persona que sale pierde', 'personas que salen pierden')} su participación en ellos.`}
             {' '}Todo queda en el historial.
           </span>

@@ -49,9 +49,11 @@ export interface EntradaGuardarGrupo {
   grupo?: string
   nombre: string
   secretaria: string
-  lider: string
-  /** Ids de usuario; el líder se cuenta aunque no venga. */
+  /** Opcional. Sin líder, el grupo entra a los indicadores como apoyo y el principal no cambia. */
+  lider?: string | null
+  /** Ids de usuario; el líder, si hay, se cuenta aunque no venga. */
   miembros: string[]
+  descripcion?: string
   motivo?: string
 }
 
@@ -79,6 +81,7 @@ export const MAX_INDICADORES = 300
 export const MAX_MIEMBROS = 100
 export const MAX_MOTIVO = 500
 export const MAX_NOMBRE_GRUPO = 120
+export const MAX_DESCRIPCION = 500
 
 /** `null` si la lista es válida; si no, qué falla. */
 export function errorEnLista(lista: unknown, tope: number, que: string): string | null {

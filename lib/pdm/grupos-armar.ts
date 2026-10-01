@@ -12,6 +12,7 @@ export interface FilaGrupo {
   id: string
   nombre: string
   dependencia_id: string
+  descripcion?: string | null
   dependencia: { nombre: string } | { nombre: string }[] | null
 }
 
@@ -46,6 +47,7 @@ export function armarGrupos(grupos: FilaGrupo[], miembros: FilaMiembro[], indica
         nombre: g.nombre,
         secretariaId: g.dependencia_id,
         secretaria: dep?.nombre ?? 'Sin secretaría',
+        descripcion: g.descripcion ?? null,
         liderId: suyos.find(m => m.es_lider)?.usuario_id ?? null,
         miembros: suyos.map(m => m.usuario_id),
         indicadores: indicadoresDe.get(g.id) ?? 0,
