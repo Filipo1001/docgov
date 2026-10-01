@@ -19,6 +19,7 @@ import {
   ESTADOS, agrupar, estadoDe, fmt, fmtPct, haySeguimiento, resumir, sinAsignar,
   type Indicador, type Resumen,
 } from '@/lib/pdm/plan'
+import { MODOS, claveModo, resumirCorte, type AvanceModo, type Corte } from '@/lib/pdm/seguimiento'
 import { BarraEstados, Leyenda } from './Barras'
 
 function Cifra({ titulo, valor, nota, tono = 'neutro' }: {
@@ -65,29 +66,33 @@ function FilaGrupo({ nombre, r, conSeguimiento, onClick }: { nombre: string; r: 
 }
 
 export default function Tablero({
-  lista, reportado, conEvidencia, controles, onAbrir, onVerDependencia,
+  lista, criterio, corteAbierto, controles, onAbrir, onVerDependencia,
 }: {
   lista: Indicador[]
-  reportado: Record<number, number>
-  conEvidencia: number
+  /** Qué significa el avance en este plan; `null`: por definir (el cumplimiento es provisional). */
+  criterio: AvanceModo | null
+  /** El corte donde hoy se reporta, si hay uno. */
+  corteAbierto: Corte | null
   /** Vista de Control Interno: añade los controles de integridad. */
   controles?: boolean
   onAbrir: (id: number) => void
   onVerDependencia?: (dependencia: string) => void
 }) {
-  const r = resumir(lista, reportado)
-  // Con el plan recién cargado, nadie ha reportado nada: «0 %» sería engañoso (suena a un plan que
+  const r = resumir(lista)
+  // Con el plan recién cargado, nadie ha validado nada: «0 %» sería engañoso (suena a un plan que
   // no cumple, cuando es un plan que aún no ha empezado a medirse). Se dice tal cual.
-  const conSeg = haySeguimiento(lista, reportado)
+  const conSeg = haySeguimiento(lista)
   const dependencias = agrupar(lista, i => i.dependencia)
   const lineas = agrupar(lista, i => i.linea).sort((a, b) => a[0].localeCompare(b[0]))
+  const modo = MODOS[claveModo(criterio)]
+  const corte = corteAbierto ? resumirCorte(lista.map(i => i.enCorte?.situacion ?? null)) : null
 
   const peso = (i: Indicador) => {
-    const e = estadoDe(i, reportado[i.id])
+    const e = estadoDe(i)
     return (e === 'critico' ? 0 : e === 'atrasado' ? 1 : 2) + (sinAsignar(i) ? 0 : 0.5)
   }
   const atencion = lista
-    .filter(i => sinAsignar(i) || ['critico', 'atrasado'].includes(estadoDe(i, reportado[i.id])))
+    .filter(i => sinAsignar(i) || ['critico', 'atrasado'].includes(estadoDe(i)))
     .sort((a, b) => peso(a) - peso(b))
 
   return (
@@ -96,11 +101,11 @@ export default function Tablero({
       {/* 1 · Cuatro cifras: ¿hay que preocuparse? */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Cifra
-          titulo="Cumplimiento provisional"
+          titulo={criterio ? 'Cumplimiento' : 'Cumplimiento provisional'}
           valor={conSeg ? fmtPct(r.cumplimiento) : '—'}
           nota={conSeg
-            ? `${r.cumplidos} de ${r.medibles} con meta 2026, según un criterio por definir`
-            : `Aún no hay seguimiento: ${r.medibles} indicadores tienen meta 2026 y ninguno ha reportado`}
+            ? `${r.cumplidos} de ${r.medibles} con meta, ${criterio ? `según el avance ${criterio === 'anual' ? 'del año' : 'acumulado'} validado` : 'según un criterio por definir'}`
+            : `Aún no hay seguimiento: ${r.medibles} indicadores tienen meta y ninguno tiene un avance validado`}
         />
         <Cifra
           titulo="Sin responsable"
@@ -112,14 +117,22 @@ export default function Tablero({
           titulo="Atrasados o críticos"
           valor={conSeg ? String(r.atrasados + r.criticos) : '—'}
           nota={conSeg
-            ? `${r.criticos} críticos y ${r.atrasados} atrasados frente a su meta 2026`
-            : 'Se calcula cuando haya avances reportados'}
+            ? `${r.criticos} críticos y ${r.atrasados} atrasados frente a su meta`
+            : 'Se calcula cuando haya avances validados'}
         />
-        <Cifra
-          titulo="Con evidencia"
-          valor={`${conEvidencia}`}
-          nota={`de ${r.total}. Ningún reporte con evidencia todavía; el sistema la exige al reportar`}
-        />
+        {corte && corteAbierto ? (
+          <Cifra
+            titulo="Reportes del corte"
+            valor={`${corte.porValidar + corte.aprobados + corte.devueltos}`}
+            nota={`de ${corte.conResponsable} con responsable en «${corteAbierto.nombre}»: ${corte.porValidar} sin validar, ${corte.aprobados} ${corte.aprobados === 1 ? 'aprobado' : 'aprobados'}, ${corte.devueltos} ${corte.devueltos === 1 ? 'devuelto' : 'devueltos'}`}
+          />
+        ) : (
+          <Cifra
+            titulo="Corte"
+            valor="—"
+            nota="No hay un corte abierto: por ahora nadie puede reportar avances"
+          />
+        )}
       </div>
 
       {/* 2 · Cómo se reparte el plan */}
@@ -132,13 +145,13 @@ export default function Tablero({
           </>
         ) : (
           <p className="mt-2 text-sm leading-relaxed text-gray-600">
-            El plan está cargado con sus metas y sus responsables, y todavía sin avances: nadie ha
-            reportado. Cuando lleguen los primeros reportes, aquí se verá cómo va cada indicador.
+            El plan está cargado con sus metas y sus responsables, y todavía sin avances validados.
+            Cada reporte cuenta cuando la secretaría lo aprueba; desde entonces aquí se verá cómo va cada indicador.
           </p>
         )}
         {r.sinMeta > 0 && (
           <p className="mt-3 text-xs text-gray-500">
-            {r.sinMeta} indicadores no tienen meta para 2026 y no entran en el cálculo.
+            {r.sinMeta} indicadores no tienen meta y no entran en el cálculo.
           </p>
         )}
       </section>
@@ -155,7 +168,7 @@ export default function Tablero({
               <FilaGrupo
                 key={nombre}
                 nombre={nombre}
-                r={resumir(l, reportado)}
+                r={resumir(l)}
                 conSeguimiento={conSeg}
                 onClick={onVerDependencia ? () => onVerDependencia(nombre) : undefined}
               />
@@ -166,7 +179,7 @@ export default function Tablero({
           <h2 className="text-sm font-bold text-gray-900">Por línea estratégica</h2>
           <div className="mt-1 divide-y divide-gray-100">
             {lineas.map(([nombre, l]) => (
-              <FilaGrupo key={nombre} nombre={nombre} r={resumir(l, reportado)} conSeguimiento={conSeg} />
+              <FilaGrupo key={nombre} nombre={nombre} r={resumir(l)} conSeguimiento={conSeg} />
             ))}
           </div>
         </section>
@@ -183,15 +196,11 @@ export default function Tablero({
               <dd className="font-bold tabular-nums text-gray-900">{r.sinResponsable}</dd>
             </div>
             <div className="flex items-baseline justify-between gap-4 py-2.5">
-              <dt className="text-gray-600">Sin reporte en el corte</dt>
+              <dt className="text-gray-600">Sin avance validado</dt>
               <dd className="font-bold tabular-nums text-gray-900">{r.sinReporte}</dd>
             </div>
             <div className="flex items-baseline justify-between gap-4 py-2.5">
-              <dt className="text-gray-600">Con evidencia adjunta</dt>
-              <dd className="font-bold tabular-nums text-gray-900">{conEvidencia} de {r.total}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-4 py-2.5">
-              <dt className="text-gray-600">Sin meta definida para 2026</dt>
+              <dt className="text-gray-600">Sin meta definida</dt>
               <dd className="font-bold tabular-nums text-gray-900">{r.sinMeta}</dd>
             </div>
           </dl>
@@ -206,7 +215,7 @@ export default function Tablero({
         </div>
         <ul className="mt-1 divide-y divide-gray-100">
           {atencion.slice(0, 8).map(i => {
-            const e = estadoDe(i, reportado[i.id])
+            const e = estadoDe(i)
             return (
               <li key={i.id}>
                 <button
@@ -219,7 +228,7 @@ export default function Tablero({
                     <span className="mt-0.5 block text-xs text-gray-500">
                       {i.dependencia}
                       {sinAsignar(i) && <span className="font-medium text-red-700"> · Sin responsable</span>}
-                      {e === 'critico' || e === 'atrasado' ? ` · ${ESTADOS[e].rotulo}: ${fmt(i.avance)} de ${fmt(i.meta2026)}` : ''}
+                      {e === 'critico' || e === 'atrasado' ? ` · ${ESTADOS[e].rotulo}: ${fmt(i.avance)} de ${fmt(i.metaMedida)}` : ''}
                     </span>
                   </span>
                   <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="mt-1 shrink-0 text-gray-300" />
@@ -235,10 +244,19 @@ export default function Tablero({
 
       {conSeg && (
         <p className="px-1 text-xs leading-relaxed text-gray-500">
-          Criterio provisional: un indicador se cuenta como cumplido cuando su avance alcanza la meta de 2026.
-          Falta definir si el avance se reporta acumulado o del año, y qué umbrales separan «en ruta», «atrasado» y
-          «crítico». Lo define la Alcaldía; una vez definido queda escrito en el sistema y se aplica igual a todos.
-          Hasta entonces, este porcentaje es una referencia y no una cifra oficial.
+          {criterio === null ? (
+            <>
+              Criterio provisional: un indicador se cuenta como cumplido cuando su avance validado alcanza la meta de 2026.
+              Falta definir si el avance se reporta acumulado o del año, y qué umbrales separan «en ruta», «atrasado» y
+              «crítico». Lo define la Alcaldía; una vez definido queda escrito en el sistema y se aplica igual a todos.
+              Hasta entonces, este porcentaje es una referencia y no una cifra oficial.
+            </>
+          ) : (
+            <>
+              {modo.titulo}: se mide contra la {modo.meta}. Un indicador se cuenta como cumplido cuando su avance validado
+              la alcanza. Los umbrales que separan «en ruta», «atrasado» y «crítico» siguen por definir.
+            </>
+          )}
         </p>
       )}
     </div>

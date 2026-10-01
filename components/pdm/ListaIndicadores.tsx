@@ -6,35 +6,37 @@
  * El archivo original es una hoja de 258 columnas: imposible de leer en un
  * teléfono, y los responsables de indicadores son sobre todo contratistas que
  * trabajan desde uno. Cada tarjeta dice lo que importa para decidir si hay que
- * abrirla: qué se mide, contra qué meta, cómo va y a nombre de quién está.
+ * abrirla: qué se mide, contra qué meta, cómo va, en qué punto del corte está y a
+ * nombre de quién.
  */
 
 import { useMemo, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, agrupar, estadoDe, fmt, fmtRazon, razon, sinAsignar, tipoResponsable, type Indicador,
+  ESTADOS, agrupar, estadoDe, fmt, fmtRazon, razon, rotuloMeta, sinAsignar, tipoResponsable, type Indicador,
 } from '@/lib/pdm/plan'
+import { SITUACIONES } from '@/lib/pdm/seguimiento'
 import { BarraAvance } from './Barras'
-import type { Filtro } from '@/lib/pdm/filtros'
+import { FILTROS_DE_CORTE, cumpleFiltro, type Filtro } from '@/lib/pdm/filtros'
 import type { PersonaFicha } from '@/lib/pdm/personas'
 
 const PAGINA = 25
 
-export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado, seleccionable, elegido }: {
+export function TarjetaIndicador({ i, onAbrir, asignado, seleccionable, elegido }: {
   i: Indicador
-  reportado?: number
   onAbrir: () => void
-  conBoton?: boolean
   /** En modo de selección la tarjeta se marca en vez de abrirse. */
   seleccionable?: boolean
   elegido?: boolean
   /** Nombre de la persona asignada en la plataforma; sin él se muestra lo que decía el Excel. */
   asignado?: string
 }) {
-  const estado = estadoDe(i, reportado)
-  const r = razon(i, reportado)
+  const estado = estadoDe(i)
+  const r = razon(i)
   const huerfano = sinAsignar(i)
+  const corte = i.enCorte
+  const reporte = corte?.reporte ?? null
   return (
     <button
       onClick={onAbrir}
@@ -53,9 +55,17 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado, se
           </span>
         )}
         <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">{i.codigo}</span>
-        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${ESTADOS[estado].chip}`}>
-          {ESTADOS[estado].rotulo}
-        </span>
+        {/* «Sin avance validado» sobra cuando el chip del corte ya dice en qué punto va el reporte. */}
+        {(estado !== 'sin_reporte' || !corte) && (
+          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${ESTADOS[estado].chip}`}>
+            {ESTADOS[estado].rotulo}
+          </span>
+        )}
+        {corte && (
+          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${SITUACIONES[corte.situacion].chip}`}>
+            {SITUACIONES[corte.situacion].rotulo}
+          </span>
+        )}
       </div>
 
       <p className="mt-2.5 text-sm font-semibold leading-snug text-gray-900">{i.indicador}</p>
@@ -64,14 +74,24 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado, se
       <div className="mt-3.5">
         <div className="mb-1.5 flex items-baseline justify-between gap-3 text-xs">
           <span className="text-gray-500">
-            Avance <b className="tabular-nums text-gray-900">{fmt(reportado ?? i.avance)}</b>
+            Avance <b className="tabular-nums text-gray-900">{fmt(i.avance)}</b>
             <span className="text-gray-400"> de </span>
-            <b className="tabular-nums text-gray-900">{fmt(i.meta2026)}</b>
-            <span className="text-gray-400"> · meta 2026</span>
+            <b className="tabular-nums text-gray-900">{fmt(i.metaMedida)}</b>
+            <span className="text-gray-400"> · {rotuloMeta(i)}</span>
           </span>
-          {r !== null && <span className="font-semibold tabular-nums text-gray-700">{fmtRazon(r)}</span>}
+          {r !== null && <span className="font-semibold tabular-nums text-gray-700">{fmtRazon(r, i.criterio !== null)}</span>}
         </div>
         <BarraAvance razon={r} estado={estado} />
+        {reporte && corte?.situacion === 'pendiente' && (
+          <p className="mt-1.5 truncate text-xs text-amber-800">
+            {reporte.autorNombre} reportó <b className="tabular-nums">{fmt(reporte.valor)}</b>; falta que la secretaría lo valide
+          </p>
+        )}
+        {reporte && corte?.situacion === 'devuelto' && (
+          <p className="mt-1.5 truncate text-xs text-red-700">
+            Devuelto{reporte.validacionComentario ? `: ${reporte.validacionComentario}` : ''}
+          </p>
+        )}
       </div>
 
       <div className="mt-3.5 flex items-center justify-between gap-3 text-xs">
@@ -83,9 +103,7 @@ export function TarjetaIndicador({ i, reportado, onAbrir, conBoton, asignado, se
               : (asignado ?? i.responsable)}
           </span>
         </span>
-        {conBoton
-          ? <span className="shrink-0 rounded-lg bg-[#192031] px-3 py-1.5 font-semibold text-white">Reportar</span>
-          : <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />}
+        <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-gray-300" />
       </div>
     </button>
   )
@@ -101,13 +119,20 @@ export interface SeleccionLista {
   onReemplazar: (ids: number[]) => void
 }
 
+const ROTULO_FILTRO: Record<Filtro, string> = {
+  todos: 'Todos',
+  sin_responsable: 'Sin responsable',
+  atencion: 'Atrasados y críticos',
+  sin_reporte: 'Sin avance validado',
+  por_reportar: 'Por reportar',
+  por_validar: 'Sin validar',
+}
+
 export default function ListaIndicadores({
-  lista, reportado, onAbrir, conBoton, dependencia, onDependencia, filtroInicial, fichas, seleccion,
+  lista, onAbrir, dependencia, onDependencia, filtroInicial, fichas, seleccion,
 }: {
   lista: Indicador[]
-  reportado: Record<number, number>
   onAbrir: (id: number) => void
-  conBoton?: boolean
   /** Si viene, se muestra el selector de secretaría (alcalde y Control Interno). */
   dependencia?: string
   onDependencia?: (d: string) => void
@@ -129,35 +154,29 @@ export default function ListaIndicadores({
     [lista, dependencia],
   )
 
+  // Los filtros del corte solo se ofrecen si hay un corte abierto (si no, no hay nada que filtrar).
+  const hayCorte = useMemo(() => lista.some(i => i.enCorte !== null), [lista])
+  const filtros = useMemo(
+    () => (Object.keys(ROTULO_FILTRO) as Filtro[]).filter(f => hayCorte || !FILTROS_DE_CORTE.includes(f)),
+    [hayCorte],
+  )
+  // Un enlace puede pedir un filtro del corte cuando ya no hay corte: se ignora y sale la lista completa.
+  const filtroActivo: Filtro = filtros.includes(filtro) ? filtro : 'todos'
+
   const cuenta = useMemo(() => {
-    const c: Record<Filtro, number> = { todos: delAlcance.length, sin_responsable: 0, atencion: 0, sin_reporte: 0 }
-    for (const i of delAlcance) {
-      const e = estadoDe(i, reportado[i.id])
-      if (sinAsignar(i)) c.sin_responsable++
-      if (e === 'critico' || e === 'atrasado') c.atencion++
-      if (e === 'sin_reporte') c.sin_reporte++
-    }
+    const c = Object.fromEntries(filtros.map(f => [f, 0])) as Record<Filtro, number>
+    for (const i of delAlcance) for (const f of filtros) if (cumpleFiltro(i, f)) c[f]++
     return c
-  }, [delAlcance, reportado])
+  }, [delAlcance, filtros])
 
   const visibles = useMemo(() => {
     const t = q.trim().toLowerCase()
     return delAlcance.filter(i => {
-      const e = estadoDe(i, reportado[i.id])
-      if (filtro === 'sin_responsable' && !sinAsignar(i)) return false
-      if (filtro === 'atencion' && e !== 'critico' && e !== 'atrasado') return false
-      if (filtro === 'sin_reporte' && e !== 'sin_reporte') return false
+      if (!cumpleFiltro(i, filtroActivo)) return false
       if (!t) return true
       return [i.indicador, i.producto, i.programa, i.responsable, i.codigo].some(x => x.toLowerCase().includes(t))
     })
-  }, [delAlcance, reportado, q, filtro])
-
-  const filtros: { k: Filtro; rotulo: string }[] = [
-    { k: 'todos', rotulo: 'Todos' },
-    { k: 'sin_responsable', rotulo: 'Sin responsable' },
-    { k: 'atencion', rotulo: 'Atrasados y críticos' },
-    { k: 'sin_reporte', rotulo: 'Sin reporte' },
-  ]
+  }, [delAlcance, q, filtroActivo])
 
   return (
     <div className="space-y-4">
@@ -191,16 +210,16 @@ export default function ListaIndicadores({
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {filtros.map(f => (
           <button
-            key={f.k}
-            onClick={() => { setFiltro(f.k); setLimite(PAGINA) }}
-            aria-pressed={filtro === f.k}
+            key={f}
+            onClick={() => { setFiltro(f); setLimite(PAGINA) }}
+            aria-pressed={filtroActivo === f}
             className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-              filtro === f.k
+              filtroActivo === f
                 ? 'border-[#192031] bg-[#192031] text-white'
                 : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
             }`}
           >
-            {f.rotulo} <span className="ml-1 tabular-nums opacity-70">{cuenta[f.k]}</span>
+            {ROTULO_FILTRO[f]} <span className="ml-1 tabular-nums opacity-70">{cuenta[f]}</span>
           </button>
         ))}
       </div>
@@ -251,11 +270,9 @@ export default function ListaIndicadores({
               <TarjetaIndicador
                 key={i.id}
                 i={i}
-                reportado={reportado[i.id]}
                 onAbrir={seleccion?.activa ? () => seleccion.onAlternar(i.id) : () => onAbrir(i.id)}
                 seleccionable={seleccion?.activa}
                 elegido={seleccion?.activa ? seleccion.elegidos.has(i.id) : undefined}
-                conBoton={conBoton}
                 asignado={(() => { const f = fichas?.[i.id]; return f && 'nombre' in f ? f.nombre : undefined })()}
               />
             ))}

@@ -10,8 +10,8 @@
  * traía el AVANCE del seguimiento de junio, y se retiró: el plan se cargó en la
  * base sin ningún avance, a propósito. Un avance sin autor, sin fecha y sin
  * evidencia no es un dato del plan sino un dato sin dueño, y mezclado con lo
- * demás lo contamina. Por eso `avance` es `null` para todos hasta que alguien
- * reporte con su nombre y su evidencia.
+ * demás lo contamina. Por eso `avance` es `null` hasta que alguien reporte con su
+ * nombre y su evidencia Y la secretaría lo valide: solo lo aprobado cuenta.
  *
  * ── Qué se corrigió al sembrar ───────────────────────────────────────────
  *
@@ -20,14 +20,22 @@
  * cuatrienio. La meta de este año es, por tanto, la tercera. Con el rótulo
  * equivocado cualquiera habría tomado la primera.
  *
- * ── El criterio de «cumplido» es PROVISIONAL ─────────────────────────────
+ * ── Qué cuenta, y contra qué se mide ─────────────────────────────────────
  *
- * El archivo no lo define en ninguna parte: probados los cinco criterios que
- * admite, ninguno reproduce las cifras de su hoja de gráficos. Aquí se usa el
- * más simple —avance ≥ meta 2026— y se rotula como provisional en pantalla.
- * Definirlo es una decisión de la Alcaldía, no del software, y el sistema la
- * hace visible en lugar de esconderla.
+ * El avance de un indicador es el último reporte APROBADO por la secretaría; lo reportado y aún
+ * sin validar se ve, pero no cuenta. Contra qué meta se mide depende de un dato del plan que la
+ * Alcaldía define a mano (`Seguimiento.ajustes.avanceModo`):
+ *
+ *   · anual        el valor es el avance de este año → meta de 2026.
+ *   · acumulado    el valor es lo que se lleva desde 2024 → suma de las metas de 2024 a 2026.
+ *   · por definir  se usa la meta de 2026 y el cumplimiento se rotula PROVISIONAL en pantalla.
+ *
+ * Los umbrales del semáforo («en ruta», «atrasado», «crítico») siguen siendo provisionales: el
+ * archivo de origen no los define y, probados los cinco criterios que admite, ninguno reproduce
+ * las cifras de su hoja de gráficos. Definirlos es una decisión de la Alcaldía, no del software.
  */
+
+import type { AvanceModo, EstadoEnCorte } from './seguimiento'
 
 /** Quién tiene un indicador asignado en la plataforma. */
 export interface Asignacion {
@@ -64,29 +72,18 @@ export interface Indicador {
   lineaBase: number | null
   metaCuatrienio: number | null
   meta2026: number | null
-  /** Último avance reportado. `null` mientras nadie haya reportado: hoy, todos. */
+  /** La suma de las metas de 2024 a 2026. */
+  metaAcumulada: number | null
+  /** Qué significa el avance reportado en este plan; `null` mientras no se defina (cumplimiento provisional). */
+  criterio: AvanceModo | null
+  /** La meta contra la que se mide el avance, según el criterio. */
+  metaMedida: number | null
+  /** El último avance APROBADO. `null` mientras ningún reporte se haya validado. */
   avance: number | null
-}
-
-// ─── Reportes ─────────────────────────────────────────────────────────────────
-
-/**
- * Un reporte de avance, tal como lo guardaría el sistema.
- *
- * Lleva `anterior` y `nuevo` a propósito: el valor previo no se sobrescribe, se
- * conserva al lado del nuevo. Es la respuesta a «¿qué cambió respecto al
- * reporte anterior?», que en el archivo de Excel no existe porque cada corte
- * escribe encima del otro.
- *
- * Hoy nada los produce: todavía no hay reportes en la base. Llegan con la Fase B.
- */
-export interface Reporte {
-  fecha: number
-  autor: string
-  anterior: number | null
-  nuevo: number
-  texto: string
-  evidencia: string
+  /** En qué corte se aprobó ese avance. */
+  avanceCorte: string | null
+  /** Dónde va en el corte abierto; `null` si no hay corte abierto o si nadie puede reportarlo todavía. */
+  enCorte: EstadoEnCorte | null
 }
 
 // ─── Responsable ──────────────────────────────────────────────────────────────
@@ -137,26 +134,24 @@ export const ESTADOS: Record<Estado, { rotulo: string; punto: string; chip: stri
   en_ruta:     { rotulo: 'En ruta',       punto: 'bg-amber-400',   chip: 'bg-amber-50 text-amber-800 border-amber-200',       barra: 'bg-amber-400' },
   atrasado:    { rotulo: 'Atrasado',      punto: 'bg-orange-500',  chip: 'bg-orange-50 text-orange-800 border-orange-200',    barra: 'bg-orange-500' },
   critico:     { rotulo: 'Crítico',       punto: 'bg-red-500',     chip: 'bg-red-50 text-red-800 border-red-200',             barra: 'bg-red-500' },
-  sin_reporte: { rotulo: 'Sin reporte',   punto: 'bg-gray-400',    chip: 'bg-gray-100 text-gray-700 border-gray-200',         barra: 'bg-gray-300' },
-  sin_meta:    { rotulo: 'Sin meta 2026', punto: 'bg-gray-300',    chip: 'bg-white text-gray-500 border-gray-200',            barra: 'bg-gray-200' },
+  sin_reporte: { rotulo: 'Sin avance validado', punto: 'bg-gray-400',    chip: 'bg-gray-100 text-gray-700 border-gray-200',         barra: 'bg-gray-300' },
+  sin_meta:    { rotulo: 'Sin meta', punto: 'bg-gray-300',    chip: 'bg-white text-gray-500 border-gray-200',            barra: 'bg-gray-200' },
 }
 
 /** Umbrales del semáforo. Provisionales, como el criterio de cumplido. */
 const UMBRALES = { cumplido: 1, en_ruta: 0.7, atrasado: 0.4 }
 
-export function avanceDe(i: Indicador, reportado?: number | null): number | null {
-  return reportado ?? i.avance
+export function razon(i: Indicador): number | null {
+  if (i.avance === null || !i.metaMedida) return null
+  return i.avance / i.metaMedida
 }
 
-export function razon(i: Indicador, reportado?: number | null): number | null {
-  const a = avanceDe(i, reportado)
-  if (a === null || !i.meta2026) return null
-  return a / i.meta2026
-}
+/** Cómo se llama la meta contra la que se mide, para ponerla junto a las cifras. */
+export const rotuloMeta = (i: Indicador): string => (i.criterio === 'acumulado' ? 'meta acumulada a 2026' : 'meta 2026')
 
-export function estadoDe(i: Indicador, reportado?: number | null): Estado {
-  if (!i.meta2026) return 'sin_meta'
-  const r = razon(i, reportado)
+export function estadoDe(i: Indicador): Estado {
+  if (!i.metaMedida) return 'sin_meta'
+  const r = razon(i)
   if (r === null) return 'sin_reporte'
   if (r >= UMBRALES.cumplido) return 'cumplido'
   if (r >= UMBRALES.en_ruta) return 'en_ruta'
@@ -181,15 +176,14 @@ export interface Resumen {
   cumplimiento: number | null
 }
 
-/** `reportado` trae el último valor reportado en esta sesión, por id. */
-export function resumir(lista: Indicador[], reportado: Record<number, number> = {}): Resumen {
+export function resumir(lista: Indicador[]): Resumen {
   const r: Resumen = {
     total: lista.length, medibles: 0, cumplidos: 0, enRuta: 0, atrasados: 0,
     criticos: 0, sinReporte: 0, sinMeta: 0, sinResponsable: 0, cumplimiento: null,
   }
   for (const i of lista) {
     if (sinAsignar(i)) r.sinResponsable++
-    switch (estadoDe(i, reportado[i.id])) {
+    switch (estadoDe(i)) {
       case 'sin_meta':    r.sinMeta++; break
       case 'sin_reporte': r.medibles++; r.sinReporte++; break
       case 'cumplido':    r.medibles++; r.cumplidos++; break
@@ -211,14 +205,14 @@ export function agrupar(lista: Indicador[], clave: (i: Indicador) => string): [s
 // ─── ¿Hay seguimiento? ────────────────────────────────────────────────────────
 
 /**
- * ¿Ha reportado alguien algo, en algún indicador?
+ * ¿Hay algún avance VALIDADO, en algún indicador?
  *
  * Con el plan recién cargado la respuesta es NO, y las pantallas tienen que
  * decirlo. Sin esto, «0 cumplidos de 221» se pinta como «0 %», que suena a un
  * plan que no cumple cuando en realidad es un plan que no ha empezado a medirse.
  */
-export function haySeguimiento(lista: Indicador[], reportado: Record<number, number> = {}): boolean {
-  return lista.some(i => avanceDe(i, reportado[i.id]) !== null)
+export function haySeguimiento(lista: Indicador[]): boolean {
+  return lista.some(i => i.avance !== null)
 }
 
 // ─── Formato ──────────────────────────────────────────────────────────────────
@@ -242,9 +236,11 @@ export function fmtPct(n: number | null): string {
  * descartó, pero la pregunta de fondo sigue abierta —¿el avance se reporta
  * acumulado o del año?—, y mientras no se responda, mostrar «200 %» daría por
  * bueno un dato cuyo sentido no está definido; «cumplida» dice solo lo que se
- * puede sostener.
+ * puede sostener. Cuando la Alcaldía define el criterio (`criterioDefinido`), el
+ * porcentaje se muestra tal cual.
  */
-export function fmtRazon(r: number | null): string {
+export function fmtRazon(r: number | null, criterioDefinido = false): string {
   if (r === null) return ''
+  if (criterioDefinido) return `${Math.round(r * 100)} %`
   return r >= 1 ? '≥ 100 %' : `${Math.round(r * 100)} %`
 }

@@ -47,7 +47,7 @@ export const accesoPdm = cache(async (): Promise<AccesoPdm | null> => {
 })
 
 /** Qué se exige para entrar a una pantalla. */
-export type Requisito = 'cualquiera' | 'gestor' | 'gestor_o_consulta'
+export type Requisito = 'cualquiera' | 'gestor' | 'gestor_o_consulta' | 'admin'
 
 /**
  * La puerta de TODAS las pantallas del módulo.
@@ -83,6 +83,7 @@ export async function exigirAccesoPdm(requiere: Requisito = 'cualquiera'): Promi
   const suficiente = requiere === 'cualquiera'
     || (requiere === 'gestor' && gestiona(acceso.nivel))
     || (requiere === 'gestor_o_consulta' && veDirectorio(acceso.nivel))
+    || (requiere === 'admin' && acceso.nivel === 'admin')
   if (!suficiente) redirect(ITEM_PLAN_DESARROLLO.href)
 
   return acceso

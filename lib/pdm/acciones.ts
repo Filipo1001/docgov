@@ -133,6 +133,11 @@ export function traducirErrorPdm(code?: string | null, mensaje?: string | null):
   const m = (mensaje ?? '').trim()
   if (m.startsWith('PDM: ')) return capitalizar(m.slice(5))
   if (code === '23505' && /pdm_grupos_nombre_uq/.test(m)) return 'Ya existe un grupo con ese nombre.'
+  if (code === '23505' && /pdm_cortes_nombre_unico|pdm_cortes_plan_id_nombre_key/.test(m)) return 'Ya existe un corte con ese nombre.'
+  if (code === '23505' && /pdm_reportes_un_original|pdm_reportes_una_correccion/.test(m)) {
+    return 'Este indicador ya tiene un reporte en el corte. Recarga la página para verlo.'
+  }
+  if (code === '23505' && /pdm_evidencias_ruta_key/.test(m)) return 'Uno de esos archivos ya está en otro reporte. Súbelo de nuevo.'
   if (code === '42501') return 'No tienes permiso para hacer este cambio.'
   return GENERICO
 }

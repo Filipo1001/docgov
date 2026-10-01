@@ -23,16 +23,16 @@ import type { GrupoVista, PersonaDirectorio, PersonaFicha } from '@/lib/pdm/pers
 import { asignadosVista } from '@/lib/pdm/asignados'
 import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
 import { describirResumen, type AccionesPdm, type ResumenCambio } from '@/lib/pdm/acciones'
+import { fechaCorta, type Seguimiento } from '@/lib/pdm/seguimiento'
+import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import IndicadorModal from './IndicadorModal'
 import SelectorAsignacion from './SelectorAsignacion'
 import { ACCIONES_REALES } from './acciones-reales'
-
-const SIN_REPORTES: never[] = []
-const SIN_REPORTADO: Record<number, number> = {}
-const NO_REPORTA = () => {}
+import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
 
 export default function IndicadoresPdm({
-  indicadores, fichas, personas, grupos, nivel, dependenciaInicial, filtroInicial, restringirA, acciones = ACCIONES_REALES,
+  indicadores, fichas, personas, grupos, nivel, yoId, seguimiento, dependenciaInicial, filtroInicial, abiertoInicial, restringirA,
+  acciones = ACCIONES_REALES, accionesSeguimiento = ACCIONES_SEGUIMIENTO_REALES,
 }: {
   indicadores: Indicador[]
   fichas: Record<number, PersonaFicha>
@@ -40,15 +40,22 @@ export default function IndicadoresPdm({
   grupos: GrupoVista[]
   /** Qué puede hacer quien mira: quien gestiona asigna y quita; el administrador además ve el historial. */
   nivel: NivelPdm
+  /** Quién mira: sirve para saber qué indicadores son suyos para reportar. */
+  yoId: string
+  /** Los cortes y los ajustes del plan. */
+  seguimiento: Seguimiento
   /** Lo que quien gestiona puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
   acciones?: AccionesPdm
+  accionesSeguimiento?: AccionesSeguimiento
   dependenciaInicial?: string
   filtroInicial?: Filtro
+  /** Abre la ficha de este indicador al entrar (un enlace de Reportes lo pide). */
+  abiertoInicial?: number
   /** Solo estos indicadores (los de una persona), con el nombre para el rótulo. */
   restringirA?: { etiqueta: string; ids: number[] }
 }) {
   const [dependencia, setDependencia] = useState(dependenciaInicial ?? '')
-  const [abierto, setAbierto] = useState<number | null>(null)
+  const [abierto, setAbierto] = useState<number | null>(abiertoInicial ?? null)
   const [seleccionActiva, setSeleccionActiva] = useState(false)
   const [elegidos, setElegidos] = useState<ReadonlySet<number>>(new Set())
   // Los indicadores que se están asignando (los marcados, o el de la ficha abierta); `null`: el selector está cerrado.
@@ -88,6 +95,16 @@ export default function IndicadoresPdm({
         detalle={restringirA ? `${lista.length} de ${indicadores.length}` : `${indicadores.length} indicadores de producto`}
       />
 
+      {/* En qué punto está el seguimiento. Quien reporta necesita saber por qué hay (o no) un botón para hacerlo. */}
+      {seguimiento.abierto ? (
+        <p className="inline-flex flex-wrap items-center gap-x-2 rounded-full bg-teal-50 px-3.5 py-1 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-100">
+          <span>Corte abierto · {seguimiento.abierto.nombre}</span>
+          <span className="font-medium text-teal-700">al {fechaCorta(seguimiento.abierto.fecha)}</span>
+        </p>
+      ) : (nivel === 'responsable' || nivel === 'coordinador') && (
+        <p className="text-xs text-gray-500">No hay un corte abierto: por ahora no hay nada que reportar.</p>
+      )}
+
       {aviso && (
         <p role="status" className="flex items-start justify-between gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           <span>{aviso}</span>
@@ -113,7 +130,6 @@ export default function IndicadoresPdm({
 
       <ListaIndicadores
         lista={lista}
-        reportado={SIN_REPORTADO}
         onAbrir={setAbierto}
         dependencia={dependencia}
         onDependencia={setDependencia}
@@ -159,10 +175,8 @@ export default function IndicadoresPdm({
       <IndicadorModal
         key={abierto ?? 'cerrado'}
         indicador={indicador}
-        reportes={SIN_REPORTES}
-        puedeReportar={false}
         onCerrar={() => setAbierto(null)}
-        onReportar={NO_REPORTA}
+        seguimiento={{ nivel, yoId, corteAbierto: seguimiento.abierto, acciones: accionesSeguimiento }}
         persona={indicador ? fichas[indicador.id] : undefined}
         asignados={indicador ? asignadosVista(indicador, personasPorId, gruposPorId) : undefined}
         onAsignar={puedeAsignar && indicador ? () => { setAviso(null); setSelectorPara([indicador]) } : undefined}

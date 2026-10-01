@@ -5,19 +5,21 @@
  *
  * ── Trazabilidad ─────────────────────────────────────────────────────────
  *
- * La historia del indicador es la lista de sus reportes, del más reciente al
- * más antiguo, cada uno con autor, fecha, valor anterior, valor nuevo, la
- * explicación y la evidencia. Nada se sobrescribe: un reporte nuevo añade una
- * fila, no cambia las anteriores. Sin reportes, dice que aún no hay seguimiento:
- * no hay un «valor de partida» del archivo, porque el avance del Excel no se
- * cargó (era un número sin autor, sin fecha y sin evidencia).
+ * La historia del indicador es la lista de sus reportes, del más reciente al más antiguo, cada uno
+ * con autor, fecha, valor anterior, valor nuevo, la explicación, la evidencia y lo que dijo la
+ * secretaría. Nada se sobrescribe: un reporte nuevo añade una fila. Todo eso lo pinta
+ * `SeguimientoIndicador`, que lee el detalle al abrirse.
+ *
+ * ── Qué cuenta ───────────────────────────────────────────────────────────
+ *
+ * Las cifras de arriba son el avance VALIDADO: el último reporte que la secretaría aprobó. Lo
+ * reportado y aún sin validar se ve en la trazabilidad y en el chip del corte, pero no cuenta.
  *
  * ── Por qué la evidencia es obligatoria ─────────────────────────────────
  *
- * Es el punto del módulo. El archivo actual registra el avance como un número
- * sin documento que lo respalde; aquí no se puede reportar sin adjuntar al
- * menos uno. Hoy el archivo no se sube a ninguna parte: la subida llega con la
- * Fase B, y mientras tanto solo se muestra su nombre.
+ * Es el punto del módulo. El archivo del que se partió registra el avance como un número sin
+ * documento que lo respalde; aquí no se puede reportar sin adjuntar al menos uno, y la base de
+ * datos lo exige aunque alguien se salte la pantalla.
  *
  * Va montado en <body> con un portal: el dashboard usa `transform` en contenedores
  * que convierten un `position: fixed` en algo relativo a ellos y no a la
@@ -29,18 +31,17 @@ import { createPortal } from 'react-dom'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import {
-  ESTADOS, coincideNombre, estadoDe, fmt, fmtRazon, razon, sinAsignar, tipoResponsable,
-  type Indicador, type Reporte,
+  ESTADOS, coincideNombre, estadoDe, fmt, fmtRazon, razon, rotuloMeta, sinAsignar, tipoResponsable,
+  type Indicador,
 } from '@/lib/pdm/plan'
+import { SITUACIONES } from '@/lib/pdm/seguimiento'
 import { BarraAvance } from './Barras'
+import SeguimientoIndicador, { type ContextoSeguimiento } from './SeguimientoIndicador'
 import { Avatar, LineaContrato } from './PersonaVista'
 import type { MotivoSinVincular, PersonaFicha } from '@/lib/pdm/personas'
 import type { AsignadoVista } from '@/lib/pdm/asignados'
 import type { Resultado } from '@/lib/pdm/acciones'
 import { fechaHoraBogota, type EntradaHistorial } from '@/lib/pdm/historial'
-
-const fechaHora = (t: number) =>
-  new Date(t).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 
 function Dato({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
@@ -58,13 +59,10 @@ const NOTA_SIN_USUARIO: Record<MotivoSinVincular, string> = {
 }
 
 export default function IndicadorModal({
-  indicador, reportes, puedeReportar, onCerrar, onReportar, persona, asignados, onAsignar, onQuitar, onCargarHistorial,
+  indicador, onCerrar, persona, asignados, onAsignar, onQuitar, onCargarHistorial, seguimiento,
 }: {
   indicador: Indicador | null
-  reportes: Reporte[]
-  puedeReportar: boolean
   onCerrar: () => void
-  onReportar: (id: number, r: Omit<Reporte, 'fecha' | 'autor' | 'anterior'>) => void
   /** Quién es el responsable en la plataforma, si se sabe. Sin él se muestra el texto del archivo. */
   persona?: PersonaFicha
   /** Principal y apoyos, con nombre. Sin esto la ficha solo muestra al principal. */
@@ -78,24 +76,24 @@ export default function IndicadorModal({
   onQuitar?: (usuarioId: string) => Promise<string | null>
   /** Con esto la ficha muestra el historial de cambios de responsable (solo lo lee el administrador). */
   onCargarHistorial?: () => Promise<Resultado<EntradaHistorial[]>>
+  /** Con esto la ficha muestra la trazabilidad, deja reportar y validar, y comentar. Sin esto, esa parte no se pinta. */
+  seguimiento?: ContextoSeguimiento
 }) {
-  const [valor, setValor] = useState('')
-  const [texto, setTexto] = useState('')
-  const [archivo, setArchivo] = useState('')
-  const [enviado, setEnviado] = useState(false)
   const [quitando, setQuitando] = useState<string | null>(null)
   const [errorApoyo, setErrorApoyo] = useState<string | null>(null)
-  const [historial, setHistorial] = useState<EntradaHistorial[] | null>(null)
+  // El historial cargado se guarda con la firma de quién llevaba el indicador cuando se leyó.
+  const [cargado, setCargado] = useState<{ firma: string; datos: EntradaHistorial[] } | null>(null)
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
-  const [errorHistorial, setErrorHistorial] = useState<string | null>(null)
+  const [errorLeido, setErrorLeido] = useState<{ firma: string; mensaje: string } | null>(null)
   const cerrarRef = useRef<HTMLButtonElement>(null)
 
   // Escape, bloqueo del fondo y foco al abrir. Depende del id: que el padre se
   // vuelva a pintar con el modal abierto no debe repetirlo.
   const id = indicador?.id
-  // Si cambia quién lleva el indicador, el historial que se había cargado ya no está al día.
+  // Si cambia quién lleva el indicador, el historial que se había cargado ya no está al día: deja de contar.
   const firma = asignados?.map(a => `${a.usuarioId}${a.principal ? 'P' : 'A'}`).join(',') ?? ''
-  useEffect(() => { setHistorial(null); setErrorHistorial(null) }, [firma])
+  const historial = cargado?.firma === firma ? cargado.datos : null
+  const errorHistorial = errorLeido?.firma === firma ? errorLeido.mensaje : null
   const cerrarFn = useRef(onCerrar)
   useEffect(() => { cerrarFn.current = onCerrar })
   useEffect(() => {
@@ -115,17 +113,13 @@ export default function IndicadorModal({
 
   if (!indicador) return null
 
-  const vigente = reportes[0]?.nuevo
-  const estado = estadoDe(indicador, vigente)
-  const r = razon(indicador, vigente)
+  const estado = estadoDe(indicador)
+  const r = razon(indicador)
+  const corte = indicador.enCorte
   // Nadie asignado Y el Excel tampoco nombraba a una persona: no hay a quién preguntarle.
   // (Si el Excel nombraba a alguien que aún no tiene usuario, se muestra su nombre y por qué.)
   const huerfano = sinAsignar(indicador) && tipoResponsable(indicador.responsable) !== 'persona'
   const nombraAlgo = /\p{L}/u.test(indicador.responsable)
-  const numero = Number(valor.replace(',', '.'))
-  const valido = valor.trim() !== '' && Number.isFinite(numero) && numero >= 0
-    && texto.trim().length >= 10 && archivo !== ''
-
   const principalVista = asignados?.find(a => a.principal)
   const apoyos = asignados?.filter(a => !a.principal) ?? []
 
@@ -141,21 +135,15 @@ export default function IndicadorModal({
   async function cargarHistorial() {
     if (!onCargarHistorial) return
     setCargandoHistorial(true)
-    setErrorHistorial(null)
+    setErrorLeido(null)
     const r = await onCargarHistorial()
     setCargandoHistorial(false)
-    if (r.ok) setHistorial(r.datos)
-    else setErrorHistorial(r.error)
+    if (r.ok) setCargado({ firma, datos: r.datos })
+    else setErrorLeido({ firma, mensaje: r.error })
   }
 
   // Al principal solo se le quita si es la única asignación; con apoyos se le reemplaza.
   const puedeQuitarPrincipal = !!principalVista && !principalVista.grupo && (asignados?.length ?? 0) === 1
-
-  function enviar() {
-    if (!valido || !indicador) return
-    onReportar(indicador.id, { nuevo: numero, texto: texto.trim(), evidencia: archivo })
-    setValor(''); setTexto(''); setArchivo(''); setEnviado(true)
-  }
 
   return createPortal(
     <div
@@ -175,7 +163,14 @@ export default function IndicadorModal({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">{indicador.codigo}</span>
-                <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${ESTADOS[estado].chip}`}>{ESTADOS[estado].rotulo}</span>
+                {(estado !== 'sin_reporte' || !corte) && (
+                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${ESTADOS[estado].chip}`}>{ESTADOS[estado].rotulo}</span>
+                )}
+                {corte && (
+                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${SITUACIONES[corte.situacion].chip}`}>
+                    {SITUACIONES[corte.situacion].rotulo}
+                  </span>
+                )}
               </div>
               <h2 className="mt-2 text-lg font-bold leading-snug tracking-tight text-[#192031] sm:text-xl">{indicador.indicador}</h2>
             </div>
@@ -191,24 +186,32 @@ export default function IndicadorModal({
 
         <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
 
-          {/* Avance */}
+          {/* Avance: el último reporte aprobado */}
           <section>
             <div className="flex items-end justify-between gap-4">
-              {(vigente ?? indicador.avance) === null ? (
+              {indicador.avance === null ? (
                 <p className="text-2xl font-bold leading-none text-gray-400">
-                  Sin avance
-                  <span className="ml-2 text-base font-medium">· meta {fmt(indicador.meta2026)}</span>
+                  Sin avance validado
+                  <span className="ml-2 text-base font-medium">· meta {fmt(indicador.metaMedida)}</span>
                 </p>
               ) : (
                 <p className="text-4xl font-bold tabular-nums leading-none text-gray-900">
-                  {fmt(vigente ?? indicador.avance)}
-                  <span className="ml-2 text-base font-medium text-gray-400">de {fmt(indicador.meta2026)}</span>
+                  {fmt(indicador.avance)}
+                  <span className="ml-2 text-base font-medium text-gray-400">de {fmt(indicador.metaMedida)}</span>
                 </p>
               )}
-              {r !== null && <p className="text-2xl font-bold tabular-nums text-gray-700">{fmtRazon(r)}</p>}
+              {r !== null && <p className="text-2xl font-bold tabular-nums text-gray-700">{fmtRazon(r, indicador.criterio !== null)}</p>}
             </div>
             <div className="mt-3"><BarraAvance razon={r} estado={estado} /></div>
-            <p className="mt-2 text-xs text-gray-500">{indicador.unidad} · meta 2026</p>
+            <p className="mt-2 text-xs text-gray-500">
+              {indicador.unidad} · {rotuloMeta(indicador)}
+              {indicador.avanceCorte ? ` · validado en «${indicador.avanceCorte}»` : ''}
+            </p>
+            {indicador.criterio === null && (
+              <p className="mt-1 text-[11px] leading-snug text-gray-400">
+                La Alcaldía aún define si el avance es del año o acumulado: el porcentaje es provisional.
+              </p>
+            )}
           </section>
 
           {/* Responsable */}
@@ -310,34 +313,8 @@ export default function IndicadorModal({
             <Dato rotulo="Línea base · Meta cuatrienio" valor={`${fmt(indicador.lineaBase)} · ${fmt(indicador.metaCuatrienio)}`} />
           </dl>
 
-          {/* Trazabilidad */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900">Trazabilidad</h3>
-            <ol className="mt-3 space-y-0">
-              {reportes.map((rep, k) => (
-                <li key={rep.fecha} className="relative border-l-2 border-gray-200 pb-5 pl-5 last:pb-1">
-                  <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full ${k === 0 ? 'bg-[#192031]' : 'bg-gray-300'}`} />
-                  <p className="text-xs text-gray-500">{fechaHora(rep.fecha)} · {rep.autor}</p>
-                  <p className="mt-0.5 text-sm font-semibold text-gray-900">
-                    {fmt(rep.anterior)} <span className="text-gray-400">→</span> {fmt(rep.nuevo)}
-                  </p>
-                  <p className="mt-1 text-sm leading-snug text-gray-700">{rep.texto}</p>
-                  <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-gray-600">
-                    <Icono glifo={Iconos.documentos.adjunto} tamano="sm" />{rep.evidencia}
-                  </p>
-                </li>
-              ))}
-              {reportes.length === 0 && (
-                <li className="relative border-l-2 border-transparent pl-5">
-                  <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full bg-gray-300" />
-                  <p className="text-sm font-semibold text-gray-900">Sin seguimiento todavía</p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-500">
-                    El primer reporte quedará aquí, con su autor, su fecha y su evidencia.
-                  </p>
-                </li>
-              )}
-            </ol>
-          </section>
+          {/* Trazabilidad, reportar, validar y comentar */}
+          {seguimiento && <SeguimientoIndicador indicador={indicador} ctx={seguimiento} />}
 
           {/* Cambios de responsable (solo el administrador): quién cambió qué y cuándo */}
           {onCargarHistorial && (
@@ -372,61 +349,6 @@ export default function IndicadorModal({
                   </ol>
                 )
               )}
-            </section>
-          )}
-
-          {/* Reportar */}
-          {puedeReportar && (
-            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
-              <h3 className="text-sm font-bold text-gray-900">Reportar avance</h3>
-              <div className="mt-3 space-y-3">
-                <label className="block">
-                  <span className="text-xs font-semibold text-gray-600">Nuevo valor acumulado ({indicador.unidad.toLowerCase()})</span>
-                  <input
-                    id="pdm-valor"
-                    type="text"
-                    inputMode="decimal"
-                    value={valor}
-                    onChange={e => { setValor(e.target.value.replace(/[^\d.,]/g, '').slice(0, 9)); setEnviado(false) }}
-                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm tabular-nums text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-gray-600">¿Qué se hizo?</span>
-                  <textarea
-                    id="pdm-texto"
-                    value={texto}
-                    onChange={e => { setTexto(e.target.value); setEnviado(false) }}
-                    rows={3}
-                    maxLength={1000}
-                    className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
-                  />
-                </label>
-                <div>
-                  <span className="text-xs font-semibold text-gray-600">Evidencia <span className="font-normal text-gray-500">(obligatoria)</span></span>
-                  <label className="mt-1 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-white px-3 py-3 text-sm text-gray-600 transition-colors hover:border-gray-400">
-                    <Icono glifo={Iconos.documentos.subir} tamano="sm" className="shrink-0 text-gray-500" />
-                    <span className="min-w-0 truncate">{archivo || 'Adjuntar foto, acta o documento'}</span>
-                    <input
-                      id="pdm-evidencia"
-                      type="file"
-                      className="sr-only"
-                      onChange={e => { setArchivo(e.target.files?.[0]?.name ?? ''); setEnviado(false) }}
-                    />
-                  </label>
-                </div>
-                <button
-                  id="pdm-enviar"
-                  onClick={enviar}
-                  disabled={!valido}
-                  className="w-full rounded-xl bg-[#192031] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Registrar reporte
-                </button>
-                {enviado
-                  ? <p role="status" className="text-center text-xs font-medium text-emerald-700">Reporte registrado en la trazabilidad. En la vista previa no se guarda.</p>
-                  : <p className="text-center text-xs text-gray-500">Vista previa: lo que reportes aquí no se guarda.</p>}
-              </div>
             </section>
           )}
         </div>

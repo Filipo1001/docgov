@@ -18,11 +18,12 @@ export const generateMetadata = () => metadataPdm('Indicadores')
  *   origen       el nombre, tal como lo escribió el Excel, de alguien que todavía no
  *                tiene usuario → los indicadores que el Excel le atribuía
  *   grupo        el id de un grupo → los indicadores que lleva
+ *   abrir        el número de un indicador → se abre su ficha al entrar (lo usa «Reportes»)
  */
 export default async function IndicadoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dependencia?: string; filtro?: string; usuario?: string; origen?: string; grupo?: string }>
+  searchParams: Promise<{ dependencia?: string; filtro?: string; usuario?: string; origen?: string; grupo?: string; abrir?: string }>
 }) {
   const acceso = await exigirAccesoPdm()
   const p = await searchParams
@@ -32,6 +33,7 @@ export default async function IndicadoresPage({
 
   const dependencia = plan.indicadores.find(i => i.dependencia === p.dependencia)?.dependencia
   const filtro = FILTROS.find((f): f is Filtro => f === p.filtro)
+  const abrir = plan.indicadores.find(i => String(i.id) === p.abrir)?.id
 
   let restringirA: { etiqueta: string; ids: number[] } | undefined
   const persona = dir.personas.find(x => x.id === p.usuario)
@@ -59,14 +61,17 @@ export default async function IndicadoresPage({
   return (
     <IndicadoresPdm
       // Un enlace nuevo a esta misma pantalla debe arrancar de cero.
-      key={`${dependencia ?? ''}|${filtro ?? ''}|${persona?.id ?? grupo?.id ?? sinUsuario?.nombre ?? ''}`}
+      key={`${dependencia ?? ''}|${filtro ?? ''}|${abrir ?? ''}|${persona?.id ?? grupo?.id ?? sinUsuario?.nombre ?? ''}`}
       indicadores={plan.indicadores}
       fichas={dir.fichas}
       personas={dir.personas}
       grupos={dir.grupos}
       nivel={acceso.nivel}
+      yoId={acceso.userId}
+      seguimiento={plan.seguimiento}
       dependenciaInicial={dependencia}
       filtroInicial={filtro}
+      abiertoInicial={abrir}
       restringirA={restringirA}
     />
   )

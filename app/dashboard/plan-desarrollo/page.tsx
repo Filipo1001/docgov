@@ -15,9 +15,10 @@ import { cargarDirectorio } from '@/lib/pdm/directorio'
  *    decide si la barra lateral muestra el botón, así que botón y páginas no
  *    pueden discrepar. Cada página la llama a través de `exigirAccesoPdm`.
  *
- * 2. No hay ni una escritura a la base de datos. El módulo LEE las tablas `pdm_*`
- *    (con la sesión de quien mira) y las de usuarios y contratos que ya lee la
- *    pantalla de usuarios de CD. Escribir llega con la pantalla de asignación.
+ * 2. Esta pantalla solo LEE las tablas `pdm_*` (con la sesión de quien mira) y las de
+ *    usuarios y contratos que ya lee la pantalla de usuarios de CD. Las escrituras
+ *    (reportar, validar, asignar) salen de la ficha de un indicador y de las otras
+ *    secciones, siempre con la sesión de quien las hace.
  *
  * No toca `middleware.ts`. La huella en el resto de la aplicación son dos: el
  * botón de la barra lateral del administrador y el layout del panel, que en
@@ -33,5 +34,5 @@ export default async function ResumenPage() {
   const plan = await cargarPlanPdm()
   if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
   const { fichas } = await cargarDirectorio()
-  return <ResumenPdm indicadores={plan.indicadores} fichas={fichas} />
+  return <ResumenPdm indicadores={plan.indicadores} fichas={fichas} nivel={acceso.nivel} yoId={acceso.userId} seguimiento={plan.seguimiento} />
 }

@@ -15,7 +15,7 @@ const SEGMENTOS = [
   { clave: 'enRuta',     estado: 'en_ruta',     rotulo: 'En ruta' },
   { clave: 'atrasados',  estado: 'atrasado',    rotulo: 'Atrasados' },
   { clave: 'criticos',   estado: 'critico',     rotulo: 'Críticos' },
-  { clave: 'sinReporte', estado: 'sin_reporte', rotulo: 'Sin reporte' },
+  { clave: 'sinReporte', estado: 'sin_reporte', rotulo: 'Sin avance validado' },
 ] as const
 
 export function BarraEstados({ r, alto = 'h-3' }: { r: Resumen; alto?: string }) {
@@ -23,7 +23,7 @@ export function BarraEstados({ r, alto = 'h-3' }: { r: Resumen; alto?: string })
   return (
     <div
       role="img"
-      aria-label={`Estado de ${r.medibles} indicadores con meta 2026: ${descripcion}`}
+      aria-label={`Estado de ${r.medibles} indicadores con meta: ${descripcion}`}
       className={`flex w-full ${alto} overflow-hidden rounded-full bg-gray-100`}
     >
       {r.medibles > 0 && SEGMENTOS.map(s => {
