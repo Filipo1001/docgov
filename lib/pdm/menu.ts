@@ -105,11 +105,14 @@ export const SECCIONES_PDM: SeccionPdm[] = [
  *   · «Ajustes» (cortes y criterio de avance): solo el administrador.
  */
 export function seccionesPara(nivel: NivelPdm | null | undefined): SeccionPdm[] {
-  return SECCIONES_PDM.filter(s => {
-    if (s.href === HREF_RESPONSABLES || s.href === HREF_REPORTES) return veDirectorio(nivel)
-    if (s.href === HREF_AJUSTES) return nivel === 'admin'
-    return true
-  })
+  return SECCIONES_PDM
+    .filter(s => {
+      if (s.href === HREF_RESPONSABLES || s.href === HREF_REPORTES) return veDirectorio(nivel)
+      if (s.href === HREF_AJUSTES) return nivel === 'admin'
+      return true
+    })
+    // Para quien solo responde por indicadores, la primera pestaña no es el tablero del plan sino «Mi trabajo».
+    .map(s => (s.href === BASE && nivel === 'responsable' ? { ...s, rotulo: 'Mi trabajo' } : s))
 }
 
 /** ¿Cuál pestaña corresponde a esta ruta? `null` si ninguna (no se marca ninguna). */

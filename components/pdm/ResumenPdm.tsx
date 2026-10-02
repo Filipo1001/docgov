@@ -10,9 +10,11 @@
  */
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { agrupar, type Indicador } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
+import { pendientesDeReportar } from '@/lib/pdm/mi-trabajo'
 import type { NivelPdm } from '@/lib/pdm/niveles'
 import type { Seguimiento } from '@/lib/pdm/seguimiento'
 import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
@@ -20,6 +22,7 @@ import EncabezadoSeccion from './EncabezadoSeccion'
 import Tablero from './Tablero'
 import IndicadorModal from './IndicadorModal'
 import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
+import { T } from './tema'
 import type { PersonaFicha } from '@/lib/pdm/personas'
 
 export default function ResumenPdm({ indicadores, fichas, nivel, yoId, seguimiento, accionesSeguimiento = ACCIONES_SEGUIMIENTO_REALES }: {
@@ -36,6 +39,9 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, seguimien
 
   const lineas = agrupar(indicadores, i => i.linea).length
   const secretarias = agrupar(indicadores, i => i.dependencia).length
+  // Una secretaría también reporta los indicadores que lleva ella misma, y entre los de toda su
+  // dependencia no los distinguiría: se le avisa de los suyos, con un enlace que los lista.
+  const propiosPorReportar = nivel === 'coordinador' ? pendientesDeReportar(indicadores, yoId) : 0
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -47,6 +53,16 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, seguimien
           { rotulo: 'Corte', valor: seguimiento.abierto ? seguimiento.abierto.nombre : 'Sin corte abierto' },
         ]}
       />
+
+      {propiosPorReportar > 0 && seguimiento.abierto && (
+        <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ${T.avisoNota}`}>
+          <p>
+            Tienes <b className="tabular-nums">{propiosPorReportar}</b> {propiosPorReportar === 1 ? 'indicador a tu cargo' : 'indicadores a tu cargo'} por
+            reportar en «{seguimiento.abierto.nombre}».
+          </p>
+          <Link href={`${HREF_INDICADORES}?usuario=${yoId}&filtro=por_reportar`} className={T.enlace}>Ver cuáles</Link>
+        </div>
+      )}
 
       <Tablero
         lista={indicadores}

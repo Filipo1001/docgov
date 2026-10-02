@@ -51,12 +51,14 @@ export function SituacionTexto({ situacion, className = '' }: { situacion: Situa
 }
 
 /** Un panel: la unidad con que se ordena toda pantalla. Con rótulo opcional y regla debajo. */
-export function Panel({ titulo, nota, acciones, className = '', children }: {
+export function Panel({ titulo, nota, acciones, className = '', sinRelleno = false, children }: {
   titulo?: string
   /** Texto corto a la derecha del título (una cuenta, una fecha). */
   nota?: ReactNode
   acciones?: ReactNode
   className?: string
+  /** Para listas que llegan de borde a borde (cada fila pone su propio relleno). */
+  sinRelleno?: boolean
   children: ReactNode
 }) {
   return (
@@ -70,7 +72,7 @@ export function Panel({ titulo, nota, acciones, className = '', children }: {
           {acciones}
         </div>
       )}
-      <div className="px-4 py-4 sm:px-5">{children}</div>
+      {sinRelleno ? children : <div className="px-4 py-4 sm:px-5">{children}</div>}
     </section>
   )
 }

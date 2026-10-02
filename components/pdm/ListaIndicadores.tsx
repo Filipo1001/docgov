@@ -25,8 +25,8 @@ import type { PersonaFicha } from '@/lib/pdm/personas'
 
 const PAGINA = 25
 
-/** Las columnas, en escritorio. La primera (selección) solo existe cuando se está seleccionando. */
-const COLUMNAS = 'md:grid-cols-[4.25rem_minmax(0,1fr)_12rem_9.5rem_12rem]'
+/** Las columnas, en escritorio. La primera (selección) solo existe cuando se está seleccionando. «Mi trabajo» usa las mismas. */
+export const COLUMNAS = 'md:grid-cols-[4.25rem_minmax(0,1fr)_12rem_9.5rem_12rem]'
 const COLUMNAS_SEL = 'md:grid-cols-[1.5rem_4.25rem_minmax(0,1fr)_12rem_9.5rem_12rem]'
 
 function Responsable({ i, asignado }: { i: Indicador; asignado?: string }) {
@@ -41,9 +41,11 @@ function Responsable({ i, asignado }: { i: Indicador; asignado?: string }) {
   return <span className="block truncate text-xs text-[#4A5568]">{asignado ?? i.responsable}</span>
 }
 
-export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido }: {
+export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yoId }: {
   i: Indicador
   onAbrir: () => void
+  /** Quién mira: si el reporte es suyo, la fila dice «Tú» y no su nombre. */
+  yoId?: string
   /** En modo de selección la fila se marca en vez de abrirse. */
   seleccionable?: boolean
   elegido?: boolean
@@ -100,7 +102,7 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido }: 
         <p className="mt-0.5 truncate text-xs text-[#667085]">{i.programa}</p>
         {reporte && corte?.situacion === 'pendiente' && (
           <p className="mt-1 truncate text-xs text-[#8A5A12]">
-            {reporte.autorNombre} reportó <b className="tabular-nums">{fmt(reporte.valor)}</b>; falta que la secretaría lo valide
+            {yoId && reporte.autorId === yoId ? 'Tú' : reporte.autorNombre} reportó <b className="tabular-nums">{fmt(reporte.valor)}</b>; falta que la secretaría lo valide
           </p>
         )}
         {reporte && corte?.situacion === 'devuelto' && (
