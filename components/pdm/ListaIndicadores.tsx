@@ -18,6 +18,7 @@ import {
   agrupar, estadoDe, fmt, fmtRazon, razon, rotuloMeta, sinAsignar, tipoResponsable, type Indicador,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
+import IconoSector from './IconoSector'
 import { EstadoTexto, SituacionTexto } from './ui'
 import { T } from './tema'
 import { FILTROS_DEL_ANIO, cumpleFiltro, type Filtro } from '@/lib/pdm/filtros'
@@ -87,6 +88,7 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
               {elegido && <Icono glifo={Iconos.estado.ok} tamano="sm" className="h-3 w-3" />}
             </span>
           )}
+          <IconoSector sector={i.sector} />
           <span className="text-xs font-semibold tabular-nums text-[#667085]">{i.codigo}</span>
         </span>
         <span className="flex flex-col items-end gap-0.5">
@@ -95,7 +97,10 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
         </span>
       </div>
 
-      <span className="hidden text-xs font-semibold tabular-nums text-[#667085] md:block">{i.codigo}</span>
+      <span className="hidden flex-col items-start gap-1.5 md:flex">
+        <IconoSector sector={i.sector} />
+        <span className="text-xs font-semibold tabular-nums text-[#667085]">{i.codigo}</span>
+      </span>
 
       <div className="min-w-0">
         <p className="line-clamp-2 text-sm font-medium leading-snug text-[#192031]">{i.indicador}</p>

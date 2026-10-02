@@ -21,6 +21,7 @@ import { armarReportesDelAnio } from '@/lib/pdm/reportes-armar'
 import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import SelectorAnio from './SelectorAnio'
+import IconoSector from './IconoSector'
 import { Cifras } from './ui'
 import { T } from './tema'
 
@@ -138,6 +139,7 @@ export default function ReportesPdm({ indicadores, anioActual, anioInicial, nive
                         href={`${HREF_INDICADORES}?abrir=${i.id}&anio=${anio}`}
                         className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[#F7F8FA] focus-visible:bg-[#F1F3F7] focus-visible:outline-none sm:px-5"
                       >
+                        <IconoSector sector={i.sector} />
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-medium leading-snug text-[#192031]">{i.indicador}</span>
                           <span className="mt-0.5 block text-xs text-[#667085]">

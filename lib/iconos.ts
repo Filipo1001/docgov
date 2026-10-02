@@ -51,6 +51,9 @@ import {
   // Dominio
   CalendarDays, Coins, Stethoscope, Sparkles, QrCode, Hash, MapPin, Phone,
   Briefcase, TrendingUp, History, Camera, ListChecks, CreditCard, Target,
+  // Sectores y líneas del Plan de Desarrollo
+  HeartHandshake, Leaf, Sprout, HeartPulse, GraduationCap, MonitorSmartphone, Shield, Scale, Trophy,
+  Drama, Droplets, Store, Map, Zap, Route, House, TreePine, Handshake,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -164,6 +167,43 @@ export const Iconos = {
     // institución con la que se trata, y no compiten en la misma pantalla.
     banco: Landmark,
     cuentaBancaria: CreditCard,
+  },
+
+  /**
+   * Los sectores del Plan de Desarrollo (la clasificación del DNP: la misma en todos los municipios). Cada
+   * indicador pertenece a uno, y por eso cada indicador tiene su identificador. Se usan de a UNO por indicador,
+   * y siempre con el nombre del sector disponible (en pantalla o como etiqueta accesible): ver `lib/pdm/iconos-plan.ts`.
+   */
+  sector: {
+    inclusionSocial: HeartHandshake,
+    ambiental: Leaf,
+    agricultura: Sprout,
+    salud: HeartPulse,
+    educacion: GraduationCap,
+    tic: MonitorSmartphone,
+    defensa: Shield,
+    justicia: Scale,
+    deporte: Trophy,
+    cultura: Drama,
+    gobierno: Landmark,
+    trabajo: Briefcase,
+    agua: Droplets,
+    comercio: Store,
+    ciudad: Map,
+    energia: Zap,
+    vias: Route,
+    vivienda: House,
+    hacienda: Coins,
+    /** Un sector que todavía no tiene su icono: el del propio plan. */
+    general: Target,
+  },
+
+  /** Las cuatro líneas estratégicas de «Por Amor a Fredonia». */
+  linea: {
+    bienestar: Users,
+    economia: TrendingUp,
+    habitat: TreePine,
+    seguridad: Handshake,
   },
 } as const
 

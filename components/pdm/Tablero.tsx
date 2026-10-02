@@ -19,14 +19,22 @@ import {
 } from '@/lib/pdm/plan'
 import { ROTULO_ESTADO_ANIO, anioIniciado, estadoDelAnio, resumirAnio } from '@/lib/pdm/seguimiento'
 import { BarraEstados, Leyenda } from './Barras'
+import IconoSector from './IconoSector'
 import { Cifras, EstadoTexto, Panel, type Cifra } from './ui'
 import { T } from './tema'
 
-function FilaGrupo({ nombre, r, conSeguimiento, onClick }: { nombre: string; r: Resumen; conSeguimiento: boolean; onClick?: () => void }) {
+function FilaGrupo({ nombre, r, conSeguimiento, onClick, conIconoDeLinea = false }: {
+  nombre: string; r: Resumen; conSeguimiento: boolean; onClick?: () => void
+  /** Las filas de «Por línea estratégica» llevan el icono de su línea. */
+  conIconoDeLinea?: boolean
+}) {
   const contenido = (
     <div className="px-4 py-3.5 sm:px-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="min-w-0 truncate text-sm font-semibold text-[#192031]">{nombre}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex min-w-0 items-center gap-2.5 text-sm font-semibold text-[#192031]">
+          {conIconoDeLinea && <IconoSector linea={nombre} />}
+          <span className="truncate">{nombre}</span>
+        </p>
         {conSeguimiento && <p className="shrink-0 text-sm font-semibold tabular-nums text-[#192031]">{fmtPct(r.cumplimiento)}</p>}
       </div>
       {conSeguimiento && <div className="mt-2"><BarraEstados r={r} alto="h-1.5" /></div>}
@@ -158,7 +166,7 @@ export default function Tablero({
           <h2 className={`${T.rotulo} border-b ${T.regla} px-4 py-3 sm:px-5`}>Por línea estratégica</h2>
           <div className={`divide-y ${T.divide}`}>
             {lineas.map(([nombre, l]) => (
-              <FilaGrupo key={nombre} nombre={nombre} r={resumir(l)} conSeguimiento={conSeg} />
+              <FilaGrupo key={nombre} nombre={nombre} r={resumir(l)} conSeguimiento={conSeg} conIconoDeLinea />
             ))}
           </div>
         </section>
@@ -199,6 +207,7 @@ export default function Tablero({
                   onClick={() => onAbrir(i.id)}
                   className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F7F8FA] focus-visible:bg-[#F1F3F7] focus-visible:outline-none sm:px-5"
                 >
+                  <IconoSector sector={i.sector} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium leading-snug text-[#192031]">{i.indicador}</span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[#667085]">

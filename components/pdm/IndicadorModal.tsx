@@ -35,6 +35,7 @@ import {
   type Indicador,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
+import IconoSector from './IconoSector'
 import { EstadoTexto, Rotulo, Seccion, SituacionTexto } from './ui'
 import { T } from './tema'
 import SeguimientoIndicador, { type ContextoSeguimiento } from './SeguimientoIndicador'
@@ -155,9 +156,11 @@ export default function IndicadorModal({
         {/* Encabezado: código y estado a una línea, el indicador debajo */}
         <div className={`shrink-0 border-b ${T.regla} px-5 pb-4 pt-5 sm:px-7`}>
           <div className="flex items-start gap-3">
+            <IconoSector sector={indicador.sector} tamano="md" className="mt-0.5" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span className="text-xs font-semibold tabular-nums text-[#667085]">Indicador {indicador.codigo}</span>
+                <span className="text-xs text-[#667085]">{indicador.sector}</span>
                 {(estado !== 'sin_reporte' || !enAnio) && <EstadoTexto estado={estado} />}
                 {enAnio && <SituacionTexto situacion={enAnio.situacion} />}
               </div>
