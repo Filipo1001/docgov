@@ -28,7 +28,7 @@ import { anioIniciado } from '@/lib/pdm/seguimiento'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import type { NivelPdm } from '@/lib/pdm/niveles'
 import {
-  MAX_COMENTARIO_VALIDACION, describirTamano, errorEnValidacion,
+  MAX_COMENTARIO_VALIDACION, MAX_OBSERVACION, describirTamano, errorEnValidacion,
   type AccionesSeguimiento, type DetalleIndicador, type EvidenciaVista, type ReporteDetalle,
 } from '@/lib/pdm/seguimiento-acciones'
 import FormularioReporte from './FormularioReporte'
@@ -82,18 +82,26 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
   if (lista.length === 0) return null
   return (
     <div className="mt-2">
-      <ul className="flex flex-wrap gap-1.5">
+      <ul className="flex flex-wrap items-start gap-x-2 gap-y-2">
         {lista.map(e => (
-          <li key={e.id}>
-            <button
-              onClick={() => abrir(e.id)}
-              disabled={abriendo !== null}
-              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-[#DCE0E8] bg-white px-2.5 py-1 text-xs font-medium text-[#192031] transition-colors hover:border-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] disabled:opacity-60"
-            >
-              <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0 text-[#667085]" />
-              <span className="truncate">{e.nombre}</span>
-              <span className="shrink-0 tabular-nums text-[#667085]">{describirTamano(e.bytes)}</span>
-            </button>
+          <li key={e.id} className="min-w-0 max-w-full">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={() => abrir(e.id)}
+                disabled={abriendo !== null}
+                className={`inline-flex max-w-full items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-[#192031] transition-colors hover:border-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] disabled:opacity-60 ${e.observacion ? 'border-[#F1C0BB] bg-[#FDF3F2]' : 'border-[#DCE0E8] bg-white'}`}
+              >
+                <Icono glifo={e.observacion ? Iconos.estado.advertencia : Iconos.documentos.adjunto} tamano="sm" className={`shrink-0 ${e.observacion ? 'text-[#B42318]' : 'text-[#667085]'}`} />
+                <span className="truncate">{e.nombre}</span>
+                <span className="shrink-0 tabular-nums text-[#667085]">{describirTamano(e.bytes)}</span>
+              </button>
+              {e.conservada && <Sello>Conservada</Sello>}
+            </span>
+            {e.observacion && (
+              <span className="mt-1 block text-xs leading-snug text-[#912018]">
+                <b>Devuelto</b> por {e.observacion.por}: «{e.observacion.motivo}»
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -109,20 +117,34 @@ function Validar({ reporte, acciones, onHecho }: {
 }) {
   const [devolviendo, setDevolviendo] = useState(false)
   const [comentario, setComentario] = useState('')
+  // Los archivos que se devuelven: id → qué les pasa. El reporte vuelve completo; lo que no se marca pasa solo a la nueva versión.
+  const [marcados, setMarcados] = useState<Record<string, string>>({})
   const [enviando, setEnviando] = useState<'aprobado' | 'devuelto' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const observaciones = Object.entries(marcados).map(([evidencia, motivo]) => ({ evidencia, motivo }))
+  const notasListas = observaciones.every(o => o.motivo.trim() !== '')
+
+  function marcar(id: string) {
+    setMarcados(m => { const n = { ...m }; if (id in n) delete n[id]; else n[id] = ''; return n })
+  }
+
   async function enviar(estado: 'aprobado' | 'devuelto') {
     if (enviando) return
-    const mal = errorEnValidacion(estado, comentario)
+    const mal = errorEnValidacion(estado, comentario, estado === 'devuelto' ? observaciones : undefined)
     if (mal) { setError(mal); return }
     setEnviando(estado)
     setError(null)
-    const r = await acciones.validarReporte({ reporte: reporte.id, estado, comentario: estado === 'devuelto' ? comentario : undefined })
+    const r = await acciones.validarReporte({
+      reporte: reporte.id, estado,
+      comentario: estado === 'devuelto' ? comentario : undefined,
+      observaciones: estado === 'devuelto' && observaciones.length > 0 ? observaciones : undefined,
+    })
     setEnviando(null)
     if (!r.ok) { setError(r.error); return }
     setDevolviendo(false)
     setComentario('')
+    setMarcados({})
     onHecho()
   }
 
@@ -159,9 +181,60 @@ function Validar({ reporte, acciones, onHecho }: {
               className={`${T.campo} mt-1.5 resize-none`}
             />
           </label>
+
+          {reporte.evidencias.length > 0 && (
+            <div>
+              <span className={T.rotulo}>¿Algún archivo tiene problema? <span className="font-normal normal-case tracking-normal">· opcional</span></span>
+              <p className="mt-1 text-xs leading-relaxed text-[#667085]">
+                El reporte se devuelve completo. Los archivos que no marques pasan solos a la nueva versión; los que marques, no.
+              </p>
+              <ul className="mt-1.5 space-y-1.5">
+                {reporte.evidencias.map(ev => {
+                  const marcado = ev.id in marcados
+                  return (
+                    <li key={ev.id} className={`rounded-lg border px-3 py-2 ${marcado ? 'border-[#F1C0BB] bg-[#FDF3F2]' : 'border-[#DCE0E8] bg-white'}`}>
+                      <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+                        <input type="checkbox" checked={marcado} disabled={enviando !== null} onChange={() => marcar(ev.id)} className="h-4 w-4 shrink-0 accent-[#B42318]" />
+                        <span className="min-w-0 flex-1 truncate text-[#192031]">{ev.nombre}</span>
+                        <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(ev.bytes)}</span>
+                      </label>
+                      {marcado && (
+                        <div className="mt-2 space-y-1.5 pl-6">
+                          <input
+                            type="text"
+                            value={marcados[ev.id]}
+                            maxLength={MAX_OBSERVACION}
+                            disabled={enviando !== null}
+                            onChange={e => setMarcados(m => ({ ...m, [ev.id]: e.target.value }))}
+                            placeholder="¿Qué le pasa a este archivo?"
+                            aria-label={`Qué le pasa a ${ev.nombre}`}
+                            className={T.campo}
+                          />
+                          <div className="flex flex-wrap gap-1.5">
+                            {['No abre', 'Ilegible', 'No corresponde al indicador', 'Falta la firma', 'Está en blanco'].map(m => (
+                              <button
+                                key={m}
+                                type="button"
+                                disabled={enviando !== null}
+                                onClick={() => setMarcados(prev => ({ ...prev, [ev.id]: m }))}
+                                className="rounded-md border border-[#C5CBD6] bg-white px-2 py-1 text-[11px] font-medium text-[#4A5568] transition-colors hover:border-[#192031] hover:text-[#192031] disabled:opacity-60"
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
-              onClick={() => { setDevolviendo(false); setComentario(''); setError(null) }}
+              onClick={() => { setDevolviendo(false); setComentario(''); setMarcados({}); setError(null) }}
               disabled={enviando !== null}
               className={T.botonSecChico}
             >
@@ -170,7 +243,7 @@ function Validar({ reporte, acciones, onHecho }: {
             <button
               id="pdm-devolver-confirmar"
               onClick={() => enviar('devuelto')}
-              disabled={enviando !== null || comentario.trim().length < 10}
+              disabled={enviando !== null || comentario.trim().length < 10 || !notasListas}
               className={T.botonPeligro}
             >
               {enviando === 'devuelto' ? 'Devolviendo…' : 'Devolver el reporte'}

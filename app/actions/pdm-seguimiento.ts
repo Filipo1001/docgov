@@ -25,7 +25,10 @@
  *   · Al registrar el reporte NO se cree lo que el navegador dice del archivo: se lee del
  *     almacenamiento su tamaño y su tipo reales.
  *   · Si registrar falla, los archivos recién subidos se borran (no quedan huérfanos), pero solo
- *     los que no pertenecen a otro reporte.
+ *     los que no pertenecen a otro reporte. Lo que se CONSERVA de la versión anterior nunca se borra:
+ *     es de un reporte que ya existe.
+ *   · Al corregir un reporte se pueden conservar archivos de la versión anterior (la base comprueba que
+ *     sean de ella y que no estén devueltos) en vez de subirlos otra vez.
  *   · Ver una evidencia: se comprueba con la sesión que quien pide ve ese reporte (RLS) y recién
  *     entonces se firma una dirección de cinco minutos.
  *
@@ -146,8 +149,13 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     if (mal) return falla(mal)
     const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
     if (motivo.length > MAX_MOTIVO_CORRECCION) return falla(`El motivo no puede pasar de ${MAX_MOTIVO_CORRECCION} caracteres.`)
-    if (!Array.isArray(e.evidencias) || e.evidencias.length === 0) return falla('Adjunta al menos una evidencia.')
-    if (e.evidencias.length > MAX_EVIDENCIAS) return falla(`Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`)
+    if (!Array.isArray(e.evidencias)) return falla('Adjunta al menos una evidencia.')
+    // Lo conservado de la versión anterior cuenta para el mínimo de uno y el máximo de cinco.
+    const conservar = e.conservar === undefined ? [] : e.conservar
+    if (!Array.isArray(conservar) || !conservar.every(esUuid)) return falla('Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
+    if (new Set(conservar).size !== conservar.length) return falla('Un archivo está repetido entre los que conservas.')
+    if (e.evidencias.length + conservar.length === 0) return falla('Adjunta al menos una evidencia.')
+    if (e.evidencias.length + conservar.length > MAX_EVIDENCIAS) return falla(`Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`)
 
     const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
     if (!ctx.ok) return falla(ctx.error)
@@ -167,8 +175,11 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     if (new Set(rutas).size !== rutas.length) return falla('Un mismo archivo está repetido.')
 
     // Lo que de verdad llegó al almacenamiento: existencia, tamaño y tipo reales (no los que dice el navegador).
+    // Si solo se conserva lo anterior, no hay nada nuevo que mirar.
     const admin = createAdminSupabaseClient()
-    const listado = await admin.storage.from(BUCKET).list(carpeta, { limit: 100 })
+    const listado = rutas.length === 0
+      ? { data: [] as { name: string; metadata?: unknown }[], error: null }
+      : await admin.storage.from(BUCKET).list(carpeta, { limit: 100 })
     if (listado.error || !listado.data) {
       console.error('[pdm/seguimiento] reportar (listado):', listado.error?.message)
       return falla(GENERICO)
@@ -190,15 +201,19 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     }
 
     // Que ninguno pertenezca ya a otro reporte: así, si registrar falla, borrar lo subido no toca lo de nadie.
-    const yaUsadas = await admin.from('pdm_evidencias').select('ruta').in('ruta', rutas)
-    if (yaUsadas.error) return falla(GENERICO)
-    if (yaUsadas.data?.length) return falla('Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
+    if (rutas.length > 0) {
+      const yaUsadas = await admin.from('pdm_evidencias').select('ruta').in('ruta', rutas)
+      if (yaUsadas.error) return falla(GENERICO)
+      if (yaUsadas.data?.length) return falla('Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
+    }
 
     const { data, error } = await s.supabase.rpc('pdm_reportar', {
       p_indicador: e.indicador, p_anio: ctx.anio, p_valor: e.valor, p_texto: e.texto.trim(), p_evidencias: evidencias, p_motivo: motivo || null,
+      p_conservar: conservar,
     })
     if (error) {
-      await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
+      // Solo se borra lo recién subido: lo conservado es de un reporte que ya existe.
+      if (rutas.length > 0) await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
       return falla(traducirErrorPdm(error.code, error.message))
     }
     const d = (data ?? {}) as { reporte?: unknown; correccion?: unknown }
@@ -218,11 +233,12 @@ export async function validarReporte(e: EntradaValidar): Promise<Resultado<{ cam
     const s = await sesionPdm(a => gestiona(a.nivel))
     if (!s) return falla(SIN_PERMISO)
     if (!esUuid(e?.reporte)) return falla('Algo de lo elegido no es válido.')
-    const mal = errorEnValidacion(e.estado, e.comentario)
+    const mal = errorEnValidacion(e.estado, e.comentario, e.observaciones)
     if (mal) return falla(mal)
 
     const { data, error } = await s.supabase.rpc('pdm_validar', {
       p_reporte: e.reporte, p_estado: e.estado, p_comentario: e.comentario?.trim() || null,
+      p_observaciones: (e.observaciones ?? []).map(o => ({ evidencia: o.evidencia, motivo: o.motivo.trim() })),
     })
     if (error) return falla(traducirErrorPdm(error.code, error.message))
     const cambio = (data as { cambio?: unknown } | null)?.cambio
@@ -288,8 +304,8 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
     let validaciones: FilaValidacion[] = []
     if (ids.length) {
       const [evi, val] = await Promise.all([
-        s.supabase.from('pdm_evidencias').select('id, reporte_id, nombre, tipo, bytes').in('reporte_id', ids),
-        s.supabase.from('pdm_validaciones').select('reporte_id, estado, comentario, validador_nombre, created_at').in('reporte_id', ids),
+        s.supabase.from('pdm_evidencias').select('id, reporte_id, nombre, tipo, bytes, copia_de').in('reporte_id', ids),
+        s.supabase.from('pdm_validaciones').select('reporte_id, estado, comentario, validador_nombre, created_at, observaciones').in('reporte_id', ids),
       ])
       if (evi.error || val.error || !evi.data || !val.data) return falla(GENERICO)
       evidencias = evi.data as FilaEvidencia[]

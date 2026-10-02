@@ -22,6 +22,7 @@ export const MAX_TEXTO_REPORTE = 1000
 export const MAX_MOTIVO_CORRECCION = 500
 export const MAX_COMENTARIO = 2000
 export const MAX_COMENTARIO_VALIDACION = 1000
+export const MAX_OBSERVACION = 300
 export const MAX_NOMBRE_ARCHIVO = 200
 
 export interface TipoEvidencia {
@@ -75,10 +76,13 @@ export interface ArchivoPorSubir {
   bytes: number
 }
 
-/** `null` si los archivos sirven como evidencia; si no, qué falla. */
-export function errorEnArchivos(archivos: ArchivoPorSubir[]): string | null {
-  if (archivos.length === 0) return 'Adjunta al menos una evidencia.'
-  if (archivos.length > MAX_EVIDENCIAS) return `Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`
+/**
+ * `null` si los archivos sirven como evidencia; si no, qué falla. `conservadas` son los archivos de la versión
+ * anterior que pasan a esta (solo al corregir): cuentan para el mínimo de uno y el máximo de cinco.
+ */
+export function errorEnArchivos(archivos: ArchivoPorSubir[], conservadas = 0): string | null {
+  if (archivos.length + conservadas === 0) return 'Adjunta al menos una evidencia.'
+  if (archivos.length + conservadas > MAX_EVIDENCIAS) return `Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`
   for (const a of archivos) {
     if (!a.nombre.trim() || a.nombre.length > MAX_NOMBRE_ARCHIVO) return 'Un archivo tiene un nombre que no sirve.'
     if (!tipoDeArchivo(a.nombre, a.tipo)) return `«${a.nombre}»: solo se admite ${TEXTO_TIPOS_EVIDENCIA}.`
@@ -119,9 +123,22 @@ export interface EntradaReportar {
   anio: number
   valor: number
   texto: string
+  /** Los archivos NUEVOS, ya subidos. Pueden ser ninguno si se conserva al menos uno de la versión anterior. */
   evidencias: EvidenciaSubida[]
+  /**
+   * Ids de evidencias de la versión que se corrige, que pasan tal cual a la nueva (solo al corregir). Un archivo que
+   * la secretaría devolvió no se conserva: se reemplaza o se quita.
+   */
+  conservar?: string[]
   /** Solo si el último reporte del año está sin cerrar (pendiente o devuelto): entonces esto es una corrección y el motivo es obligatorio. */
   motivo?: string
+}
+
+/** Un archivo que la secretaría devuelve, con lo que le pasa. */
+export interface ObservacionArchivo {
+  /** El id de la evidencia. */
+  evidencia: string
+  motivo: string
 }
 
 export interface EntradaValidar {
@@ -129,6 +146,11 @@ export interface EntradaValidar {
   estado: 'aprobado' | 'devuelto'
   /** Obligatorio al devolver: sin decir qué falta, devolver no sirve. */
   comentario?: string
+  /**
+   * Los archivos con problema (solo al devolver). El reporte se devuelve COMPLETO —no se aprueba a medias—; quien
+   * responde conserva los archivos que no se marcaron y reemplaza o quita los marcados.
+   */
+  observaciones?: ObservacionArchivo[]
 }
 
 export interface EntradaComentar {
@@ -154,12 +176,27 @@ export function errorEnReporte(e: { valor: unknown; texto: unknown; motivo?: unk
   return null
 }
 
-/** Devolver exige decir qué falta; aprobar no pide nada. */
-export function errorEnValidacion(estado: unknown, comentario: unknown): string | null {
+/** Devolver exige decir qué falta; aprobar no pide nada. Los archivos observados solo se marcan al devolver, cada uno con su nota. */
+export function errorEnValidacion(estado: unknown, comentario: unknown, observaciones?: unknown): string | null {
   if (estado !== 'aprobado' && estado !== 'devuelto') return 'Algo de lo elegido no es válido.'
   const c = typeof comentario === 'string' ? comentario.trim() : ''
   if (estado === 'devuelto' && c.length < MIN_TEXTO) return `Explica qué falta (al menos ${MIN_TEXTO} caracteres).`
   if (c.length > MAX_COMENTARIO_VALIDACION) return `El comentario no puede pasar de ${MAX_COMENTARIO_VALIDACION} caracteres.`
+  if (observaciones === undefined || observaciones === null) return null
+  if (!Array.isArray(observaciones)) return 'Algo de lo elegido no es válido.'
+  if (observaciones.length === 0) return null
+  if (estado !== 'devuelto') return 'Solo se marcan archivos al devolver un reporte.'
+  if (observaciones.length > MAX_EVIDENCIAS) return `Un reporte tiene como máximo ${MAX_EVIDENCIAS} archivos.`
+  const vistos = new Set<string>()
+  for (const o of observaciones) {
+    const id = typeof o?.evidencia === 'string' ? o.evidencia : ''
+    const motivo = typeof o?.motivo === 'string' ? o.motivo.trim() : ''
+    if (id === '') return 'Algo de lo elegido no es válido.'
+    if (vistos.has(id)) return 'Un archivo está marcado dos veces.'
+    vistos.add(id)
+    if (motivo === '') return 'Escribe qué le pasa a cada archivo que devuelves.'
+    if (motivo.length > MAX_OBSERVACION) return `La nota de un archivo no puede pasar de ${MAX_OBSERVACION} caracteres.`
+  }
   return null
 }
 
@@ -172,11 +209,23 @@ export function errorEnComentario(texto: unknown): string | null {
 
 // ─── El detalle de un indicador ───────────────────────────────────────────────
 
+/** La nota con que la secretaría devolvió un archivo. */
+export interface ObservacionVista {
+  motivo: string
+  /** Quién lo devolvió y cuándo (ISO). */
+  por: string
+  cuando: string
+}
+
 export interface EvidenciaVista {
   id: string
   nombre: string
   tipo: string
   bytes: number
+  /** Pasó tal cual de la versión anterior de este reporte (no se subió con esta versión). */
+  conservada: boolean
+  /** Si la secretaría lo devolvió: la nota más reciente. Un archivo devuelto no se conserva en la corrección. */
+  observacion: ObservacionVista | null
 }
 
 export interface ValidacionVista {

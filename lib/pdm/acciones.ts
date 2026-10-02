@@ -136,7 +136,7 @@ export function traducirErrorPdm(code?: string | null, mensaje?: string | null):
   if (code === '23505' && /pdm_reportes_una_correccion/.test(m)) {
     return 'Ese reporte ya fue corregido por otra persona. Recarga la página para ver lo último.'
   }
-  if (code === '23505' && /pdm_evidencias_ruta_key/.test(m)) return 'Uno de esos archivos ya está en otro reporte. Súbelo de nuevo.'
+  if (code === '23505' && /pdm_evidencias_ruta_key|pdm_evidencias_ruta_original|pdm_evidencias_reporte_ruta_key/.test(m)) return 'Uno de esos archivos ya está en otro reporte. Súbelo de nuevo.'
   if (code === '42501') return 'No tienes permiso para hacer este cambio.'
   return GENERICO
 }

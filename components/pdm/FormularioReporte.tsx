@@ -15,6 +15,12 @@
  *
  * Un reporte nunca se reescribe: corregir crea una versión nueva y la anterior queda en el historial.
  * La evidencia es obligatoria, como en la base: sin al menos un archivo el botón no se activa.
+ *
+ * ── Al corregir, nada de lo que estaba bien se vuelve a subir ────────────
+ *
+ * El formulario muestra los archivos de la versión anterior. Los que la secretaría no objetó pasan solos a la
+ * nueva (se pueden quitar uno a uno); los que devolvió NO se conservan: se reemplazan con uno nuevo o se dejan
+ * fuera, y cada uno trae la nota de quien lo devolvió. Entre lo conservado y lo nuevo hay de uno a cinco archivos.
  */
 
 import { useRef, useState } from 'react'
@@ -50,6 +56,9 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
   const [texto, setTexto] = useState(correccion && vigente ? vigente.texto : '')
   const [motivo, setMotivo] = useState('')
   const [archivos, setArchivos] = useState<File[]>([])
+  // Lo de la versión anterior que pasa a esta: por defecto todo lo que la secretaría no devolvió.
+  const anteriores = correccion && vigente ? vigente.evidencias : []
+  const [conservar, setConservar] = useState<ReadonlySet<string>>(() => new Set(anteriores.filter(a => !a.observacion).map(a => a.id)))
   const [fase, setFase] = useState<Fase>(null)
   const [error, setError] = useState<string | null>(null)
   const entrada = useRef<HTMLInputElement>(null)
@@ -78,14 +87,20 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
   const numero = leerNumero(valor)
   const enviando = fase !== null
   const motivoOk = !correccion || motivo.trim().length >= MIN_TEXTO
-  const listo = numero !== null && texto.trim().length >= MIN_TEXTO && archivos.length > 0 && motivoOk
+  // Lo conservado y lo nuevo comparten el tope de cinco y el mínimo de uno.
+  const total = conservar.size + archivos.length
+  const listo = numero !== null && texto.trim().length >= MIN_TEXTO && total > 0 && motivoOk
+
+  function alternarConservado(id: string) {
+    setConservar(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s })
+  }
 
   function agregar(lista: FileList | null) {
     if (!lista || lista.length === 0) return
     setError(null)
     const nuevos = [...archivos]
     for (const f of Array.from(lista)) {
-      if (nuevos.length >= MAX_EVIDENCIAS) { setError(`Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`); break }
+      if (conservar.size + nuevos.length >= MAX_EVIDENCIAS) { setError(`Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos, contando los que conservas.`); break }
       const mal = errorEnArchivos([{ nombre: f.name, tipo: f.type, bytes: f.size }])
       if (mal) { setError(mal); continue }
       if (nuevos.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) continue
@@ -99,24 +114,29 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
     if (enviando) return
     setError(null)
     const mal = errorEnReporte({ valor: numero, texto, motivo }, correccion)
-      ?? errorEnArchivos(archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })))
+      ?? errorEnArchivos(archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })), conservar.size)
     if (mal || numero === null) { setError(mal ?? 'Escribe el valor del avance.'); return }
 
-    setFase('subiendo')
-    const prep = await acciones.prepararEvidencias({
-      indicador: indicador.uuid,
-      anio,
-      archivos: archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })),
-    })
-    if (!prep.ok) { setFase(null); setError(prep.error); return }
-    if (prep.datos.length !== archivos.length) { setFase(null); setError('No se pudo preparar la subida. Intenta de nuevo.'); return }
+    // Si todo lo que se envía es lo conservado de la versión anterior, no hay nada que subir.
+    let rutas: { ruta: string; tipo: string }[] = []
+    if (archivos.length > 0) {
+      setFase('subiendo')
+      const prep = await acciones.prepararEvidencias({
+        indicador: indicador.uuid,
+        anio,
+        archivos: archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })),
+      })
+      if (!prep.ok) { setFase(null); setError(prep.error); return }
+      if (prep.datos.length !== archivos.length) { setFase(null); setError('No se pudo preparar la subida. Intenta de nuevo.'); return }
 
-    try {
-      await Promise.all(archivos.map((f, k) => subirArchivo(prep.datos[k].urlSubida, f, prep.datos[k].tipo)))
-    } catch (e) {
-      setFase(null)
-      setError(e instanceof ErrorDeSubida ? e.message : 'No se pudo subir un archivo. Revisa tu conexión e intenta de nuevo.')
-      return
+      try {
+        await Promise.all(archivos.map((f, k) => subirArchivo(prep.datos[k].urlSubida, f, prep.datos[k].tipo)))
+      } catch (e) {
+        setFase(null)
+        setError(e instanceof ErrorDeSubida ? e.message : 'No se pudo subir un archivo. Revisa tu conexión e intenta de nuevo.')
+        return
+      }
+      rutas = prep.datos
     }
 
     setFase('registrando')
@@ -125,7 +145,8 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
       anio,
       valor: numero,
       texto,
-      evidencias: archivos.map((f, k) => ({ ruta: prep.datos[k].ruta, nombre: f.name, tipo: prep.datos[k].tipo, bytes: f.size })),
+      evidencias: archivos.map((f, k) => ({ ruta: rutas[k].ruta, nombre: f.name, tipo: rutas[k].tipo, bytes: f.size })),
+      conservar: correccion ? [...conservar] : undefined,
       motivo: correccion ? motivo : undefined,
     })
     setFase(null)
@@ -199,8 +220,46 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
 
         <div>
           <span className={T.rotulo}>
-            Evidencia <span className="font-normal normal-case tracking-normal">· obligatoria · hasta {MAX_EVIDENCIAS} archivos · {TEXTO_TIPOS_EVIDENCIA}</span>
+            Evidencia <span className="font-normal normal-case tracking-normal">· obligatoria · {total} de {MAX_EVIDENCIAS} archivos · {TEXTO_TIPOS_EVIDENCIA}</span>
           </span>
+
+          {anteriores.length > 0 && (
+            <div className="mt-1.5">
+              <p className="text-xs leading-relaxed text-[#667085]">
+                Archivos de la versión anterior: los que estaban bien pasan solos; no hace falta subirlos otra vez.
+              </p>
+              <ul className="mt-1.5 space-y-1.5">
+                {anteriores.map(a => a.observacion ? (
+                  <li key={a.id} className="rounded-lg border border-[#F1C0BB] bg-[#FDF3F2] px-3 py-2 text-sm">
+                    <p className="flex items-center gap-2">
+                      <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="shrink-0 text-[#B42318]" />
+                      <span className="min-w-0 flex-1 truncate font-medium text-[#192031]">{a.nombre}</span>
+                      <span className="shrink-0 text-xs text-[#912018]">No se conserva</span>
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#912018]">
+                      Devuelto por {a.observacion.por}: «{a.observacion.motivo}». Reemplázalo con uno nuevo o déjalo fuera.
+                    </p>
+                  </li>
+                ) : (
+                  <li key={a.id}>
+                    <label className={`flex items-center gap-2.5 rounded-lg border bg-white px-3 py-2 text-sm ${enviando ? 'opacity-60' : 'cursor-pointer'} ${conservar.has(a.id) ? 'border-[#DCE0E8]' : 'border-dashed border-[#C5CBD6]'}`}>
+                      <input
+                        type="checkbox"
+                        checked={conservar.has(a.id)}
+                        disabled={enviando}
+                        onChange={() => alternarConservado(a.id)}
+                        className="h-4 w-4 shrink-0 accent-[#192031]"
+                      />
+                      <span className={`min-w-0 flex-1 truncate ${conservar.has(a.id) ? 'text-[#192031]' : 'text-[#98A2B3] line-through'}`}>{a.nombre}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(a.bytes)}</span>
+                      <span className="shrink-0 text-xs font-medium text-[#556072]">{conservar.has(a.id) ? 'Se conserva' : 'Se quita'}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {archivos.length > 0 && (
             <ul className="mt-1.5 space-y-1.5">
               {archivos.map(f => (
@@ -220,10 +279,10 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
               ))}
             </ul>
           )}
-          {archivos.length < MAX_EVIDENCIAS && (
+          {total < MAX_EVIDENCIAS && (
             <label className={`mt-1.5 flex items-center gap-3 rounded-lg border border-dashed border-[#AEB6C4] bg-white px-3 py-3 text-sm text-[#556072] transition-colors ${enviando ? 'opacity-60' : 'cursor-pointer hover:border-[#192031] hover:text-[#192031]'}`}>
               <Icono glifo={Iconos.documentos.subir} tamano="sm" className="shrink-0" />
-              <span className="min-w-0 truncate">{archivos.length === 0 ? 'Adjuntar foto, acta o documento' : 'Adjuntar otro archivo'}</span>
+              <span className="min-w-0 truncate">{total === 0 ? 'Adjuntar foto, acta o documento' : 'Adjuntar otro archivo'}</span>
               <input
                 ref={entrada}
                 id="pdm-evidencia"

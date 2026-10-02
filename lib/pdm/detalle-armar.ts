@@ -1,5 +1,5 @@
 import { esNivelHabilitable, type NivelPdm } from './niveles'
-import type { ComentarioVista, DetalleIndicador, EvidenciaVista, ReporteDetalle, ValidacionVista } from './seguimiento-acciones'
+import type { ComentarioVista, DetalleIndicador, EvidenciaVista, ObservacionVista, ReporteDetalle, ValidacionVista } from './seguimiento-acciones'
 import type { EstadoReporte } from './seguimiento'
 
 /**
@@ -28,6 +28,8 @@ export interface FilaEvidencia {
   nombre: string
   tipo: string
   bytes: number | string
+  /** La evidencia de la versión anterior de la que se conservó este archivo; `null` si se subió con este reporte. */
+  copia_de?: string | null
 }
 
 export interface FilaValidacion {
@@ -36,6 +38,8 @@ export interface FilaValidacion {
   comentario: string | null
   validador_nombre: string
   created_at: string
+  /** Los archivos que se devolvieron: `[{evidencia, motivo}]`. */
+  observaciones?: unknown
 }
 
 export interface FilaComentario {
@@ -74,10 +78,25 @@ export function armarDetalle(entrada: {
   const ultimoDelAnio = new Map<number, string>()
   for (const r of [...entrada.reportes].sort(masReciente).reverse()) ultimoDelAnio.set(r.anio, r.id)
 
+  // La nota más reciente de cada archivo devuelto, con quién y cuándo (las validaciones se leen de la más antigua a la más reciente).
+  const observadas = new Map<string, ObservacionVista>()
+  for (const v of [...entrada.validaciones].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0))) {
+    if (v.estado !== 'devuelto' || !Array.isArray(v.observaciones)) continue
+    for (const o of v.observaciones as { evidencia?: unknown; motivo?: unknown }[]) {
+      if (typeof o?.evidencia === 'string' && typeof o?.motivo === 'string' && o.motivo.trim() !== '') {
+        observadas.set(o.evidencia, { motivo: o.motivo, por: v.validador_nombre, cuando: v.created_at })
+      }
+    }
+  }
+
   const evidenciasDe = new Map<string, EvidenciaVista[]>()
   for (const e of entrada.evidencias) {
     const lista = evidenciasDe.get(e.reporte_id) ?? []
-    lista.push({ id: e.id, nombre: e.nombre, tipo: e.tipo, bytes: numero(e.bytes) ?? 0 })
+    lista.push({
+      id: e.id, nombre: e.nombre, tipo: e.tipo, bytes: numero(e.bytes) ?? 0,
+      conservada: (e.copia_de ?? null) !== null,
+      observacion: observadas.get(e.id) ?? null,
+    })
     evidenciasDe.set(e.reporte_id, lista)
   }
 
