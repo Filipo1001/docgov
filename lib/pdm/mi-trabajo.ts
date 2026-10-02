@@ -1,5 +1,8 @@
 import type { Indicador } from './plan'
-import { requiereReporte, type SituacionCorte } from './seguimiento'
+import {
+  ANIOS_PLAN, estadoDelAnio, requiereReporte, resumirAnio,
+  type EstadoDelAnio, type ResumenAnio, type SituacionAnio,
+} from './seguimiento'
 import type { GrupoVista } from './personas'
 
 /**
@@ -39,12 +42,12 @@ const TITULOS: Record<ClaveSeccion, { titulo: string; nota: string }> = {
   reportar:  { titulo: 'Te toca reportar', nota: 'Cada uno con su evidencia' },
   validar:   { titulo: 'Esperando a la secretaría', nota: 'Ya se reportaron; falta que los valide' },
   aprobados: { titulo: 'Aprobados', nota: 'Ya cuentan en el cumplimiento' },
-  otros:     { titulo: 'Sin movimiento en el corte', nota: 'Nada que hacer por ahora' },
+  otros:     { titulo: 'Sin nada que reportar', nota: 'En este año no se espera nada de ellos' },
   todos:     { titulo: 'Indicadores a tu cargo', nota: '' },
 }
 
-/** De la situación en el corte, a la sección donde se lista. */
-function claveDe(s: SituacionCorte | undefined): ClaveSeccion {
+/** De la situación en el año, a la sección donde se lista. */
+function claveDe(s: SituacionAnio | undefined | null): ClaveSeccion {
   if (requiereReporte(s)) return 'reportar'
   if (s === 'pendiente') return 'validar'
   if (s === 'aprobado') return 'aprobados'
@@ -52,12 +55,12 @@ function claveDe(s: SituacionCorte | undefined): ClaveSeccion {
 }
 
 /**
- * Mis indicadores, en secciones.
+ * Mis indicadores en el año que se mira (la lista ya viene proyectada a él), en secciones.
  *
- *   · Con un corte abierto: lo que me toca reportar primero (lo devuelto antes que lo que falta, porque
- *     alguien ya lo miró y espera mi respuesta), luego lo que espera a la secretaría, luego lo aprobado.
- *     Una sección vacía no se devuelve.
- *   · Sin corte abierto no hay nada que reportar: una sola lista.
+ *   · En un año en que se espera algo: lo que me toca reportar primero (lo devuelto antes que lo que falta,
+ *     porque alguien ya lo miró y espera mi respuesta), luego lo que espera a la secretaría, luego lo
+ *     aprobado. Una sección vacía no se devuelve.
+ *   · En un año en que no se espera nada (uno que no ha empezado, o sin metas): una sola lista.
  *
  * Dentro de cada sección, el orden del plan (el del Excel), que es el que ya conocen.
  */
@@ -65,26 +68,55 @@ export function ordenarMiTrabajo(indicadores: Indicador[], yoId: string): Seccio
   const mios = indicadores.filter(i => esMio(i, yoId)).sort((a, b) => a.id - b.id)
   if (mios.length === 0) return []
 
-  if (!mios.some(i => i.enCorte !== null)) {
+  if (!mios.some(i => i.enAnio !== null)) {
     return [{ clave: 'todos', ...TITULOS.todos, indicadores: mios }]
   }
 
   const orden: ClaveSeccion[] = ['reportar', 'validar', 'aprobados', 'otros']
   const porClave = new Map<ClaveSeccion, Indicador[]>(orden.map(c => [c, []]))
-  for (const i of mios) porClave.get(claveDe(i.enCorte?.situacion))!.push(i)
+  for (const i of mios) porClave.get(claveDe(i.enAnio?.situacion))!.push(i)
 
   // Lo devuelto antes que lo que falta: esperan una respuesta mía.
   porClave.get('reportar')!.sort((a, b) =>
-    Number(b.enCorte?.situacion === 'devuelto') - Number(a.enCorte?.situacion === 'devuelto') || a.id - b.id)
+    Number(b.enAnio?.situacion === 'devuelto') - Number(a.enAnio?.situacion === 'devuelto') || a.id - b.id)
 
   return orden
     .map(c => ({ clave: c, ...TITULOS[c], indicadores: porClave.get(c)! }))
     .filter(s => s.indicadores.length > 0)
 }
 
-/** Cuántos indicadores míos esperan que yo reporte (me faltan, o me los devolvieron). */
+/** Cuántos indicadores míos esperan que yo reporte en el año que se mira (me faltan, o me los devolvieron). */
 export const pendientesDeReportar = (indicadores: Indicador[], yoId: string): number =>
-  indicadores.filter(i => esMio(i, yoId) && requiereReporte(i.enCorte?.situacion)).length
+  indicadores.filter(i => esMio(i, yoId) && requiereReporte(i.enAnio?.situacion)).length
+
+// ─── Las tarjetas de los años ─────────────────────────────────────────────────
+
+/** Cómo van MIS indicadores en un año: lo que dice la tarjeta de ese año. */
+export interface TarjetaAnio {
+  anio: number
+  estado: EstadoDelAnio
+  /** Cuántos de mis indicadores tienen meta en ese año. */
+  conMeta: number
+  /** Cuántos de ellos ya tienen un avance aprobado en el año. */
+  conAvance: number
+  /** Dónde va cada uno en el año: lo que falta, lo que espera a la secretaría, lo devuelto, lo aprobado. */
+  resumen: ResumenAnio
+}
+
+/** Una tarjeta por año del plan, con lo mío. Sirve cualquier proyección de la lista: usa los cuatro años de cada indicador. */
+export function tarjetasDeAnios(indicadores: Indicador[], yoId: string, anioActual: number): TarjetaAnio[] {
+  const mios = indicadores.filter(i => esMio(i, yoId))
+  return ANIOS_PLAN.map(anio => {
+    const deAnio = mios.map(i => i.anios.find(a => a.anio === anio))
+    return {
+      anio,
+      estado: estadoDelAnio(anio, anioActual),
+      conMeta: deAnio.filter(a => (a?.meta ?? 0) > 0).length,
+      conAvance: deAnio.filter(a => (a?.meta ?? 0) > 0 && a?.avance !== null && a?.avance !== undefined).length,
+      resumen: resumirAnio(deAnio.map(a => a?.enAnio?.situacion ?? null)),
+    }
+  })
+}
 
 // ─── Mis grupos ───────────────────────────────────────────────────────────────
 

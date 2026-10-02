@@ -17,7 +17,7 @@ import {
   agrupar, estadoDe, fmt, fmtPct, haySeguimiento, resumir, sinAsignar,
   type Indicador, type Resumen,
 } from '@/lib/pdm/plan'
-import { MODOS, claveModo, resumirCorte, type AvanceModo, type Corte } from '@/lib/pdm/seguimiento'
+import { ROTULO_ESTADO_ANIO, anioIniciado, estadoDelAnio, resumirAnio } from '@/lib/pdm/seguimiento'
 import { BarraEstados, Leyenda } from './Barras'
 import { Cifras, EstadoTexto, Panel, type Cifra } from './ui'
 import { T } from './tema'
@@ -49,13 +49,13 @@ function FilaGrupo({ nombre, r, conSeguimiento, onClick }: { nombre: string; r: 
 }
 
 export default function Tablero({
-  lista, criterio, corteAbierto, controles, onAbrir, onVerDependencia,
+  lista, anio, anioActual, controles, onAbrir, onVerDependencia,
 }: {
+  /** Los indicadores ya proyectados al año que se mira. */
   lista: Indicador[]
-  /** Qué significa el avance en este plan; `null`: por definir (el cumplimiento es provisional). */
-  criterio: AvanceModo | null
-  /** El corte donde hoy se reporta, si hay uno. */
-  corteAbierto: Corte | null
+  anio: number
+  /** El año calendario: de él depende si el año que se mira ya empezó. */
+  anioActual: number
   /** Vista de Control Interno: añade los controles de integridad. */
   controles?: boolean
   onAbrir: (id: number) => void
@@ -67,8 +67,8 @@ export default function Tablero({
   const conSeg = haySeguimiento(lista)
   const dependencias = agrupar(lista, i => i.dependencia)
   const lineas = agrupar(lista, i => i.linea).sort((a, b) => a[0].localeCompare(b[0]))
-  const modo = MODOS[claveModo(criterio)]
-  const corte = corteAbierto ? resumirCorte(lista.map(i => i.enCorte?.situacion ?? null)) : null
+  const iniciado = anioIniciado(anio, anioActual)
+  const esperados = resumirAnio(lista.map(i => i.enAnio?.situacion ?? null))
 
   const peso = (i: Indicador) => {
     const e = estadoDe(i)
@@ -80,11 +80,11 @@ export default function Tablero({
 
   const cifras: Cifra[] = [
     {
-      titulo: criterio ? 'Cumplimiento' : 'Cumplimiento provisional',
+      titulo: `Cumplimiento ${anio}`,
       valor: conSeg ? fmtPct(r.cumplimiento) : '—',
       nota: conSeg
-        ? `${r.cumplidos} de ${r.medibles} con meta, ${criterio ? `según el avance ${criterio === 'anual' ? 'del año' : 'acumulado'} validado` : 'según un criterio por definir'}`
-        : `Aún no hay seguimiento: ${r.medibles} indicadores tienen meta y ninguno tiene un avance validado`,
+        ? `${r.cumplidos} de ${r.medibles} con meta en ${anio}, según el avance validado`
+        : `Aún no hay seguimiento: ${r.medibles} indicadores tienen meta en ${anio} y ninguno tiene un avance validado`,
     },
     {
       titulo: 'Sin responsable',
@@ -99,16 +99,16 @@ export default function Tablero({
         ? `${r.criticos} críticos y ${r.atrasados} atrasados frente a su meta`
         : 'Se calcula cuando haya avances validados',
     },
-    corte && corteAbierto
+    iniciado
       ? {
-          titulo: 'Reportes del corte',
-          valor: `${corte.porValidar + corte.aprobados + corte.devueltos}`,
-          nota: `de ${corte.conResponsable} con responsable en «${corteAbierto.nombre}»: ${corte.porValidar} sin validar, ${corte.aprobados} ${corte.aprobados === 1 ? 'aprobado' : 'aprobados'}, ${corte.devueltos} ${corte.devueltos === 1 ? 'devuelto' : 'devueltos'}`,
+          titulo: `Reportes de ${anio}`,
+          valor: `${esperados.porValidar + esperados.aprobados + esperados.devueltos}`,
+          nota: `de ${esperados.esperados} esperados: ${esperados.porValidar} sin validar, ${esperados.aprobados} ${esperados.aprobados === 1 ? 'aprobado' : 'aprobados'}, ${esperados.devueltos} ${esperados.devueltos === 1 ? 'devuelto' : 'devueltos'}`,
         }
       : {
-          titulo: 'Corte',
+          titulo: `Reportes de ${anio}`,
           valor: '—',
-          nota: 'No hay un corte abierto: por ahora nadie puede reportar avances',
+          nota: `El ${anio} empieza el 1 de enero: todavía no se puede reportar`,
         },
   ]
 
@@ -124,8 +124,9 @@ export default function Tablero({
           </>
         ) : (
           <p className="text-sm leading-relaxed text-[#556072]">
-            El plan está cargado con sus metas y sus responsables, y todavía sin avances validados.
-            Cada reporte cuenta cuando la secretaría lo aprueba; desde entonces aquí se verá cómo va cada indicador.
+            {iniciado
+              ? `En ${anio} todavía no hay avances validados. Cada reporte cuenta cuando la secretaría lo aprueba; desde entonces aquí se verá cómo va cada indicador.`
+              : `El ${anio} está ${ROTULO_ESTADO_ANIO[estadoDelAnio(anio, anioActual)].toLowerCase()}: sus metas están cargadas y empieza a medirse el 1 de enero.`}
           </p>
         )}
         {r.sinMeta > 0 && (
@@ -206,7 +207,7 @@ export default function Tablero({
                       {(e === 'critico' || e === 'atrasado') && (
                         <span className="inline-flex items-center gap-2">
                           <EstadoTexto estado={e} />
-                          <span className="tabular-nums">{fmt(i.avance)} de {fmt(i.metaMedida)}</span>
+                          <span className="tabular-nums">{fmt(i.avance)} de {fmt(i.meta)}</span>
                         </span>
                       )}
                     </span>
@@ -224,19 +225,9 @@ export default function Tablero({
 
       {conSeg && (
         <p className={`text-xs leading-relaxed ${T.avisoNota}`}>
-          {criterio === null ? (
-            <>
-              <b>Criterio provisional.</b> Un indicador se cuenta como cumplido cuando su avance validado alcanza la meta de 2026.
-              Falta definir si el avance se reporta acumulado o del año, y qué umbrales separan «en ruta», «atrasado» y
-              «crítico». Lo define la Alcaldía; una vez definido queda escrito en el sistema y se aplica igual a todos.
-              Hasta entonces, este porcentaje es una referencia y no una cifra oficial.
-            </>
-          ) : (
-            <>
-              <b>{modo.titulo}.</b> Se mide contra la {modo.meta}. Un indicador se cuenta como cumplido cuando su avance validado
-              la alcanza. Los umbrales que separan «en ruta», «atrasado» y «crítico» siguen por definir.
-            </>
-          )}
+          <b>Cada año se mide contra su propia meta.</b> Un indicador se cuenta como cumplido cuando su avance validado de {anio} alcanza
+          la meta de {anio}. Los umbrales que separan «en ruta», «atrasado» y «crítico» siguen por definir: lo define la Alcaldía y,
+          una vez definido, queda escrito en el sistema y se aplica igual a todos. Hasta entonces, los estados intermedios son una referencia.
         </p>
       )}
     </div>

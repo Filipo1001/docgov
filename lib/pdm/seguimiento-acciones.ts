@@ -1,15 +1,15 @@
 /**
- * Lo que el navegador y el servidor se dicen en el seguimiento por cortes (Fase B): las
+ * Lo que el navegador y el servidor se dicen en el seguimiento por años (Fase B): las
  * entradas, las respuestas, el detalle de un indicador y las reglas que se comprueban antes de
  * preguntarle nada a la base.
  *
  * Solo tipos y funciones puras, sin `'use server'` ni `server-only`: lo usan los componentes de
  * cliente (para avisar antes de enviar) y las acciones del servidor (para validar lo que llega).
- * Las MISMAS reglas las impone la base de datos (migración 056): aquí se repiten para que el
+ * Las MISMAS reglas las impone la base de datos (migraciones 056 y 057): aquí se repiten para que el
  * mensaje llegue antes y en palabras de persona, no para sustituirla.
  */
 
-import type { AvanceModo, EstadoReporte } from './seguimiento'
+import type { EstadoReporte } from './seguimiento'
 import type { NivelPdm } from './niveles'
 import type { Resultado } from './acciones'
 
@@ -22,8 +22,6 @@ export const MAX_TEXTO_REPORTE = 1000
 export const MAX_MOTIVO_CORRECCION = 500
 export const MAX_COMENTARIO = 2000
 export const MAX_COMENTARIO_VALIDACION = 1000
-export const MAX_NOMBRE_CORTE = 80
-export const MAX_PERIODICIDAD = 120
 export const MAX_NOMBRE_ARCHIVO = 200
 
 export interface TipoEvidencia {
@@ -94,6 +92,8 @@ export function errorEnArchivos(archivos: ArchivoPorSubir[]): string | null {
 export interface EntradaPrepararEvidencias {
   /** `uuid` del indicador. */
   indicador: string
+  /** El año del plan al que pertenece el reporte. */
+  anio: number
   archivos: ArchivoPorSubir[]
 }
 
@@ -115,10 +115,12 @@ export interface EvidenciaSubida {
 
 export interface EntradaReportar {
   indicador: string
+  /** El año del plan del que se reporta el avance (se mide contra la meta de ESE año). */
+  anio: number
   valor: number
   texto: string
   evidencias: EvidenciaSubida[]
-  /** Solo si ya había un reporte en el corte: entonces esto es una corrección y el motivo es obligatorio. */
+  /** Solo si el último reporte del año está sin cerrar (pendiente o devuelto): entonces esto es una corrección y el motivo es obligatorio. */
   motivo?: string
 }
 
@@ -136,7 +138,7 @@ export interface EntradaComentar {
   reporte?: string
 }
 
-/** `null` si lo escrito en el reporte sirve; si no, qué falla. `correccion`: ya había un reporte en el corte. */
+/** `null` si lo escrito en el reporte sirve; si no, qué falla. `correccion`: el último reporte del año está sin cerrar. */
 export function errorEnReporte(e: { valor: unknown; texto: unknown; motivo?: unknown }, correccion: boolean): string | null {
   const valor = e.valor
   if (typeof valor !== 'number' || !Number.isFinite(valor) || valor < 0) return 'El valor debe ser un número igual o mayor que cero.'
@@ -168,34 +170,6 @@ export function errorEnComentario(texto: unknown): string | null {
   return null
 }
 
-// ─── Ajustes y cortes (solo el administrador) ─────────────────────────────────
-
-export interface EntradaConfigurarPlan {
-  /** `null`: dejarlo por definir. */
-  avanceModo: AvanceModo | null
-  periodicidad?: string
-}
-
-export interface EntradaGuardarCorte {
-  /** Sin él, se crea; con él, se edita. */
-  corte?: string
-  /** Sin nombre se propone uno con la fecha. */
-  nombre?: string
-  /** `YYYY-MM-DD`. */
-  fecha: string
-  /** Dejarlo abierto (solo uno a la vez). */
-  abrir?: boolean
-}
-
-export interface EntradaEstadoCorte {
-  corte: string
-  estado: 'abierto' | 'cerrado'
-}
-
-export interface EntradaEliminarCorte {
-  corte: string
-}
-
 // ─── El detalle de un indicador ───────────────────────────────────────────────
 
 export interface EvidenciaVista {
@@ -215,8 +189,7 @@ export interface ValidacionVista {
 /** Una versión de un reporte, con todo lo que se sabe de ella. */
 export interface ReporteDetalle {
   id: string
-  corteId: string
-  corteNombre: string
+  anio: number
   valor: number
   valorAnterior: number | null
   texto: string
@@ -225,7 +198,7 @@ export interface ReporteDetalle {
   creado: string
   corrigeA: string | null
   motivoCorreccion: string | null
-  /** Es la última versión de su cadena: la que vale. Las demás son historia. */
+  /** No ha sido reemplazado por una corrección: las versiones corregidas son historia. */
   vigente: boolean
   /** Lo que dice su última validación; «pendiente» si nadie la ha tocado. */
   estado: EstadoReporte
@@ -247,7 +220,7 @@ export interface ComentarioVista {
 }
 
 export interface DetalleIndicador {
-  /** Del más reciente al más antiguo. */
+  /** De todos los años, del más reciente al más antiguo. */
   reportes: ReporteDetalle[]
   /** Del más reciente al más antiguo. */
   comentarios: ComentarioVista[]
@@ -255,10 +228,6 @@ export interface DetalleIndicador {
 
 /** Lo que el seguimiento puede hacer. En producción lo respalda el servidor; en pruebas, un doble. */
 export interface AccionesSeguimiento {
-  configurarPlan: (e: EntradaConfigurarPlan) => Promise<Resultado>
-  guardarCorte: (e: EntradaGuardarCorte) => Promise<Resultado<{ corte: string }>>
-  cambiarEstadoCorte: (e: EntradaEstadoCorte) => Promise<Resultado>
-  eliminarCorte: (e: EntradaEliminarCorte) => Promise<Resultado>
   prepararEvidencias: (e: EntradaPrepararEvidencias) => Promise<Resultado<EvidenciaPreparada[]>>
   reportar: (e: EntradaReportar) => Promise<Resultado<{ reporte: string; correccion: boolean }>>
   validarReporte: (e: EntradaValidar) => Promise<Resultado<{ cambio: 'aprobado' | 'devuelto' | 'ninguno' }>>

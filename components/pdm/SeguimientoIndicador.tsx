@@ -6,15 +6,15 @@
  *
  * ── Trazabilidad ─────────────────────────────────────────────────────────
  *
- * Cada versión de cada reporte, de la más reciente a la más antigua: corte, autor, fecha, valor
- * anterior y nuevo, lo que se hizo, las evidencias, y qué dijo la secretaría. Nada se sobrescribe:
+ * Cada versión de cada reporte del año que se mira, de la más reciente a la más antigua: fecha, autor,
+ * valor anterior y nuevo, lo que se hizo, las evidencias, y qué dijo la secretaría. Nada se sobrescribe:
  * corregir añade una versión y la anterior queda marcada como tal. Lo que ve cada quien lo decide
  * la base (un responsable ve lo de sus indicadores, una secretaría lo de su dependencia).
  *
  * ── Quién hace qué ───────────────────────────────────────────────────────
  *
- *   · Reportar: quien tiene el indicador a su cargo, en el corte abierto. Ni el administrador ni
- *     Control Interno reportan por otro.
+ *   · Reportar: quien tiene el indicador a su cargo, en un año que ya empezó (sin que nadie abra nada).
+ *     Ni el administrador ni Control Interno reportan por otro.
  *   · Validar (aprobar o devolver): el administrador y la secretaría de la dependencia, nunca sobre
  *     un reporte propio. El servidor dice a cada reporte si quien mira puede validarlo.
  *   · Comentar: cualquiera con acceso al módulo.
@@ -24,7 +24,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
-import type { Corte } from '@/lib/pdm/seguimiento'
+import { anioIniciado } from '@/lib/pdm/seguimiento'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import type { NivelPdm } from '@/lib/pdm/niveles'
 import {
@@ -40,8 +40,8 @@ import { T } from './tema'
 export interface ContextoSeguimiento {
   nivel: NivelPdm
   yoId: string
-  /** El corte donde hoy se reporta, si hay uno. */
-  corteAbierto: Corte | null
+  /** El año calendario (hora de Colombia): de él depende qué años ya se pueden reportar. */
+  anioActual: number
   acciones: AccionesSeguimiento
 }
 
@@ -188,7 +188,7 @@ function Version({ r, acciones, onHecho }: { r: ReporteDetalle; acciones: Accion
     <li className={`relative border-l-2 border-[#DCE0E8] pb-6 pl-5 last:pb-1 ${r.vigente ? '' : 'opacity-70'}`}>
       <span className={`absolute -left-[6px] top-1 h-2.5 w-2.5 rounded-[2px] ${r.vigente ? 'bg-[#192031]' : 'bg-[#B8BFCC]'}`} />
       <p className="text-xs text-[#667085]">
-        <span className="font-semibold text-[#192031]">{r.corteNombre}</span> · {fechaHoraBogota(r.creado)} · {r.autorNombre}
+        <span className="font-semibold text-[#192031]">{fechaHoraBogota(r.creado)}</span> · {r.autorNombre}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="text-sm font-semibold tabular-nums text-[#192031]">
@@ -215,15 +215,15 @@ function Version({ r, acciones, onHecho }: { r: ReporteDetalle; acciones: Accion
 }
 
 export default function SeguimientoIndicador({ indicador, ctx }: { indicador: Indicador; ctx: ContextoSeguimiento }) {
-  const { acciones, corteAbierto, nivel, yoId } = ctx
+  const { acciones, anioActual, nivel, yoId } = ctx
   const [detalle, setDetalle] = useState<DetalleIndicador | null>(null)
   const [errorCarga, setErrorCarga] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
   const [aviso, setAviso] = useState<string | null>(null)
 
   // Lo que cambia en el servidor (alguien valida, o se reporta) llega aquí como una firma distinta: se vuelve a leer.
-  const enCorte = indicador.enCorte
-  const firma = `${enCorte?.situacion ?? '-'}:${enCorte?.reporte?.reporteId ?? '-'}:${enCorte?.reporte?.estado ?? '-'}:${indicador.avance ?? '-'}`
+  const enAnio = indicador.enAnio
+  const firma = `${enAnio?.situacion ?? '-'}:${enAnio?.reporte?.reporteId ?? '-'}:${enAnio?.reporte?.estado ?? '-'}:${indicador.avance ?? '-'}`
 
   useEffect(() => {
     let cancelado = false
@@ -240,14 +240,16 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
   }, [])
 
   const esDeQuienMira = indicador.asignados.some(a => a.usuarioId === yoId)
-  const vigenteEnCorte = corteAbierto && detalle
-    ? detalle.reportes.find(r => r.vigente && r.corteId === corteAbierto.id) ?? null
-    : null
-  const puedeReportar = !!corteAbierto && esDeQuienMira && reportaPorSuCuenta(nivel)
+  // El detalle trae los reportes de todos los años; aquí se muestra el año que se mira. Vienen del más reciente
+  // al más antiguo, así que el primero es lo último que se reportó en él.
+  const delAnio = detalle ? detalle.reportes.filter(r => r.anio === indicador.anio) : []
+  const ultimoDelAnio = delAnio[0] ?? null
+  const reportaria = esDeQuienMira && reportaPorSuCuenta(nivel)
+  const puedeReportar = reportaria && anioIniciado(indicador.anio, anioActual)
 
   return (
     <>
-      <Seccion rotulo="Trazabilidad">
+      <Seccion rotulo={`Trazabilidad · ${indicador.anio}`}>
         {aviso && <p role="status" className={`mb-3 ${T.avisoBien} text-xs font-medium`}>{aviso}</p>}
         {errorCarga ? (
           <div className={`flex items-center justify-between gap-3 ${T.avisoMal}`}>
@@ -256,11 +258,11 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
           </div>
         ) : detalle === null ? (
           <p className="text-xs text-[#667085]">Cargando el seguimiento…</p>
-        ) : detalle.reportes.length === 0 ? (
+        ) : delAnio.length === 0 ? (
           <ol>
             <li className="relative border-l-2 border-transparent pl-5">
               <span className="absolute -left-[6px] top-1 h-2.5 w-2.5 rounded-[2px] bg-[#B8BFCC]" />
-              <p className="text-sm font-semibold text-[#192031]">Sin seguimiento todavía</p>
+              <p className="text-sm font-semibold text-[#192031]">Sin reportes en {indicador.anio}</p>
               <p className="mt-1 text-xs leading-relaxed text-[#667085]">
                 El primer reporte quedará aquí, con su autor, su fecha y su evidencia.
               </p>
@@ -268,21 +270,25 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
           </ol>
         ) : (
           <ol className="space-y-0">
-            {detalle.reportes.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={() => recargar()} />)}
+            {delAnio.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={() => recargar()} />)}
           </ol>
         )}
       </Seccion>
 
-      {puedeReportar && corteAbierto && detalle && (
+      {puedeReportar && detalle && (
         <FormularioReporte
           // Cada estado del reporte abre un formulario nuevo: el de «responder» no arrastra lo del de «corregir».
-          key={`${corteAbierto.id}:${vigenteEnCorte?.id ?? 'nuevo'}:${vigenteEnCorte?.estado ?? ''}`}
+          key={`${indicador.anio}:${ultimoDelAnio?.id ?? 'nuevo'}:${ultimoDelAnio?.estado ?? ''}`}
           indicador={indicador}
-          corte={corteAbierto}
-          vigente={vigenteEnCorte}
+          vigente={ultimoDelAnio}
           acciones={acciones}
           onHecho={recargar}
         />
+      )}
+      {reportaria && !puedeReportar && (
+        <Seccion rotulo={`Reporte de ${indicador.anio}`}>
+          <p className={T.avisoNota}>El {indicador.anio} empieza el 1 de enero: todavía no se puede reportar.</p>
+        </Seccion>
       )}
 
       {detalle && (

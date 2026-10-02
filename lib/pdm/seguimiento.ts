@@ -1,59 +1,72 @@
 /**
- * El seguimiento por cortes: los tipos y las cuentas puras (Fase B).
+ * El seguimiento por AÑOS: los tipos y las cuentas puras (Fase B, rehecha en la migración 057).
  *
  * Sin `server-only` ni `'use client'`: lo usan el servidor (al armar los datos), el navegador
  * (al pintarlos) y las pruebas. Aquí no se lee nada de ninguna parte.
  *
  * ── Las reglas, tal como las decidió la Alcaldía ─────────────────────────
  *
- *   · Un CORTE es el momento en que se reporta. Hay a lo sumo uno ABIERTO; se crean, abren y
- *     cierran a mano (no hay frecuencia fija en el sistema: está por definir con Control Interno).
- *   · Quien tiene un indicador a su cargo REPORTA su avance en el corte abierto, siempre con
- *     evidencia. Un reporte nunca se reescribe: corregirlo es hacer otro, diciendo por qué.
- *   · El supervisor (la secretaría de la dependencia) VALIDA: aprueba o devuelve. Nadie valida lo
- *     suyo. SOLO LO APROBADO CUENTA en el cumplimiento; mientras tanto se ve como «reportado, sin
- *     validar».
+ *   · La unidad es el AÑO del plan (2024 a 2027). Cada indicador tiene una meta por año y cada año se
+ *     mide contra la suya: lo que se reporta es el avance de ESE año. No hay cortes que alguien tenga
+ *     que abrir: quien tiene un indicador a su cargo reporta cuando haya algo que reportar.
+ *   · Se puede reportar varias veces en el año (cada reporte lleva su fecha); lo vigente del año es el
+ *     último. 2024 y 2025 quedan abiertos para cargar el histórico; un año que no ha empezado (2027 hasta
+ *     el 1 de enero) todavía no se reporta. La base impone esto, no solo la pantalla.
+ *   · Siempre con evidencia. Un reporte nunca se reescribe: si el último está sin cerrar (pendiente o
+ *     devuelto), el siguiente es su corrección y dice por qué; si el último está aprobado, el siguiente es
+ *     un avance nuevo.
+ *   · El supervisor (la secretaría de la dependencia) VALIDA: aprueba o devuelve. Nadie valida lo suyo.
+ *     SOLO LO APROBADO CUENTA en el cumplimiento; mientras tanto se ve como «reportado, sin validar».
  *   · Control Interno comenta y no cambia nada.
- *   · Qué significa el valor que se reporta (avance del año o acumulado) es un dato del plan que
- *     se define a mano (`avance_modo`); mientras no se defina, el cumplimiento es provisional.
  */
-
-export type AvanceModo = 'acumulado' | 'anual'
 
 /** Cómo va un reporte: esperando al supervisor, aprobado o devuelto con un comentario. */
 export type EstadoReporte = 'pendiente' | 'aprobado' | 'devuelto'
 
-export interface Corte {
-  id: string
-  nombre: string
-  /** `YYYY-MM-DD`: la fecha de corte, sin hora ni zona (es una fecha, no un instante). */
-  fecha: string
-  abierto: boolean
+/** Los años del plan «Por Amor a Fredonia»: cada uno es una tarjeta en «Mi trabajo». */
+export const ANIOS_PLAN = [2024, 2025, 2026, 2027] as const
+export type AnioPlan = (typeof ANIOS_PLAN)[number]
+
+export const esAnioPlan = (v: unknown): v is AnioPlan => ANIOS_PLAN.includes(v as AnioPlan)
+
+/** El año de una fecha `YYYY-MM-DD`. */
+export const anioDeFecha = (iso: string): number => Number(iso.slice(0, 4))
+
+/** El año que se muestra al entrar: el de hoy, o el del plan más cercano si hoy queda fuera de él. */
+export function anioPorDefecto(anioActual: number): AnioPlan {
+  const primero = ANIOS_PLAN[0]
+  const ultimo = ANIOS_PLAN[ANIOS_PLAN.length - 1]
+  return (Math.min(Math.max(anioActual, primero), ultimo)) as AnioPlan
 }
 
-export interface AjustesPlan {
-  /** `null`: por definir. */
-  avanceModo: AvanceModo | null
-  /** Texto libre, solo informativo. */
-  periodicidad: string | null
+/** El año de un parámetro de la dirección, si es del plan; si no, el de por defecto. Nada de lo que venga se cree. */
+export function anioDeParametro(valor: string | undefined, anioActual: number): AnioPlan {
+  const n = valor !== undefined && /^\d{4}$/.test(valor) ? Number(valor) : NaN
+  return esAnioPlan(n) ? n : anioPorDefecto(anioActual)
 }
 
+/** ¿Ya empezó este año? Antes de que empiece no se puede reportar (la base lo exige igual). */
+export const anioIniciado = (anio: number, anioActual: number): boolean => anio <= anioActual
+
+export type EstadoDelAnio = 'terminado' | 'en_curso' | 'proximo'
+
+export function estadoDelAnio(anio: number, anioActual: number): EstadoDelAnio {
+  return anio < anioActual ? 'terminado' : anio === anioActual ? 'en_curso' : 'proximo'
+}
+
+export const ROTULO_ESTADO_ANIO: Record<EstadoDelAnio, string> = {
+  terminado: 'Terminó',
+  en_curso: 'En curso',
+  proximo: 'Próximo',
+}
+
+/** Lo que las pantallas necesitan saber del tiempo: en qué año calendario estamos (hora de Colombia). */
 export interface Seguimiento {
-  ajustes: AjustesPlan
-  /** Del más reciente al más antiguo (por fecha de corte). */
-  cortes: Corte[]
-  /** El corte donde hoy se reporta, si hay uno. */
-  abierto: Corte | null
+  anioActual: number
 }
 
-export const SIN_SEGUIMIENTO: Seguimiento = {
-  ajustes: { avanceModo: null, periodicidad: null },
-  cortes: [],
-  abierto: null,
-}
-
-/** El reporte VIGENTE de un indicador en un corte: la última versión de su cadena de correcciones. */
-export interface ReporteCorte {
+/** El reporte VIGENTE de un indicador en un año: el último que se hizo en él. */
+export interface ReporteAnio {
   reporteId: string
   valor: number
   estado: EstadoReporte
@@ -69,15 +82,15 @@ export interface ReporteCorte {
   validadorNombre: string | null
 }
 
-/** Dónde está un indicador respecto al corte: a quién le falta qué. */
-export type SituacionCorte = 'falta' | EstadoReporte
+/** Dónde está un indicador respecto al año: a quién le falta qué. */
+export type SituacionAnio = 'falta' | EstadoReporte
 
-export interface EstadoEnCorte {
-  situacion: SituacionCorte
-  reporte: ReporteCorte | null
+export interface EstadoEnAnio {
+  situacion: SituacionAnio
+  reporte: ReporteAnio | null
 }
 
-export const SITUACIONES: Record<SituacionCorte, { rotulo: string; punto: string }> = {
+export const SITUACIONES: Record<SituacionAnio, { rotulo: string; punto: string }> = {
   // «Falta reportar» no es un estado sino un pendiente: se dibuja con un marcador hueco (ver `ui.tsx`).
   falta:     { rotulo: 'Falta reportar',          punto: 'bg-[#192031]' },
   pendiente: { rotulo: 'Reportado · sin validar', punto: 'bg-[#B7791F]' },
@@ -86,106 +99,50 @@ export const SITUACIONES: Record<SituacionCorte, { rotulo: string; punto: string
 }
 
 /**
- * Lo que le toca hacer a cada quien con un indicador en el corte abierto:
+ * Lo que le toca hacer a cada quien con un indicador en un año:
  * reportar (le falta, o se lo devolvieron) o esperar la validación.
  */
-export const requiereReporte = (s: SituacionCorte | undefined) => s === 'falta' || s === 'devuelto'
+export const requiereReporte = (s: SituacionAnio | undefined | null) => s === 'falta' || s === 'devuelto'
 
-// ─── El criterio de avance ────────────────────────────────────────────────────
-
-export interface DescripcionModo {
-  /** Para el selector de Ajustes. */
-  titulo: string
-  /** Contra qué meta se mide, dicho en una frase corta. */
-  meta: string
-  /** Qué hay que entender. */
-  nota: string
+/**
+ * Qué situación tiene un indicador en un año, o `null` si en ese año no se espera nada de él.
+ *
+ * Si ya hay un reporte, la situación sale del reporte, siempre. Si no lo hay, solo «falta» cuando se espera
+ * uno: el año ya empezó, alguien tiene el indicador a su cargo y el indicador tiene meta ese año (con
+ * meta 0 o sin meta no hay nada que cumplir ni que reportar).
+ */
+export function situacionEn(
+  esperaReporte: boolean,
+  ultimo: { estado: EstadoReporte } | undefined | null,
+): SituacionAnio | null {
+  if (ultimo) return ultimo.estado
+  return esperaReporte ? 'falta' : null
 }
 
-export const MODOS: Record<AvanceModo | 'por_definir', DescripcionModo> = {
-  por_definir: {
-    titulo: 'Por definir',
-    meta: 'meta 2026',
-    nota: 'El cumplimiento se muestra como provisional y se mide contra la meta de 2026, sin decidir si lo reportado es del año o acumulado.',
-  },
-  anual: {
-    titulo: 'Avance del año',
-    meta: 'meta 2026',
-    nota: 'Cada reporte dice cuánto se ha avanzado en 2026 y se mide contra la meta de este año.',
-  },
-  acumulado: {
-    titulo: 'Avance acumulado',
-    meta: 'meta acumulada a 2026',
-    nota: 'Cada reporte dice cuánto se lleva desde 2024 y se mide contra la suma de las metas de 2024 a 2026.',
-  },
-}
-
-export const claveModo = (m: AvanceModo | null): AvanceModo | 'por_definir' => m ?? 'por_definir'
-
-// ─── Fechas de corte ──────────────────────────────────────────────────────────
-
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-const FECHA = /^(\d{4})-(\d{2})-(\d{2})$/
-
-/** Una fecha `YYYY-MM-DD` es válida si existe en el calendario (no 31 de febrero). */
-export function esFechaValida(s: unknown): s is string {
-  if (typeof s !== 'string') return false
-  const m = FECHA.exec(s)
-  if (!m) return false
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  const t = new Date(Date.UTC(y, mo - 1, d))
-  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d
-}
-
-/** «31 de octubre de 2026». Se arma con los números, sin pasar por `Date` local: una fecha no tiene huso. */
-export function fechaLarga(iso: string): string {
-  const m = FECHA.exec(iso)
-  if (!m) return iso
-  return `${Number(m[3])} de ${MESES[Number(m[2]) - 1]} de ${m[1]}`
-}
-
-/** «31 oct 2026». */
-export function fechaCorta(iso: string): string {
-  const m = FECHA.exec(iso)
-  if (!m) return iso
-  return `${Number(m[3])} ${MESES[Number(m[2]) - 1].slice(0, 3)} ${m[1]}`
-}
-
-/** El nombre que se propone para un corte si quien lo crea no escribe uno. */
-export const sugerirNombreCorte = (fechaIso: string) => `Corte a ${fechaLarga(fechaIso)}`
-
-// ─── Cuentas por corte ────────────────────────────────────────────────────────
-
-/** Qué situación tiene un indicador en un corte, o `null` si nadie puede reportarlo (sin responsable). */
-export function situacionEn(sinResponsable: boolean, vigente: { estado: EstadoReporte } | undefined | null): SituacionCorte | null {
-  if (vigente) return vigente.estado
-  return sinResponsable ? null : 'falta'
-}
-
-export interface ResumenCorte {
-  /** Indicadores que alguien tiene a su cargo (los únicos que pueden reportar). */
-  conResponsable: number
-  sinResponsable: number
+export interface ResumenAnio {
+  /** Indicadores de los que se espera algo en el año: los que tienen situación. */
+  esperados: number
+  /** Los que no tienen situación: nadie los lleva, el año no empieza o no tienen meta. */
+  sinObligacion: number
   faltan: number
   porValidar: number
   aprobados: number
   devueltos: number
 }
 
-export const RESUMEN_CORTE_VACIO: ResumenCorte = {
-  conResponsable: 0, sinResponsable: 0, faltan: 0, porValidar: 0, aprobados: 0, devueltos: 0,
+export const RESUMEN_ANIO_VACIO: ResumenAnio = {
+  esperados: 0, sinObligacion: 0, faltan: 0, porValidar: 0, aprobados: 0, devueltos: 0,
 }
 
 /**
- * La cuenta de un corte. `situaciones` trae una entrada por indicador: `null` si nadie lo tiene
- * a su cargo (y entonces nadie puede reportarlo), y si no, dónde va. Que alguien con un indicador
- * sin responsable lo haya reportado antes de que lo quitaran sí cuenta: la situación sale del reporte.
+ * La cuenta de un año. `situaciones` trae una entrada por indicador: `null` si en ese año no se espera nada
+ * de él, y si no, dónde va.
  */
-export function resumirCorte(situaciones: (SituacionCorte | null)[]): ResumenCorte {
-  const r = { ...RESUMEN_CORTE_VACIO }
+export function resumirAnio(situaciones: (SituacionAnio | null)[]): ResumenAnio {
+  const r = { ...RESUMEN_ANIO_VACIO }
   for (const s of situaciones) {
-    if (s === null) { r.sinResponsable++; continue }
-    r.conResponsable++
+    if (s === null) { r.sinObligacion++; continue }
+    r.esperados++
     if (s === 'falta') r.faltan++
     else if (s === 'pendiente') r.porValidar++
     else if (s === 'aprobado') r.aprobados++

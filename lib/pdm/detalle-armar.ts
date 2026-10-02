@@ -3,15 +3,15 @@ import type { ComentarioVista, DetalleIndicador, EvidenciaVista, ReporteDetalle,
 import type { EstadoReporte } from './seguimiento'
 
 /**
- * De las filas de la base al detalle de un indicador: todas las versiones de sus reportes con
- * sus evidencias y validaciones, y sus comentarios.
+ * De las filas de la base al detalle de un indicador: todas las versiones de sus reportes (de todos los
+ * años) con sus evidencias y validaciones, y sus comentarios.
  *
  * Pura: no lee nada. La lectura vive en `app/actions/pdm-seguimiento.ts`.
  */
 
 export interface FilaReporteDetalle {
   id: string
-  corte_id: string
+  anio: number
   valor: number | string
   valor_anterior: number | string | null
   texto: string | null
@@ -20,7 +20,6 @@ export interface FilaReporteDetalle {
   corrige_a: string | null
   motivo_correccion: string | null
   created_at: string
-  corte: { nombre: string } | { nombre: string }[] | null
 }
 
 export interface FilaEvidencia {
@@ -71,6 +70,9 @@ export function armarDetalle(entrada: {
   puedeValidarElIndicador: boolean
 }): DetalleIndicador {
   const corregidos = new Set(entrada.reportes.map(r => r.corrige_a).filter((x): x is string => x !== null))
+  // Lo último que se reportó en cada año: es lo único que se valida (la base lo exige igual).
+  const ultimoDelAnio = new Map<number, string>()
+  for (const r of [...entrada.reportes].sort(masReciente).reverse()) ultimoDelAnio.set(r.anio, r.id)
 
   const evidenciasDe = new Map<string, EvidenciaVista[]>()
   for (const e of entrada.evidencias) {
@@ -90,14 +92,12 @@ export function armarDetalle(entrada: {
   const reportes: ReporteDetalle[] = [...entrada.reportes].sort(masReciente).flatMap(r => {
     const valor = numero(r.valor)
     if (valor === null) return []
-    const corte = Array.isArray(r.corte) ? r.corte[0] : r.corte
     const validaciones = validacionesDe.get(r.id) ?? []
     const estado: EstadoReporte = validaciones.length ? validaciones[validaciones.length - 1].estado : 'pendiente'
     const vigente = !corregidos.has(r.id)
     return [{
       id: r.id,
-      corteId: r.corte_id,
-      corteNombre: corte?.nombre ?? 'Corte',
+      anio: r.anio,
       valor,
       valorAnterior: numero(r.valor_anterior),
       texto: r.texto ?? '',
@@ -110,8 +110,8 @@ export function armarDetalle(entrada: {
       estado,
       evidencias: evidenciasDe.get(r.id) ?? [],
       validaciones,
-      // Nadie valida lo suyo, ni lo que ya fue superado por una corrección.
-      puedeValidar: entrada.puedeValidarElIndicador && vigente && r.autor_id !== entrada.yoId,
+      // Nadie valida lo suyo, ni lo que ya fue superado por una corrección o por un reporte más reciente del año.
+      puedeValidar: entrada.puedeValidarElIndicador && vigente && ultimoDelAnio.get(r.anio) === r.id && r.autor_id !== entrada.yoId,
     } satisfies ReporteDetalle]
   })
 

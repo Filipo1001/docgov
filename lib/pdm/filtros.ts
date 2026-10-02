@@ -11,14 +11,14 @@ import { requiereReporte } from './seguimiento'
  * ejecución sin que TypeScript lo note. Un módulo sin `'use client'` sirve a los dos.
  *
  *   sin_reporte   ningún reporte aprobado todavía (nada cuenta en el cumplimiento)
- *   por_reportar  hay corte abierto y a quien lo tiene le falta reportar, o se lo devolvieron
- *   por_validar   hay corte abierto y lo reportado espera a la secretaría
+ *   por_reportar  en el año que se mira, a quien lo tiene le falta reportar, o se lo devolvieron
+ *   por_validar   en el año que se mira, lo reportado espera a la secretaría
  */
 export type Filtro = 'todos' | 'sin_responsable' | 'atencion' | 'sin_reporte' | 'por_reportar' | 'por_validar'
 export const FILTROS: readonly Filtro[] = ['todos', 'sin_responsable', 'atencion', 'sin_reporte', 'por_reportar', 'por_validar']
 
-/** Los dos filtros que solo tienen sentido con un corte abierto. */
-export const FILTROS_DE_CORTE: readonly Filtro[] = ['por_reportar', 'por_validar']
+/** Los dos filtros que solo tienen sentido en un año en que se espera algo (uno que ya empezó). */
+export const FILTROS_DEL_ANIO: readonly Filtro[] = ['por_reportar', 'por_validar']
 
 export function cumpleFiltro(i: Indicador, f: Filtro): boolean {
   switch (f) {
@@ -26,7 +26,7 @@ export function cumpleFiltro(i: Indicador, f: Filtro): boolean {
     case 'sin_responsable': return sinAsignar(i)
     case 'atencion': { const e = estadoDe(i); return e === 'critico' || e === 'atrasado' }
     case 'sin_reporte': return estadoDe(i) === 'sin_reporte'
-    case 'por_reportar': return requiereReporte(i.enCorte?.situacion)
-    case 'por_validar': return i.enCorte?.situacion === 'pendiente'
+    case 'por_reportar': return requiereReporte(i.enAnio?.situacion)
+    case 'por_validar': return i.enAnio?.situacion === 'pendiente'
   }
 }

@@ -26,12 +26,6 @@ export const PLAN = {
 } as const
 
 /**
- * El año contra el que se mide el seguimiento. La meta «de este año» del Tablero
- * es la de este año, y solo la de este año se pide a la base (ver `datos.ts`).
- */
-export const ANIO_SEGUIMIENTO = 2026
-
-/**
  * Mientras el módulo esté en vista previa (solo administrador, solo en el entorno
  * de pruebas), lo dice en pantalla: una línea, sin ocupar una tarjeta. Se apaga
  * aquí, y solo debe apagarse el día que el módulo se abra de verdad.

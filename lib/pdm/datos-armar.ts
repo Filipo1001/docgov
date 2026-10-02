@@ -1,6 +1,6 @@
-import type { Asignacion, Indicador } from './plan'
+import type { Asignacion, AnioDeIndicador, Indicador } from './plan'
 import {
-  situacionEn, type AvanceModo, type Corte, type EstadoEnCorte, type EstadoReporte, type ReporteCorte, type Seguimiento,
+  ANIOS_PLAN, anioIniciado, anioPorDefecto, situacionEn, type EstadoReporte, type ReporteAnio,
 } from './seguimiento'
 
 /**
@@ -26,9 +26,10 @@ export interface FilaIndicador {
   dependencia: { nombre: string } | { nombre: string }[] | null
 }
 
-/** Meta de UN año (la que se pidió en la lectura). */
+/** La meta de un indicador en un año. */
 export interface FilaMeta {
   indicador_id: string
+  anio: number
   meta: number | string | null
 }
 
@@ -39,23 +40,18 @@ export interface FilaAsignacion {
   grupo_id?: string | null
 }
 
-/** De `pdm_avance_validado`: el último reporte aprobado de cada indicador. */
+/** De `pdm_avance_validado`: el último reporte aprobado de cada indicador en cada año. */
 export interface FilaAvanceValidado {
   indicador_id: string
+  anio: number
   valor: number | string
-  corte_nombre: string
 }
 
-/** De `pdm_metas_acumuladas`, para el año de seguimiento. */
-export interface FilaMetaAcumulada {
-  indicador_id: string
-  meta_acumulada: number | string | null
-}
-
-/** De `pdm_reportes_vigentes`: el último reporte de cada indicador en UN corte. */
+/** De `pdm_reportes_vigentes`: el último reporte de cada indicador en cada año. */
 export interface FilaVigente {
   reporte_id: string
   indicador_id: string
+  anio: number
   valor: number | string
   estado: string
   autor_id: string | null
@@ -69,17 +65,15 @@ export interface FilaVigente {
 
 /** Lo que `armarIndicadores` necesita saber del seguimiento. Sin nada de esto, se arma el plan «sin seguimiento». */
 export interface DatosSeguimiento {
-  modo: AvanceModo | null
-  /** Hay un corte abierto: solo entonces los indicadores traen su situación en el corte. */
-  hayCorteAbierto: boolean
+  /** El año calendario (hora de Colombia): de él depende qué años ya se pueden reportar. */
+  anioActual: number
   avances: FilaAvanceValidado[]
-  acumuladas: FilaMetaAcumulada[]
-  /** Los vigentes del corte ABIERTO. */
+  /** El último reporte de cada indicador en cada año. */
   vigentes: FilaVigente[]
 }
 
 export const SIN_DATOS_SEGUIMIENTO: DatosSeguimiento = {
-  modo: null, hayCorteAbierto: false, avances: [], acumuladas: [], vigentes: [],
+  anioActual: ANIOS_PLAN[0], avances: [], vigentes: [],
 }
 
 /** PostgREST devuelve `numeric` como número, pero como texto si excede la precisión de un double: se acepta ambos. */
@@ -93,7 +87,7 @@ const ESTADOS_REPORTE: readonly EstadoReporte[] = ['pendiente', 'aprobado', 'dev
 const esEstadoReporte = (v: unknown): v is EstadoReporte => ESTADOS_REPORTE.includes(v as EstadoReporte)
 
 /** Una fila de la vista, como la usan las pantallas. `null` si trae algo que no se entiende (no se inventa un estado). */
-export function reporteDeFila(f: FilaVigente): ReporteCorte | null {
+export function reporteDeFila(f: FilaVigente): ReporteAnio | null {
   const valor = numero(f.valor)
   if (valor === null || !esEstadoReporte(f.estado)) return null
   return {
@@ -110,19 +104,24 @@ export function reporteDeFila(f: FilaVigente): ReporteCorte | null {
   }
 }
 
+/**
+ * El plan listo para pintar: cada indicador con sus cuatro años y, ya proyectado, el que se mira (`anio`, por
+ * defecto el de hoy).
+ */
 export function armarIndicadores(
   filas: FilaIndicador[],
   metas: FilaMeta[],
   asignaciones: FilaAsignacion[],
   seg: DatosSeguimiento = SIN_DATOS_SEGUIMIENTO,
+  anio: number = anioPorDefecto(seg.anioActual),
 ): Indicador[] {
-  const metaDe = new Map(metas.map(m => [m.indicador_id, numero(m.meta)]))
-  const acumuladaDe = new Map(seg.acumuladas.map(m => [m.indicador_id, numero(m.meta_acumulada)]))
-  const avanceDe = new Map(seg.avances.map(a => [a.indicador_id, a]))
-  const vigenteDe = new Map<string, ReporteCorte>()
+  const clave = (id: string, a: number) => `${id}:${a}`
+  const metaDe = new Map(metas.map(m => [clave(m.indicador_id, m.anio), numero(m.meta)]))
+  const avanceDe = new Map(seg.avances.map(a => [clave(a.indicador_id, a.anio), numero(a.valor)]))
+  const vigenteDe = new Map<string, ReporteAnio>()
   for (const f of seg.vigentes) {
     const r = reporteDeFila(f)
-    if (r) vigenteDe.set(f.indicador_id, r)
+    if (r) vigenteDe.set(clave(f.indicador_id, f.anio), r)
   }
 
   const asignadosDe = new Map<string, Asignacion[]>()
@@ -136,16 +135,21 @@ export function armarIndicadores(
     .map(f => {
       const dep = Array.isArray(f.dependencia) ? f.dependencia[0] : f.dependencia
       const asignados = asignadosDe.get(f.id) ?? []
-      const meta2026 = metaDe.get(f.id) ?? null
-      const metaAcumulada = acumuladaDe.get(f.id) ?? null
-      const avance = avanceDe.get(f.id)
-      const vigente = vigenteDe.get(f.id) ?? null
 
-      let enCorte: EstadoEnCorte | null = null
-      if (seg.hayCorteAbierto) {
-        const situacion = situacionEn(asignados.length === 0, vigente)
-        if (situacion) enCorte = { situacion, reporte: vigente }
-      }
+      const anios: AnioDeIndicador[] = ANIOS_PLAN.map(a => {
+        const meta = metaDe.get(clave(f.id, a)) ?? null
+        const vigente = vigenteDe.get(clave(f.id, a)) ?? null
+        // Se espera un reporte cuando el año ya empezó, alguien lo lleva y hay una meta que cumplir.
+        const espera = asignados.length > 0 && anioIniciado(a, seg.anioActual) && (meta ?? 0) > 0
+        const situacion = situacionEn(espera, vigente)
+        return {
+          anio: a,
+          meta,
+          avance: avanceDe.get(clave(f.id, a)) ?? null,
+          enAnio: situacion ? { situacion, reporte: vigente } : null,
+        }
+      })
+      const visto = anios.find(a => a.anio === anio)
 
       return {
         id: f.fila_origen,
@@ -162,42 +166,12 @@ export function armarIndicadores(
         asignados,
         lineaBase: numero(f.linea_base),
         metaCuatrienio: numero(f.meta_cuatrienio),
-        meta2026,
-        metaAcumulada,
-        criterio: seg.modo,
-        // Con el criterio sin definir se mide contra la meta de 2026, y se rotula provisional.
-        metaMedida: seg.modo === 'acumulado' ? metaAcumulada : meta2026,
-        avance: avance ? numero(avance.valor) : null,
-        avanceCorte: avance?.corte_nombre ?? null,
-        enCorte,
+        anios,
+        anio,
+        meta: visto?.meta ?? null,
+        avance: visto?.avance ?? null,
+        enAnio: visto?.enAnio ?? null,
       } satisfies Indicador
     })
     .sort((a, b) => a.id - b.id)
-}
-
-// ─── Cortes y ajustes ─────────────────────────────────────────────────────────
-
-export interface FilaPlanAjustes {
-  avance_modo: string | null
-  periodicidad: string | null
-}
-
-export interface FilaCorte {
-  id: string
-  nombre: string
-  fecha_corte: string
-  estado: string
-}
-
-/** Lo que la base dice de los cortes y los ajustes, como lo usan las pantallas. Más reciente primero. */
-export function armarSeguimiento(plan: FilaPlanAjustes, cortes: FilaCorte[]): Seguimiento {
-  const modo: AvanceModo | null = plan.avance_modo === 'acumulado' || plan.avance_modo === 'anual' ? plan.avance_modo : null
-  const lista: Corte[] = cortes
-    .map(c => ({ id: c.id, nombre: c.nombre, fecha: c.fecha_corte, abierto: c.estado === 'abierto' }))
-    .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : a.nombre.localeCompare(b.nombre, 'es')))
-  return {
-    ajustes: { avanceModo: modo, periodicidad: plan.periodicidad },
-    cortes: lista,
-    abierto: lista.find(c => c.abierto) ?? null,
-  }
 }

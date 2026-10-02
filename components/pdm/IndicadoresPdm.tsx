@@ -14,9 +14,10 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
-import type { Indicador } from '@/lib/pdm/plan'
+import { proyectarLista, type Indicador } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import EncabezadoSeccion from './EncabezadoSeccion'
+import SelectorAnio from './SelectorAnio'
 import { T } from './tema'
 import ListaIndicadores from './ListaIndicadores'
 import type { Filtro } from '@/lib/pdm/filtros'
@@ -24,7 +25,7 @@ import type { GrupoVista, PersonaDirectorio, PersonaFicha } from '@/lib/pdm/pers
 import { asignadosVista } from '@/lib/pdm/asignados'
 import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
 import { describirResumen, type AccionesPdm, type ResumenCambio } from '@/lib/pdm/acciones'
-import { fechaCorta, type Seguimiento } from '@/lib/pdm/seguimiento'
+import { anioIniciado } from '@/lib/pdm/seguimiento'
 import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import IndicadorModal from './IndicadorModal'
 import SelectorAsignacion from './SelectorAsignacion'
@@ -32,9 +33,10 @@ import { ACCIONES_REALES } from './acciones-reales'
 import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
 
 export default function IndicadoresPdm({
-  indicadores, fichas, personas, grupos, nivel, yoId, seguimiento, dependenciaInicial, filtroInicial, abiertoInicial, restringirA,
+  indicadores, fichas, personas, grupos, nivel, yoId, anioActual, anioInicial, dependenciaInicial, filtroInicial, abiertoInicial, restringirA,
   acciones = ACCIONES_REALES, accionesSeguimiento = ACCIONES_SEGUIMIENTO_REALES,
 }: {
+  /** Con sus cuatro años: se proyectan al que se mira. */
   indicadores: Indicador[]
   fichas: Record<number, PersonaFicha>
   personas: PersonaDirectorio[]
@@ -43,8 +45,10 @@ export default function IndicadoresPdm({
   nivel: NivelPdm
   /** Quién mira: sirve para saber qué indicadores son suyos para reportar. */
   yoId: string
-  /** Los cortes y los ajustes del plan. */
-  seguimiento: Seguimiento
+  /** El año calendario (hora de Colombia): de él depende qué años ya se pueden reportar. */
+  anioActual: number
+  /** El año con que se abre la lista. */
+  anioInicial: number
   /** Lo que quien gestiona puede hacer. Por defecto, las acciones del servidor; las pruebas ponen un doble. */
   acciones?: AccionesPdm
   accionesSeguimiento?: AccionesSeguimiento
@@ -55,6 +59,7 @@ export default function IndicadoresPdm({
   /** Solo estos indicadores (los de una persona), con el nombre para el rótulo. */
   restringirA?: { etiqueta: string; ids: number[] }
 }) {
+  const [anio, setAnio] = useState(anioInicial)
   const [dependencia, setDependencia] = useState(dependenciaInicial ?? '')
   const [abierto, setAbierto] = useState<number | null>(abiertoInicial ?? null)
   const [seleccionActiva, setSeleccionActiva] = useState(false)
@@ -63,17 +68,19 @@ export default function IndicadoresPdm({
   const [selectorPara, setSelectorPara] = useState<Indicador[] | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
+  // Todos los indicadores vistos en el año elegido; la lista es lo que de ellos se enseña.
+  const delAnio = useMemo(() => proyectarLista(indicadores, anio), [indicadores, anio])
   const lista = useMemo(() => {
-    if (!restringirA) return indicadores
+    if (!restringirA) return delAnio
     const ids = new Set(restringirA.ids)
-    return indicadores.filter(i => ids.has(i.id))
-  }, [indicadores, restringirA])
-  const indicador = abierto === null ? null : indicadores.find(i => i.id === abierto) ?? null
+    return delAnio.filter(i => ids.has(i.id))
+  }, [delAnio, restringirA])
+  const indicador = abierto === null ? null : delAnio.find(i => i.id === abierto) ?? null
 
   const puedeAsignar = gestiona(nivel)
   const personasPorId = useMemo(() => new Map(personas.map(p => [p.id, p])), [personas])
   const gruposPorId = useMemo(() => new Map(grupos.map(g => [g.id, g])), [grupos])
-  const marcados = useMemo(() => indicadores.filter(i => elegidos.has(i.id)), [indicadores, elegidos])
+  const marcados = useMemo(() => delAnio.filter(i => elegidos.has(i.id)), [delAnio, elegidos])
 
   function alternar(id: number) {
     setElegidos(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s })
@@ -91,16 +98,17 @@ export default function IndicadoresPdm({
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
-      {/* El cuadro de datos dice de qué corte se habla: quien reporta necesita saber por qué hay (o no) con qué hacerlo. */}
+      {/* El cuadro de datos dice de qué año se habla: quien reporta necesita saber por qué hay (o no) con qué hacerlo. */}
       <EncabezadoSeccion
         titulo="Indicadores"
-        detalle={!seguimiento.abierto && (nivel === 'responsable' || nivel === 'coordinador') ? 'No hay un corte abierto: por ahora no hay nada que reportar.' : undefined}
+        detalle={!anioIniciado(anio, anioActual) && (nivel === 'responsable' || nivel === 'coordinador') ? `El ${anio} empieza el 1 de enero: todavía no se puede reportar.` : undefined}
         datos={[
-          { rotulo: 'Corte', valor: seguimiento.abierto ? seguimiento.abierto.nombre : 'Sin corte abierto' },
-          ...(seguimiento.abierto ? [{ rotulo: 'Fecha de corte', valor: fechaCorta(seguimiento.abierto.fecha) }] : []),
+          { rotulo: 'Año', valor: String(anio) },
           { rotulo: 'Indicadores', valor: restringirA ? `${lista.length} de ${indicadores.length}` : String(indicadores.length) },
         ]}
       />
+
+      <SelectorAnio anio={anio} anioActual={anioActual} onCambiar={setAnio} />
 
       {aviso && (
         <p role="status" className={`flex items-start justify-between gap-3 ${T.avisoBien}`}>
@@ -162,7 +170,8 @@ export default function IndicadoresPdm({
         key={abierto ?? 'cerrado'}
         indicador={indicador}
         onCerrar={() => setAbierto(null)}
-        seguimiento={{ nivel, yoId, corteAbierto: seguimiento.abierto, acciones: accionesSeguimiento }}
+        onAnio={setAnio}
+        seguimiento={{ nivel, yoId, anioActual, acciones: accionesSeguimiento }}
         persona={indicador ? fichas[indicador.id] : undefined}
         asignados={indicador ? asignadosVista(indicador, personasPorId, gruposPorId) : undefined}
         onAsignar={puedeAsignar && indicador ? () => { setAviso(null); setSelectorPara([indicador]) } : undefined}

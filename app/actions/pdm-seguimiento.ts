@@ -1,15 +1,15 @@
 'use server'
 
 /**
- * El seguimiento por cortes del módulo Plan de Desarrollo (Fase B): ajustes y cortes (administrador),
- * reportes con evidencia (quien tiene el indicador), validación (la secretaría) y comentarios.
+ * El seguimiento por años del módulo Plan de Desarrollo (Fase B): reportes con evidencia (quien tiene el
+ * indicador), validación (la secretaría) y comentarios.
  *
  * Todas siguen el mismo camino que `app/actions/pdm.ts` y ninguna se salta una puerta:
  *
  *   1. `accesoPdm()`: fuera de la vista previa (producción) no hacen nada.
  *   2. El nivel de quien pide, leído del servidor y no del navegador.
  *   3. Se valida lo que llega ANTES de preguntarle nada a la base.
- *   4. La base decide: funciones SECURITY INVOKER (migración 056) con la sesión de quien pide, así
+ *   4. La base decide: funciones SECURITY INVOKER (migraciones 056 y 057) con la sesión de quien pide, así
  *      que mandan las políticas. Aunque alguien invocara esto a mano, la base lo negaría.
  *
  * ── Las evidencias ───────────────────────────────────────────────────────
@@ -18,9 +18,9 @@
  * el archivo DIRECTO al almacenamiento (subir varios MB a través de una acción agota el tiempo de la
  * función en Vercel) y después se registra. El espacio `pdm-evidencias` es privado y sin políticas:
  * solo este archivo lo toca, con la clave de servicio, DESPUÉS de comprobar con la sesión de quien
- * pide que el indicador es suyo y que hay un corte abierto.
+ * pide que el indicador es suyo y que el año ya empezó.
  *
- *   · La ruta la decide el servidor: `{plan}/{indicador}/{corte}/{uuid}.{ext}`. El navegador no
+ *   · La ruta la decide el servidor: `{plan}/{indicador}/{año}/{uuid}.{ext}`. El navegador no
  *     elige dónde se guarda nada.
  *   · Al registrar el reporte NO se cree lo que el navegador dice del archivo: se lee del
  *     almacenamiento su tamaño y su tipo reales.
@@ -40,13 +40,13 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { accesoPdm, type AccesoPdm } from '@/lib/pdm/acceso'
 import { gestiona } from '@/lib/pdm/niveles'
 import { esUuid, traducirErrorPdm, type Resultado } from '@/lib/pdm/acciones'
-import { esFechaValida, sugerirNombreCorte } from '@/lib/pdm/seguimiento'
+import { hoyBogota } from '@/lib/pdm/contrato'
+import { anioDeFecha, anioIniciado, esAnioPlan } from '@/lib/pdm/seguimiento'
 import { armarDetalle, type FilaComentario, type FilaEvidencia, type FilaReporteDetalle, type FilaValidacion } from '@/lib/pdm/detalle-armar'
 import {
-  MAX_BYTES_EVIDENCIA, MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO, MAX_NOMBRE_CORTE, MAX_PERIODICIDAD,
+  MAX_BYTES_EVIDENCIA, MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO,
   TIPOS_EVIDENCIA, errorEnArchivos, errorEnComentario, errorEnReporte, errorEnValidacion, tipoDeArchivo,
-  type DetalleIndicador, type EntradaComentar, type EntradaConfigurarPlan, type EntradaEliminarCorte,
-  type EntradaEstadoCorte, type EntradaGuardarCorte, type EntradaPrepararEvidencias, type EntradaReportar,
+  type DetalleIndicador, type EntradaComentar, type EntradaPrepararEvidencias, type EntradaReportar,
   type EntradaValidar, type EvidenciaPreparada, type EvidenciaSubida,
 } from '@/lib/pdm/seguimiento-acciones'
 
@@ -66,96 +66,23 @@ async function sesionPdm(permite: (a: AccesoPdm) => boolean = () => true) {
   return { acceso, supabase: await createServerSupabaseClient() }
 }
 
-// ─── Ajustes y cortes: solo el administrador ──────────────────────────────────
-
-export async function configurarPlan(e: EntradaConfigurarPlan): Promise<Resultado> {
-  try {
-    const s = await sesionPdm(a => a.nivel === 'admin')
-    if (!s) return falla(SIN_PERMISO)
-    if (e?.avanceModo !== null && e?.avanceModo !== 'anual' && e?.avanceModo !== 'acumulado') {
-      return falla('Algo de lo elegido no es válido.')
-    }
-    const periodicidad = typeof e.periodicidad === 'string' ? e.periodicidad.trim() : ''
-    if (periodicidad.length > MAX_PERIODICIDAD) return falla(`La periodicidad no puede pasar de ${MAX_PERIODICIDAD} caracteres.`)
-
-    const { error } = await s.supabase.rpc('pdm_plan_configurar', {
-      p_avance_modo: e.avanceModo, p_periodicidad: periodicidad || null, p_motivo: null,
-    })
-    if (error) return falla(traducirErrorPdm(error.code, error.message))
-    refrescar()
-    return { ok: true, datos: undefined }
-  } catch (err) {
-    console.error('[pdm/seguimiento] configurarPlan:', err)
-    return falla(GENERICO)
-  }
-}
-
-export async function guardarCorte(e: EntradaGuardarCorte): Promise<Resultado<{ corte: string }>> {
-  try {
-    const s = await sesionPdm(a => a.nivel === 'admin')
-    if (!s) return falla(SIN_PERMISO)
-    if (e?.corte !== undefined && !esUuid(e.corte)) return falla('Algo de lo elegido no es válido.')
-    if (!esFechaValida(e?.fecha)) return falla('Elige la fecha del corte.')
-    const nombre = (typeof e.nombre === 'string' ? e.nombre.trim() : '') || sugerirNombreCorte(e.fecha)
-    if (nombre.length > MAX_NOMBRE_CORTE) return falla(`El nombre no puede pasar de ${MAX_NOMBRE_CORTE} caracteres.`)
-
-    const { data, error } = await s.supabase.rpc('pdm_corte_guardar', {
-      p_corte: e.corte ?? null, p_nombre: nombre, p_fecha: e.fecha, p_abrir: e.abrir === true, p_motivo: null,
-    })
-    if (error) return falla(traducirErrorPdm(error.code, error.message))
-    if (!esUuid(data)) return falla(GENERICO)
-    refrescar()
-    return { ok: true, datos: { corte: data } }
-  } catch (err) {
-    console.error('[pdm/seguimiento] guardarCorte:', err)
-    return falla(GENERICO)
-  }
-}
-
-export async function cambiarEstadoCorte(e: EntradaEstadoCorte): Promise<Resultado> {
-  try {
-    const s = await sesionPdm(a => a.nivel === 'admin')
-    if (!s) return falla(SIN_PERMISO)
-    if (!esUuid(e?.corte) || (e.estado !== 'abierto' && e.estado !== 'cerrado')) return falla('Algo de lo elegido no es válido.')
-
-    const { error } = await s.supabase.rpc('pdm_corte_estado', { p_corte: e.corte, p_estado: e.estado, p_motivo: null })
-    if (error) return falla(traducirErrorPdm(error.code, error.message))
-    refrescar()
-    return { ok: true, datos: undefined }
-  } catch (err) {
-    console.error('[pdm/seguimiento] cambiarEstadoCorte:', err)
-    return falla(GENERICO)
-  }
-}
-
-export async function eliminarCorte(e: EntradaEliminarCorte): Promise<Resultado> {
-  try {
-    const s = await sesionPdm(a => a.nivel === 'admin')
-    if (!s) return falla(SIN_PERMISO)
-    if (!esUuid(e?.corte)) return falla('Algo de lo elegido no es válido.')
-
-    const { error } = await s.supabase.rpc('pdm_corte_eliminar', { p_corte: e.corte, p_motivo: null })
-    if (error) return falla(traducirErrorPdm(error.code, error.message))
-    refrescar()
-    return { ok: true, datos: undefined }
-  } catch (err) {
-    console.error('[pdm/seguimiento] eliminarCorte:', err)
-    return falla(GENERICO)
-  }
-}
-
 // ─── Reportar ─────────────────────────────────────────────────────────────────
 
 /**
- * A qué plan y a qué corte va un reporte de este indicador, o por qué no se puede.
- * Se pregunta con la sesión de quien reporta: si no ve el indicador, no lo tiene a su cargo o no hay
- * corte abierto, no hay nada que preparar.
+ * A qué plan va un reporte de este indicador en este año, o por qué no se puede.
+ * Se pregunta con la sesión de quien reporta: si no ve el indicador, no lo tiene a su cargo o el año no
+ * ha empezado, no hay nada que preparar. (La base lo vuelve a decidir al registrar.)
  */
 async function contextoDeReporte(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   indicador: string,
+  anio: unknown,
   usuarioId: string,
-): Promise<{ ok: true; planId: string; corteId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; planId: string; anio: number } | { ok: false; error: string }> {
+  if (!esAnioPlan(anio)) return { ok: false, error: 'Elige un año del plan.' }
+  if (!anioIniciado(anio, anioDeFecha(hoyBogota()))) {
+    return { ok: false, error: `El ${anio} empieza el 1 de enero: todavía no se puede reportar.` }
+  }
   const [ind, asi] = await Promise.all([
     supabase.from('pdm_indicadores').select('plan_id').eq('id', indicador).eq('activo', true).maybeSingle(),
     supabase.from('pdm_asignaciones').select('usuario_id').eq('indicador_id', indicador).eq('usuario_id', usuarioId).limit(1),
@@ -163,12 +90,7 @@ async function contextoDeReporte(
   if (ind.error || asi.error) return { ok: false, error: GENERICO }
   if (!ind.data) return { ok: false, error: 'El indicador no existe o no tienes acceso a él.' }
   if (!asi.data?.length) return { ok: false, error: SOLO_RESPONSABLES }
-
-  const planId = ind.data.plan_id as string
-  const corte = await supabase.from('pdm_cortes').select('id').eq('plan_id', planId).eq('estado', 'abierto').maybeSingle()
-  if (corte.error) return { ok: false, error: GENERICO }
-  if (!corte.data) return { ok: false, error: 'No hay un corte abierto para reportar.' }
-  return { ok: true, planId, corteId: corte.data.id as string }
+  return { ok: true, planId: ind.data.plan_id as string, anio }
 }
 
 /** Reportar lo hace quien tiene el indicador a su cargo: ni el administrador ni Control Interno lo hacen por otro. */
@@ -188,14 +110,14 @@ export async function prepararEvidencias(e: EntradaPrepararEvidencias): Promise<
     const mal = errorEnArchivos(archivos)
     if (mal) return falla(mal)
 
-    const ctx = await contextoDeReporte(s.supabase, e.indicador, s.acceso.userId)
+    const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
     if (!ctx.ok) return falla(ctx.error)
 
     const admin = createAdminSupabaseClient()
     const preparadas: EvidenciaPreparada[] = []
     for (const a of archivos) {
       const tipo = tipoDeArchivo(a.nombre, a.tipo)!
-      const ruta = `${ctx.planId}/${e.indicador}/${ctx.corteId}/${randomUUID()}.${tipo.ext}`
+      const ruta = `${ctx.planId}/${e.indicador}/${ctx.anio}/${randomUUID()}.${tipo.ext}`
       const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(ruta, { upsert: false })
       if (error || !data) {
         console.error('[pdm/seguimiento] prepararEvidencias:', error?.message)
@@ -219,7 +141,7 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     if (!puedeReportar(s.acceso)) return falla(SOLO_RESPONSABLES)
     if (!esUuid(e?.indicador)) return falla('Algo de lo elegido no es válido.')
 
-    // Que sea o no corrección lo decide la base (si ya hay un reporte en el corte); aquí se revisa lo que se sabe.
+    // Que sea o no corrección lo decide la base (si el último reporte del año está sin cerrar); aquí se revisa lo que se sabe.
     const mal = errorEnReporte(e, false)
     if (mal) return falla(mal)
     const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
@@ -227,17 +149,17 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     if (!Array.isArray(e.evidencias) || e.evidencias.length === 0) return falla('Adjunta al menos una evidencia.')
     if (e.evidencias.length > MAX_EVIDENCIAS) return falla(`Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`)
 
-    const ctx = await contextoDeReporte(s.supabase, e.indicador, s.acceso.userId)
+    const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
     if (!ctx.ok) return falla(ctx.error)
-    const carpeta = `${ctx.planId}/${e.indicador}/${ctx.corteId}`
+    const carpeta = `${ctx.planId}/${e.indicador}/${ctx.anio}`
 
-    // Cada ruta es de ESTE indicador y ESTE corte, con el nombre que armó el servidor.
+    // Cada ruta es de ESTE indicador y ESTE año, con el nombre que armó el servidor.
     const rutas: string[] = []
     for (const ev of e.evidencias) {
       const ruta = typeof ev?.ruta === 'string' ? ev.ruta : ''
       const nombre = typeof ev?.nombre === 'string' ? ev.nombre.trim() : ''
       if (!ruta.startsWith(`${carpeta}/`) || !NOMBRE_RUTA.test(ruta.slice(carpeta.length + 1))) {
-        return falla('Una evidencia no corresponde a este indicador y este corte. Vuelve a adjuntarla.')
+        return falla('Una evidencia no corresponde a este indicador y este año. Vuelve a adjuntarla.')
       }
       if (nombre === '' || nombre.length > MAX_NOMBRE_ARCHIVO) return falla('Un archivo tiene un nombre que no sirve.')
       rutas.push(ruta)
@@ -273,7 +195,7 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     if (yaUsadas.data?.length) return falla('Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
 
     const { data, error } = await s.supabase.rpc('pdm_reportar', {
-      p_indicador: e.indicador, p_valor: e.valor, p_texto: e.texto.trim(), p_evidencias: evidencias, p_motivo: motivo || null,
+      p_indicador: e.indicador, p_anio: ctx.anio, p_valor: e.valor, p_texto: e.texto.trim(), p_evidencias: evidencias, p_motivo: motivo || null,
     })
     if (error) {
       await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
@@ -334,7 +256,7 @@ export async function comentar(e: EntradaComentar): Promise<Resultado> {
 // ─── Leer el detalle ──────────────────────────────────────────────────────────
 
 /**
- * Todo lo que hay detrás de un indicador: sus reportes (cada versión), las evidencias, las
+ * Todo lo que hay detrás de un indicador: sus reportes de todos los años (cada versión), las evidencias, las
  * validaciones y los comentarios. Lo que ve cada quien lo decide la base.
  */
 export async function detalleIndicador(indicador: string): Promise<Resultado<DetalleIndicador>> {
@@ -350,7 +272,7 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
     const [rep, com] = await Promise.all([
       s.supabase
         .from('pdm_reportes')
-        .select('id, corte_id, valor, valor_anterior, texto, autor_id, autor_nombre, corrige_a, motivo_correccion, created_at, corte:pdm_cortes(nombre)')
+        .select('id, anio, valor, valor_anterior, texto, autor_id, autor_nombre, corrige_a, motivo_correccion, created_at')
         .eq('indicador_id', indicador),
       s.supabase
         .from('pdm_comentarios')

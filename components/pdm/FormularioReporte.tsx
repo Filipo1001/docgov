@@ -1,15 +1,17 @@
 'use client'
 
 /**
- * El formulario con que quien tiene un indicador reporta su avance en el corte abierto.
+ * El formulario con que quien tiene un indicador reporta su avance en un año. Nadie tiene que abrir nada: el
+ * año ya empezó y se reporta cuando haya algo que reportar, las veces que haga falta.
  *
- * Tres situaciones, según lo que ya haya en el corte:
+ * Cuatro situaciones, según lo último que haya en el año:
  *
  *   nuevo       nadie ha reportado: se reporta.
- *   corregir    ya hay un reporte esperando validación: se puede corregir (el formulario arranca
+ *   corregir    el último está esperando validación: se puede corregir (el formulario arranca
  *               cerrado: es la excepción), y la corrección dice qué se corrige.
  *   responder   la secretaría lo devolvió: se responde con un reporte nuevo que dice qué cambió.
- *   aprobado    ya lo validaron: no hay formulario. Para cambiarlo la secretaría tiene que devolverlo.
+ *   aprobado    ya lo validaron: ese avance cuenta. Si el responsable lleva más, reporta un avance
+ *               nuevo (el formulario arranca cerrado); no se corrige lo aprobado.
  *
  * Un reporte nunca se reescribe: corregir crea una versión nueva y la anterior queda en el historial.
  * La evidencia es obligatoria, como en la base: sin al menos un archivo el botón no se activa.
@@ -19,7 +21,6 @@ import { useRef, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
-import type { Corte } from '@/lib/pdm/seguimiento'
 import {
   MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_TEXTO_REPORTE, MIN_TEXTO, TEXTO_TIPOS_EVIDENCIA,
   describirTamano, errorEnArchivos, errorEnReporte, leerNumero,
@@ -31,47 +32,45 @@ import { T } from './tema'
 
 type Fase = 'subiendo' | 'registrando' | null
 
-export default function FormularioReporte({ indicador, corte, vigente, acciones, onHecho }: {
+export default function FormularioReporte({ indicador, vigente, acciones, onHecho }: {
+  /** El indicador visto en el año en que se reporta (`indicador.anio`). */
   indicador: Indicador
-  corte: Corte
-  /** La versión vigente del reporte de este indicador en este corte, si ya hay una. */
+  /** Lo último que se reportó de este indicador en este año, si ya hay algo. */
   vigente: ReporteDetalle | null
   acciones: AccionesSeguimiento
   /** Se llama con el aviso de lo que pasó, para que quien lo monta recargue. */
   onHecho: (mensaje: string) => void
 }) {
   const modo = !vigente ? 'nuevo' : vigente.estado === 'aprobado' ? 'aprobado' : vigente.estado === 'devuelto' ? 'responder' : 'corregir'
-  const correccion = vigente !== null && modo !== 'aprobado'
+  const correccion = modo === 'corregir' || modo === 'responder'
+  const anio = indicador.anio
 
-  const [abierto, setAbierto] = useState(modo !== 'corregir')
-  const [valor, setValor] = useState(vigente ? String(vigente.valor).replace('.', ',') : '')
-  const [texto, setTexto] = useState(vigente?.texto ?? '')
+  const [abierto, setAbierto] = useState(modo === 'nuevo' || modo === 'responder')
+  const [valor, setValor] = useState(correccion && vigente ? String(vigente.valor).replace('.', ',') : '')
+  const [texto, setTexto] = useState(correccion && vigente ? vigente.texto : '')
   const [motivo, setMotivo] = useState('')
   const [archivos, setArchivos] = useState<File[]>([])
   const [fase, setFase] = useState<Fase>(null)
   const [error, setError] = useState<string | null>(null)
   const entrada = useRef<HTMLInputElement>(null)
 
-  if (modo === 'aprobado') {
-    return (
-      <Seccion rotulo="Reporte del corte">
-        <div className={T.avisoBien}>
-          <p className="text-sm font-semibold">Reporte aprobado</p>
-          <p className="mt-1 text-xs leading-relaxed">
-            La secretaría aprobó el reporte de «{corte.nombre}». Si hay que cambiarlo, tiene que devolverlo antes.
-          </p>
-        </div>
-      </Seccion>
-    )
-  }
-
   if (!abierto) {
     return (
-      <Seccion rotulo="Reporte del corte">
-        <div className={`flex flex-wrap items-center justify-between gap-3 ${T.avisoNota}`}>
-          <p>¿Hay que corregir lo que reportaste en «{corte.nombre}»?</p>
-          <button id="pdm-corregir" onClick={() => setAbierto(true)} className={T.botonSecChico}>Corregir el reporte</button>
-        </div>
+      <Seccion rotulo={`Reporte de ${anio}`}>
+        {modo === 'aprobado' && vigente ? (
+          <div className={`flex flex-wrap items-center justify-between gap-3 ${T.avisoBien}`}>
+            <div>
+              <p className="text-sm font-semibold">Último reporte aprobado: {fmt(vigente.valor)}</p>
+              <p className="mt-1 text-xs leading-relaxed">Ya cuenta en el cumplimiento. Si llevas más, reporta el nuevo avance.</p>
+            </div>
+            <button id="pdm-nuevo-avance" onClick={() => setAbierto(true)} className={T.botonSecChico}>Reportar nuevo avance</button>
+          </div>
+        ) : (
+          <div className={`flex flex-wrap items-center justify-between gap-3 ${T.avisoNota}`}>
+            <p>¿Hay que corregir lo que reportaste en {anio}?</p>
+            <button id="pdm-corregir" onClick={() => setAbierto(true)} className={T.botonSecChico}>Corregir el reporte</button>
+          </div>
+        )}
       </Seccion>
     )
   }
@@ -106,6 +105,7 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
     setFase('subiendo')
     const prep = await acciones.prepararEvidencias({
       indicador: indicador.uuid,
+      anio,
       archivos: archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })),
     })
     if (!prep.ok) { setFase(null); setError(prep.error); return }
@@ -122,6 +122,7 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
     setFase('registrando')
     const r = await acciones.reportar({
       indicador: indicador.uuid,
+      anio,
       valor: numero,
       texto,
       evidencias: archivos.map((f, k) => ({ ruta: prep.datos[k].ruta, nombre: f.name, tipo: prep.datos[k].tipo, bytes: f.size })),
@@ -134,7 +135,7 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
     onHecho(r.datos.correccion ? 'Corrección enviada. La secretaría la revisará.' : 'Reporte enviado. La secretaría lo revisará.')
   }
 
-  const titulo = modo === 'nuevo' ? `Reportar avance · ${corte.nombre}` : modo === 'responder' ? 'Responder a la devolución' : 'Corregir el reporte'
+  const titulo = modo === 'nuevo' ? `Reportar avance · ${anio}` : modo === 'aprobado' ? `Nuevo avance · ${anio}` : modo === 'responder' ? 'Responder a la devolución' : 'Corregir el reporte'
 
   return (
     <Seccion rotulo={titulo}>
@@ -163,11 +164,9 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
               {numero === null ? 'No se entiende ese número.' : `Se registrará ${fmt(numero)}`}
             </span>
           )}
-          {indicador.criterio === null && (
-            <span className="mt-1 block text-[11px] text-[#667085]">
-              La Alcaldía aún define si el avance es del año o acumulado: el valor queda guardado tal como lo reportas.
-            </span>
-          )}
+          <span className="mt-1 block text-[11px] text-[#667085]">
+            Es el avance de {anio}, medido contra su meta{indicador.meta !== null ? ` (${fmt(indicador.meta)})` : ''}.
+          </span>
         </label>
 
         <label className="block">
@@ -242,7 +241,7 @@ export default function FormularioReporte({ indicador, corte, vigente, acciones,
         {error && <p role="alert" className={`text-xs font-medium ${T.avisoMal}`}>{error}</p>}
 
         <div className="flex gap-2">
-          {modo === 'corregir' && !enviando && (
+          {(modo === 'corregir' || modo === 'aprobado') && !enviando && (
             <button onClick={() => { setAbierto(false); setError(null) }} className={T.botonSec}>Cancelar</button>
           )}
           <button id="pdm-enviar" onClick={enviar} disabled={!listo || enviando} className={`${T.boton} flex-1`}>

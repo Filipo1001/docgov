@@ -5,6 +5,7 @@ import { exigirAccesoPdm, metadataPdm } from '@/lib/pdm/acceso'
 import { cargarPlanPdm } from '@/lib/pdm/datos'
 import { cargarDirectorio } from '@/lib/pdm/directorio'
 import { armarMisGrupos } from '@/lib/pdm/mi-trabajo'
+import { anioDeParametro } from '@/lib/pdm/seguimiento'
 
 /**
  * Plan de Desarrollo — Resumen (vista previa).
@@ -31,9 +32,16 @@ import { armarMisGrupos } from '@/lib/pdm/mi-trabajo'
 
 export const generateMetadata = () => metadataPdm('Resumen')
 
-export default async function ResumenPage() {
+/**
+ * `anio` en la dirección: el año con que se abre la pantalla (se contrasta con los años del plan; si no
+ * es uno, se abre en el de hoy).
+ */
+export default async function ResumenPage({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
   const acceso = await exigirAccesoPdm()
+  const p = await searchParams
   const plan = await cargarPlanPdm()
+  const { anioActual } = plan.seguimiento
+  const anioInicial = anioDeParametro(p.anio, anioActual)
 
   // Quien solo responde por indicadores no necesita el tablero del plan sino saber qué le toca: su
   // inicio es «Mi trabajo». Sin indicadores a su cargo también lo ve (puede tener grupos y, cuando le
@@ -49,12 +57,13 @@ export default async function ResumenPage() {
         gruposLeidos={dir.ok}
         nivel={acceso.nivel}
         yoId={acceso.userId}
-        seguimiento={plan.seguimiento}
+        anioActual={anioActual}
+        anioInicial={anioInicial}
       />
     )
   }
 
   if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
   const { fichas } = await cargarDirectorio()
-  return <ResumenPdm indicadores={plan.indicadores} fichas={fichas} nivel={acceso.nivel} yoId={acceso.userId} seguimiento={plan.seguimiento} />
+  return <ResumenPdm indicadores={plan.indicadores} fichas={fichas} nivel={acceso.nivel} yoId={acceso.userId} anioActual={anioActual} anioInicial={anioInicial} />
 }

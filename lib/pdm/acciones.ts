@@ -124,7 +124,7 @@ export function errorEnMotivo(motivo: unknown): string | null {
 const GENERICO = 'No se pudo guardar el cambio. Intenta de nuevo; si sigue igual, avísale a quien administra la plataforma.'
 
 /**
- * Los mensajes que escriben las funciones de la migración 052 empiezan por «PDM: »
+ * Los mensajes que escriben las funciones de las migraciones 052 a 057 empiezan por «PDM: »
  * y están pensados para leerse: se muestran tal cual. Todo lo demás (un error de
  * permisos de Postgres, una restricción) se traduce o se oculta: el texto crudo
  * de la base no es para el usuario.
@@ -133,9 +133,8 @@ export function traducirErrorPdm(code?: string | null, mensaje?: string | null):
   const m = (mensaje ?? '').trim()
   if (m.startsWith('PDM: ')) return capitalizar(m.slice(5))
   if (code === '23505' && /pdm_grupos_nombre_uq/.test(m)) return 'Ya existe un grupo con ese nombre.'
-  if (code === '23505' && /pdm_cortes_nombre_unico|pdm_cortes_plan_id_nombre_key/.test(m)) return 'Ya existe un corte con ese nombre.'
-  if (code === '23505' && /pdm_reportes_un_original|pdm_reportes_una_correccion/.test(m)) {
-    return 'Este indicador ya tiene un reporte en el corte. Recarga la página para verlo.'
+  if (code === '23505' && /pdm_reportes_una_correccion/.test(m)) {
+    return 'Ese reporte ya fue corregido por otra persona. Recarga la página para ver lo último.'
   }
   if (code === '23505' && /pdm_evidencias_ruta_key/.test(m)) return 'Uno de esos archivos ya está en otro reporte. Súbelo de nuevo.'
   if (code === '42501') return 'No tienes permiso para hacer este cambio.'

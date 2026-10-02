@@ -13,7 +13,7 @@
  * ── Qué cuenta ───────────────────────────────────────────────────────────
  *
  * Las cifras de arriba son el avance VALIDADO: el último reporte que la secretaría aprobó. Lo
- * reportado y aún sin validar se ve en la trazabilidad y en el chip del corte, pero no cuenta.
+ * reportado y aún sin validar se ve en la trazabilidad y en el chip del año, pero no cuenta.
  *
  * ── Por qué la evidencia es obligatoria ─────────────────────────────────
  *
@@ -51,10 +51,13 @@ const NOTA_SIN_USUARIO: Record<MotivoSinVincular, string> = {
 }
 
 export default function IndicadorModal({
-  indicador, onCerrar, persona, asignados, onAsignar, onQuitar, onCargarHistorial, seguimiento,
+  indicador, onCerrar, persona, asignados, onAsignar, onQuitar, onCargarHistorial, seguimiento, onAnio,
 }: {
+  /** El indicador visto en el año que se mira (`indicador.anio`). */
   indicador: Indicador | null
   onCerrar: () => void
+  /** Con esto, el cuadro «Por año» deja cambiar el año que se mira. Sin esto, solo informa. */
+  onAnio?: (anio: number) => void
   /** Quién es el responsable en la plataforma, si se sabe. Sin él se muestra el texto del archivo. */
   persona?: PersonaFicha
   /** Principal y apoyos, con nombre. Sin esto la ficha solo muestra al principal. */
@@ -107,7 +110,7 @@ export default function IndicadorModal({
 
   const estado = estadoDe(indicador)
   const r = razon(indicador)
-  const corte = indicador.enCorte
+  const enAnio = indicador.enAnio
   // Nadie asignado Y el Excel tampoco nombraba a una persona: no hay a quién preguntarle.
   // (Si el Excel nombraba a alguien que aún no tiene usuario, se muestra su nombre y por qué.)
   const huerfano = sinAsignar(indicador) && tipoResponsable(indicador.responsable) !== 'persona'
@@ -155,8 +158,8 @@ export default function IndicadorModal({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span className="text-xs font-semibold tabular-nums text-[#667085]">Indicador {indicador.codigo}</span>
-                {(estado !== 'sin_reporte' || !corte) && <EstadoTexto estado={estado} />}
-                {corte && <SituacionTexto situacion={corte.situacion} />}
+                {(estado !== 'sin_reporte' || !enAnio) && <EstadoTexto estado={estado} />}
+                {enAnio && <SituacionTexto situacion={enAnio.situacion} />}
               </div>
               <h2 className="mt-2 text-xl font-semibold leading-snug tracking-tight text-[#192031]">{indicador.indicador}</h2>
             </div>
@@ -172,32 +175,57 @@ export default function IndicadorModal({
 
         <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
 
-          {/* Avance: el último reporte aprobado */}
-          <Seccion rotulo="Avance validado">
+          {/* Avance del año: el último reporte aprobado */}
+          <Seccion rotulo={`Avance validado · ${indicador.anio}`}>
             <div className="flex items-end justify-between gap-4">
               {indicador.avance === null ? (
                 <p className="text-2xl font-semibold leading-none tracking-tight text-[#98A2B3]">
                   Sin avance validado
-                  <span className="ml-2 text-base font-medium">· meta {fmt(indicador.metaMedida)}</span>
+                  <span className="ml-2 text-base font-medium">· meta {fmt(indicador.meta)}</span>
                 </p>
               ) : (
                 <p className="text-[40px] font-semibold tabular-nums leading-none tracking-tight text-[#192031]">
                   {fmt(indicador.avance)}
-                  <span className="ml-2 text-base font-medium text-[#667085]">de {fmt(indicador.metaMedida)}</span>
+                  <span className="ml-2 text-base font-medium text-[#667085]">de {fmt(indicador.meta)}</span>
                 </p>
               )}
-              {r !== null && <p className="text-2xl font-semibold tabular-nums text-[#192031]">{fmtRazon(r, indicador.criterio !== null)}</p>}
+              {r !== null && <p className="text-2xl font-semibold tabular-nums text-[#192031]">{fmtRazon(r)}</p>}
             </div>
             <div className="mt-3"><BarraAvance razon={r} estado={estado} /></div>
-            <p className="mt-2 text-xs text-[#667085]">
-              {indicador.unidad} · {rotuloMeta(indicador)}
-              {indicador.avanceCorte ? ` · validado en «${indicador.avanceCorte}»` : ''}
-            </p>
-            {indicador.criterio === null && (
-              <p className="mt-1 text-[11px] leading-snug text-[#667085]">
-                La Alcaldía aún define si el avance es del año o acumulado: el porcentaje es provisional.
-              </p>
-            )}
+            <p className="mt-2 text-xs text-[#667085]">{indicador.unidad} · {rotuloMeta(indicador)}</p>
+          </Seccion>
+
+          {/* Los cuatro años del plan, lado a lado */}
+          <Seccion rotulo="Metas y avance por año">
+            <div className={`grid grid-cols-2 gap-px overflow-hidden rounded-lg border ${T.reglaFuerte} bg-[#DCE0E8] sm:grid-cols-4`}>
+              {indicador.anios.map(a => {
+                const actual = a.anio === indicador.anio
+                const contenido = (
+                  <>
+                    <span className={T.rotulo}>{a.anio}</span>
+                    <span className="mt-1 block text-sm font-semibold tabular-nums text-[#192031]">
+                      {a.avance === null ? '—' : fmt(a.avance)}
+                      <span className="font-normal text-[#667085]"> / {a.meta === null ? 'sin meta' : fmt(a.meta)}</span>
+                    </span>
+                    <span className="mt-1 block min-h-[1rem]">{a.enAnio && <SituacionTexto situacion={a.enAnio.situacion} className="text-[11px]" />}</span>
+                  </>
+                )
+                const clase = `flex flex-col items-stretch justify-start px-3.5 py-2.5 text-left ${actual ? 'bg-[#EDF0F5]' : 'bg-white'}`
+                return onAnio ? (
+                  <button
+                    key={a.anio}
+                    onClick={() => onAnio(a.anio)}
+                    aria-pressed={actual}
+                    className={`${clase} transition-colors hover:bg-[#F1F3F7] focus-visible:bg-[#F1F3F7] focus-visible:outline-none`}
+                  >
+                    {contenido}
+                  </button>
+                ) : (
+                  <div key={a.anio} aria-current={actual || undefined} className={clase}>{contenido}</div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-xs text-[#667085]">Avance validado / meta de cada año.</p>
           </Seccion>
 
           {/* Responsable */}

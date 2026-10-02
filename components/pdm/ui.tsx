@@ -8,7 +8,7 @@
 
 import type { ReactNode } from 'react'
 import { ESTADOS, type Estado } from '@/lib/pdm/plan'
-import { SITUACIONES, type SituacionCorte } from '@/lib/pdm/seguimiento'
+import { SITUACIONES, type SituacionAnio } from '@/lib/pdm/seguimiento'
 import { T } from './tema'
 
 /** Rótulo en mayúscula sostenida, como los de los formatos oficiales. */
@@ -39,8 +39,8 @@ export function EstadoTexto({ estado, className = '' }: { estado: Estado; classN
   )
 }
 
-/** En qué punto va un indicador dentro del corte abierto: marcador + palabra. */
-export function SituacionTexto({ situacion, className = '' }: { situacion: SituacionCorte; className?: string }) {
+/** En qué punto va un indicador dentro del año: marcador + palabra. */
+export function SituacionTexto({ situacion, className = '' }: { situacion: SituacionAnio; className?: string }) {
   const s = SITUACIONES[situacion]
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-medium text-[#192031] ${className}`}>
@@ -107,7 +107,7 @@ export function Cifras({ items }: { items: Cifra[] }) {
 
 /**
  * Los datos de referencia de una pantalla, en celdas con rótulo, como el cuadro de datos de un
- * formato oficial (código, versión, fecha). Es lo que dice, de un vistazo, de qué corte y de qué
+ * formato oficial (código, versión, fecha). Es lo que dice, de un vistazo, de qué año y de qué
  * plan se está hablando.
  */
 export function FichaDatos({ datos, className = '' }: { datos: { rotulo: string; valor: ReactNode }[]; className?: string }) {

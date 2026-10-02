@@ -22,20 +22,20 @@
  *
  * ── Qué cuenta, y contra qué se mide ─────────────────────────────────────
  *
- * El avance de un indicador es el último reporte APROBADO por la secretaría; lo reportado y aún
- * sin validar se ve, pero no cuenta. Contra qué meta se mide depende de un dato del plan que la
- * Alcaldía define a mano (`Seguimiento.ajustes.avanceModo`):
+ * El plan se mide POR AÑO: cada indicador tiene una meta para 2024, 2025, 2026 y 2027, y lo que se
+ * reporta es el avance de ESE año. El avance de un año es el último reporte APROBADO por la secretaría en él;
+ * lo reportado y aún sin validar se ve, pero no cuenta.
  *
- *   · anual        el valor es el avance de este año → meta de 2026.
- *   · acumulado    el valor es lo que se lleva desde 2024 → suma de las metas de 2024 a 2026.
- *   · por definir  se usa la meta de 2026 y el cumplimiento se rotula PROVISIONAL en pantalla.
+ * Un `Indicador` trae los cuatro años (`anios`) y, además, lo de UN año ya a mano (`anio`, `meta`, `avance`,
+ * `enAnio`): el año que se está mirando. `proyectarAnio` lo cambia sin volver a leer nada, y así las
+ * pantallas cambian de año al instante.
  *
- * Los umbrales del semáforo («en ruta», «atrasado», «crítico») siguen siendo provisionales: el
- * archivo de origen no los define y, probados los cinco criterios que admite, ninguno reproduce
- * las cifras de su hoja de gráficos. Definirlos es una decisión de la Alcaldía, no del software.
+ * Los umbrales del semáforo («en ruta», «atrasado», «crítico») siguen siendo provisionales: el archivo de
+ * origen no los define y, probados los cinco criterios que admite, ninguno reproduce las cifras de su hoja
+ * de gráficos. Definirlos es una decisión de la Alcaldía, no del software.
  */
 
-import type { AvanceModo, EstadoEnCorte } from './seguimiento'
+import type { EstadoEnAnio } from './seguimiento'
 
 /** Quién tiene un indicador asignado en la plataforma. */
 export interface Asignacion {
@@ -43,6 +43,17 @@ export interface Asignacion {
   principal: boolean
   /** Grupo del que vino esta asignación; `null` si es individual. */
   grupoId: string | null
+}
+
+/** Un indicador en UN año del plan: su meta, lo que ya cuenta y dónde va el reporte. */
+export interface AnioDeIndicador {
+  anio: number
+  /** La meta de ese año; `null` si el plan no trae una. */
+  meta: number | null
+  /** El último avance APROBADO en ese año. `null` mientras ningún reporte se haya validado. */
+  avance: number | null
+  /** Dónde va en ese año; `null` si en él no se espera nada (nadie lo lleva, no ha empezado o no tiene meta). */
+  enAnio: EstadoEnAnio | null
 }
 
 export interface Indicador {
@@ -71,20 +82,23 @@ export interface Indicador {
   asignados: Asignacion[]
   lineaBase: number | null
   metaCuatrienio: number | null
-  meta2026: number | null
-  /** La suma de las metas de 2024 a 2026. */
-  metaAcumulada: number | null
-  /** Qué significa el avance reportado en este plan; `null` mientras no se defina (cumplimiento provisional). */
-  criterio: AvanceModo | null
-  /** La meta contra la que se mide el avance, según el criterio. */
-  metaMedida: number | null
-  /** El último avance APROBADO. `null` mientras ningún reporte se haya validado. */
+  /** Los años del plan, del primero al último, cada uno con lo suyo. */
+  anios: AnioDeIndicador[]
+  // ── Lo del año que se está mirando (se cambia con `proyectarAnio`) ──
+  anio: number
+  meta: number | null
   avance: number | null
-  /** En qué corte se aprobó ese avance. */
-  avanceCorte: string | null
-  /** Dónde va en el corte abierto; `null` si no hay corte abierto o si nadie puede reportarlo todavía. */
-  enCorte: EstadoEnCorte | null
+  enAnio: EstadoEnAnio | null
 }
+
+/** El mismo indicador visto en otro año: cambian `anio`, `meta`, `avance` y `enAnio`; lo demás es igual. */
+export function proyectarAnio(i: Indicador, anio: number): Indicador {
+  if (i.anio === anio) return i
+  const a = i.anios.find(x => x.anio === anio)
+  return { ...i, anio, meta: a?.meta ?? null, avance: a?.avance ?? null, enAnio: a?.enAnio ?? null }
+}
+
+export const proyectarLista = (lista: Indicador[], anio: number): Indicador[] => lista.map(i => proyectarAnio(i, anio))
 
 // ─── Responsable ──────────────────────────────────────────────────────────────
 
@@ -147,15 +161,15 @@ export const ESTADOS: Record<Estado, { rotulo: string; punto: string; barra: str
 const UMBRALES = { cumplido: 1, en_ruta: 0.7, atrasado: 0.4 }
 
 export function razon(i: Indicador): number | null {
-  if (i.avance === null || !i.metaMedida) return null
-  return i.avance / i.metaMedida
+  if (i.avance === null || !i.meta) return null
+  return i.avance / i.meta
 }
 
 /** Cómo se llama la meta contra la que se mide, para ponerla junto a las cifras. */
-export const rotuloMeta = (i: Indicador): string => (i.criterio === 'acumulado' ? 'meta acumulada a 2026' : 'meta 2026')
+export const rotuloMeta = (i: Indicador): string => `meta ${i.anio}`
 
 export function estadoDe(i: Indicador): Estado {
-  if (!i.metaMedida) return 'sin_meta'
+  if (!i.meta) return 'sin_meta'
   const r = razon(i)
   if (r === null) return 'sin_reporte'
   if (r >= UMBRALES.cumplido) return 'cumplido'
@@ -231,21 +245,7 @@ export function fmtPct(n: number | null): string {
   return n === null ? '—' : `${Math.round(n)} %`
 }
 
-/**
- * La razón avance/meta, lista para mostrar.
- *
- * Se topa en «≥ 100 %» a propósito. El archivo del que se partió traía, en 62 de
- * los 257 indicadores, un avance EXACTAMENTE igual al doble de la meta de 2026, y
- * en otros 18 al cuádruple: múltiplos enteros perfectos que un avance real no
- * produce, señal de una columna acumulada o de metas copiadas. Ese avance se
- * descartó, pero la pregunta de fondo sigue abierta —¿el avance se reporta
- * acumulado o del año?—, y mientras no se responda, mostrar «200 %» daría por
- * bueno un dato cuyo sentido no está definido; «cumplida» dice solo lo que se
- * puede sostener. Cuando la Alcaldía define el criterio (`criterioDefinido`), el
- * porcentaje se muestra tal cual.
- */
-export function fmtRazon(r: number | null, criterioDefinido = false): string {
-  if (r === null) return ''
-  if (criterioDefinido) return `${Math.round(r * 100)} %`
-  return r >= 1 ? '≥ 100 %' : `${Math.round(r * 100)} %`
+/** La razón avance/meta, lista para mostrar: «80 %», y «120 %» cuando se superó la meta. */
+export function fmtRazon(r: number | null): string {
+  return r === null ? '' : `${Math.round(r * 100)} %`
 }

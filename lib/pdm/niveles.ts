@@ -8,7 +8,7 @@
  *   coordinador  la secretaría (el supervisor de una dependencia). Ve y asigna lo de la SUYA y
  *                habilita a su gente como `responsable`. La base lo exige, no solo la pantalla.
  *   consulta     Control Interno: ve todo y comenta, pero no cambia nada.
- *   responsable  quien lleva indicadores: ve lo suyo y lo reporta en cada corte, con evidencia.
+ *   responsable  quien lleva indicadores: ve lo suyo y lo reporta en cada año, con evidencia.
  *
  * `consulta`, `responsable` y `coordinador` son los tres valores que admite la columna
  * `pdm_permisos.nivel`; `admin` solo existe aquí.
@@ -36,7 +36,7 @@ export const ETIQUETA_NIVEL: Record<NivelPdm, string> = {
 }
 
 export const AYUDA_NIVEL: Record<NivelHabilitable, string> = {
-  responsable: 'Ve los indicadores a su cargo y los reporta en cada corte, con evidencia.',
+  responsable: 'Ve los indicadores a su cargo y los reporta por año, con evidencia.',
   coordinador: 'Ve y asigna los indicadores de su secretaría, crea grupos, habilita a su gente y valida lo que reportan.',
   consulta: 'Ve todo el plan y lo comenta, sin cambiar nada (Control Interno).',
 }

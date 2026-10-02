@@ -7,7 +7,7 @@
  * El archivo original es una hoja de 258 columnas: imposible de leer en un teléfono, y los
  * responsables de indicadores son sobre todo contratistas que trabajan desde uno. Cada fila dice
  * lo que importa para decidir si hay que abrirla: qué se mide, a nombre de quién está, cómo va
- * contra su meta y en qué punto del corte está. El estado se dice con un marcador y una palabra,
+ * contra su meta y en qué punto del año está. El estado se dice con un marcador y una palabra,
  * una vez; no con un racimo de etiquetas de colores.
  */
 
@@ -20,7 +20,7 @@ import {
 import { BarraAvance } from './Barras'
 import { EstadoTexto, SituacionTexto } from './ui'
 import { T } from './tema'
-import { FILTROS_DE_CORTE, cumpleFiltro, type Filtro } from '@/lib/pdm/filtros'
+import { FILTROS_DEL_ANIO, cumpleFiltro, type Filtro } from '@/lib/pdm/filtros'
 import type { PersonaFicha } from '@/lib/pdm/personas'
 
 const PAGINA = 25
@@ -54,10 +54,10 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
 }) {
   const estado = estadoDe(i)
   const r = razon(i)
-  const corte = i.enCorte
-  const reporte = corte?.reporte ?? null
-  // «Sin avance validado» sobra cuando la situación del corte ya dice en qué punto va el reporte.
-  const mostrarEstado = estado !== 'sin_reporte' || !corte
+  const enAnio = i.enAnio
+  const reporte = enAnio?.reporte ?? null
+  // «Sin avance validado» sobra cuando la situación del año ya dice en qué punto va el reporte.
+  const mostrarEstado = estado !== 'sin_reporte' || !enAnio
 
   return (
     <button
@@ -91,7 +91,7 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
         </span>
         <span className="flex flex-col items-end gap-0.5">
           {mostrarEstado && <EstadoTexto estado={estado} />}
-          {corte && <SituacionTexto situacion={corte.situacion} />}
+          {enAnio && <SituacionTexto situacion={enAnio.situacion} />}
         </span>
       </div>
 
@@ -100,12 +100,12 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
       <div className="min-w-0">
         <p className="line-clamp-2 text-sm font-medium leading-snug text-[#192031]">{i.indicador}</p>
         <p className="mt-0.5 truncate text-xs text-[#667085]">{i.programa}</p>
-        {reporte && corte?.situacion === 'pendiente' && (
+        {reporte && enAnio?.situacion === 'pendiente' && (
           <p className="mt-1 truncate text-xs text-[#8A5A12]">
             {yoId && reporte.autorId === yoId ? 'Tú' : reporte.autorNombre} reportó <b className="tabular-nums">{fmt(reporte.valor)}</b>; falta que la secretaría lo valide
           </p>
         )}
-        {reporte && corte?.situacion === 'devuelto' && (
+        {reporte && enAnio?.situacion === 'devuelto' && (
           <p className="mt-1 truncate text-xs text-[#B42318]">
             Devuelto{reporte.validacionComentario ? `: ${reporte.validacionComentario}` : ''}
           </p>
@@ -121,17 +121,17 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
           <span className="text-[#667085]">
             <b className="font-semibold tabular-nums text-[#192031]">{fmt(i.avance)}</b>
             <span> / </span>
-            <span className="tabular-nums">{fmt(i.metaMedida)}</span>
+            <span className="tabular-nums">{fmt(i.meta)}</span>
             <span className="md:hidden"> · {rotuloMeta(i)}</span>
           </span>
-          {r !== null && <span className="font-semibold tabular-nums text-[#192031]">{fmtRazon(r, i.criterio !== null)}</span>}
+          {r !== null && <span className="font-semibold tabular-nums text-[#192031]">{fmtRazon(r)}</span>}
         </div>
         <div className="mt-1.5"><BarraAvance razon={r} estado={estado} /></div>
       </div>
 
       <div className="hidden flex-col items-start gap-1 md:flex">
         {mostrarEstado && <EstadoTexto estado={estado} />}
-        {corte && <SituacionTexto situacion={corte.situacion} />}
+        {enAnio && <SituacionTexto situacion={enAnio.situacion} />}
       </div>
     </button>
   )
@@ -182,13 +182,13 @@ export default function ListaIndicadores({
     [lista, dependencia],
   )
 
-  // Los filtros del corte solo se ofrecen si hay un corte abierto (si no, no hay nada que filtrar).
-  const hayCorte = useMemo(() => lista.some(i => i.enCorte !== null), [lista])
+  // Los filtros del año solo se ofrecen si en él se espera algo (si no, no hay nada que filtrar).
+  const hayReportes = useMemo(() => lista.some(i => i.enAnio !== null), [lista])
   const filtros = useMemo(
-    () => (Object.keys(ROTULO_FILTRO) as Filtro[]).filter(f => hayCorte || !FILTROS_DE_CORTE.includes(f)),
-    [hayCorte],
+    () => (Object.keys(ROTULO_FILTRO) as Filtro[]).filter(f => hayReportes || !FILTROS_DEL_ANIO.includes(f)),
+    [hayReportes],
   )
-  // Un enlace puede pedir un filtro del corte cuando ya no hay corte: se ignora y sale la lista completa.
+  // Un enlace puede pedir un filtro del año cuando en ese año no se espera nada: se ignora y sale la lista completa.
   const filtroActivo: Filtro = filtros.includes(filtro) ? filtro : 'todos'
 
   const cuenta = useMemo(() => {

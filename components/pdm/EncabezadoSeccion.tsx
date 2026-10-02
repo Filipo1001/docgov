@@ -4,7 +4,7 @@ import { T } from './tema'
 
 /**
  * El encabezado de cada sección: el título a la izquierda y, a la derecha, un cuadro con los datos
- * de referencia (de qué corte y de qué alcance se habla), al estilo del cuadro de código, versión y
+ * de referencia (de qué año y de qué alcance se habla), al estilo del cuadro de código, versión y
  * fecha de un formato oficial. Una sola forma, para que todas las secciones se lean como hermanas.
  *
  * `detalle` es una línea de apoyo bajo el título; `datos` son las celdas del cuadro.
