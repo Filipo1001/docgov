@@ -61,6 +61,32 @@ function enfocables(raiz: HTMLElement): HTMLElement[] {
   return Array.from(raiz.querySelectorAll<HTMLElement>(ENFOCABLES)).filter(e => e.getClientRects().length > 0)
 }
 
+/**
+ * Para algo DENTRO de una ventana que debe recibir Escape antes que la ventana (una confirmación en línea): mientras
+ * `activo`, Escape lo atiende `alEscape` y la ventana no se cierra. Entra en la misma pila que las ventanas, así que
+ * la regla es la misma: solo la última recibe la tecla.
+ */
+export function useEscapePrimero(activo: boolean, alEscape: () => void) {
+  const id = useId()
+  const fn = useRef(alEscape)
+  useEffect(() => { fn.current = alEscape })
+  useEffect(() => {
+    if (!activo) return
+    pila.push(id)
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || pila[pila.length - 1] !== id) return
+      e.stopPropagation()
+      fn.current()
+    }
+    window.addEventListener('keydown', tecla, true)
+    return () => {
+      window.removeEventListener('keydown', tecla, true)
+      const i = pila.lastIndexOf(id)
+      if (i !== -1) pila.splice(i, 1)
+    }
+  }, [activo, id])
+}
+
 // ─── Contextos ─────────────────────────────────────────────────────────────
 
 /** `null`: no hay `Presencia` (la ventana se despide sola). `boolean`: si `Presencia` la está despidiendo. */

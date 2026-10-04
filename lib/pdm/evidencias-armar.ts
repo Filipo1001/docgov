@@ -1,18 +1,27 @@
 import { nombrePropio } from './personas'
-import { esAnioPlan, type EstadoReporte } from './seguimiento'
+import type { Indicador } from './plan'
+import { anioDeParametro, type EstadoReporte } from './seguimiento'
 
 /**
  * La vista de evidencias: lo que se pregunta y lo que se pinta, sin leer nada.
  *
  * Pura: la lectura vive en `evidencias.ts` (`server-only`). Aquí se decide qué filtros valen (nada de lo que venga
- * en la dirección se cree: cada valor se contrasta con lo que de verdad existe), cómo se traducen a una consulta,
- * y cómo se ve cada fila.
+ * en la dirección se cree: cada valor se contrasta con lo que de verdad existe), qué indicadores se muestran y cómo
+ * se ve cada fila.
  *
- * ── Qué se muestra por defecto ───────────────────────────────────────────
+ * ── La unidad es el INDICADOR en un AÑO, no el archivo ───────────────────
  *
- * Los archivos de las versiones VIGENTES de cada reporte. Cuando se corrige un reporte, la versión anterior queda
- * como historia (y lo que se conservó ya está en la nueva), así que mostrarla repetiría los mismos archivos. «Incluir
- * versiones anteriores» las trae, con su marca.
+ * Una lista de archivos deja de servir cuando hay miles: no responde a ninguna pregunta de comprobación. La pregunta
+ * es «¿este indicador, este año, tiene con qué demostrarse?». Así que cada fila es un indicador con lo que lo
+ * respalda ese año: si es UN archivo, el archivo; si son varios, una carpeta con todos.
+ *
+ * Los años no se mezclan nunca: la pantalla muestra un año a la vez, y un indicador con evidencia en dos años
+ * aparece una vez en cada uno, con SUS archivos. (Un mismo archivo reutilizado en dos años no es «el mismo» a efectos
+ * de esta vista: cada año se demuestra por separado.)
+ *
+ * Qué indicadores tienen evidencia ya lo sabe el plan (cada indicador trae su último reporte de cada año y cuántos
+ * archivos lleva), así que no hace falta una consulta para eso: solo se piden a la base los archivos de los 25
+ * indicadores de la página.
  */
 
 export const TAMANO_PAGINA = 25
@@ -21,11 +30,6 @@ export const MAX_BUSQUEDA = 60
 // ─── Tipos de archivo ─────────────────────────────────────────────────────────
 
 export type CategoriaTipo = 'pdf' | 'imagen' | 'word' | 'excel'
-export const CATEGORIAS: readonly CategoriaTipo[] = ['pdf', 'imagen', 'word', 'excel']
-
-export const ROTULO_CATEGORIA: Record<CategoriaTipo, string> = {
-  pdf: 'PDF', imagen: 'Imágenes', word: 'Word', excel: 'Excel',
-}
 
 /** Cómo se llama un tipo de archivo en singular, para la fila («PDF · 146 KB»). */
 export const ETIQUETA_CATEGORIA: Record<CategoriaTipo, string> = {
@@ -50,44 +54,27 @@ export function categoriaDeMime(mime: string): CategoriaTipo | null {
   return null
 }
 
-/** Cómo se pide una categoría a la base: un tipo exacto, una lista o un prefijo. */
-export function condicionDeCategoria(c: CategoriaTipo): { igual?: string; en?: string[]; prefijo?: string } {
-  switch (c) {
-    case 'pdf': return { igual: 'application/pdf' }
-    case 'imagen': return { prefijo: 'image/' }
-    case 'word': return { en: MIME_WORD }
-    case 'excel': return { en: MIME_EXCEL }
-  }
-}
-
 // ─── Filtros ──────────────────────────────────────────────────────────────────
 
-export type EstadoFiltro = 'aprobado' | 'pendiente' | 'devuelto' | 'observado'
-export const ESTADOS_FILTRO: readonly EstadoFiltro[] = ['aprobado', 'pendiente', 'devuelto', 'observado']
+/** Cómo va el ÚLTIMO reporte del indicador en el año. */
+export type EstadoFiltro = EstadoReporte
+export const ESTADOS_FILTRO: readonly EstadoFiltro[] = ['aprobado', 'pendiente', 'devuelto']
 
 export const ROTULO_ESTADO_FILTRO: Record<EstadoFiltro, string> = {
-  aprobado: 'Aprobadas',
+  aprobado: 'Aprobados',
   pendiente: 'Sin validar',
-  devuelto: 'Devueltas',
-  observado: 'Archivos devueltos',
+  devuelto: 'Devueltos',
 }
 
 export interface FiltroEvidencias {
-  /** Un año del plan; `null`: todos. */
-  anio: number | null
-  /** Texto que se busca en el nombre del archivo y en el indicador. Ya limpio. */
+  /** Siempre hay UN año: los años no se mezclan. */
+  anio: number
+  /** Texto que se busca en el nombre de los archivos, el indicador y su código. Ya limpio. */
   q: string
-  tipo: CategoriaTipo | null
   estado: EstadoFiltro | null
   dependencia: string | null
-  /** Incluir las versiones de reportes que ya fueron corregidos. */
-  historico: boolean
   /** Desde 1. */
   pagina: number
-}
-
-export const FILTRO_VACIO: FiltroEvidencias = {
-  anio: null, q: '', tipo: null, estado: null, dependencia: null, historico: false, pagina: 1,
 }
 
 /**
@@ -117,76 +104,55 @@ export function claveDeBusqueda(q: string): string {
 export function leerFiltros(
   p: Record<string, string | string[] | undefined>,
   dependenciasValidas: readonly string[],
+  anioActual: number,
 ): FiltroEvidencias {
   const un = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
-  const anio = un(p.anio)
-  const n = anio !== undefined && /^\d{4}$/.test(anio) ? Number(anio) : NaN
   const pag = un(p.pagina)
-  const pagina = pag !== undefined && /^\d{1,4}$/.test(pag) ? Math.max(1, Number(pag)) : 1
-  const tipo = un(p.tipo)
-  const estado = un(p.estado)
   const dep = un(p.dependencia)
+  const estado = un(p.estado)
   return {
-    anio: esAnioPlan(n) ? n : null,
+    anio: anioDeParametro(un(p.anio), anioActual),
     q: limpiarBusqueda(un(p.q) ?? ''),
-    tipo: CATEGORIAS.find(c => c === tipo) ?? null,
     estado: ESTADOS_FILTRO.find(e => e === estado) ?? null,
     dependencia: dep !== undefined && dependenciasValidas.includes(dep) ? dep : null,
-    historico: un(p.historico) === '1',
-    pagina,
+    pagina: pag !== undefined && /^\d{1,4}$/.test(pag) ? Math.max(1, Number(pag)) : 1,
   }
 }
 
-/** Los filtros como parámetros de la dirección; lo que está en su valor por defecto no se escribe. */
-export function aParametros(f: Partial<FiltroEvidencias>): URLSearchParams {
+/** Los filtros como parámetros de la dirección; lo que está en su valor por defecto no se escribe (el año sí: es la identidad de la vista). */
+export function aParametros(f: Partial<FiltroEvidencias> & { anio: number }): URLSearchParams {
   const s = new URLSearchParams()
-  if (f.anio) s.set('anio', String(f.anio))
+  s.set('anio', String(f.anio))
   if (f.q) s.set('q', f.q)
-  if (f.tipo) s.set('tipo', f.tipo)
   if (f.estado) s.set('estado', f.estado)
   if (f.dependencia) s.set('dependencia', f.dependencia)
-  if (f.historico) s.set('historico', '1')
   if (f.pagina && f.pagina > 1) s.set('pagina', String(f.pagina))
   return s
 }
 
 /**
- * Aplica los filtros a una consulta de `pdm_evidencias_vista`. Vive aquí y no en el lector del servidor para que la
- * prueba ejercite EXACTAMENTE lo mismo que la pantalla.
+ * Aplica la búsqueda a una consulta de `pdm_evidencias_vista`: cada palabra escrita tiene que aparecer, en cualquier
+ * orden, en la columna `busqueda` (nombre del archivo, indicador y código, ya en minúsculas y sin tildes). Vive aquí y
+ * no en el lector del servidor para que la prueba ejercite EXACTAMENTE lo mismo que la pantalla.
  *
- * `f.q` ya viene limpio (`limpiarBusqueda`): sin comas, paréntesis ni comodines, no puede romper el filtro. Se busca
- * en la columna `busqueda`, que ya está en minúsculas y sin tildes.
+ * `q` ya viene limpio (`limpiarBusqueda`): sin comas, paréntesis ni comodines, no puede romper el filtro.
  */
-// El constructor de consultas de PostgREST tiene un tipo muy cargado; aquí solo se le piden estos métodos.
+// El constructor de consultas de PostgREST tiene un tipo muy cargado; aquí solo se le pide este método.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function aplicarFiltros<Q extends Record<string, any>>(q: Q, f: FiltroEvidencias): Q {
-  let r = q
-  // Lo normal es ver solo las versiones vigentes: lo de una versión corregida es historia.
-  if (!f.historico) r = r.eq('reemplazada', false)
-  if (f.anio !== null) r = r.eq('anio', f.anio)
-  if (f.dependencia !== null) r = r.eq('dependencia', f.dependencia)
-  if (f.tipo !== null) {
-    const c = condicionDeCategoria(f.tipo)
-    if (c.igual) r = r.eq('tipo', c.igual)
-    else if (c.en) r = r.in('tipo', c.en)
-    else if (c.prefijo) r = r.like('tipo', `${c.prefijo}%`)
-  }
-  if (f.estado === 'observado') r = r.not('observacion', 'is', null)
-  else if (f.estado !== null) r = r.eq('estado_reporte', f.estado)
-  // Cada palabra escrita tiene que aparecer, en cualquier orden: «pse aprobada» encuentra «PSE - Transacción Aprobada».
-  for (const palabra of claveDeBusqueda(f.q).split(' ')) {
+export function aplicarBusqueda<Q extends Record<string, any>>(consulta: Q, q: string): Q {
+  let r = consulta
+  for (const palabra of claveDeBusqueda(q).split(' ')) {
     if (palabra !== '') r = r.ilike('busqueda', `%${palabra}%`)
   }
   return r
 }
 
-/** ¿Hay algún filtro puesto (sin contar la página)? */
-export const hayFiltros = (f: FiltroEvidencias): boolean =>
-  f.anio !== null || f.q !== '' || f.tipo !== null || f.estado !== null || f.dependencia !== null || f.historico
+/** ¿Hay algún filtro puesto (sin contar el año ni la página)? */
+export const hayFiltros = (f: FiltroEvidencias): boolean => f.q !== '' || f.estado !== null || f.dependencia !== null
 
-// ─── Las filas ────────────────────────────────────────────────────────────────
+// ─── Los archivos, tal como los devuelve la base ──────────────────────────────
 
-/** Una fila de `pdm_evidencias_vista`, tal como la devuelve la base. */
+/** Una fila de `pdm_evidencias_vista`: un archivo con su reporte, su indicador y su estado. */
 export interface FilaDeVista {
   id: string
   reporte_id: string
@@ -209,30 +175,6 @@ export interface FilaDeVista {
   observacion: string | null
 }
 
-/**
- * Un indicador al que sirve un archivo, con lo que le pasó en SU reporte: quién lo reportó, cuándo, cómo va y si
- * ese archivo se devolvió. Un archivo que respalda a tres indicadores tiene tres de estas líneas.
- */
-export interface IndicadorRelacionado {
-  /** El número del indicador en el plan (la clave que usan los enlaces a «Indicadores»). */
-  indicadorFila: number
-  codigo: string
-  indicador: string
-  sector: string
-  dependencia: string
-  anio: number
-  estado: EstadoReporte | null
-  /** Quién reportó, ya en forma de nombre propio. */
-  autor: string
-  /** ISO. */
-  reportadoEn: string
-  /** La nota con que la secretaría devolvió este archivo en ese reporte, si lo hizo. */
-  observacion: string | null
-  conservada: boolean
-  /** Ese reporte ya fue corregido: la línea es historia. */
-  reemplazada: boolean
-}
-
 /** Lo que hace falta de un archivo para saber si es el mismo que otro y a qué indicador sirve. */
 export interface FilaRelacionable {
   id: string
@@ -247,40 +189,6 @@ export interface FilaRelacionable {
   nombre: string
   bytes: number | string
   tipo: string
-  autor_nombre: string
-  reportado_en: string
-  observacion: string | null
-  conservada: boolean
-}
-
-/** Una fila, lista para pintar. */
-export interface EvidenciaFila {
-  id: string
-  nombre: string
-  tipo: string
-  categoria: CategoriaTipo | null
-  bytes: number
-  conservada: boolean
-  /** El número del indicador en el plan (la clave que usan los enlaces a «Indicadores»). */
-  indicadorFila: number
-  codigo: string
-  indicador: string
-  sector: string
-  dependencia: string
-  anio: number
-  valor: number | null
-  /** Quién reportó, ya en forma de nombre propio. */
-  autor: string
-  /** ISO. */
-  reportadoEn: string
-  /** Cómo va el reporte al que pertenece el archivo; `null` si la base trae algo que no se entiende (no se inventa). */
-  estado: EstadoReporte | null
-  /** El reporte ya fue corregido: el archivo es historia. */
-  reemplazada: boolean
-  /** La nota con que la secretaría devolvió ESTE archivo, si lo hizo. */
-  observacion: string | null
-  /** Qué otros indicadores respalda este mismo archivo (vacío si solo respalda al de su fila). */
-  tambien: IndicadorRelacionado[]
 }
 
 const ESTADOS: readonly EstadoReporte[] = ['pendiente', 'aprobado', 'devuelto']
@@ -291,39 +199,26 @@ const numero = (v: number | string | null | undefined): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
-export function armarFilas(filas: FilaDeVista[], relaciones: ReadonlyMap<string, IndicadorRelacionado[]> = new Map()): EvidenciaFila[] {
-  return filas.map(f => ({
-    id: f.id,
-    nombre: f.nombre,
-    tipo: f.tipo,
-    categoria: categoriaDeMime(f.tipo),
-    bytes: numero(f.bytes) ?? 0,
-    conservada: f.conservada === true,
-    indicadorFila: f.indicador_fila,
-    codigo: f.codigo,
-    indicador: f.indicador,
-    sector: f.sector,
-    dependencia: f.dependencia,
-    anio: f.anio,
-    valor: numero(f.valor),
-    autor: nombrePropio(f.autor_nombre),
-    reportadoEn: f.reportado_en,
-    estado: ESTADOS.find(e => e === f.estado_reporte) ?? null,
-    reemplazada: f.reemplazada === true,
-    observacion: f.observacion && f.observacion.trim() !== '' ? f.observacion : null,
-    tambien: relaciones.get(f.id) ?? [],
-  }))
-}
-
 // ─── Un mismo archivo en varios indicadores ───────────────────────────────────
+
+/** Otro indicador del MISMO año al que sirve el mismo archivo. */
+export interface IndicadorRelacionado {
+  /** El número del indicador en el plan (la clave que usan los enlaces a «Indicadores»). */
+  indicadorFila: number
+  codigo: string
+  indicador: string
+  sector: string
+  dependencia: string
+  anio: number
+  estado: EstadoReporte | null
+}
 
 /**
  * La identidad de un archivo: su nombre (normalizado, sin importar mayúsculas), su tamaño real y su tipo. Dos
  * archivos con las tres cosas iguales son, para todo efecto práctico, el mismo documento subido dos veces.
  *
  * Es lo que se sabe HOY: la base no liga un archivo a más de un reporte (cada reporte lleva sus propias copias).
- * Si algún día un archivo se adjunta a varios indicadores de verdad, solo cambia de dónde sale esta relación;
- * la pantalla ya la sabe pintar.
+ * Si algún día un archivo se adjunta a varios indicadores de verdad, solo cambia de dónde sale esta relación.
  */
 export function claveDeArchivo(f: { nombre: string; bytes: number | string; tipo: string }): string {
   return `${f.nombre.normalize('NFC').toLowerCase()}|${Number(f.bytes)}|${f.tipo}`
@@ -335,11 +230,8 @@ export function nombresPedibles(filas: { nombre: string }[]): string[] {
 }
 
 /**
- * Para cada archivo de la página, los OTROS indicadores a los que sirve ese mismo archivo.
- *
- * `candidatas` son los archivos vigentes de la base (los que quien mira puede ver) con el mismo nombre que alguno de la
- * página; aquí se afina por tamaño y tipo. Se deduplica por indicador y año, y no se cuenta el propio indicador.
- * Salen del año más reciente al más antiguo y, dentro de un año, por código.
+ * Para cada archivo, los OTROS indicadores del MISMO año a los que sirve ese mismo archivo (nunca de otro año: los
+ * años no se mezclan). No cuenta el propio indicador y deduplica por indicador. Salen por código.
  */
 export function relacionar(filas: FilaDeVista[], candidatas: FilaRelacionable[]): Map<string, IndicadorRelacionado[]> {
   const porClave = new Map<string, FilaRelacionable[]>()
@@ -353,75 +245,147 @@ export function relacionar(filas: FilaDeVista[], candidatas: FilaRelacionable[])
     const vistos = new Set<string>()
     const otros: IndicadorRelacionado[] = []
     for (const c of porClave.get(claveDeArchivo(f)) ?? []) {
-      if (c.indicador_id === f.indicador_id) continue
-      const k = `${c.indicador_id}|${c.anio}`
-      if (vistos.has(k)) continue
-      vistos.add(k)
+      if (c.indicador_id === f.indicador_id || c.anio !== f.anio || vistos.has(c.indicador_id)) continue
+      vistos.add(c.indicador_id)
       otros.push({
         indicadorFila: c.indicador_fila, codigo: c.codigo, indicador: c.indicador, sector: c.sector,
         dependencia: c.dependencia, anio: c.anio, estado: ESTADOS.find(e => e === c.estado_reporte) ?? null,
-        autor: nombrePropio(c.autor_nombre), reportadoEn: c.reportado_en,
-        observacion: c.observacion && c.observacion.trim() !== '' ? c.observacion : null,
-        conservada: c.conservada === true, reemplazada: false,
       })
     }
     if (otros.length > 0) {
-      otros.sort((a, b) => b.anio - a.anio || a.codigo.localeCompare(b.codigo, 'es', { numeric: true }) || a.indicadorFila - b.indicadorFila)
+      otros.sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }) || a.indicadorFila - b.indicadorFila)
       res.set(f.id, otros)
     }
   }
   return res
 }
 
-// ─── Un documento, una fila ───────────────────────────────────────────────────
+// ─── Las filas: un indicador en un año, con sus archivos ──────────────────────
 
-/**
- * Un documento y los indicadores a los que sirve. Es lo que se pinta: UNA fila por documento, con sus indicadores
- * como sub-filas (cada una con su autor, su fecha y su estado, que son del reporte de ESE indicador).
- */
-export interface GrupoEvidencia {
-  /** La fila que representa al documento: la más reciente de las que lo traen en esta página. Es la que se abre. */
-  archivo: EvidenciaFila
-  /** Todos los indicadores a los que sirve, del año más reciente al más antiguo. Siempre hay al menos uno. */
-  lineas: IndicadorRelacionado[]
+/** Un archivo que respalda a un indicador en un año. */
+export interface ArchivoDeIndicador {
+  id: string
+  reporteId: string
+  nombre: string
+  tipo: string
+  categoria: CategoriaTipo | null
+  bytes: number
+  conservada: boolean
+  /** Cómo va el reporte al que pertenece ESTE archivo (puede diferir del último si el año tiene varios). */
+  estado: EstadoReporte | null
+  /** La nota con que la secretaría devolvió este archivo, si lo hizo. */
+  observacion: string | null
+  /** ISO. */
+  reportadoEn: string
+  autor: string
+  /** Otros indicadores del mismo año a los que sirve este mismo archivo. */
+  tambien: IndicadorRelacionado[]
 }
 
-const mismaLinea = (a: IndicadorRelacionado, b: IndicadorRelacionado) => a.indicadorFila === b.indicadorFila && a.anio === b.anio
-
-/** La línea de un indicador que corresponde a una fila de la lista. */
-export function lineaDe(f: EvidenciaFila): IndicadorRelacionado {
-  return {
-    indicadorFila: f.indicadorFila, codigo: f.codigo, indicador: f.indicador, sector: f.sector, dependencia: f.dependencia,
-    anio: f.anio, estado: f.estado, autor: f.autor, reportadoEn: f.reportadoEn, observacion: f.observacion,
-    conservada: f.conservada, reemplazada: f.reemplazada,
-  }
+/** Una fila lista para pintar: un indicador, un año, y lo que lo respalda. */
+export interface FilaIndicador {
+  indicadorFila: number
+  codigo: string
+  indicador: string
+  sector: string
+  dependencia: string
+  anio: number
+  /** Cómo va el ÚLTIMO reporte del año. */
+  estado: EstadoReporte | null
+  /** Quién hizo el último reporte, ya en forma de nombre propio. */
+  autor: string
+  /** ISO: cuándo se hizo el último reporte. */
+  reportadoEn: string
+  /** Los archivos vigentes del año, del más reciente al más antiguo. Uno solo: se muestra el archivo; varios: una carpeta. */
+  archivos: ArchivoDeIndicador[]
 }
 
 /**
- * Junta las filas de la página que son el MISMO documento (nombre, tamaño y tipo) en una sola, con todos los
- * indicadores a los que sirve: los de las filas que se juntan y los que `tambien` trae de fuera de la página.
+ * Los indicadores que tienen evidencia en el año, ya filtrados y en el orden en que se muestran: primero lo que se
+ * reportó más recientemente.
  *
- * Mantiene el orden de la lista (el documento sale donde salió su primera fila) y nunca repite una línea: un
- * indicador en un año aparece una vez aunque llegue por dos caminos.
+ * «Tiene evidencia» es que su último reporte del año lleva al menos un archivo (la base exige uno en cada reporte).
+ * `ids` es el resultado de buscar por texto en la base (los indicadores cuyos archivos o nombre coinciden), o `null`
+ * si no se buscó nada.
  */
-export function agrupar(filas: EvidenciaFila[]): GrupoEvidencia[] {
-  const grupos: GrupoEvidencia[] = []
-  const porClave = new Map<string, GrupoEvidencia>()
-  for (const f of filas) {
-    const k = claveDeArchivo(f)
-    let g = porClave.get(k)
-    if (!g) { g = { archivo: f, lineas: [] }; porClave.set(k, g); grupos.push(g) }
-    for (const l of [lineaDe(f), ...f.tambien]) if (!g.lineas.some(x => mismaLinea(x, l))) g.lineas.push(l)
+export function indicadoresConEvidencia(
+  lista: Indicador[],
+  f: Pick<FiltroEvidencias, 'anio' | 'estado' | 'dependencia'>,
+  ids: ReadonlySet<string> | null,
+): Indicador[] {
+  const con: { i: Indicador; creado: string }[] = []
+  for (const i of lista) {
+    const r = i.anios.find(a => a.anio === f.anio)?.enAnio?.reporte
+    if (!r || r.nEvidencias < 1) continue
+    if (f.dependencia !== null && i.dependencia !== f.dependencia) continue
+    if (f.estado !== null && r.estado !== f.estado) continue
+    if (ids !== null && !ids.has(i.uuid)) continue
+    con.push({ i, creado: r.creado })
   }
-  for (const g of grupos) {
-    g.lineas.sort((a, b) => b.anio - a.anio || a.codigo.localeCompare(b.codigo, 'es', { numeric: true }) || a.indicadorFila - b.indicadorFila)
+  return con
+    .sort((a, b) => (a.creado < b.creado ? 1 : a.creado > b.creado ? -1 : a.i.id - b.i.id))
+    .map(x => x.i)
+}
+
+/** Arma las filas de una página: cada indicador con SUS archivos de ese año (los vigentes). */
+export function armarFilasIndicador(
+  pagina: Indicador[],
+  anio: number,
+  archivos: FilaDeVista[],
+  relaciones: ReadonlyMap<string, IndicadorRelacionado[]> = new Map(),
+): FilaIndicador[] {
+  const porIndicador = new Map<string, FilaDeVista[]>()
+  for (const a of archivos) {
+    if (a.anio !== anio || a.reemplazada) continue
+    const l = porIndicador.get(a.indicador_id)
+    if (l) l.push(a); else porIndicador.set(a.indicador_id, [a])
   }
-  return grupos
+  return pagina.map(i => {
+    const r = i.anios.find(a => a.anio === anio)?.enAnio?.reporte ?? null
+    const propios = (porIndicador.get(i.uuid) ?? [])
+      .slice()
+      .sort((a, b) => (a.reportado_en < b.reportado_en ? 1 : a.reportado_en > b.reportado_en ? -1 : a.nombre.localeCompare(b.nombre, 'es')))
+    return {
+      indicadorFila: i.id,
+      codigo: i.codigo,
+      indicador: i.indicador,
+      sector: i.sector,
+      dependencia: i.dependencia,
+      anio,
+      estado: r?.estado ?? null,
+      autor: r ? nombrePropio(r.autorNombre) : '',
+      reportadoEn: r?.creado ?? '',
+      archivos: propios.map(a => ({
+        id: a.id,
+        reporteId: a.reporte_id,
+        nombre: a.nombre,
+        tipo: a.tipo,
+        categoria: categoriaDeMime(a.tipo),
+        bytes: numero(a.bytes) ?? 0,
+        conservada: a.conservada === true,
+        estado: ESTADOS.find(e => e === a.estado_reporte) ?? null,
+        observacion: a.observacion && a.observacion.trim() !== '' ? a.observacion : null,
+        reportadoEn: a.reportado_en,
+        autor: nombrePropio(a.autor_nombre),
+        tambien: relaciones.get(a.id) ?? [],
+      })),
+    }
+  })
+}
+
+/** Cuántos archivos de cada tipo hay, dicho en una línea («PDF ×2 · Imagen»). */
+export function resumenDeTipos(archivos: Pick<ArchivoDeIndicador, 'categoria'>[]): string {
+  const cuenta = new Map<string, number>()
+  for (const a of archivos) {
+    const k = a.categoria ? ETIQUETA_CATEGORIA[a.categoria] : 'Otro'
+    cuenta.set(k, (cuenta.get(k) ?? 0) + 1)
+  }
+  return [...cuenta].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es')).map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(' · ')
 }
 
 /** Del número de página y el total de filas: desde cuál hasta cuál se muestra y cuántas páginas hay. */
-export function rangoDePagina(pagina: number, total: number, tamano = TAMANO_PAGINA): { desde: number; hasta: number; paginas: number } {
+export function rangoDePagina(pagina: number, total: number, tamano = TAMANO_PAGINA): { desde: number; hasta: number; paginas: number; pagina: number } {
   const paginas = Math.max(1, Math.ceil(total / tamano))
   const p = Math.min(Math.max(1, pagina), paginas)
-  return { desde: total === 0 ? 0 : (p - 1) * tamano + 1, hasta: Math.min(total, p * tamano), paginas }
+  return { desde: total === 0 ? 0 : (p - 1) * tamano + 1, hasta: Math.min(total, p * tamano), paginas, pagina: p }
 }

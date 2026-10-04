@@ -34,7 +34,9 @@ import {
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
 import Ventana, { BotonCerrarVentana } from './Ventana'
-import { TextoEstable } from './Movimiento'
+import { TextoEstable, useConfirmar } from './Movimiento'
+import { useAvisar } from './Avisos'
+import ConfirmarQuitar from './ConfirmarQuitar'
 import IconoSector from './IconoSector'
 import { EstadoTexto, Rotulo, Seccion, SituacionTexto } from './ui'
 import { T } from './tema'
@@ -75,8 +77,13 @@ export default function IndicadorModal({
   /** Con esto la ficha muestra la trazabilidad, deja reportar y validar, y comentar. Sin esto, esa parte no se pinta. */
   seguimiento?: ContextoSeguimiento
 }) {
-  const [quitando, setQuitando] = useState<string | null>(null)
-  const [errorApoyo, setErrorApoyo] = useState<string | null>(null)
+  // Quitar a alguien pregunta antes: `confirma` es a quién se le está preguntando; `objetivo`, a quién se está quitando
+  // (no se borra al cerrar la pregunta, para que su botón no vuelva a «Sí, quitar» mientras la pregunta se pliega).
+  const [confirma, setConfirma] = useState<string | null>(null)
+  const [objetivo, setObjetivo] = useState<string | null>(null)
+  const [errorQuitar, setErrorQuitar] = useState<string | null>(null)
+  const { fase: faseQuitar, correr: correrQuitar, ocupado: quitando } = useConfirmar()
+  const avisar = useAvisar()
   // El historial cargado se guarda con la firma de quién llevaba el indicador cuando se leyó.
   const [cargado, setCargado] = useState<{ firma: string; datos: EntradaHistorial[] } | null>(null)
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
@@ -99,13 +106,30 @@ export default function IndicadorModal({
   const principalVista = asignados?.find(a => a.principal)
   const apoyos = asignados?.filter(a => !a.principal) ?? []
 
-  async function quitar(usuarioId: string) {
-    if (!onQuitar) return
-    setQuitando(usuarioId)
-    setErrorApoyo(null)
-    const e = await onQuitar(usuarioId)
-    setQuitando(null)
-    if (e) setErrorApoyo(e)
+  function preguntarQuitar(usuarioId: string) {
+    setErrorQuitar(null)
+    setConfirma(usuarioId)
+  }
+
+  async function quitar(a: AsignadoVista) {
+    if (!onQuitar || quitando) return
+    setObjetivo(a.usuarioId)
+    setErrorQuitar(null)
+    await correrQuitar(
+      async () => {
+        const e = await onQuitar(a.usuarioId)
+        return e === null ? { ok: true as const, datos: undefined } : { ok: false as const, error: e }
+      },
+      {
+        alTerminar: () => {
+          setConfirma(null)
+          avisar(a.principal ? `${a.nombre} ya no es responsable de este indicador.` : `${a.nombre} ya no apoya este indicador.`)
+        },
+        alFallar: setErrorQuitar,
+        // La persona desaparece al recargar la ficha: hasta entonces el botón no vuelve a decir «Sí, quitar».
+        quedarseHecho: true,
+      },
+    )
   }
 
   async function cargarHistorial() {
@@ -203,11 +227,12 @@ export default function IndicadorModal({
                 {onQuitar && puedeQuitarPrincipal && principalVista && (
                   <button
                     id="pdm-ficha-quitar"
-                    onClick={() => quitar(principalVista.usuarioId)}
-                    disabled={quitando !== null}
+                    onClick={() => preguntarQuitar(principalVista.usuarioId)}
+                    disabled={quitando}
+                    aria-expanded={confirma === principalVista.usuarioId}
                     className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031] disabled:opacity-50"
                   >
-                    <TextoEstable texto={quitando === principalVista.usuarioId ? 'Quitando…' : 'Quitar'} reserva="Quitando…" />
+                    Quitar
                   </button>
                 )}
                 {onAsignar && <button id="pdm-ficha-asignar" onClick={onAsignar} className={T.botonSecChico}>Asignar…</button>}
@@ -243,7 +268,7 @@ export default function IndicadorModal({
                   )}
                 </>
               )}
-              {asignados && (principalVista?.grupo || apoyos.length > 0 || errorApoyo) && (
+              {asignados && (principalVista?.grupo || apoyos.length > 0) && (
                 <div className={`mt-3 border-t ${T.reglaFuerte} pt-3`}>
                   {principalVista?.grupo && <p className="text-xs text-[#667085]">Por el grupo «{principalVista.grupo}»</p>}
                   {apoyos.length > 0 && (
@@ -251,30 +276,54 @@ export default function IndicadorModal({
                       <Rotulo className="mt-1">{apoyos.length === 1 ? 'Apoyo' : 'Apoyos'}</Rotulo>
                       <ul className="mt-2 space-y-2">
                         {apoyos.map(a => (
-                          <li key={a.usuarioId} className="flex items-center gap-3">
-                            <Avatar nombre={a.nombre} fotoUrl={a.fotoUrl} tamano="sm" apagado={!a.activo} />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium text-[#192031]">{a.nombre}</span>
-                              {a.grupo && <span className="block truncate text-xs text-[#667085]">Por el grupo «{a.grupo}»</span>}
-                            </span>
+                          <li key={a.usuarioId}>
+                            <div className="flex items-center gap-3">
+                              <Avatar nombre={a.nombre} fotoUrl={a.fotoUrl} tamano="sm" apagado={!a.activo} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-[#192031]">{a.nombre}</span>
+                                {a.grupo && <span className="block truncate text-xs text-[#667085]">Por el grupo «{a.grupo}»</span>}
+                              </span>
+                              {onQuitar && !a.grupo && (
+                                <button
+                                  onClick={() => preguntarQuitar(a.usuarioId)}
+                                  disabled={quitando}
+                                  aria-expanded={confirma === a.usuarioId}
+                                  className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031] disabled:opacity-50"
+                                >
+                                  Quitar
+                                </button>
+                              )}
+                            </div>
                             {onQuitar && !a.grupo && (
-                              <button
-                                onClick={() => quitar(a.usuarioId)}
-                                disabled={quitando !== null}
-                                className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031] disabled:opacity-50"
-                              >
-                                <TextoEstable texto={quitando === a.usuarioId ? 'Quitando…' : 'Quitar'} reserva="Quitando…" />
-                              </button>
+                              <ConfirmarQuitar
+                                abierto={confirma === a.usuarioId}
+                                nombre={a.nombre}
+                                comoPrincipal={false}
+                                fase={objetivo === a.usuarioId ? faseQuitar : 'reposo'}
+                                error={objetivo === a.usuarioId ? errorQuitar : null}
+                                onCancelar={() => setConfirma(null)}
+                                onConfirmar={() => quitar(a)}
+                              />
                             )}
                           </li>
                         ))}
                       </ul>
                     </>
                   )}
-                  {errorApoyo && <p role="alert" className="mt-2 text-xs font-medium text-[#B42318]">{errorApoyo}</p>}
                 </div>
               )}
             </div>
+            {onQuitar && puedeQuitarPrincipal && principalVista && (
+              <ConfirmarQuitar
+                abierto={confirma === principalVista.usuarioId}
+                nombre={principalVista.nombre}
+                comoPrincipal
+                fase={objetivo === principalVista.usuarioId ? faseQuitar : 'reposo'}
+                error={objetivo === principalVista.usuarioId ? errorQuitar : null}
+                onCancelar={() => setConfirma(null)}
+                onConfirmar={() => quitar(principalVista)}
+              />
+            )}
           </Seccion>
 
           {/* Ficha técnica: un cuadro de datos, como el de un formato oficial */}

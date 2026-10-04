@@ -1,41 +1,46 @@
 'use client'
 
 /**
- * Evidencias: todos los archivos que respaldan los reportes, en una lista que se puede recorrer.
+ * Evidencias: los indicadores que ya tienen con qué demostrarse, año por año.
  *
- * Es la pantalla de quien supervisa o audita (y de cada responsable con lo suyo): sin entrar indicador por
- * indicador, se ve qué se subió, de quién, de qué reporte y cómo va ese reporte. Un clic abre el archivo; el enlace
- * «Ver indicador» lleva a su ficha. Los filtros viajan en la dirección (se pueden compartir) y la lista se pide a
- * la base de a 25.
+ * Es la pantalla de quien supervisa o audita (y de cada responsable con lo suyo). Una lista de archivos no responde
+ * ninguna pregunta de comprobación —con miles, menos—: la pregunta es «¿este indicador, este año, tiene respaldo?».
+ * Por eso cada fila es un INDICADOR, y lo que lo respalda va dentro:
  *
- * Por defecto se ven los archivos de las versiones VIGENTES de cada reporte: lo de un reporte ya corregido es
- * historia, y lo que se conservó ya está en la versión nueva, así que mostrarlo repetiría los mismos archivos.
+ *   · Un solo archivo: se muestra el archivo, y un clic lo abre.
+ *   · Varios archivos: una carpeta («4 archivos · PDF ×3 · Imagen»); se abre para verlos uno a uno.
+ *
+ * Los años no se mezclan: se mira un año a la vez, y cada archivo está en el año de su reporte. Los filtros viajan en
+ * la dirección (se pueden compartir) y la lista se muestra de a 25 indicadores.
  */
 
-import { useEffect, useRef, useState, useTransition, type CSSProperties } from 'react'
+import { useEffect, useId, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { HREF_EVIDENCIAS, HREF_INDICADORES } from '@/lib/pdm/menu'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
-import { ANIOS_PLAN } from '@/lib/pdm/seguimiento'
 import { describirTamano, type AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import {
-  CATEGORIAS, ESTADOS_FILTRO, ETIQUETA_CATEGORIA, ROTULO_CATEGORIA, ROTULO_ESTADO_FILTRO, TAMANO_PAGINA,
-  agrupar, aParametros, hayFiltros, rangoDePagina,
-  type CategoriaTipo, type FiltroEvidencias, type GrupoEvidencia, type IndicadorRelacionado,
+  ESTADOS_FILTRO, ETIQUETA_CATEGORIA, ROTULO_ESTADO_FILTRO, TAMANO_PAGINA,
+  aParametros, hayFiltros, rangoDePagina, resumenDeTipos,
+  type ArchivoDeIndicador, type CategoriaTipo, type FilaIndicador, type FiltroEvidencias,
 } from '@/lib/pdm/evidencias-armar'
 import type { Evidencias } from '@/lib/pdm/evidencias'
-import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import IconoSector from './IconoSector'
+import Pagina from './Pagina'
+import SelectorAnio from './SelectorAnio'
+import { Despliegue } from './Movimiento'
 import { Sello, SituacionTexto } from './ui'
 import { useAbrirEvidencia } from './abrir-evidencia'
 import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
 import { T } from './tema'
 
-const COLUMNAS = 'md:grid-cols-[minmax(0,1.25fr)_minmax(0,1.3fr)_10rem_11.5rem]'
+// Cuatro columnas solo desde 1024 px: con menos, la de evidencia queda de ~180 px y, dentro de una carpeta, los sellos y el
+// estado de cada archivo no caben y se recortan. Por debajo, la fila se apila.
+const COLUMNAS = 'lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.35fr)_9.5rem_11.5rem]'
 
 const GLIFO: Record<CategoriaTipo, typeof Iconos.documentos.adjunto> = {
   pdf: Iconos.documentos.archivoPdf,
@@ -44,123 +49,156 @@ const GLIFO: Record<CategoriaTipo, typeof Iconos.documentos.adjunto> = {
   excel: Iconos.documentos.archivoHoja,
 }
 
-/** Cuántos indicadores se ven antes de «Ver los N restantes». */
-const VISIBLES = 3
+/** Cuántos indicadores se nombran en «También respalda a…» antes de «y N más». */
+const MAX_TAMBIEN = 3
 
-/** Un indicador con su icono de sector, su secretaría y año, y —si ese archivo se devolvió— por qué. */
-function IndicadorDelArchivo({ l }: { l: IndicadorRelacionado }) {
+/** Un archivo: su nombre (un clic lo abre), su tipo y tamaño, y lo que le pasó. */
+function ArchivoLinea({ a, abrir, abriendo, conEstado }: {
+  a: ArchivoDeIndicador
+  abrir: (id: string) => void
+  abriendo: boolean
+  /** Se dice cómo va el reporte de ESTE archivo (cuando la carpeta junta reportes que van distinto). */
+  conEstado: boolean
+}) {
+  const etiqueta = a.categoria ? ETIQUETA_CATEGORIA[a.categoria] : 'Archivo'
   return (
-    <div className="flex min-w-0 items-start gap-2.5">
-      <IconoSector sector={l.sector} />
-      <div className="min-w-0">
-        <p className="line-clamp-2 text-sm leading-snug text-[#192031] [overflow-wrap:anywhere]">
-          <span className="font-semibold tabular-nums text-[#667085]">{l.codigo}</span> · {l.indicador}
+    <div className="min-w-0">
+      <button
+        onClick={() => abrir(a.id)}
+        disabled={abriendo}
+        // `w-full`: un botón no se estira solo a su celda, y sin eso el nombre largo no se recorta y pisa la columna de al lado.
+        className="group flex w-full min-w-0 items-start gap-3 text-left focus-visible:outline-none disabled:opacity-60"
+      >
+        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EDF0F5] text-[#192031] transition-colors group-hover:bg-[#E1E6EE] group-focus-visible:ring-2 group-focus-visible:ring-[#192031]">
+          <Icono glifo={a.categoria ? GLIFO[a.categoria] : Iconos.documentos.adjunto} tamano="md" />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-[#192031] group-hover:underline" title={a.nombre}>{a.nombre}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#667085]">
+            <span className="tabular-nums">{etiqueta} · {describirTamano(a.bytes)}</span>
+            {a.conservada && <Sello>Conservada</Sello>}
+            {conEstado && a.estado && <SituacionTexto situacion={a.estado} />}
+          </span>
+        </span>
+      </button>
+      {a.observacion && (
+        <p className="mt-1.5 flex items-start gap-1.5 pl-12 text-xs leading-snug text-[#912018]">
+          <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-px shrink-0" />
+          <span className="min-w-0 [overflow-wrap:anywhere]"><b>Devuelto:</b> «{a.observacion}»</span>
         </p>
-        <p className="mt-0.5 truncate text-xs text-[#667085]">{l.dependencia} · {l.anio}</p>
-        {l.observacion && (
-          <p className="mt-1 flex items-start gap-1.5 text-xs leading-snug text-[#912018]">
-            <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-px shrink-0" />
-            <span className="min-w-0 [overflow-wrap:anywhere]"><b>Devuelto:</b> «{l.observacion}»</span>
-          </p>
-        )}
-        <Link href={`${HREF_INDICADORES}?abrir=${l.indicadorFila}&anio=${l.anio}`} className={`mt-0.5 inline-block text-xs ${T.enlace}`}>
-          Ver indicador
-        </Link>
-      </div>
+      )}
+      {a.tambien.length > 0 && (
+        <div className="mt-1.5 pl-12 text-xs text-[#667085]">
+          <p>También respalda a {a.tambien.length === 1 ? 'otro indicador' : `otros ${a.tambien.length} indicadores`} de {a.tambien[0].anio}:</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {a.tambien.slice(0, MAX_TAMBIEN).map(t => (
+              <li key={t.indicadorFila} className="min-w-0 truncate">
+                <Link href={`${HREF_INDICADORES}?abrir=${t.indicadorFila}&anio=${t.anio}`} className="text-[#2D3648] underline decoration-[#C5CBD6] underline-offset-2 transition-colors hover:text-[#192031] hover:decoration-[#192031]" title={t.indicador}>
+                  <span className="tabular-nums">{t.codigo}</span> · {t.indicador}
+                </Link>
+              </li>
+            ))}
+            {a.tambien.length > MAX_TAMBIEN && <li>y {a.tambien.length - MAX_TAMBIEN} más</li>}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
 
 /**
- * Un documento y los indicadores a los que sirve.
- *
- * Una fila por DOCUMENTO: a la izquierda el archivo (una sola celda, que abarca todas las sub-filas), a la derecha
- * cada indicador al que sirve en su propia sub-fila, alineada con las columnas de la tabla —indicador, quién lo
- * reportó, cómo va ese reporte—, porque autor, fecha y estado son del reporte de CADA indicador. Si el mismo
- * archivo se subió por separado en varios reportes (que es como hoy un archivo llega a varios indicadores), aquí
- * es una sola fila con tantas sub-filas como indicadores: «Respalda a 3 indicadores» y se ven los tres.
- *
- * Con más de tres indicadores se pliega («Ver los N restantes»). En una pantalla estrecha las sub-filas se apilan.
+ * Varios archivos de un indicador, juntos: una carpeta. Cerrada dice cuántos son, de qué tipo y si alguno se devolvió;
+ * abierta (con un clic) muestra cada archivo.
  */
-function FilaDocumento({ g, abrir, abriendo }: { g: GrupoEvidencia; abrir: (id: string) => void; abriendo: boolean }) {
-  const f = g.archivo
-  const [desplegado, setDesplegado] = useState(false)
-  const n = g.lineas.length
-  const visibles = desplegado ? g.lineas : g.lineas.slice(0, VISIBLES)
-  const ocultos = n - visibles.length
-  const conPie = ocultos > 0 || (desplegado && n > VISIBLES)
-  // Filas de la rejilla que ocupa el archivo: el rótulo (si hay varios), cada indicador y el botón de plegar.
-  const filas = visibles.length + (n > 1 ? 1 : 0) + (conPie ? 1 : 0)
-  const etiqueta = f.categoria ? ETIQUETA_CATEGORIA[f.categoria] : 'Archivo'
-
+function Carpeta({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir: (id: string) => void; abriendo: boolean }) {
+  const [abierta, setAbierta] = useState(false)
+  const id = useId()
+  const n = fila.archivos.length
+  const devueltos = fila.archivos.filter(a => a.observacion !== null).length
+  // Si la carpeta junta reportes distintos (un avance aprobado y otro por validar, por ejemplo), cada archivo dice el suyo.
+  const variosReportes = new Set(fila.archivos.map(a => a.reporteId)).size > 1
   return (
-    <li
-      style={{ '--n': filas } as CSSProperties}
-      className={`grid grid-cols-1 gap-x-4 px-4 py-3.5 sm:px-5 ${COLUMNAS} md:[grid-template-rows:repeat(var(--n),auto)]`}
-    >
-      <div className="min-w-0 md:col-start-1 md:[grid-row:1/span_var(--n)] md:self-center">
-        <button
-          onClick={() => abrir(f.id)}
-          disabled={abriendo}
-          // `w-full`: un botón no se estira solo a su celda, y sin eso el nombre largo no se recorta y pisa la columna de al lado.
-          className="group flex w-full min-w-0 items-start gap-3 text-left focus-visible:outline-none disabled:opacity-60"
-        >
-          <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EDF0F5] text-[#192031] transition-colors group-hover:bg-[#E1E6EE] group-focus-visible:ring-2 group-focus-visible:ring-[#192031]">
-            <Icono glifo={f.categoria ? GLIFO[f.categoria] : Iconos.documentos.adjunto} tamano="md" />
+    <div className="min-w-0">
+      <button
+        onClick={() => setAbierta(v => !v)}
+        aria-expanded={abierta}
+        aria-controls={id}
+        className="group flex w-full min-w-0 items-center gap-3 text-left focus-visible:outline-none"
+      >
+        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EDF0F5] text-[#192031] transition-colors group-hover:bg-[#E1E6EE] group-focus-visible:ring-2 group-focus-visible:ring-[#192031]">
+          <Icono glifo={Iconos.documentos.expediente} tamano="md" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-[#192031] group-hover:underline">{n} archivos</span>
+          <span className="mt-0.5 block truncate text-xs text-[#667085]">
+            {resumenDeTipos(fila.archivos)}
+            {devueltos > 0 && <span className="font-medium text-[#912018]"> · {devueltos === 1 ? '1 devuelto' : `${devueltos} devueltos`}</span>}
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-[#192031] group-hover:underline" title={f.nombre}>{f.nombre}</span>
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#667085]">
-              <span className="tabular-nums">{etiqueta} · {describirTamano(f.bytes)}</span>
-              {n > 1 && <Sello>En {n} indicadores</Sello>}
-            </span>
-          </span>
-        </button>
+        </span>
+        <Icono glifo={Iconos.accion.desplegar} tamano="sm" className={`shrink-0 text-[#667085] transition-transform duration-200 ${abierta ? 'rotate-180' : ''}`} />
+      </button>
+      <div id={id}>
+        <Despliegue abierto={abierta} separacion="pb-1">
+          <ul className="ml-[18px] mt-3 space-y-3.5 border-l border-[#C5CBD6] pl-4">
+            {fila.archivos.map(a => (
+              <li key={a.id}>
+                <ArchivoLinea a={a} abrir={abrir} abriendo={abriendo} conEstado={variosReportes} />
+              </li>
+            ))}
+          </ul>
+        </Despliegue>
+      </div>
+    </div>
+  )
+}
+
+/** Un indicador, con lo que lo respalda ese año. */
+function FilaDeIndicador({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir: (id: string) => void; abriendo: boolean }) {
+  return (
+    <li className={`grid grid-cols-1 gap-x-4 gap-y-3 px-4 py-4 sm:px-5 ${COLUMNAS} lg:items-start`}>
+      <div className="flex min-w-0 items-start gap-2.5">
+        <IconoSector sector={fila.sector} />
+        <div className="min-w-0">
+          <p className="line-clamp-2 text-sm leading-snug text-[#192031] [overflow-wrap:anywhere]">
+            <span className="font-semibold tabular-nums text-[#667085]">{fila.codigo}</span> · {fila.indicador}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-[#667085]">{fila.dependencia}</p>
+          <Link href={`${HREF_INDICADORES}?abrir=${fila.indicadorFila}&anio=${fila.anio}`} className={`mt-0.5 inline-block text-xs ${T.enlace}`}>
+            Ver indicador
+          </Link>
+        </div>
       </div>
 
-      {n > 1 && (
-        <p className="mt-3 text-xs font-semibold text-[#192031] md:col-span-3 md:mt-0 md:pb-2">Respalda a {n} indicadores</p>
-      )}
+      <div className="min-w-0">
+        {fila.archivos.length === 0 ? (
+          <p className="text-xs text-[#667085]">Sin archivos este año.</p>
+        ) : fila.archivos.length === 1 ? (
+          <ArchivoLinea a={fila.archivos[0]} abrir={abrir} abriendo={abriendo} conEstado={false} />
+        ) : (
+          <Carpeta fila={fila} abrir={abrir} abriendo={abriendo} />
+        )}
+      </div>
 
-      {visibles.map((l, k) => (
-        <div
-          key={`${l.indicadorFila}:${l.anio}`}
-          className={`grid min-w-0 gap-x-4 gap-y-2 py-3 md:col-span-3 md:grid-cols-subgrid md:items-center ${n > 1 || k > 0 ? 'border-t border-[#E6E9EF]' : ''} ${k >= VISIBLES ? 'pdm-entra' : ''} ${n === 1 ? 'first:pt-0 last:pb-0' : ''}`}
-        >
-          <IndicadorDelArchivo l={l} />
-          <div className="min-w-0 text-xs leading-snug">
-            <p className="truncate font-medium text-[#192031]">{l.autor}</p>
-            <p className="mt-0.5 text-[#667085]">{fechaHoraBogota(l.reportadoEn)}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {l.estado && <SituacionTexto situacion={l.estado} />}
-            {l.conservada && <Sello>Conservada</Sello>}
-            {l.reemplazada && <Sello>Versión anterior</Sello>}
-          </div>
+      {/* Apiladas, «Reportó» y el estado van lado a lado; con cuatro columnas (`lg:contents`) cada una vuelve a ser su celda. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 lg:contents">
+        <div className="min-w-0 text-xs leading-snug">
+          <p className="truncate font-medium text-[#192031]">{fila.autor}</p>
+          <p className="mt-0.5 text-[#667085]">{fila.reportadoEn ? fechaHoraBogota(fila.reportadoEn) : ''}</p>
         </div>
-      ))}
 
-      {conPie && (
-        <div className="border-t border-[#E6E9EF] pt-2.5 md:col-span-3">
-          <button
-            onClick={() => setDesplegado(v => !v)}
-            aria-expanded={desplegado}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[#192031] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031]"
-          >
-            {desplegado ? 'Ver menos' : `Ver los ${ocultos} restantes`}
-            <Icono glifo={Iconos.accion.desplegar} tamano="sm" className={`transition-transform duration-200 ${desplegado ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-      )}
+        <div>{fila.estado && <SituacionTexto situacion={fila.estado} />}</div>
+      </div>
     </li>
   )
 }
 
-export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = ACCIONES_SEGUIMIENTO_REALES, base = HREF_EVIDENCIAS }: {
+export default function EvidenciasPdm({ filtro, datos, dependencias, anioActual, acciones = ACCIONES_SEGUIMIENTO_REALES, base = HREF_EVIDENCIAS }: {
   filtro: FiltroEvidencias
   datos: Evidencias
   /** Las secretarías entre las que se puede elegir (solo se ofrece el selector si hay más de una). */
   dependencias: string[]
+  /** El año de hoy: dice cuál de los años del plan está en curso. */
+  anioActual: number
   acciones?: Pick<AccionesSeguimiento, 'urlEvidencia'>
   /** La ruta de esta pantalla (las pruebas la apuntan a otra). */
   base?: string
@@ -177,8 +215,8 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
    * Cambia filtros: vuelve a la primera página (salvo que el cambio sea de página).
    *
    * Sin `scroll`: por defecto `router.push` sube la pantalla al inicio, y quien filtra o pasa de página estando abajo
-   * veía la pantalla dar un salto. Al cambiar de PÁGINA sí se lleva, con suavidad, al inicio de la lista (los archivos
-   * nuevos empiezan ahí); al filtrar, la persona se queda donde estaba.
+   * veía la pantalla dar un salto. Al cambiar de PÁGINA sí se lleva, con suavidad, al inicio de la lista; al filtrar,
+   * la persona se queda donde estaba.
    */
   function ir(cambios: Partial<FiltroEvidencias>) {
     const siguiente = { ...filtroRef.current, pagina: 1, ...cambios }
@@ -198,52 +236,38 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
 
   const { desde, hasta, paginas } = rangoDePagina(datos.pagina, datos.total)
   const filtrado = hayFiltros(filtro)
-  // Los archivos que son el mismo documento se muestran juntos, en una sola fila con sus indicadores.
-  const grupos = agrupar(datos.filas)
-  const hayJuntos = grupos.length < datos.filas.length
 
   return (
     <Pagina>
       <EncabezadoSeccion
         titulo="Evidencias"
-        detalle="Los archivos que respaldan cada reporte"
+        detalle="Los indicadores que ya tienen con qué demostrarse"
         datos={[
-          { rotulo: 'Archivos', valor: datos.ok ? String(datos.total) : '—' },
-          { rotulo: 'Año', valor: filtro.anio ? String(filtro.anio) : 'Todos' },
+          { rotulo: 'Indicadores', valor: datos.ok ? String(datos.total) : '—' },
+          { rotulo: 'Año', valor: String(filtro.anio) },
         ]}
       />
 
+      {/* Un año a la vez: los años no se mezclan. */}
+      <SelectorAnio anio={filtro.anio} anioActual={anioActual} onCambiar={a => ir({ anio: a })} />
+
       <div className="space-y-3">
         <label className="relative block">
-          <span className="sr-only">Buscar por archivo o indicador</span>
+          <span className="sr-only">Buscar por indicador o por nombre de archivo</span>
           <Icono glifo={Iconos.accion.buscar} tamano="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
           <input
             id="pdm-evidencias-busqueda"
             type="search"
             value={texto}
             onChange={e => setTexto(e.target.value)}
-            placeholder="Buscar por nombre del archivo o por indicador"
+            placeholder="Buscar por indicador, código o nombre del archivo"
             className={`${T.campo} pl-10`}
           />
         </label>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <label className="block">
-            <span className={T.rotulo}>Año</span>
-            <select id="pdm-evidencias-anio" value={filtro.anio ?? ''} onChange={e => ir({ anio: e.target.value ? Number(e.target.value) : null })} className={`${T.campo} mt-1.5`}>
-              <option value="">Todos</option>
-              {ANIOS_PLAN.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className={T.rotulo}>Tipo</span>
-            <select id="pdm-evidencias-tipo" value={filtro.tipo ?? ''} onChange={e => ir({ tipo: (CATEGORIAS.find(c => c === e.target.value) ?? null) })} className={`${T.campo} mt-1.5`}>
-              <option value="">Todos</option>
-              {CATEGORIAS.map(c => <option key={c} value={c}>{ROTULO_CATEGORIA[c]}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className={T.rotulo}>Estado</span>
+            <span className={T.rotulo}>Estado del reporte</span>
             <select id="pdm-evidencias-estado" value={filtro.estado ?? ''} onChange={e => ir({ estado: (ESTADOS_FILTRO.find(s => s === e.target.value) ?? null) })} className={`${T.campo} mt-1.5`}>
               <option value="">Todos</option>
               {ESTADOS_FILTRO.map(s => <option key={s} value={s}>{ROTULO_ESTADO_FILTRO[s]}</option>)}
@@ -260,21 +284,11 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <label className="-my-1.5 flex cursor-pointer items-center gap-2 py-1.5 text-sm text-[#4A5568]">
-            <input
-              id="pdm-evidencias-historico"
-              type="checkbox"
-              checked={filtro.historico}
-              onChange={e => ir({ historico: e.target.checked })}
-              className="h-4 w-4 accent-[#192031]"
-            />
-            Incluir versiones anteriores
-          </label>
-          {filtrado && (
-            <Link href={base} className={`text-xs ${T.enlace}`}>Quitar los filtros</Link>
-          )}
-        </div>
+        {filtrado && (
+          <p className="text-right">
+            <Link href={`${base}?anio=${filtro.anio}`} className={`text-xs ${T.enlace}`}>Quitar los filtros</Link>
+          </p>
+        )}
       </div>
 
       {error && <p role="alert" className={T.avisoMal}>{error}</p>}
@@ -286,7 +300,7 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
       ) : datos.total === 0 ? (
         <div className="rounded-lg border border-dashed border-[#C5CBD6] bg-white px-6 py-12 text-center">
           <p className={`text-sm font-medium ${T.tinta}`}>
-            {filtrado ? 'Ningún archivo coincide con lo que buscas.' : 'Todavía no hay evidencias.'}
+            {filtrado ? 'Ningún indicador coincide con lo que buscas.' : `Ningún indicador tiene evidencias en ${filtro.anio}.`}
           </p>
           <p className={`mt-1 text-xs ${T.tenue}`}>
             {filtrado ? 'Prueba con otra palabra o quita algún filtro.' : 'Aparecerán aquí cuando alguien reporte un avance con sus archivos.'}
@@ -294,29 +308,28 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
         </div>
       ) : (
         <>
-          {/* Con otros resultados (otro filtro u otra página) la lista se vuelve a montar y llega con el cruce suave de siempre. */}
+          {/* Con otros resultados (otro año, otro filtro u otra página) la lista se vuelve a montar y llega con el cruce suave de siempre. */}
           <section
             ref={lista}
-            key={`${filtro.q}|${filtro.anio}|${filtro.tipo}|${filtro.estado}|${filtro.dependencia}|${filtro.historico}|${datos.pagina}`}
+            key={`${filtro.anio}|${filtro.q}|${filtro.estado}|${filtro.dependencia}|${datos.pagina}`}
             className={`pdm-entra scroll-mt-24 overflow-hidden ${T.panel} transition-opacity ${pendiente ? 'opacity-60' : ''}`}
             aria-busy={pendiente}
           >
-            <div className={`hidden gap-x-4 border-b ${T.regla} bg-[#F7F8FA] px-5 py-2 md:grid ${COLUMNAS}`}>
-              <span className={T.rotulo}>Archivo</span>
-              <span className={T.rotulo}>Respalda a</span>
+            <div className={`hidden gap-x-4 border-b ${T.regla} bg-[#F7F8FA] px-5 py-2 lg:grid ${COLUMNAS}`}>
+              <span className={T.rotulo}>Indicador</span>
+              <span className={T.rotulo}>Evidencia</span>
               <span className={T.rotulo}>Reportó</span>
               <span className={T.rotulo}>Estado del reporte</span>
             </div>
             <ul className={`divide-y ${T.divide}`}>
-              {grupos.map(g => <FilaDocumento key={g.archivo.id} g={g} abrir={abrir} abriendo={abriendo !== null} />)}
+              {datos.filas.map(f => <FilaDeIndicador key={`${f.indicadorFila}:${f.anio}`} fila={f} abrir={abrir} abriendo={abriendo !== null} />)}
             </ul>
           </section>
 
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#667085]">
             <span>
-              Mostrando <b className="tabular-nums text-[#192031]">{desde}–{hasta}</b> de <b className="tabular-nums text-[#192031]">{datos.total}</b> {datos.total === 1 ? 'archivo' : 'archivos'}
+              Mostrando <b className="tabular-nums text-[#192031]">{desde}–{hasta}</b> de <b className="tabular-nums text-[#192031]">{datos.total}</b> {datos.total === 1 ? 'indicador' : 'indicadores'}
               {datos.total > TAMANO_PAGINA && <> · página <span className="tabular-nums">{datos.pagina}</span> de <span className="tabular-nums">{paginas}</span></>}
-              {hayJuntos && <> · lo que es el mismo documento se muestra junto</>}
             </span>
             {paginas > 1 && (
               <div className="flex gap-2">
