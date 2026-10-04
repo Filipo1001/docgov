@@ -27,7 +27,7 @@ import { ESTADOS_POR_URGENCIA, PALABRA_DE, lineaDeSemaforo } from '@/lib/pdm/sem
 import {
   ETIQUETA_CATEGORIA, TAMANO_PAGINA,
   aParametros, hayFiltros, rangoDePagina, resumenDeTipos,
-  type ArchivoDeIndicador, type CategoriaTipo, type FilaIndicador, type FiltroEvidencias,
+  type ArchivoDeIndicador, type FilaIndicador, type FiltroEvidencias,
 } from '@/lib/pdm/evidencias-armar'
 import type { Evidencias } from '@/lib/pdm/evidencias'
 import EncabezadoSeccion from './EncabezadoSeccion'
@@ -38,18 +38,14 @@ import { Despliegue } from './Movimiento'
 import { Marcador, Sello, SemaforoReporte, SituacionTexto } from './ui'
 import { useAbrirEvidencia } from './abrir-evidencia'
 import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
+import { GLIFO_DE_CATEGORIA } from './iconos-tipo'
 import { T } from './tema'
 
 // Cuatro columnas solo desde 1024 px: con menos, la de evidencia queda de ~180 px y, dentro de una carpeta, los sellos y el
 // estado de cada archivo no caben y se recortan. Por debajo, la fila se apila.
 const COLUMNAS = 'lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.35fr)_9.5rem_11.5rem]'
 
-const GLIFO: Record<CategoriaTipo, typeof Iconos.documentos.adjunto> = {
-  pdf: Iconos.documentos.archivoPdf,
-  word: Iconos.documentos.archivoWord,
-  imagen: Iconos.documentos.archivoImagen,
-  excel: Iconos.documentos.archivoHoja,
-}
+const GLIFO = GLIFO_DE_CATEGORIA
 
 /** El chip de un filtro: el mismo de las listas de indicadores. */
 const claseChip = (activo: boolean) =>

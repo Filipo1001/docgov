@@ -23,7 +23,7 @@
  */
 
 import {
-  createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import Icono from '@/components/ui/Icono'
@@ -133,6 +133,10 @@ export default function Ventana({ etiqueta, onCerrar, ancho = 'sm:max-w-xl', chi
   children: ReactNode
 }) {
   const id = useId()
+  // En el servidor no hay `document`: si la ficha se abre al cargar la página (el botón de los correos, un enlace
+  // `?abrir=`, recargar con la ficha abierta), pintarla allí rompe el renderizado. Sin navegador no se pinta; al hidratar
+  // aparece. En el navegador (abrir con un clic) es verdadero desde el primer momento: no hay parpadeo.
+  const enNavegador = useSyncExternalStore(() => () => {}, () => true, () => false)
   const panel = useRef<HTMLDivElement>(null)
   const empezoEnElVelo = useRef(false)
   const dePresencia = useContext(SalidaCtx)
@@ -159,6 +163,7 @@ export default function Ventana({ etiqueta, onCerrar, ancho = 'sm:max-w-xl', chi
   const valor = useMemo(() => ({ cerrar }), [cerrar])
 
   useEffect(() => {
+    if (!enNavegador) return
     const previo = document.activeElement as HTMLElement | null
     bloquearScroll()
     pila.push(id)
@@ -191,8 +196,9 @@ export default function Ventana({ etiqueta, onCerrar, ancho = 'sm:max-w-xl', chi
       // El foco vuelve a quien abrió la ventana, salvo que ya no exista (la lista cambió mientras tanto).
       if (previo && previo.isConnected) previo.focus({ preventScroll: true })
     }
-  }, [id])
+  }, [id, enNavegador])
 
+  if (!enNavegador) return null
   return createPortal(
     <VentanaCtx.Provider value={valor}>
       {/* En pantallas grandes la ventana tiene el borde SUPERIOR fijo (no está centrada en vertical): si estuviera centrada,

@@ -64,6 +64,35 @@ const refrescar = () => revalidatePath('/dashboard/plan-desarrollo', 'layout')
 
 const falla = (error: string): { ok: false; error: string } => ({ ok: false, error })
 
+/**
+ * Un rechazo que se le dice a la persona Y queda en el registro del servidor. Sin esto, las subidas que no pasaban
+ * (un tipo, un tamaño, un permiso) devolvían su mensaje al navegador y no dejaban NINGÚN rastro: imposible saber después
+ * qué había pasado. Los nombres de archivo se tapan: el registro cuenta el motivo, no el contenido.
+ */
+const rechazo = (donde: string, mensaje: string): { ok: false; error: string } => {
+  console.warn(`[pdm/seguimiento] ${donde} rechazado: ${mensaje.replace(/«[^»]*»/g, '«…»')}`)
+  return falla(mensaje)
+}
+
+/**
+ * Busca en el almacenamiento los objetos de una carpeta que se llamen así, recorriendo la carpeta por páginas. Antes se
+ * leían solo los primeros 100: en un indicador con muchas versiones, el archivo recién subido podía quedar en la segunda
+ * página y el reporte se rechazaba con «un archivo no llegó a subirse» aunque sí había llegado.
+ */
+async function buscarEnAlmacen(
+  admin: ReturnType<typeof createAdminSupabaseClient>, carpeta: string, nombres: string[],
+): Promise<{ data: { name: string; metadata?: unknown }[]; error: { message: string } | null }> {
+  const faltan = new Set(nombres)
+  const halladas: { name: string; metadata?: unknown }[] = []
+  for (let pagina = 0; pagina < 30 && faltan.size > 0; pagina++) {
+    const { data, error } = await admin.storage.from(BUCKET).list(carpeta, { limit: 100, offset: pagina * 100 })
+    if (error || !data) return { data: halladas, error: error ?? { message: 'sin datos' } }
+    for (const o of data) if (faltan.delete(o.name)) halladas.push(o)
+    if (data.length < 100) break
+  }
+  return { data: halladas, error: null }
+}
+
 /** Sesión de quien pide, con el acceso ya comprobado. */
 async function sesionPdm(permite: (a: AccesoPdm) => boolean = () => true) {
   const acceso = await accesoPdm()
@@ -104,19 +133,19 @@ const puedeReportar = (a: AccesoPdm) => a.nivel === 'responsable' || a.nivel ===
 export async function prepararEvidencias(e: EntradaPrepararEvidencias): Promise<Resultado<EvidenciaPreparada[]>> {
   try {
     const s = await sesionPdm()
-    if (!s) return falla(SIN_PERMISO)
-    if (!puedeReportar(s.acceso)) return falla(SOLO_RESPONSABLES)
-    if (!esUuid(e?.indicador) || !Array.isArray(e.archivos)) return falla('Algo de lo elegido no es válido.')
+    if (!s) return rechazo('prepararEvidencias', SIN_PERMISO)
+    if (!puedeReportar(s.acceso)) return rechazo('prepararEvidencias', SOLO_RESPONSABLES)
+    if (!esUuid(e?.indicador) || !Array.isArray(e.archivos)) return rechazo('prepararEvidencias', 'Algo de lo elegido no es válido.')
     const archivos = e.archivos.map(a => ({
       nombre: typeof a?.nombre === 'string' ? a.nombre : '',
       tipo: typeof a?.tipo === 'string' ? a.tipo : '',
       bytes: typeof a?.bytes === 'number' ? a.bytes : NaN,
     }))
     const mal = errorEnArchivos(archivos)
-    if (mal) return falla(mal)
+    if (mal) return rechazo('prepararEvidencias', mal)
 
     const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
-    if (!ctx.ok) return falla(ctx.error)
+    if (!ctx.ok) return rechazo('prepararEvidencias', ctx.error)
 
     const admin = createAdminSupabaseClient()
     const preparadas: EvidenciaPreparada[] = []
@@ -126,7 +155,7 @@ export async function prepararEvidencias(e: EntradaPrepararEvidencias): Promise<
       const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(ruta, { upsert: false })
       if (error || !data) {
         console.error('[pdm/seguimiento] prepararEvidencias:', error?.message)
-        return falla('No se pudo preparar la subida. Intenta de nuevo.')
+        return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
       }
       preparadas.push({ ruta, urlSubida: data.signedUrl, tipo: tipo.mime })
     }
@@ -142,25 +171,25 @@ const NOMBRE_RUTA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte: string; correccion: boolean }>> {
   try {
     const s = await sesionPdm()
-    if (!s) return falla(SIN_PERMISO)
-    if (!puedeReportar(s.acceso)) return falla(SOLO_RESPONSABLES)
-    if (!esUuid(e?.indicador)) return falla('Algo de lo elegido no es válido.')
+    if (!s) return rechazo('reportar', SIN_PERMISO)
+    if (!puedeReportar(s.acceso)) return rechazo('reportar', SOLO_RESPONSABLES)
+    if (!esUuid(e?.indicador)) return rechazo('reportar', 'Algo de lo elegido no es válido.')
 
     // Que sea o no corrección lo decide la base (si el último reporte del año está sin cerrar); aquí se revisa lo que se sabe.
     const mal = errorEnReporte(e, false)
-    if (mal) return falla(mal)
+    if (mal) return rechazo('reportar', mal)
     const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
-    if (motivo.length > MAX_MOTIVO_CORRECCION) return falla(`El motivo no puede pasar de ${MAX_MOTIVO_CORRECCION} caracteres.`)
-    if (!Array.isArray(e.evidencias)) return falla('Adjunta al menos una evidencia.')
+    if (motivo.length > MAX_MOTIVO_CORRECCION) return rechazo('reportar', `El motivo no puede pasar de ${MAX_MOTIVO_CORRECCION} caracteres.`)
+    if (!Array.isArray(e.evidencias)) return rechazo('reportar', 'Adjunta al menos una evidencia.')
     // Lo conservado de la versión anterior cuenta para el mínimo de uno y el máximo de cinco.
     const conservar = e.conservar === undefined ? [] : e.conservar
-    if (!Array.isArray(conservar) || !conservar.every(esUuid)) return falla('Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
-    if (new Set(conservar).size !== conservar.length) return falla('Un archivo está repetido entre los que conservas.')
-    if (e.evidencias.length + conservar.length === 0) return falla('Adjunta al menos una evidencia.')
-    if (e.evidencias.length + conservar.length > MAX_EVIDENCIAS) return falla(`Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`)
+    if (!Array.isArray(conservar) || !conservar.every(esUuid)) return rechazo('reportar', 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
+    if (new Set(conservar).size !== conservar.length) return rechazo('reportar', 'Un archivo está repetido entre los que conservas.')
+    if (e.evidencias.length + conservar.length === 0) return rechazo('reportar', 'Adjunta al menos una evidencia.')
+    if (e.evidencias.length + conservar.length > MAX_EVIDENCIAS) return rechazo('reportar', `Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`)
 
     const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
-    if (!ctx.ok) return falla(ctx.error)
+    if (!ctx.ok) return rechazo('reportar', ctx.error)
     const carpeta = `${ctx.planId}/${e.indicador}/${ctx.anio}`
 
     // Cada ruta es de ESTE indicador y ESTE año, con el nombre que armó el servidor.
@@ -169,19 +198,19 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       const ruta = typeof ev?.ruta === 'string' ? ev.ruta : ''
       const nombre = typeof ev?.nombre === 'string' ? ev.nombre.trim() : ''
       if (!ruta.startsWith(`${carpeta}/`) || !NOMBRE_RUTA.test(ruta.slice(carpeta.length + 1))) {
-        return falla('Una evidencia no corresponde a este indicador y este año. Vuelve a adjuntarla.')
+        return rechazo('reportar', 'Una evidencia no corresponde a este indicador y este año. Vuelve a adjuntarla.')
       }
-      if (nombre === '' || nombre.length > MAX_NOMBRE_ARCHIVO) return falla('Un archivo tiene un nombre que no sirve.')
+      if (nombre === '' || nombre.length > MAX_NOMBRE_ARCHIVO) return rechazo('reportar', 'Un archivo tiene un nombre que no sirve.')
       rutas.push(ruta)
     }
-    if (new Set(rutas).size !== rutas.length) return falla('Un mismo archivo está repetido.')
+    if (new Set(rutas).size !== rutas.length) return rechazo('reportar', 'Un mismo archivo está repetido.')
 
     // Lo que de verdad llegó al almacenamiento: existencia, tamaño y tipo reales (no los que dice el navegador).
     // Si solo se conserva lo anterior, no hay nada nuevo que mirar.
     const admin = createAdminSupabaseClient()
     const listado = rutas.length === 0
       ? { data: [] as { name: string; metadata?: unknown }[], error: null }
-      : await admin.storage.from(BUCKET).list(carpeta, { limit: 100 })
+      : await buscarEnAlmacen(admin, carpeta, rutas.map(r => r.slice(carpeta.length + 1)))
     if (listado.error || !listado.data) {
       console.error('[pdm/seguimiento] reportar (listado):', listado.error?.message)
       return falla(GENERICO)
@@ -193,11 +222,11 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       const bytes = Number((obj?.metadata as { size?: unknown } | null | undefined)?.size)
       const tipo = (obj?.metadata as { mimetype?: unknown } | null | undefined)?.mimetype
       if (!obj || !Number.isFinite(bytes) || bytes < 1 || typeof tipo !== 'string') {
-        return falla('Un archivo no llegó a subirse. Vuelve a adjuntarlo.')
+        return rechazo('reportar', 'Un archivo no llegó a subirse. Vuelve a adjuntarlo.')
       }
       if (bytes > MAX_BYTES_EVIDENCIA || !TIPOS_EVIDENCIA.some(t => t.mime === tipo)) {
         await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
-        return falla('Un archivo no es válido como evidencia. Vuelve a adjuntarlo.')
+        return rechazo('reportar', 'Un archivo no es válido como evidencia. Vuelve a adjuntarlo.')
       }
       evidencias.push({ ruta: rutas[k], nombre: e.evidencias[k].nombre.trim(), tipo, bytes })
     }
@@ -206,7 +235,7 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     if (rutas.length > 0) {
       const yaUsadas = await admin.from('pdm_evidencias').select('ruta').in('ruta', rutas)
       if (yaUsadas.error) return falla(GENERICO)
-      if (yaUsadas.data?.length) return falla('Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
+      if (yaUsadas.data?.length) return rechazo('reportar', 'Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
     }
 
     const { data, error } = await s.supabase.rpc('pdm_reportar', {
@@ -216,7 +245,8 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     if (error) {
       // Solo se borra lo recién subido: lo conservado es de un reporte que ya existe.
       if (rutas.length > 0) await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
-      return falla(traducirErrorPdm(error.code, error.message))
+      console.warn('[pdm/seguimiento] pdm_reportar falló con el código', error.code)
+      return rechazo('reportar', traducirErrorPdm(error.code, error.message))
     }
     const d = (data ?? {}) as { reporte?: unknown; correccion?: unknown }
     if (!esUuid(d.reporte)) return falla(GENERICO)

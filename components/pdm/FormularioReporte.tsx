@@ -23,19 +23,25 @@
  * fuera, y cada uno trae la nota de quien lo devolvió. Entre lo conservado y lo nuevo hay de uno a cinco archivos.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
 import {
-  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_TEXTO_REPORTE, MIN_TEXTO, TEXTO_TIPOS_EVIDENCIA,
+  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_TEXTO_REPORTE, MIN_TEXTO,
   describirTamano, errorEnArchivos, errorEnReporte, leerNumero,
   type AccionesSeguimiento, type ReporteDetalle,
 } from '@/lib/pdm/seguimiento-acciones'
-import { ErrorDeSubida, subirArchivo } from '@/lib/pdm/subir'
+import { clasificarSeleccion, entradaNueva, esImagenDibujable, mensajeDeFallos, resumenDeSubida, type ArchivoEnCola, type Rechazo } from '@/lib/pdm/evidencias-cola'
+import { subirArchivo } from '@/lib/pdm/subir'
+import { subirCola } from '@/lib/pdm/subir-cola'
 import { Seccion } from './ui'
 import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
+import ZonaEvidencias from './ZonaEvidencias'
 import { T } from './tema'
+
+/** El borde rojo de un campo al que le falta algo. `!` porque el campo ya trae su borde gris. */
+const CAMPO_MAL = '!border-[#B42318] focus:!ring-[#B42318]'
 
 export default function FormularioReporte({ indicador, vigente, acciones, onHecho }: {
   /** El indicador visto en el año en que se reporta (`indicador.anio`). */
@@ -54,15 +60,35 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
   const [valor, setValor] = useState(correccion && vigente ? String(vigente.valor).replace('.', ',') : '')
   const [texto, setTexto] = useState(correccion && vigente ? vigente.texto : '')
   const [motivo, setMotivo] = useState('')
-  const [archivos, setArchivos] = useState<File[]>([])
-  // Lo de la versión anterior que pasa a esta: por defecto todo lo que la secretaría no devolvió.
+  // Lo que se va a subir: cada archivo con su estado y su avance. Se conserva aunque falle algo, para no volver a elegirlos.
+  const [cola, setCola] = useState<ArchivoEnCola<File>[]>([])
+  const [avisos, setAvisos] = useState<Rechazo[]>([])
+  // Dónde quedó en el almacenamiento cada archivo ya subido (por su clave): lo que se registra y lo que no se repite al reintentar.
+  const subidas = useRef(new Map<string, { ruta: string; tipo: string }>())
+  // Lo que se conserva de la versión anterior: por defecto todo lo que la secretaría no devolvió.
   const anteriores = correccion && vigente ? vigente.evidencias : []
   const [conservar, setConservar] = useState<ReadonlySet<string>>(() => new Set(anteriores.filter(a => !a.observacion).map(a => a.id)))
-  // El botón cuenta lo que pasa: subiendo (con cuántos archivos) → registrando → enviado.
+  // El botón cuenta lo que pasa: subiendo (con cuántos archivos y qué tanto) → registrando → enviado.
   const { fase, correr, ocupado: enviando } = useConfirmar()
   const [etapa, setEtapa] = useState<'subiendo' | 'registrando'>('subiendo')
   const [error, setError] = useState<string | null>(null)
-  const entrada = useRef<HTMLInputElement>(null)
+  // Tras el primer intento de enviar con algo incompleto, cada campo dice lo que le falta (antes no: no se riñe a quien aún escribe).
+  const [intento, setIntento] = useState(false)
+
+  // Las direcciones temporales de las vistas previas de las fotos: se crean al elegir y se liberan al quitar o al cerrar.
+  const vistas = useRef(new Set<string>())
+  useEffect(() => {
+    const creadas = vistas.current
+    return () => { creadas.forEach(u => URL.revokeObjectURL(u)); creadas.clear() }
+  }, [])
+
+  // Mientras se sube, cerrar la pestaña perdería el envío: el navegador pregunta antes.
+  useEffect(() => {
+    if (!enviando) return
+    const avisar = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', avisar)
+    return () => window.removeEventListener('beforeunload', avisar)
+  }, [enviando])
 
   if (!abierto) {
     return (
@@ -86,56 +112,96 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
   }
 
   const numero = leerNumero(valor)
-  const motivoOk = !correccion || motivo.trim().length >= MIN_TEXTO
   // Lo conservado y lo nuevo comparten el tope de cinco y el mínimo de uno.
-  const total = conservar.size + archivos.length
-  const listo = numero !== null && texto.trim().length >= MIN_TEXTO && total > 0 && motivoOk
+  const total = conservar.size + cola.length
+  const resumen = resumenDeSubida(cola)
+
+  // Lo que falta, campo por campo. Se calcula siempre; se MUESTRA después del primer intento de enviar.
+  const faltas = {
+    valor: numero !== null ? null : valor.trim() === '' ? 'Escribe el valor del avance.' : 'No se entiende ese número.',
+    texto: texto.trim().length >= MIN_TEXTO ? null : `Cuenta qué se hizo (al menos ${MIN_TEXTO} caracteres).`,
+    motivo: !correccion || motivo.trim().length >= MIN_TEXTO ? null : `${modo === 'responder' ? 'Di cómo respondes' : 'Di qué corriges'} (al menos ${MIN_TEXTO} caracteres).`,
+    evidencia: total > 0 ? null : 'Adjunta al menos una evidencia.',
+  }
+  const ver = (k: keyof typeof faltas) => (intento ? faltas[k] : null)
+  const primeraFalta = (['valor', 'texto', 'motivo', 'evidencia'] as const).find(k => faltas[k])
 
   function alternarConservado(id: string) {
     setConservar(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s })
   }
 
-  function agregar(lista: FileList | null) {
-    if (!lista || lista.length === 0) return
+  function agregar(lista: File[], carpetas: string[] = []) {
+    if (enviando) return
     setError(null)
-    const nuevos = [...archivos]
-    for (const f of Array.from(lista)) {
-      if (conservar.size + nuevos.length >= MAX_EVIDENCIAS) { setError(`Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos, contando los que conservas.`); break }
-      const mal = errorEnArchivos([{ nombre: f.name, tipo: f.type, bytes: f.size }])
-      if (mal) { setError(mal); continue }
-      if (nuevos.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) continue
-      nuevos.push(f)
+    const sel = clasificarSeleccion(cola.map(c => c.archivo), conservar.size, lista)
+    // De cada archivo que no sirve se dice cuál es y por qué; los que sí sirven se adjuntan igual.
+    setAvisos([...carpetas.map(nombre => ({ nombre, motivo: 'Es una carpeta: adjunta los archivos que contiene, no la carpeta.' })), ...sel.rechazados])
+    if (sel.aceptados.length > 0) {
+      const entradas = sel.aceptados.map(f => {
+        const e = entradaNueva(f)
+        if (esImagenDibujable(f)) { e.vista = URL.createObjectURL(f); vistas.current.add(e.vista) }
+        return e
+      })
+      setCola(a => [...a, ...entradas])
     }
-    setArchivos(nuevos)
-    if (entrada.current) entrada.current.value = ''
+  }
+
+  function quitar(clave: string) {
+    if (enviando) return
+    subidas.current.delete(clave)
+    const vista = cola.find(c => c.clave === clave)?.vista
+    if (vista) { URL.revokeObjectURL(vista); vistas.current.delete(vista) }
+    setCola(a => a.filter(c => c.clave !== clave))
   }
 
   async function enviar() {
     if (enviando) return
     setError(null)
+    if (primeraFalta) {
+      // Se dice qué falta en su propio campo y se lleva el cursor a él; el botón nunca está «apagado» sin explicar por qué.
+      setIntento(true)
+      document.getElementById({ valor: 'pdm-valor', texto: 'pdm-texto', motivo: 'pdm-motivo', evidencia: 'pdm-evidencia' }[primeraFalta])?.focus()
+      return
+    }
     const mal = errorEnReporte({ valor: numero, texto, motivo }, correccion)
-      ?? errorEnArchivos(archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })), conservar.size)
+      ?? errorEnArchivos(cola.map(c => ({ nombre: c.archivo.name, tipo: c.archivo.type, bytes: c.archivo.size })), conservar.size)
     if (mal || numero === null) { setError(mal ?? 'Escribe el valor del avance.'); return }
 
     await correr(async () => {
-      // Si todo lo que se envía es lo conservado de la versión anterior, no hay nada que subir.
-      let rutas: { ruta: string; tipo: string }[] = []
-      if (archivos.length > 0) {
+      // Solo se sube lo que no está ya subido: tras un fallo parcial, se reintentan únicamente los que fallaron.
+      const pendientes = cola.filter(c => !subidas.current.has(c.clave))
+      if (pendientes.length > 0) {
         setEtapa('subiendo')
         const prep = await acciones.prepararEvidencias({
           indicador: indicador.uuid,
           anio,
-          archivos: archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })),
+          archivos: pendientes.map(c => ({ nombre: c.archivo.name, tipo: c.archivo.type, bytes: c.archivo.size })),
         })
         if (!prep.ok) return prep
-        if (prep.datos.length !== archivos.length) return { ok: false as const, error: 'No se pudo preparar la subida. Intenta de nuevo.' }
+        if (prep.datos.length !== pendientes.length) return { ok: false as const, error: 'No se pudo preparar la subida. Intenta de nuevo.' }
+        const destino = new Map(pendientes.map((c, k) => [c.clave, prep.datos[k]]))
 
-        try {
-          await Promise.all(archivos.map((f, k) => subirArchivo(prep.datos[k].urlSubida, f, prep.datos[k].tipo)))
-        } catch (e) {
-          return { ok: false as const, error: e instanceof ErrorDeSubida ? e.message : 'No se pudo subir un archivo. Revisa tu conexión e intenta de nuevo.' }
-        }
-        rutas = prep.datos
+        // Hasta tres a la vez, cada uno por su cuenta: un archivo que falla no tumba a los demás.
+        const resultados = await subirCola(
+          pendientes,
+          async (c, alProgreso) => {
+            const d = destino.get(c.clave)!
+            await subirArchivo(d.urlSubida, c.archivo, d.tipo, { alProgreso })
+            subidas.current.set(c.clave, { ruta: d.ruta, tipo: d.tipo })
+          },
+          {
+            alCambio: (clave, cambio) => setCola(actual => actual.map(c => {
+              if (c.clave !== clave) return c
+              if (cambio.estado === 'error') return { ...c, estado: 'error', error: cambio.error }
+              return { ...c, estado: cambio.estado, progreso: cambio.progreso, error: undefined }
+            })),
+          },
+        )
+        const fallidos = pendientes.flatMap(c => {
+          const r = resultados.get(c.clave)
+          return r && !r.ok ? [{ ...c, estado: 'error' as const, error: r.error }] : []
+        })
+        if (fallidos.length > 0) return { ok: false as const, error: mensajeDeFallos(fallidos) }
       }
 
       setEtapa('registrando')
@@ -144,16 +210,26 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
         anio,
         valor: numero,
         texto,
-        evidencias: archivos.map((f, k) => ({ ruta: rutas[k].ruta, nombre: f.name, tipo: rutas[k].tipo, bytes: f.size })),
+        evidencias: cola.map(c => {
+          const s = subidas.current.get(c.clave)!
+          return { ruta: s.ruta, nombre: c.archivo.name, tipo: s.tipo, bytes: c.archivo.size }
+        }),
         conservar: correccion ? [...conservar] : undefined,
         motivo: correccion ? motivo : undefined,
       })
-      // Ya se subieron: si el registro falló, se vuelven a elegir (cada intento sube a rutas nuevas).
-      if (!r.ok) setArchivos([])
+      if (!r.ok) {
+        // El servidor puede haber retirado lo recién subido: la próxima vez se vuelve a subir, pero NO hay que volver a
+        // elegir los archivos (antes se vaciaba la lista y se perdía todo el trabajo).
+        subidas.current.clear()
+        setCola(a => a.map(c => ({ ...c, estado: 'listo', progreso: 0, error: undefined })))
+      }
       return r
     }, {
       alTerminar: datos => {
-        setArchivos([])
+        vistas.current.forEach(u => URL.revokeObjectURL(u))
+        vistas.current.clear()
+        setCola([])
+        subidas.current.clear()
         setMotivo('')
         onHecho(datos.correccion ? 'Corrección enviada. La secretaría la revisará.' : 'Reporte enviado. La secretaría lo revisará.')
       },
@@ -164,6 +240,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
   }
 
   const titulo = modo === 'nuevo' ? `Reportar avance · ${anio}` : modo === 'aprobado' ? `Nuevo avance · ${anio}` : modo === 'responder' ? 'Responder a la devolución' : 'Corregir el reporte'
+  const hayFallidos = cola.some(c => c.estado === 'error')
 
   return (
     <Seccion rotulo={titulo}>
@@ -184,10 +261,14 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
             autoComplete="off"
             value={valor}
             disabled={enviando}
+            aria-invalid={ver('valor') ? true : undefined}
+            aria-describedby={ver('valor') ? 'pdm-valor-error' : undefined}
             onChange={e => setValor(e.target.value.replace(/[^\d.,]/g, '').slice(0, 14))}
-            className={`${T.campo} mt-1.5 tabular-nums`}
+            className={`${T.campo} mt-1.5 tabular-nums ${ver('valor') ? CAMPO_MAL : ''}`}
           />
-          {valor.trim() !== '' && (
+          {ver('valor') ? (
+            <span id="pdm-valor-error" role="alert" className="mt-1 block text-[11px] font-medium text-[#B42318]">{ver('valor')}</span>
+          ) : valor.trim() !== '' && (
             <span className={`mt-1 block text-[11px] ${numero === null ? 'text-[#B42318]' : 'text-[#667085]'}`}>
               {numero === null ? 'No se entiende ese número.' : `Se registrará ${fmt(numero)}`}
             </span>
@@ -203,11 +284,14 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
             id="pdm-texto"
             value={texto}
             disabled={enviando}
+            aria-invalid={ver('texto') ? true : undefined}
+            aria-describedby={ver('texto') ? 'pdm-texto-error' : undefined}
             onChange={e => setTexto(e.target.value)}
             rows={3}
             maxLength={MAX_TEXTO_REPORTE}
-            className={`${T.campo} mt-1.5 resize-none`}
+            className={`${T.campo} mt-1.5 resize-none ${ver('texto') ? CAMPO_MAL : ''}`}
           />
+          {ver('texto') && <span id="pdm-texto-error" role="alert" className="mt-1 block text-[11px] font-medium text-[#B42318]">{ver('texto')}</span>}
         </label>
 
         {correccion && (
@@ -217,21 +301,24 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
               id="pdm-motivo"
               value={motivo}
               disabled={enviando}
+              aria-invalid={ver('motivo') ? true : undefined}
+              aria-describedby={ver('motivo') ? 'pdm-motivo-error' : undefined}
               onChange={e => setMotivo(e.target.value)}
               rows={2}
               maxLength={MAX_MOTIVO_CORRECCION}
-              className={`${T.campo} mt-1.5 resize-none`}
+              className={`${T.campo} mt-1.5 resize-none ${ver('motivo') ? CAMPO_MAL : ''}`}
             />
+            {ver('motivo') && <span id="pdm-motivo-error" role="alert" className="mt-1 block text-[11px] font-medium text-[#B42318]">{ver('motivo')}</span>}
           </label>
         )}
 
         <div>
-          <span className={T.rotulo}>
-            Evidencia <span className="font-normal normal-case tracking-normal">· obligatoria · {total} de {MAX_EVIDENCIAS} archivos · {TEXTO_TIPOS_EVIDENCIA}</span>
+          <span className={`${T.rotulo} mb-1.5 block`}>
+            Evidencia <span className="font-normal normal-case tracking-normal">· obligatoria · {total} de {MAX_EVIDENCIAS} archivos</span>
           </span>
 
           {anteriores.length > 0 && (
-            <div className="mt-1.5">
+            <div className="mb-3">
               <p className="text-xs leading-relaxed text-[#667085]">
                 Archivos de la versión anterior: los que estaban bien pasan solos; no hace falta subirlos otra vez.
               </p>
@@ -267,45 +354,20 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
             </div>
           )}
 
-          {archivos.length > 0 && (
-            <ul className="mt-1.5 space-y-1.5">
-              {archivos.map(f => (
-                <li key={`${f.name}:${f.size}:${f.lastModified}`} className="flex items-center gap-2 rounded-lg border border-[#DCE0E8] bg-white px-3 py-2 text-sm">
-                  <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0 text-[#667085]" />
-                  <span className="min-w-0 flex-1 truncate text-[#192031]">{f.name}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(f.size)}</span>
-                  {/* Se queda en su sitio mientras se envía (inactivo): si desapareciera, la fila cambiaría de ancho. */}
-                  <button
-                    onClick={() => setArchivos(a => a.filter(x => x !== f))}
-                    disabled={enviando}
-                    className="-my-2 -mr-1.5 shrink-0 rounded-md p-2.5 text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] disabled:pointer-events-none disabled:opacity-30"
-                  >
-                    <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta={`Quitar ${f.name}`} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {total < MAX_EVIDENCIAS && (
-            <label className={`mt-1.5 flex items-center gap-3 rounded-lg border border-dashed border-[#AEB6C4] bg-white px-3 py-3 text-sm text-[#556072] transition-colors ${enviando ? 'opacity-60' : 'cursor-pointer hover:border-[#192031] hover:text-[#192031]'}`}>
-              <Icono glifo={Iconos.documentos.subir} tamano="sm" className="shrink-0" />
-              <span className="min-w-0 truncate">{total === 0 ? 'Adjuntar foto, acta o documento' : 'Adjuntar otro archivo'}</span>
-              <input
-                ref={entrada}
-                id="pdm-evidencia"
-                type="file"
-                multiple
-                disabled={enviando}
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                className="sr-only"
-                onChange={e => agregar(e.target.files)}
-              />
-            </label>
-          )}
+          <ZonaEvidencias
+            cola={cola}
+            conservadas={conservar.size}
+            bloqueada={enviando}
+            error={ver('evidencia')}
+            avisos={avisos}
+            onAgregar={agregar}
+            onQuitar={quitar}
+            onLimpiarAvisos={() => setAvisos([])}
+          />
         </div>
 
         <Despliegue abierto={!!error} separacion="">
-          {error ? <p role="alert" className={`text-xs font-medium ${T.avisoMal}`}>{error}</p> : null}
+          {error ? <p role="alert" className={`[overflow-wrap:anywhere] text-xs font-medium ${T.avisoMal}`}>{error}</p> : null}
         </Despliegue>
 
         <div className="flex gap-2">
@@ -315,14 +377,15 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
           <BotonAccion
             id="pdm-enviar"
             fase={fase}
-            inhabilitado={!listo}
             onClick={enviar}
             className="flex-1"
             etiquetas={{
-              reposo: correccion ? 'Enviar corrección' : 'Enviar reporte',
+              reposo: hayFallidos ? 'Reintentar' : correccion ? 'Enviar corrección' : 'Enviar reporte',
               trabajando: (
-                <span key={etapa} className="pdm-velo-entra">
-                  {etapa === 'subiendo' ? `Subiendo ${archivos.length === 1 ? 'el archivo' : `${archivos.length} archivos`}` : 'Registrando'}
+                <span key={etapa} className="pdm-velo-entra tabular-nums">
+                  {etapa === 'subiendo'
+                    ? `${resumen.total === 1 ? 'Subiendo el archivo' : `Subiendo ${Math.min(resumen.total, resumen.subidos + 1)} de ${resumen.total}`} · ${resumen.porcentaje} %`
+                    : 'Registrando'}
                 </span>
               ),
               hecho: correccion ? 'Corrección enviada' : 'Reporte enviado',
