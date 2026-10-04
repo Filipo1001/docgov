@@ -41,6 +41,8 @@ import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { accesoPdm, type AccesoPdm } from '@/lib/pdm/acceso'
+import { avisarDespues } from '@/lib/pdm/correos/despues'
+import { avisarReporteEnviado, avisarValidacion } from '@/lib/pdm/correos/enviar'
 import { gestiona } from '@/lib/pdm/niveles'
 import { esUuid, traducirErrorPdm, type Resultado } from '@/lib/pdm/acciones'
 import { hoyBogota } from '@/lib/pdm/contrato'
@@ -218,8 +220,11 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     }
     const d = (data ?? {}) as { reporte?: unknown; correccion?: unknown }
     if (!esUuid(d.reporte)) return falla(GENERICO)
+    const reporteId = d.reporte
     refrescar()
-    return { ok: true, datos: { reporte: d.reporte, correccion: d.correccion === true } }
+    // El aviso («Recibimos tu reporte») sale después de responder y no puede estorbar: ver `lib/pdm/correos`.
+    await avisarDespues(origen => avisarReporteEnviado({ reporteId, origen }))
+    return { ok: true, datos: { reporte: reporteId, correccion: d.correccion === true } }
   } catch (err) {
     console.error('[pdm/seguimiento] reportar:', err)
     return falla(GENERICO)
@@ -243,7 +248,13 @@ export async function validarReporte(e: EntradaValidar): Promise<Resultado<{ cam
     if (error) return falla(traducirErrorPdm(error.code, error.message))
     const cambio = (data as { cambio?: unknown } | null)?.cambio
     refrescar()
-    return { ok: true, datos: { cambio: cambio === 'aprobado' || cambio === 'devuelto' ? cambio : 'ninguno' } }
+    const resultado = cambio === 'aprobado' || cambio === 'devuelto' ? cambio : 'ninguno'
+    // Solo si algo cambió de verdad: validar dos veces lo mismo no avisa dos veces.
+    if (resultado !== 'ninguno') {
+      const reporteId = e.reporte
+      await avisarDespues(origen => avisarValidacion({ reporteId, cambio: resultado, origen }))
+    }
+    return { ok: true, datos: { cambio: resultado } }
   } catch (err) {
     console.error('[pdm/seguimiento] validarReporte:', err)
     return falla(GENERICO)

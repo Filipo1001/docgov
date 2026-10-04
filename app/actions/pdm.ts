@@ -17,6 +17,9 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { accesoPdm } from '@/lib/pdm/acceso'
+import { avisarDespues } from '@/lib/pdm/correos/despues'
+import { avisarCambioDeGrupo, avisarCambioDeReparto } from '@/lib/pdm/correos/enviar'
+import { marcaDeHistorial } from '@/lib/pdm/correos/datos'
 import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
 import { describirCambio, type EntradaHistorial, type FilaHistorial } from '@/lib/pdm/historial'
 import { revalidatePath } from 'next/cache'
@@ -75,6 +78,19 @@ function resumenDe(datos: unknown): ResumenCambio {
 
 const motivoDe = (m?: string) => (m && m.trim() ? m.trim() : null)
 
+/** El lote que la base abrió para una operación de reparto: es lo que une la operación con lo que quedó en la bitácora. */
+function loteDe(datos: unknown): string | null {
+  const l = (datos as { lote?: unknown } | null)?.lote
+  return esUuid(l) ? l : null
+}
+
+/** Tras repartir: si hubo cambios, se avisa a quienes les tocó (sin esperar, sin poder estorbar). Ver `lib/pdm/correos`. */
+async function avisarReparto(datos: unknown) {
+  const lote = loteDe(datos)
+  const r = resumenDe(datos)
+  if (lote && r.cambiados + r.quitados + r.pasadosAApoyo > 0) await avisarDespues(origen => avisarCambioDeReparto({ lote, origen }))
+}
+
 export async function asignarPersona(e: EntradaAsignarPersona): Promise<Resultado<ResumenCambio>> {
   try {
     const supabase = await sesionGestorPdm()
@@ -91,6 +107,7 @@ export async function asignarPersona(e: EntradaAsignarPersona): Promise<Resultad
     })
     if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
     refrescar()
+    await avisarReparto(data)
     return { ok: true, datos: resumenDe(data) }
   } catch (err) {
     console.error('[pdm/acciones] asignarPersona:', err)
@@ -113,6 +130,7 @@ export async function asignarGrupo(e: EntradaAsignarGrupo): Promise<Resultado<Re
     })
     if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
     refrescar()
+    await avisarReparto(data)
     return { ok: true, datos: resumenDe(data) }
   } catch (err) {
     console.error('[pdm/acciones] asignarGrupo:', err)
@@ -134,6 +152,7 @@ export async function quitarAsignacion(e: EntradaQuitarAsignacion): Promise<Resu
     })
     if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
     refrescar()
+    await avisarReparto(data)
     return { ok: true, datos: resumenDe(data) }
   } catch (err) {
     console.error('[pdm/acciones] quitarAsignacion:', err)
@@ -158,6 +177,8 @@ export async function guardarGrupo(e: EntradaGuardarGrupo): Promise<Resultado<{ 
       ?? errorEnMotivo(e.motivo)
     if (mal) return { ok: false, error: mal }
 
+    // Antes de guardar: qué fila de la bitácora era la última, para saber después cuáles son de esta operación.
+    const marca = await marcaDeHistorial()
     const { data, error } = await supabase.rpc('pdm_grupo_guardar', {
       p_grupo: e.grupo ?? null, p_nombre: nombre, p_dependencia: e.secretaria, p_lider: e.lider ?? null,
       p_miembros: e.miembros, p_motivo: motivoDe(e.motivo), p_descripcion: e.descripcion?.trim() || null,
@@ -165,7 +186,11 @@ export async function guardarGrupo(e: EntradaGuardarGrupo): Promise<Resultado<{ 
     if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
     if (!esUuid(data)) return { ok: false, error: traducirErrorPdm() }
     refrescar()
-    return { ok: true, datos: { grupo: data } }
+    // Agregar a alguien a un grupo con indicadores le asigna esos indicadores: se le avisa como en cualquier reparto.
+    const grupo = data
+    const actor = await accesoPdm()
+    if (actor) await avisarDespues(origen => avisarCambioDeGrupo({ grupoId: grupo, actorId: actor.userId, marca, origen }))
+    return { ok: true, datos: { grupo } }
   } catch (err) {
     console.error('[pdm/acciones] guardarGrupo:', err)
     return { ok: false, error: traducirErrorPdm() }

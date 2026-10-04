@@ -68,6 +68,8 @@ export async function enviarCorreo(opciones: {
   to: string
   subject: string
   html: string
+  /** Versión en texto plano (opcional). Los llamadores anteriores no la pasan y todo sigue igual. */
+  text?: string
 }): Promise<ResultadoCorreo> {
   const resend = getResendClient()
   if (!resend) return { ok: false, error: 'Resend no configurado (falta RESEND_API_KEY)' }
