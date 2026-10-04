@@ -24,6 +24,8 @@ import {
 import type { NivelPdm } from '@/lib/pdm/niveles'
 import type { PersonaFicha } from '@/lib/pdm/personas'
 import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
+import { Presencia } from './Ventana'
+import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import IndicadorModal from './IndicadorModal'
 import { COLUMNAS, FilaIndicador } from './ListaIndicadores'
@@ -72,7 +74,7 @@ function Tarjeta({ t, elegida, onElegir }: { t: TarjetaAnio; elegida: boolean; o
             <span className="text-sm text-[#667085]">de <span className="tabular-nums">{t.conMeta}</span></span>
           </span>
           <span className="mt-2.5 block h-1.5 overflow-hidden rounded-[3px] bg-[#E6E9EF]" aria-hidden>
-            <span className="block h-full bg-[#192031]" style={{ width: `${pct}%` }} />
+            <span className="block h-full w-full origin-left bg-[#192031] transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ transform: `scaleX(${pct / 100})` }} />
           </span>
           <span className="mt-2.5 flex min-h-[3rem] flex-col gap-0.5 text-xs text-[#556072]">
             {r.devueltos > 0 && <span className="font-medium text-[#B42318]">{plural(r.devueltos, 'devuelto', 'devueltos')}</span>}
@@ -160,7 +162,7 @@ export default function MiTrabajoPdm({
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <Pagina>
       <EncabezadoSeccion
         titulo="Mi trabajo"
         datos={[
@@ -193,6 +195,7 @@ export default function MiTrabajoPdm({
         <p className={`text-xs ${T.tenue}`}>No se pudieron leer tus grupos en este momento. Vuelve a cargar la página para intentarlo de nuevo.</p>
       )}
 
+      <Presencia mostrar={indicador !== null}>
       <IndicadorModal
         key={abierto ?? 'cerrado'}
         indicador={indicador}
@@ -201,6 +204,7 @@ export default function MiTrabajoPdm({
         seguimiento={{ nivel, yoId, anioActual, acciones: accionesSeguimiento }}
         persona={indicador ? fichas[indicador.id] : undefined}
       />
-    </div>
+      </Presencia>
+    </Pagina>
   )
 }

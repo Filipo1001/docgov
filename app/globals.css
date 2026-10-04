@@ -482,3 +482,97 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
 @media (prefers-reduced-motion: reduce) {
   .hoja-entra { animation: overlay-fade-in 0.15s ease-out; }
 }
+
+/* ══ Movimiento del módulo Plan de Desarrollo ═══════════════════════════════
+   Un solo vocabulario para todo el módulo, hermano del de la aplicación: las
+   mismas curvas y tiempos de la hoja inferior (`hoja-entra`) y del check que
+   se dibuja. Lo que entra FRENA (curva de salida suave) y lo que se va
+   ACELERA y dura menos: lo importante es la llegada, la despedida solo tiene
+   que no ser brusca.
+
+   Reglas que lo sostienen:
+     · Solo se anima `opacity` y `transform` (los compone la GPU: nunca mueven
+       el resto de la página). Nada anima `width`, `height`, `top` ni `margin`.
+       La única excepción es la luz de lo nuevo (`pdm-nuevo`): cambia un color
+       de fondo en un elemento pequeño y no desplaza nada.
+     · Nada dura más de 280 ms, salvo lo que informa de una espera.
+     · Todo lo que entra termina en su sitio final: no hay estados a medias.
+     · Con «reducir movimiento» se quita el desplazamiento y se deja el
+       cruce de opacidad; el anillo de espera sigue girando (es información:
+       un indicador quieto parece una pantalla colgada).
+
+   Todo cuelga de `.pdm-*` o de `html[data-pdm]`: no toca ninguna otra pantalla. */
+
+/* Las barras de desplazamiento clásicas (Windows, Linux) ocupan ancho; al
+   bloquear el scroll de la página para abrir una ventana, desaparecían y todo
+   se corría 15 px a la izquierda. Reservando el carril, la página no se mueve
+   cuando se abre ni cuando se cierra una ventana. */
+html[data-pdm] { scrollbar-gutter: stable; }
+
+@keyframes pdm-entra {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+/* El contenido de cada pantalla llega, no «aparece»: un cruce corto con un
+   asomo de subida. Se aplica a la raíz de cada pantalla, no al marco, para que
+   la barra de arriba no se mueva NUNCA al navegar. */
+.pdm-entra { animation: pdm-entra 240ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Un elemento que acaba de llegar a una lista (un comentario, una versión) se
+   marca con una luz que se apaga: dice «esto es lo nuevo» sin un cartel. */
+@keyframes pdm-nuevo {
+  from { background-color: #E6EBF3; box-shadow: 0 0 0 4px #E6EBF3; }
+  to   { background-color: transparent; box-shadow: 0 0 0 4px transparent; }
+}
+.pdm-nuevo { animation: pdm-nuevo 1600ms ease-out 120ms both; border-radius: 8px; }
+
+/* Ventanas. El velo se cruza; la hoja sube en móvil (de donde vino el dedo) y
+   crece en el sitio en escritorio, exactamente como `hoja-entra`. */
+@keyframes pdm-velo-entra { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pdm-velo-sale  { from { opacity: 1; } to { opacity: 0; } }
+@keyframes pdm-hoja-sube   { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: none; } }
+@keyframes pdm-hoja-baja   { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(40%); } }
+@keyframes pdm-hoja-crece  { from { opacity: 0; transform: scale(0.97) translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes pdm-hoja-mengua { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.985) translateY(4px); } }
+.pdm-velo-entra { animation: pdm-velo-entra 180ms ease-out both; }
+.pdm-velo-sale  { animation: pdm-velo-sale  150ms ease-in both; }
+.pdm-hoja-entra { animation: pdm-hoja-sube 280ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.pdm-hoja-sale  { animation: pdm-hoja-baja 180ms cubic-bezier(0.4, 0, 1, 1) both; }
+@media (min-width: 640px) {
+  .pdm-hoja-entra { animation: pdm-hoja-crece 200ms ease-out both; }
+  .pdm-hoja-sale  { animation: pdm-hoja-mengua 140ms ease-in both; }
+}
+
+/* Avisos (toasts): suben un poco y se cruzan; salen más rápido de lo que entran. */
+@keyframes pdm-aviso-entra { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes pdm-aviso-sale  { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(4px) scale(0.98); } }
+.pdm-aviso-entra { animation: pdm-aviso-entra 240ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.pdm-aviso-sale  { animation: pdm-aviso-sale 160ms ease-in both; }
+
+/* Hilo de espera bajo la barra: solo aparece si la navegación tarda (el retardo
+   evita el destello en las rápidas) y es un vaivén, no un porcentaje: no se
+   sabe cuánto falta y no se inventa. */
+@keyframes pdm-hilo {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(260%); }
+}
+.pdm-hilo { animation: pdm-hilo 1.15s cubic-bezier(0.4, 0, 0.2, 1) 180ms infinite backwards; }
+
+/* Esqueletos: una luz que pasa, lenta. Los colores son los del módulo. */
+@keyframes pdm-brillo { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.pdm-esq {
+  background-color: #E6E9EF;
+  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.65) 50%, transparent 70%);
+  background-size: 60% 100%;
+  background-repeat: no-repeat;
+  animation: pdm-brillo 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdm-entra { animation: pdm-velo-entra 140ms ease-out both; }
+  .pdm-hoja-entra, .pdm-velo-entra, .pdm-aviso-entra { animation: pdm-velo-entra 140ms ease-out both; }
+  .pdm-hoja-sale, .pdm-velo-sale, .pdm-aviso-sale { animation: pdm-velo-sale 110ms ease-in both; }
+  .pdm-nuevo { animation-duration: 600ms; }
+  .pdm-hilo { animation: none; transform: none; width: 100% !important; opacity: 0.5; }
+  .pdm-esq { animation: none; background-image: none; }
+}

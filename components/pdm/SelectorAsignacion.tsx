@@ -29,6 +29,8 @@ import { MAX_MOTIVO, type AccionesPdm, type Anterior, type ResumenCambio } from 
 import type { Indicador } from '@/lib/pdm/plan'
 import type { GrupoVista, PersonaDirectorio } from '@/lib/pdm/personas'
 import Dialogo from './Dialogo'
+import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
+import { T } from './tema'
 import { Avatar, LineaContrato } from './PersonaVista'
 
 type Modo = 'persona' | 'grupo'
@@ -54,7 +56,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
   const [como, setComo] = useState<'principal' | 'apoyo'>('principal')
   const [anterior, setAnterior] = useState<Anterior>('apoyo')
   const [motivo, setMotivo] = useState('')
-  const [enviando, setEnviando] = useState(false)
+  const { fase, correr, ocupado } = useConfirmar()
   const [error, setError] = useState<string | null>(null)
 
   const t = sinTildes(q.trim())
@@ -86,19 +88,19 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
 
   const etiqueta = modo === 'persona' ? persona?.nombre ?? '' : grupo ? `${grupo.nombre} (grupo)` : ''
   const elegido = modo === 'persona' ? personaId !== null : grupo !== null
-  const puede = elegido && !apoyoImposible && !enviando
+  const puede = elegido && !apoyoImposible && !ocupado
 
   async function asignar() {
     if (!puede) return
-    setEnviando(true)
     setError(null)
     const uuids = indicadores.map(i => i.uuid)
-    const r = modo === 'persona'
-      ? await acciones.asignarPersona({ indicadores: uuids, usuario: personaId!, principal: como === 'principal', anterior, motivo })
-      : await acciones.asignarGrupo({ indicadores: uuids, grupo: grupoId!, anterior, motivo })
-    setEnviando(false)
-    if (!r.ok) { setError(r.error); return }
-    onHecho(r.datos, etiqueta)
+    // El botón cuenta lo que pasa (asignando → asignado) y la ventana se despide después, no antes.
+    await correr(
+      () => modo === 'persona'
+        ? acciones.asignarPersona({ indicadores: uuids, usuario: personaId!, principal: como === 'principal', anterior, motivo })
+        : acciones.asignarGrupo({ indicadores: uuids, grupo: grupoId!, anterior, motivo }),
+      { alTerminar: datos => onHecho(datos, etiqueta), alFallar: setError, quedarseHecho: true },
+    )
   }
 
   const titulo = `Asignar ${plural(indicadores.length, 'indicador', 'indicadores')}`
@@ -112,23 +114,28 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
       subtitulo={subtitulo}
       onCerrar={onCerrar}
       pie={
-        <div className="space-y-3">
-          {error && <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p>}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button
-              onClick={onCerrar}
-              className="rounded-lg border border-[#DCE0E8] bg-white px-5 py-2.5 text-sm font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]"
-            >
-              Cancelar
-            </button>
-            <button
-              id="pdm-asignar"
-              onClick={asignar}
-              disabled={!puede}
-              className="rounded-lg bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {enviando ? 'Asignando…' : etiqueta ? `Asignar a ${etiqueta}` : 'Asignar'}
-            </button>
+        <div>
+          <Despliegue abierto={!!error}>
+            {error ? <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p> : null}
+          </Despliegue>
+          {/* El botón dice siempre lo mismo; a quién se asigna va en una línea propia. Con el nombre dentro del botón, elegir a
+              alguien lo ensanchaba y «Cancelar» se corría hasta 170 px. */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <p aria-live="polite" className="min-w-0 flex-1 truncate text-xs text-[#667085]" title={etiqueta || undefined}>
+              {etiqueta ? <>Se asignará a <b className="font-semibold text-[#192031]">{etiqueta}</b></> : 'Elige a quién asignar.'}
+            </p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <button onClick={onCerrar} disabled={ocupado} className={T.accionSecundaria}>
+                Cancelar
+              </button>
+              <BotonAccion
+                id="pdm-asignar"
+                fase={fase}
+                inhabilitado={!puede}
+                onClick={asignar}
+                etiquetas={{ reposo: 'Asignar', trabajando: 'Asignando', hecho: 'Asignado' }}
+              />
+            </div>
           </div>
         </div>
       }
@@ -203,7 +210,10 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
                         </span>
                         <LineaContrato contrato={p.contrato} />
                       </span>
-                      {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-[#192031]" etiqueta="Elegida" />}
+                      {/* El sitio del visto está siempre: si apareciera al elegir, el nombre se reajustaría. */}
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                        {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="text-[#192031]" etiqueta="Elegida" />}
+                      </span>
                     </button>
                   </li>
                 )
@@ -211,21 +221,26 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
             </ul>
           )}
 
-          {persona && (persona.contrato.estado === 'vencido' || (persona.contrato.dias !== null && persona.contrato.dias <= 30 && persona.contrato.estado === 'en_fecha')) && (
-            <p role="status" className="flex items-start gap-2 rounded-lg border border-[#EBD9A8] bg-[#FBF6E7] px-3 py-2.5 text-xs leading-relaxed text-[#7A5410]">
-              <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0" />
-              {persona.contrato.estado === 'vencido'
-                ? 'Su contrato ya terminó. Puedes asignarle de todos modos; conviene confirmar que sigue vinculado.'
-                : `Su contrato vence en ${plural(persona.contrato.dias ?? 0, 'día', 'días')}. Puedes asignarle de todos modos.`}
-            </p>
-          )}
+          {/* Los avisos que dependen de a quién se elige se DESPLIEGAN: aparecer de golpe movía 70 px lo que está debajo. */}
+          <Despliegue abierto={!!persona && (persona.contrato.estado === 'vencido' || (persona.contrato.dias !== null && persona.contrato.dias <= 30 && persona.contrato.estado === 'en_fecha'))}>
+            {persona && (persona.contrato.estado === 'vencido' || (persona.contrato.dias !== null && persona.contrato.dias <= 30 && persona.contrato.estado === 'en_fecha')) ? (
+              <p role="status" className="flex items-start gap-2 rounded-lg border border-[#EBD9A8] bg-[#FBF6E7] px-3 py-2.5 text-xs leading-relaxed text-[#7A5410]">
+                <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-0.5 shrink-0" />
+                {persona.contrato.estado === 'vencido'
+                  ? 'Su contrato ya terminó. Puedes asignarle de todos modos; conviene confirmar que sigue vinculado.'
+                  : `Su contrato vence en ${plural(persona.contrato.dias ?? 0, 'día', 'días')}. Puedes asignarle de todos modos.`}
+              </p>
+            ) : null}
+          </Despliegue>
 
-          {persona && persona.acceso === null && persona.rol !== 'admin' && (
-            <p role="status" className="flex items-start gap-2 rounded-lg bg-[#E6E9EF] px-3 py-2.5 text-xs leading-relaxed text-[#2D3648]">
-              <Icono glifo={Iconos.estado.informacion} tamano="sm" className="mt-0.5 shrink-0" />
-              Esta persona aún no tiene acceso al módulo. Asignarle indicadores no se lo da: se habilita en Responsables.
-            </p>
-          )}
+          <Despliegue abierto={!!persona && persona.acceso === null && persona.rol !== 'admin'}>
+            {persona && persona.acceso === null && persona.rol !== 'admin' ? (
+              <p role="status" className="flex items-start gap-2 rounded-lg bg-[#E6E9EF] px-3 py-2.5 text-xs leading-relaxed text-[#2D3648]">
+                <Icono glifo={Iconos.estado.informacion} tamano="sm" className="mt-0.5 shrink-0" />
+                Esta persona aún no tiene acceso al módulo. Asignarle indicadores no se lo da: se habilita en Responsables.
+              </p>
+            ) : null}
+          </Despliegue>
 
           <fieldset className="space-y-2">
             <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Cómo participa</legend>
@@ -244,11 +259,11 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
                 <span className="text-sm text-[#192031]"><b className="font-semibold">{rotulo}</b><span className="block text-xs text-[#667085]">{ayuda}</span></span>
               </label>
             ))}
-            {apoyoImposible && (
+            <Despliegue abierto={apoyoImposible} separacion="">
               <p role="status" className="text-xs font-medium text-[#8A5A12]">
                 {plural(sinPrincipal, 'indicador no tiene', 'indicadores no tienen')} responsable principal. Asígnalos primero a su responsable.
               </p>
-            )}
+            </Despliegue>
           </fieldset>
         </section>
       ) : (
@@ -285,30 +300,35 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
                           {' · '}{plural(g.miembros.length, 'persona', 'personas')}
                         </span>
                       </span>
-                      {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-[#192031]" etiqueta="Elegido" />}
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                        {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="text-[#192031]" etiqueta="Elegido" />}
+                      </span>
                     </button>
                   </li>
                 )
               })}
             </ul>
           )}
-          {grupo && (
-            <p className="text-xs leading-relaxed text-[#667085]">
-              {grupo.liderId === null
-                ? `Sin líder, ${plural(grupo.miembros.length, 'persona entra', 'personas entran')} como apoyo; el responsable principal de cada indicador no cambia.`
-                : `El líder queda como responsable principal${grupo.miembros.length <= 1 ? '.' : grupo.miembros.length === 2 ? ' y la otra persona, como apoyo.' : ` y las otras ${grupo.miembros.length - 1} personas, como apoyo.`}`}
-              {' '}Si luego cambias a los miembros o al líder, estos indicadores se ponen al día solos.
-            </p>
-          )}
-          {apoyoImposible && modo === 'grupo' && (
+          <Despliegue abierto={!!grupo}>
+            {grupo ? (
+              <p className="text-xs leading-relaxed text-[#667085]">
+                {grupo.liderId === null
+                  ? `Sin líder, ${plural(grupo.miembros.length, 'persona entra', 'personas entran')} como apoyo; el responsable principal de cada indicador no cambia.`
+                  : `El líder queda como responsable principal${grupo.miembros.length <= 1 ? '.' : grupo.miembros.length === 2 ? ' y la otra persona, como apoyo.' : ` y las otras ${grupo.miembros.length - 1} personas, como apoyo.`}`}
+                {' '}Si luego cambias a los miembros o al líder, estos indicadores se ponen al día solos.
+              </p>
+            ) : null}
+          </Despliegue>
+          <Despliegue abierto={apoyoImposible && modo === 'grupo'}>
             <p role="status" className="text-xs font-medium text-[#8A5A12]">
               {plural(sinPrincipal, 'indicador no tiene', 'indicadores no tienen')} responsable principal. Asígnalos primero a su responsable, o dale un líder al grupo.
             </p>
-          )}
+          </Despliegue>
         </section>
       )}
 
       {/* Qué hacer con el responsable anterior: solo si hay alguien a quien desplazar */}
+      <Despliegue abierto={desplazados > 0} separacion="pb-5">
       {desplazados > 0 && (
         <fieldset className="space-y-2">
           <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">
@@ -331,6 +351,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
           ))}
         </fieldset>
       )}
+      </Despliegue>
 
       <label className="block">
         <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Motivo <span className="font-normal text-[#667085]">(opcional; queda en el historial)</span></span>

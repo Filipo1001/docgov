@@ -36,6 +36,7 @@ import {
 } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import type { Directorio, MotivoSinVincular, PersonaDirectorio } from '@/lib/pdm/personas'
+import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import { BarraEstados } from './Barras'
 import { Avatar, LineaContrato } from './PersonaVista'
@@ -172,7 +173,7 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
   ]
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <Pagina>
       <EncabezadoSeccion
         titulo="Responsables"
         detalle="Quién responde por cada indicador, y dónde nadie responde."
@@ -343,6 +344,6 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
           )}
         </section>
       )}
-    </div>
+    </Pagina>
   )
 }

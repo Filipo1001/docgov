@@ -1,8 +1,8 @@
 import 'server-only'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import {
-  TAMANO_PAGINA, aplicarFiltros, armarFilas,
-  type EvidenciaFila, type FilaDeVista, type FiltroEvidencias,
+  TAMANO_PAGINA, aplicarFiltros, armarFilas, nombresPedibles, relacionar,
+  type EvidenciaFila, type FilaDeVista, type FilaRelacionable, type FiltroEvidencias, type IndicadorRelacionado,
 } from './evidencias-armar'
 
 /**
@@ -29,6 +29,9 @@ export interface Evidencias {
 const COLUMNAS =
   'id, reporte_id, nombre, tipo, bytes, conservada, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, valor, autor_nombre, reportado_en, estado_reporte, reemplazada, observacion'
 
+const COLUMNAS_RELACIONADAS =
+  'id, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, estado_reporte, nombre, bytes, tipo, autor_nombre, reportado_en, observacion, conservada'
+
 const FALLO: Evidencias = { ok: false, filas: [], total: 0, pagina: 1 }
 
 export async function cargarEvidencias(f: FiltroEvidencias): Promise<Evidencias> {
@@ -52,7 +55,24 @@ export async function cargarEvidencias(f: FiltroEvidencias): Promise<Evidencias>
       console.error('[pdm/evidencias] lectura fallida:', r.error?.message)
       return FALLO
     }
-    return { ok: true, filas: armarFilas(r.data as unknown as FilaDeVista[]), total: r.count ?? r.data.length, pagina }
+    const filas = r.data as unknown as FilaDeVista[]
+
+    // Qué otros indicadores respalda cada archivo. Si esta segunda lectura falla, la lista sigue: solo faltan los
+    // «también respalda a…», que son un complemento y no justifican esconder los archivos.
+    let relaciones = new Map<string, IndicadorRelacionado[]>()
+    const nombres = nombresPedibles(filas)
+    if (nombres.length > 0) {
+      const otras = await supabase
+        .from('pdm_evidencias_vista')
+        .select(COLUMNAS_RELACIONADAS)
+        .in('nombre', nombres)
+        .eq('reemplazada', false)
+        .limit(1000)
+      if (otras.error) console.error('[pdm/evidencias] relaciones no leídas:', otras.error.message)
+      else relaciones = relacionar(filas, (otras.data ?? []) as unknown as FilaRelacionable[])
+    }
+
+    return { ok: true, filas: armarFilas(filas, relaciones), total: r.count ?? r.data.length, pagina }
   } catch (e) {
     console.error('[pdm/evidencias] excepción:', e)
     return FALLO

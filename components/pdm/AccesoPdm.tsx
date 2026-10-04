@@ -24,6 +24,10 @@ import {
 import type { AccionesPdm } from '@/lib/pdm/acciones'
 import type { PersonaDirectorio } from '@/lib/pdm/personas'
 import Dialogo from './Dialogo'
+import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
+import { Presencia } from './Ventana'
+import { useAvisar } from './Avisos'
+import { T } from './tema'
 import { Avatar, LineaContrato } from './PersonaVista'
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
@@ -39,7 +43,7 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
   const [elegida, setElegida] = useState<string | null>(null)
   const [nivel, setNivel] = useState<NivelHabilitable>(niveles[0])
   const [motivo, setMotivo] = useState('')
-  const [enviando, setEnviando] = useState(false)
+  const { fase, correr, ocupado } = useConfirmar()
   const [error, setError] = useState<string | null>(null)
 
   const t = sinTildes(q.trim())
@@ -47,13 +51,16 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
   const persona = candidatas.find(p => p.id === elegida) ?? null
 
   async function habilitar() {
-    if (!persona || enviando) return
-    setEnviando(true)
+    if (!persona || ocupado) return
     setError(null)
-    const r = await acciones.habilitar({ usuario: persona.id, nivel, motivo })
-    setEnviando(false)
-    if (!r.ok) { setError(r.error); return }
-    onHecho(`${persona.nombre} ya puede entrar al módulo como ${ETIQUETA_NIVEL[nivel].toLowerCase()}.`)
+    await correr(
+      () => acciones.habilitar({ usuario: persona.id, nivel, motivo }),
+      {
+        alTerminar: () => onHecho(`${persona.nombre} ya puede entrar al módulo como ${ETIQUETA_NIVEL[nivel].toLowerCase()}.`),
+        alFallar: setError,
+        quedarseHecho: true,
+      },
+    )
   }
 
   return (
@@ -62,20 +69,24 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
       subtitulo="Le da acceso al módulo. No le asigna indicadores: eso se hace en Indicadores."
       onCerrar={onCerrar}
       pie={
-        <div className="space-y-3">
-          {error && <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p>}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button onClick={onCerrar} className="rounded-lg border border-[#DCE0E8] bg-white px-5 py-2.5 text-sm font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]">
-              Cancelar
-            </button>
-            <button
-              id="pdm-habilitar"
-              onClick={habilitar}
-              disabled={!persona || enviando}
-              className="rounded-lg bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {enviando ? 'Habilitando…' : persona ? `Habilitar a ${persona.nombre}` : 'Habilitar'}
-            </button>
+        <div>
+          <Despliegue abierto={!!error}>
+            {error ? <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p> : null}
+          </Despliegue>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <p aria-live="polite" className="min-w-0 flex-1 truncate text-xs text-[#667085]" title={persona?.nombre}>
+              {persona ? <>Se habilitará a <b className="font-semibold text-[#192031]">{persona.nombre}</b></> : 'Elige a quién habilitar.'}
+            </p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <button onClick={onCerrar} disabled={ocupado} className={T.accionSecundaria}>Cancelar</button>
+              <BotonAccion
+                id="pdm-habilitar"
+                fase={fase}
+                inhabilitado={!persona}
+                onClick={habilitar}
+                etiquetas={{ reposo: 'Habilitar', trabajando: 'Habilitando', hecho: 'Habilitado' }}
+              />
+            </div>
           </div>
         </div>
       }
@@ -166,7 +177,7 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
   acciones: AccionesPdm
 }) {
   const [abierto, setAbierto] = useState(false)
-  const [aviso, setAviso] = useState<string | null>(null)
+  const avisar = useAvisar()
   const [error, setError] = useState<string | null>(null)
   const [trabajando, setTrabajando] = useState<string | null>(null)
   const [confirmaQuitar, setConfirmaQuitar] = useState<string | null>(null)
@@ -189,20 +200,20 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
 
   async function cambiarNivel(p: PersonaDirectorio, nuevo: NivelHabilitable) {
     if (trabajando) return
-    setTrabajando(p.id); setError(null); setAviso(null)
+    setTrabajando(p.id); setError(null)
     const r = await acciones.habilitar({ usuario: p.id, nivel: nuevo })
     setTrabajando(null)
     if (!r.ok) setError(r.error)
-    else setAviso(`${p.nombre} ahora entra como ${ETIQUETA_NIVEL[nuevo].toLowerCase()}.`)
+    else avisar(`${p.nombre} ahora entra como ${ETIQUETA_NIVEL[nuevo].toLowerCase()}.`)
   }
 
   async function quitar(p: PersonaDirectorio) {
     if (trabajando) return
-    setTrabajando(p.id); setError(null); setAviso(null)
+    setTrabajando(p.id); setError(null)
     const r = await acciones.deshabilitar({ usuario: p.id })
     setTrabajando(null); setConfirmaQuitar(null)
     if (!r.ok) setError(r.error)
-    else setAviso(`${p.nombre} ya no entra al módulo. Sus indicadores siguen a su cargo.`)
+    else avisar(`${p.nombre} ya no entra al módulo. Sus indicadores siguen a su cargo.`)
   }
 
   return (
@@ -215,7 +226,7 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
         {puede && (
           <button
             id="pdm-habilitar-abrir"
-            onClick={() => { setAviso(null); setError(null); setAbierto(true) }}
+            onClick={() => { setError(null); setAbierto(true) }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
           >
             <Icono glifo={Iconos.accion.agregar} tamano="sm" />
@@ -224,13 +235,9 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
         )}
       </div>
 
-      {aviso && (
-        <p role="status" className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-[#B7DEC9] bg-[#F1F8F4] px-3 py-2.5 text-sm text-[#1F5D43]">
-          <span>{aviso}</span>
-          <button onClick={() => setAviso(null)} className="shrink-0 text-[#1F5D43] hover:text-[#144432]"><Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" /></button>
-        </p>
-      )}
-      {error && <p role="alert" className="mt-3 text-sm font-medium text-[#B42318]">{error}</p>}
+      <Despliegue abierto={!!error} separacion="pb-1">
+        {error ? <p role="alert" className="mt-3 text-sm font-medium text-[#B42318]">{error}</p> : null}
+      </Despliegue>
 
       {habilitados.length === 0 ? (
         <p className="mt-3 text-xs leading-relaxed text-[#667085]">
@@ -287,15 +294,17 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
         </ul>
       )}
 
-      {abierto && (
-        <DialogoHabilitar
-          candidatas={candidatas}
-          niveles={niveles}
-          acciones={acciones}
-          onCerrar={() => setAbierto(false)}
-          onHecho={m => { setAbierto(false); setAviso(m) }}
-        />
-      )}
+      <Presencia mostrar={abierto}>
+        {abierto && (
+          <DialogoHabilitar
+            candidatas={candidatas}
+            niveles={niveles}
+            acciones={acciones}
+            onCerrar={() => setAbierto(false)}
+            onHecho={m => { setAbierto(false); avisar(m) }}
+          />
+        )}
+      </Presencia>
     </section>
   )
 }

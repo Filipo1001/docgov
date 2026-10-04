@@ -7,43 +7,49 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { pdmHabilitado } from '@/lib/pdm/habilitado'
 import { PLAN } from '@/lib/pdm/identidad'
 import { ITEM_PLAN_DESARROLLO } from '@/lib/pdm/menu'
-import { esNivelHabilitable, gestiona, veDirectorio, type NivelPdm } from '@/lib/pdm/niveles'
+import { gestiona, veDirectorio } from '@/lib/pdm/niveles'
+import { leerAcceso, type AccesoLeido, type LecturaAcceso } from '@/lib/pdm/acceso-leer'
 
-export interface AccesoPdm {
-  nivel: NivelPdm
-  userId: string
-  dependenciaId: string | null
-}
+export type AccesoPdm = AccesoLeido
+export type { LecturaAcceso }
 
 /**
- * Qué puede hacer en el módulo quien pregunta, o `null` si nada.
+ * Lo que dice el error cuando no se pudo comprobar el acceso. No es un «no»: ver `acceso-leer.ts`. Lo recoge
+ * `app/dashboard/plan-desarrollo/error.tsx`, que lo muestra DENTRO del marco del módulo (con su barra).
+ */
+export const ERROR_ACCESO_NO_VERIFICADO = 'PDM: no se pudo verificar el acceso'
+
+/**
+ * Qué se sabe del acceso de quien pregunta, con los cuatro resultados de `leerAcceso`.
  *
- *   · Fuera de vista previa o desarrollo el módulo no existe: `null` para todos, y falla
- *     hacia lo cerrado (ver `pdmHabilitado`).
+ *   · Fuera de vista previa o desarrollo el módulo no existe: «sin acceso» para todos, y falla hacia
+ *     lo cerrado (ver `pdmHabilitado`).
  *   · El administrador entra por su rol.
  *   · Cualquier otra persona entra solo si tiene una fila en `pdm_permisos`: se lee con SU
  *     sesión, y la política de la base le deja ver únicamente la suya.
  *
- * Ante cualquier error responde `null`, que es el estado seguro. `cache` de React: una sola
- * lectura por petición aunque la pidan varios componentes.
+ * `cache` de React: una sola lectura por petición aunque la pidan varios componentes (la barra del módulo
+ * y la pantalla, por ejemplo).
+ */
+export const leerAccesoPdm = cache(async (): Promise<LecturaAcceso> => {
+  try {
+    if (!pdmHabilitado()) return { estado: 'sin_acceso' }
+    return await leerAcceso(await createServerSupabaseClient())
+  } catch {
+    return { estado: 'no_verificado' }
+  }
+})
+
+/**
+ * Qué puede hacer en el módulo quien pregunta, o `null` si nada.
+ *
+ * `null` es la respuesta segura ante cualquier cosa que no sea un «sí» comprobado: es lo que usan las
+ * acciones del servidor y las lecturas, que ante la duda no hacen nada. Las PANTALLAS no deben decidir
+ * con esto —un fallo pasajero se leería como «no tienes acceso»—: usan `exigirAccesoPdm`.
  */
 export const accesoPdm = cache(async (): Promise<AccesoPdm | null> => {
-  try {
-    if (!pdmHabilitado()) return null
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
-
-    const { data: yo } = await supabase.from('usuarios').select('rol, dependencia_id').eq('id', user.id).single()
-    if (!yo) return null
-    const dependenciaId = (yo.dependencia_id as string | null) ?? null
-    if (yo.rol === 'admin') return { nivel: 'admin', userId: user.id, dependenciaId }
-
-    const { data: permiso } = await supabase.from('pdm_permisos').select('nivel').eq('usuario_id', user.id).maybeSingle()
-    return esNivelHabilitable(permiso?.nivel) ? { nivel: permiso.nivel, userId: user.id, dependenciaId } : null
-  } catch {
-    return null
-  }
+  const lectura = await leerAccesoPdm()
+  return lectura.estado === 'ok' ? lectura.acceso : null
 })
 
 /** Qué se exige para entrar a una pantalla. */
@@ -59,7 +65,8 @@ export type Requisito = 'cualquiera' | 'gestor' | 'gestor_o_consulta' | 'admin'
  *
  * 1. Fuera de vista previa o desarrollo el módulo no existe: 404, y falla hacia
  *    lo cerrado (ver `pdmHabilitado`).
- * 2. Sin sesión, al inicio de sesión. Con sesión pero sin acceso al módulo, al panel.
+ * 2. Sin sesión, al inicio de sesión. Con sesión pero sin acceso al módulo, al panel. Si NO se pudo
+ *    comprobar (un fallo pasajero), no se redirige a ninguna parte: ver `acceso-leer.ts`.
  * 3. Cada pantalla dice qué nivel exige. Quien tiene acceso pero no el suficiente va al
  *    resumen, que es la pantalla de todos: ninguna pestaña lleva a una puerta cerrada.
  *
@@ -73,12 +80,14 @@ export async function exigirAccesoPdm(requiere: Requisito = 'cualquiera'): Promi
   await connection()
   if (!pdmHabilitado()) notFound()
 
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const acceso = await accesoPdm()
-  if (!acceso) redirect('/dashboard')
+  // Una sola lectura (la misma que usa la barra del módulo): sesión y acceso juntos.
+  const lectura = await leerAccesoPdm()
+  if (lectura.estado === 'sin_sesion') redirect('/login')
+  if (lectura.estado === 'sin_acceso') redirect('/dashboard')
+  // No se pudo comprobar: NO se saca a nadie del módulo. Se lanza un error que el marco del módulo recoge
+  // dejando la barra en su sitio, con un botón para reintentar.
+  if (lectura.estado === 'no_verificado') throw new Error(ERROR_ACCESO_NO_VERIFICADO)
+  const acceso = lectura.acceso
 
   const suficiente = requiere === 'cualquiera'
     || (requiere === 'gestor' && gestiona(acceso.nivel))

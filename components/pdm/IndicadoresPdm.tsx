@@ -16,6 +16,7 @@ import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { proyectarLista, type Indicador } from '@/lib/pdm/plan'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
+import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import SelectorAnio from './SelectorAnio'
 import { T } from './tema'
@@ -29,6 +30,8 @@ import { anioIniciado } from '@/lib/pdm/seguimiento'
 import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import IndicadorModal from './IndicadorModal'
 import SelectorAsignacion from './SelectorAsignacion'
+import { Presencia } from './Ventana'
+import { useAvisar } from './Avisos'
 import { ACCIONES_REALES } from './acciones-reales'
 import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
 
@@ -66,7 +69,7 @@ export default function IndicadoresPdm({
   const [elegidos, setElegidos] = useState<ReadonlySet<number>>(new Set())
   // Los indicadores que se están asignando (los marcados, o el de la ficha abierta); `null`: el selector está cerrado.
   const [selectorPara, setSelectorPara] = useState<Indicador[] | null>(null)
-  const [aviso, setAviso] = useState<string | null>(null)
+  const avisar = useAvisar()
 
   // Todos los indicadores vistos en el año elegido; la lista es lo que de ellos se enseña.
   const delAnio = useMemo(() => proyectarLista(indicadores, anio), [indicadores, anio])
@@ -93,11 +96,11 @@ export default function IndicadoresPdm({
     const eraLote = selectorPara !== null && selectorPara.length === marcados.length && marcados.length > 0
     setSelectorPara(null)
     if (eraLote) terminarSeleccion()
-    setAviso(describirResumen(resumen, etiqueta))
+    avisar(describirResumen(resumen, etiqueta))
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <Pagina>
       {/* El cuadro de datos dice de qué año se habla: quien reporta necesita saber por qué hay (o no) con qué hacerlo. */}
       <EncabezadoSeccion
         titulo="Indicadores"
@@ -109,15 +112,6 @@ export default function IndicadoresPdm({
       />
 
       <SelectorAnio anio={anio} anioActual={anioActual} onCambiar={setAnio} />
-
-      {aviso && (
-        <p role="status" className={`flex items-start justify-between gap-3 ${T.avisoBien}`}>
-          <span>{aviso}</span>
-          <button onClick={() => setAviso(null)} className="shrink-0 text-[#1F5D43] hover:text-[#144432]">
-            <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" />
-          </button>
-        </p>
-      )}
 
       {restringirA && (
         <div>
@@ -143,7 +137,7 @@ export default function IndicadoresPdm({
         seleccion={puedeAsignar ? {
           activa: seleccionActiva,
           elegidos,
-          onActiva: activa => { if (activa) { setAviso(null); setSeleccionActiva(true) } else terminarSeleccion() },
+          onActiva: activa => { if (activa) setSeleccionActiva(true); else terminarSeleccion() },
           onAlternar: alternar,
           onReemplazar: ids => setElegidos(new Set(ids)),
         } : undefined}
@@ -152,7 +146,7 @@ export default function IndicadoresPdm({
       {puedeAsignar && seleccionActiva && marcados.length > 0 && (
         <>
           <div className="h-16" aria-hidden />
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#DCE0E8] bg-white px-4 py-3">
+          <div className="pdm-entra fixed inset-x-0 bottom-0 z-40 border-t border-[#DCE0E8] bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
               <p className="text-sm font-semibold text-[#192031]">
                 <span className="tabular-nums">{marcados.length}</span> {marcados.length === 1 ? 'seleccionado' : 'seleccionados'}
@@ -166,6 +160,7 @@ export default function IndicadoresPdm({
         </>
       )}
 
+      <Presencia mostrar={indicador !== null}>
       <IndicadorModal
         key={abierto ?? 'cerrado'}
         indicador={indicador}
@@ -174,7 +169,7 @@ export default function IndicadoresPdm({
         seguimiento={{ nivel, yoId, anioActual, acciones: accionesSeguimiento }}
         persona={indicador ? fichas[indicador.id] : undefined}
         asignados={indicador ? asignadosVista(indicador, personasPorId, gruposPorId) : undefined}
-        onAsignar={puedeAsignar && indicador ? () => { setAviso(null); setSelectorPara([indicador]) } : undefined}
+        onAsignar={puedeAsignar && indicador ? () => setSelectorPara([indicador]) : undefined}
         onQuitar={puedeAsignar && indicador
           ? async usuarioId => {
               const r = await acciones.quitarAsignacion({ indicadores: [indicador.uuid], usuario: usuarioId })
@@ -183,7 +178,9 @@ export default function IndicadoresPdm({
           : undefined}
         onCargarHistorial={nivel === 'admin' && indicador ? () => acciones.historialIndicador(indicador.uuid) : undefined}
       />
+      </Presencia>
 
+      <Presencia mostrar={puedeAsignar && selectorPara !== null}>
       {puedeAsignar && selectorPara && (
         <SelectorAsignacion
           // Cada selección abre un formulario nuevo. El prefijo importa: con un solo indicador la clave sería su número,
@@ -197,6 +194,7 @@ export default function IndicadoresPdm({
           onHecho={terminoAsignar}
         />
       )}
-    </div>
+      </Presencia>
+    </Pagina>
   )
 }

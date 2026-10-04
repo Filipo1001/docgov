@@ -37,12 +37,12 @@ const VACIO: Directorio = { ok: false, personas: [], sinUsuario: [], fichas: {},
 
 export const cargarDirectorio = cache(async (): Promise<Directorio> => {
   try {
-    const plan = await cargarPlanPdm()
-    if (!plan.ok) return VACIO
-
     const supabase = await createServerSupabaseClient()
-    const acceso = await accesoPdm()
-    const [usuarios, contratos, grupos, miembros, dependencias, permisos] = await Promise.all([
+    // El plan y estas lecturas no dependen entre sí: se piden a la vez (una vuelta de red menos en cada pantalla).
+    // `cargarPlanPdm` es de `cache`: si la pantalla ya lo pidió, aquí es la misma lectura, no otra.
+    const [plan, acceso, usuarios, contratos, grupos, miembros, dependencias, permisos] = await Promise.all([
+      cargarPlanPdm(),
+      accesoPdm(),
       supabase
         .from('usuarios')
         .select('id, nombre_completo, rol, foto_url, dependencia:dependencias(nombre)')
@@ -57,6 +57,7 @@ export const cargarDirectorio = cache(async (): Promise<Directorio> => {
       supabase.from('dependencias').select('id, nombre'),
       supabase.from('pdm_permisos').select('usuario_id, nivel, habilitado_por_nombre, created_at'),
     ])
+    if (!plan.ok) return VACIO
 
     const error = usuarios.error ?? contratos.error ?? grupos.error ?? miembros.error ?? dependencias.error ?? permisos.error
     if (error || !usuarios.data || !contratos.data || !grupos.data || !miembros.data || !dependencias.data || !permisos.data) {

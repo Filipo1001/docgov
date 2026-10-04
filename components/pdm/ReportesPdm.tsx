@@ -19,6 +19,7 @@ import { anioIniciado } from '@/lib/pdm/seguimiento'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import { armarReportesDelAnio } from '@/lib/pdm/reportes-armar'
 import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
+import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import SelectorAnio from './SelectorAnio'
 import IconoSector from './IconoSector'
@@ -31,7 +32,9 @@ const MAX_LISTA = 10
 function Numero({ n, href }: { n: number; href?: string }) {
   if (n === 0) return <span className="tabular-nums text-[#B8BFCC]">0</span>
   if (!href) return <span className="font-semibold tabular-nums text-[#192031]">{n}</span>
-  return <Link href={href} className={`tabular-nums ${T.enlace}`}>{n}</Link>
+  // La zona de pulsación crece con relleno y se compensa con margen negativo: la cifra no se mueve, pero un dedo la acierta
+  // (antes medía 16×16 px). Al pasar el cursor se ve hasta dónde llega.
+  return <Link href={href} className={`-mx-2.5 -my-3 inline-block rounded-md px-2.5 py-3 tabular-nums transition-colors hover:bg-[#EDF0F5] ${T.enlace}`}>{n}</Link>
 }
 
 export default function ReportesPdm({ indicadores, anioActual, anioInicial, nivel }: {
@@ -49,7 +52,7 @@ export default function ReportesPdm({ indicadores, anioActual, anioInicial, nive
     `${HREF_INDICADORES}?dependencia=${encodeURIComponent(dependencia)}&filtro=${filtro}&anio=${anio}`
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <Pagina>
       <EncabezadoSeccion
         titulo="Reportes"
         datos={[
@@ -162,6 +165,6 @@ export default function ReportesPdm({ indicadores, anioActual, anioInicial, nive
           </section>
         </>
       )}
-    </div>
+    </Pagina>
   )
 }

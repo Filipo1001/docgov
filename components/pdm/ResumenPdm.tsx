@@ -17,6 +17,8 @@ import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import { pendientesDeReportar } from '@/lib/pdm/mi-trabajo'
 import type { NivelPdm } from '@/lib/pdm/niveles'
 import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
+import { Presencia } from './Ventana'
+import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import SelectorAnio from './SelectorAnio'
 import Tablero from './Tablero'
@@ -50,7 +52,7 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
   const propiosPorReportar = nivel === 'coordinador' ? pendientesDeReportar(lista, yoId) : 0
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <Pagina>
       <EncabezadoSeccion
         titulo="Resumen"
         datos={[
@@ -80,6 +82,7 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
         onVerDependencia={d => router.push(`${HREF_INDICADORES}?dependencia=${encodeURIComponent(d)}&anio=${anio}`)}
       />
 
+      <Presencia mostrar={indicador !== null}>
       <IndicadorModal
         key={abierto ?? 'cerrado'}
         indicador={indicador}
@@ -88,6 +91,7 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
         seguimiento={{ nivel, yoId, anioActual, acciones: accionesSeguimiento }}
         persona={indicador ? fichas[indicador.id] : undefined}
       />
-    </div>
+      </Presencia>
+    </Pagina>
   )
 }

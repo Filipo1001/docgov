@@ -25,6 +25,8 @@ import { sinTildes } from '@/lib/pdm/texto'
 import { MAX_DESCRIPCION, MAX_MIEMBROS, MAX_NOMBRE_GRUPO, type AccionesPdm } from '@/lib/pdm/acciones'
 import type { GrupoVista, PersonaDirectorio, SecretariaPlan } from '@/lib/pdm/personas'
 import Dialogo from './Dialogo'
+import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
+import { T } from './tema'
 import { Avatar, LineaContrato } from './PersonaVista'
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
@@ -46,7 +48,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
   const [q, setQ] = useState('')
   const [todas, setTodas] = useState(false)
   const [motivo, setMotivo] = useState('')
-  const [enviando, setEnviando] = useState(false)
+  const { fase, correr, ocupado: enviando } = useConfirmar()
   const [confirmaDisolver, setConfirmaDisolver] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -86,25 +88,31 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
 
   async function guardar() {
     if (!puede || !secretaria) return
-    setEnviando(true)
     setError(null)
-    const r = await acciones.guardarGrupo({
-      grupo: grupo?.id, nombre: nombreLimpio, secretaria: secretaria.id, lider: liderId, miembros,
-      descripcion: descripcion.trim(), motivo,
-    })
-    setEnviando(false)
-    if (!r.ok) { setError(r.error); return }
-    onHecho(grupo ? `Grupo «${nombreLimpio}» guardado.` : `Grupo «${nombreLimpio}» creado.`)
+    await correr(
+      () => acciones.guardarGrupo({
+        grupo: grupo?.id, nombre: nombreLimpio, secretaria: secretaria.id, lider: liderId, miembros,
+        descripcion: descripcion.trim(), motivo,
+      }),
+      {
+        alTerminar: () => onHecho(grupo ? `Grupo «${nombreLimpio}» guardado.` : `Grupo «${nombreLimpio}» creado.`),
+        alFallar: setError,
+        quedarseHecho: true,
+      },
+    )
   }
 
   async function disolver() {
     if (!grupo || enviando) return
-    setEnviando(true)
     setError(null)
-    const r = await acciones.eliminarGrupo({ grupo: grupo.id, motivo })
-    setEnviando(false)
-    if (!r.ok) { setError(r.error); setConfirmaDisolver(false); return }
-    onHecho(`Grupo «${grupo.nombre}» disuelto. Sus indicadores siguen a cargo de cada persona.`)
+    await correr(
+      () => acciones.eliminarGrupo({ grupo: grupo.id, motivo }),
+      {
+        alTerminar: () => onHecho(`Grupo «${grupo.nombre}» disuelto. Sus indicadores siguen a cargo de cada persona.`),
+        alFallar: e => { setError(e); setConfirmaDisolver(false) },
+        quedarseHecho: true,
+      },
+    )
   }
 
   return (
@@ -114,9 +122,13 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
       onCerrar={onCerrar}
       ancho="sm:max-w-2xl"
       pie={
-        <div className="space-y-3">
-          {error && <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p>}
-          {!error && falta && <p className="text-xs text-[#667085]">{falta}</p>}
+        <div>
+          {/* Lo que falta o lo que salió mal se despliega: aparecer de golpe sacudía el pie de la ventana. */}
+          <Despliegue abierto={!!error || !!falta}>
+            {error
+              ? <p role="alert" className="text-sm font-medium text-[#B42318]">{error}</p>
+              : falta ? <p className="text-xs text-[#667085]">{falta}</p> : null}
+          </Despliegue>
           {confirmaDisolver ? (
             <div className="space-y-2 rounded-lg border border-[#F1C0BB] bg-[#FDF3F2] px-3 py-3">
               <p className="text-sm text-[#912018]">
@@ -126,10 +138,13 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
                   : `Sus ${plural(grupo?.indicadores ?? 0, 'indicador', 'indicadores')} siguen a cargo de cada persona, pero ya no se actualizan en conjunto.`}
               </p>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button onClick={() => setConfirmaDisolver(false)} className="rounded-lg border border-[#DCE0E8] bg-white px-4 py-2 text-sm font-semibold text-[#2D3648] hover:bg-[#F4F5F8]">No, conservarlo</button>
-                <button onClick={disolver} disabled={enviando} className="rounded-lg bg-[#B42318] px-4 py-2 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
-                  {enviando ? 'Disolviendo…' : 'Sí, disolver'}
-                </button>
+                <button onClick={() => setConfirmaDisolver(false)} disabled={enviando} className={T.accionSecundaria}>No, conservarlo</button>
+                <BotonAccion
+                  fase={fase}
+                  onClick={disolver}
+                  className="!bg-[#B42318] hover:!bg-[#912018]"
+                  etiquetas={{ reposo: 'Sí, disolver', trabajando: 'Disolviendo', hecho: 'Disuelto' }}
+                />
               </div>
             </div>
           ) : (
@@ -140,17 +155,18 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
                 </button>
               ) : <span />}
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                <button onClick={onCerrar} className="rounded-lg border border-[#DCE0E8] bg-white px-5 py-2.5 text-sm font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]">
-                  Cancelar
-                </button>
-                <button
+                <button onClick={onCerrar} disabled={enviando} className={T.accionSecundaria}>Cancelar</button>
+                <BotonAccion
                   id="pdm-guardar-grupo"
+                  fase={fase}
+                  inhabilitado={falta !== null}
                   onClick={guardar}
-                  disabled={!puede}
-                  className="rounded-lg bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {enviando ? 'Guardando…' : grupo ? 'Guardar cambios' : 'Crear grupo'}
-                </button>
+                  etiquetas={{
+                    reposo: grupo ? 'Guardar cambios' : 'Crear grupo',
+                    trabajando: 'Guardando',
+                    hecho: grupo ? 'Guardado' : 'Creado',
+                  }}
+                />
               </div>
             </div>
           )}

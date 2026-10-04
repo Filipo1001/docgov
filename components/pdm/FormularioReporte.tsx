@@ -34,9 +34,8 @@ import {
 } from '@/lib/pdm/seguimiento-acciones'
 import { ErrorDeSubida, subirArchivo } from '@/lib/pdm/subir'
 import { Seccion } from './ui'
+import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
 import { T } from './tema'
-
-type Fase = 'subiendo' | 'registrando' | null
 
 export default function FormularioReporte({ indicador, vigente, acciones, onHecho }: {
   /** El indicador visto en el año en que se reporta (`indicador.anio`). */
@@ -59,7 +58,9 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
   // Lo de la versión anterior que pasa a esta: por defecto todo lo que la secretaría no devolvió.
   const anteriores = correccion && vigente ? vigente.evidencias : []
   const [conservar, setConservar] = useState<ReadonlySet<string>>(() => new Set(anteriores.filter(a => !a.observacion).map(a => a.id)))
-  const [fase, setFase] = useState<Fase>(null)
+  // El botón cuenta lo que pasa: subiendo (con cuántos archivos) → registrando → enviado.
+  const { fase, correr, ocupado: enviando } = useConfirmar()
+  const [etapa, setEtapa] = useState<'subiendo' | 'registrando'>('subiendo')
   const [error, setError] = useState<string | null>(null)
   const entrada = useRef<HTMLInputElement>(null)
 
@@ -85,7 +86,6 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
   }
 
   const numero = leerNumero(valor)
-  const enviando = fase !== null
   const motivoOk = !correccion || motivo.trim().length >= MIN_TEXTO
   // Lo conservado y lo nuevo comparten el tope de cinco y el mínimo de uno.
   const total = conservar.size + archivos.length
@@ -117,43 +117,50 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
       ?? errorEnArchivos(archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })), conservar.size)
     if (mal || numero === null) { setError(mal ?? 'Escribe el valor del avance.'); return }
 
-    // Si todo lo que se envía es lo conservado de la versión anterior, no hay nada que subir.
-    let rutas: { ruta: string; tipo: string }[] = []
-    if (archivos.length > 0) {
-      setFase('subiendo')
-      const prep = await acciones.prepararEvidencias({
+    await correr(async () => {
+      // Si todo lo que se envía es lo conservado de la versión anterior, no hay nada que subir.
+      let rutas: { ruta: string; tipo: string }[] = []
+      if (archivos.length > 0) {
+        setEtapa('subiendo')
+        const prep = await acciones.prepararEvidencias({
+          indicador: indicador.uuid,
+          anio,
+          archivos: archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })),
+        })
+        if (!prep.ok) return prep
+        if (prep.datos.length !== archivos.length) return { ok: false as const, error: 'No se pudo preparar la subida. Intenta de nuevo.' }
+
+        try {
+          await Promise.all(archivos.map((f, k) => subirArchivo(prep.datos[k].urlSubida, f, prep.datos[k].tipo)))
+        } catch (e) {
+          return { ok: false as const, error: e instanceof ErrorDeSubida ? e.message : 'No se pudo subir un archivo. Revisa tu conexión e intenta de nuevo.' }
+        }
+        rutas = prep.datos
+      }
+
+      setEtapa('registrando')
+      const r = await acciones.reportar({
         indicador: indicador.uuid,
         anio,
-        archivos: archivos.map(f => ({ nombre: f.name, tipo: f.type, bytes: f.size })),
+        valor: numero,
+        texto,
+        evidencias: archivos.map((f, k) => ({ ruta: rutas[k].ruta, nombre: f.name, tipo: rutas[k].tipo, bytes: f.size })),
+        conservar: correccion ? [...conservar] : undefined,
+        motivo: correccion ? motivo : undefined,
       })
-      if (!prep.ok) { setFase(null); setError(prep.error); return }
-      if (prep.datos.length !== archivos.length) { setFase(null); setError('No se pudo preparar la subida. Intenta de nuevo.'); return }
-
-      try {
-        await Promise.all(archivos.map((f, k) => subirArchivo(prep.datos[k].urlSubida, f, prep.datos[k].tipo)))
-      } catch (e) {
-        setFase(null)
-        setError(e instanceof ErrorDeSubida ? e.message : 'No se pudo subir un archivo. Revisa tu conexión e intenta de nuevo.')
-        return
-      }
-      rutas = prep.datos
-    }
-
-    setFase('registrando')
-    const r = await acciones.reportar({
-      indicador: indicador.uuid,
-      anio,
-      valor: numero,
-      texto,
-      evidencias: archivos.map((f, k) => ({ ruta: rutas[k].ruta, nombre: f.name, tipo: rutas[k].tipo, bytes: f.size })),
-      conservar: correccion ? [...conservar] : undefined,
-      motivo: correccion ? motivo : undefined,
+      // Ya se subieron: si el registro falló, se vuelven a elegir (cada intento sube a rutas nuevas).
+      if (!r.ok) setArchivos([])
+      return r
+    }, {
+      alTerminar: datos => {
+        setArchivos([])
+        setMotivo('')
+        onHecho(datos.correccion ? 'Corrección enviada. La secretaría la revisará.' : 'Reporte enviado. La secretaría lo revisará.')
+      },
+      alFallar: setError,
+      // El formulario lo reemplaza la pantalla al recargar el detalle: hasta entonces no vuelve a decir «Enviar».
+      quedarseHecho: true,
     })
-    setFase(null)
-    if (!r.ok) { setError(r.error); setArchivos([]); return }
-    setArchivos([])
-    setMotivo('')
-    onHecho(r.datos.correccion ? 'Corrección enviada. La secretaría la revisará.' : 'Reporte enviado. La secretaría lo revisará.')
   }
 
   const titulo = modo === 'nuevo' ? `Reportar avance · ${anio}` : modo === 'aprobado' ? `Nuevo avance · ${anio}` : modo === 'responder' ? 'Responder a la devolución' : 'Corregir el reporte'
@@ -267,14 +274,14 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
                   <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0 text-[#667085]" />
                   <span className="min-w-0 flex-1 truncate text-[#192031]">{f.name}</span>
                   <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(f.size)}</span>
-                  {!enviando && (
-                    <button
-                      onClick={() => setArchivos(a => a.filter(x => x !== f))}
-                      className="shrink-0 rounded p-1 text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031]"
-                    >
-                      <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta={`Quitar ${f.name}`} />
-                    </button>
-                  )}
+                  {/* Se queda en su sitio mientras se envía (inactivo): si desapareciera, la fila cambiaría de ancho. */}
+                  <button
+                    onClick={() => setArchivos(a => a.filter(x => x !== f))}
+                    disabled={enviando}
+                    className="-my-2 -mr-1.5 shrink-0 rounded-md p-2.5 text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] disabled:pointer-events-none disabled:opacity-30"
+                  >
+                    <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta={`Quitar ${f.name}`} />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -297,15 +304,30 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
           )}
         </div>
 
-        {error && <p role="alert" className={`text-xs font-medium ${T.avisoMal}`}>{error}</p>}
+        <Despliegue abierto={!!error} separacion="">
+          {error ? <p role="alert" className={`text-xs font-medium ${T.avisoMal}`}>{error}</p> : null}
+        </Despliegue>
 
         <div className="flex gap-2">
-          {(modo === 'corregir' || modo === 'aprobado') && !enviando && (
-            <button onClick={() => { setAbierto(false); setError(null) }} className={T.botonSec}>Cancelar</button>
+          {(modo === 'corregir' || modo === 'aprobado') && (
+            <button onClick={() => { setAbierto(false); setError(null) }} disabled={enviando} className={T.accionSecundaria}>Cancelar</button>
           )}
-          <button id="pdm-enviar" onClick={enviar} disabled={!listo || enviando} className={`${T.boton} flex-1`}>
-            {fase === 'subiendo' ? 'Subiendo archivos…' : fase === 'registrando' ? 'Enviando…' : correccion ? 'Enviar corrección' : 'Enviar reporte'}
-          </button>
+          <BotonAccion
+            id="pdm-enviar"
+            fase={fase}
+            inhabilitado={!listo}
+            onClick={enviar}
+            className="flex-1"
+            etiquetas={{
+              reposo: correccion ? 'Enviar corrección' : 'Enviar reporte',
+              trabajando: (
+                <span key={etapa} className="pdm-velo-entra">
+                  {etapa === 'subiendo' ? `Subiendo ${archivos.length === 1 ? 'el archivo' : `${archivos.length} archivos`}` : 'Registrando'}
+                </span>
+              ),
+              hecho: correccion ? 'Corrección enviada' : 'Reporte enviado',
+            }}
+          />
         </div>
         <p className="text-center text-xs text-[#667085]">
           Tu reporte cuenta en el cumplimiento cuando la secretaría lo apruebe.

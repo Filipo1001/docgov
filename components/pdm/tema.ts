@@ -28,6 +28,14 @@
 
 export const TINTA = '#192031'
 
+/**
+ * Los botones que cuentan lo que pasa (`BotonAccion`): se hunden un poco al pulsarlos y, mientras trabajan o
+ * al terminar, NO usan `disabled` (que los apagaría a media opacidad y se leería como «no se puede») sino
+ * `aria-disabled`: siguen siendo ellos, solo que quietos.
+ */
+const BASE_ACCION =
+  'relative inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition-[background-color,border-color,transform,opacity] duration-150 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:pointer-events-none'
+
 export const T = {
   // Superficies
   pagina: 'bg-[#F4F5F8]',
@@ -54,6 +62,10 @@ export const T = {
     'inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#C5CBD6] bg-white px-3 py-1.5 text-xs font-semibold text-[#192031] transition-colors hover:bg-[#F4F5F8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
   botonPeligro:
     'inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#B42318] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#912018] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B42318] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
+  accionPrimaria: `${BASE_ACCION} bg-[#192031] px-4 py-2.5 text-sm text-white hover:bg-[#242F45]`,
+  accionPrimariaChica: `${BASE_ACCION} bg-[#192031] px-3.5 py-2 text-xs text-white hover:bg-[#242F45]`,
+  accionSecundaria: `${BASE_ACCION} border border-[#C5CBD6] bg-white px-4 py-2.5 text-sm text-[#192031] hover:bg-[#F4F5F8]`,
+  accionSecundariaChica: `${BASE_ACCION} border border-[#C5CBD6] bg-white px-3 py-1.5 text-xs text-[#192031] hover:bg-[#F4F5F8]`,
   enlace: 'font-semibold text-[#192031] underline decoration-[#9AA3B5] underline-offset-2 transition-colors hover:decoration-[#192031]',
 
   // Campos

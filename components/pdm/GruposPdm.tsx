@@ -17,6 +17,8 @@ import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import type { AccionesPdm } from '@/lib/pdm/acciones'
 import type { GrupoVista, PersonaDirectorio, SecretariaPlan } from '@/lib/pdm/personas'
 import EditorGrupo from './EditorGrupo'
+import { Presencia } from './Ventana'
+import { useAvisar } from './Avisos'
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
 
@@ -30,7 +32,7 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
 }) {
   // `undefined`: cerrado · `null`: grupo nuevo · un grupo: editándolo
   const [editando, setEditando] = useState<GrupoVista | null | undefined>(undefined)
-  const [aviso, setAviso] = useState<string | null>(null)
+  const avisar = useAvisar()
   const nombreDe = new Map(personas.map(p => [p.id, p.nombre]))
 
   return (
@@ -43,7 +45,7 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
         {puedeGestionar && (
           <button
             id="pdm-crear-grupo"
-            onClick={() => { setAviso(null); setEditando(null) }}
+            onClick={() => setEditando(null)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#192031] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#242F45]"
           >
             <Icono glifo={Iconos.accion.agregar} tamano="sm" />
@@ -51,15 +53,6 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
           </button>
         )}
       </div>
-
-      {aviso && (
-        <p role="status" className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-[#B7DEC9] bg-[#F1F8F4] px-3 py-2.5 text-sm text-[#1F5D43]">
-          <span>{aviso}</span>
-          <button onClick={() => setAviso(null)} className="shrink-0 text-[#1F5D43] hover:text-[#144432]">
-            <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta="Cerrar aviso" />
-          </button>
-        </p>
-      )}
 
       {grupos.length === 0 ? (
         <p className="mt-3 text-xs leading-relaxed text-[#667085]">
@@ -95,7 +88,7 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
               )}
               {puedeGestionar && (
                 <button
-                  onClick={() => { setAviso(null); setEditando(g) }}
+                  onClick={() => setEditando(g)}
                   className="shrink-0 rounded-lg border border-[#DCE0E8] px-3 py-1.5 text-xs font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]"
                 >
                   Editar
@@ -106,6 +99,7 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
         </ul>
       )}
 
+      <Presencia mostrar={puedeGestionar && editando !== undefined}>
       {puedeGestionar && editando !== undefined && (
         <EditorGrupo
           // Cada grupo abre su propio formulario: sin esto, pasar de uno a otro arrastraría lo escrito.
@@ -115,9 +109,10 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
           secretarias={secretarias}
           acciones={acciones}
           onCerrar={() => setEditando(undefined)}
-          onHecho={mensaje => { setEditando(undefined); setAviso(mensaje) }}
+          onHecho={mensaje => { setEditando(undefined); avisar(mensaje) }}
         />
       )}
+      </Presencia>
     </section>
   )
 }

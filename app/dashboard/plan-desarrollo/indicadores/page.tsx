@@ -29,9 +29,9 @@ export default async function IndicadoresPage({
 }) {
   const acceso = await exigirAccesoPdm()
   const p = await searchParams
-  const plan = await cargarPlanPdm()
+  // El plan y el directorio se piden a la vez: no dependen entre sí.
+  const [plan, dir] = await Promise.all([cargarPlanPdm(), cargarDirectorio()])
   if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
-  const dir = await cargarDirectorio()
 
   const anioInicial = anioDeParametro(p.anio, plan.seguimiento.anioActual)
   const dependencia = plan.indicadores.find(i => i.dependencia === p.dependencia)?.dependencia

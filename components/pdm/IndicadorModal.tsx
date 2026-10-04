@@ -21,20 +21,20 @@
  * documento que lo respalde; aquí no se puede reportar sin adjuntar al menos uno, y la base de
  * datos lo exige aunque alguien se salte la pantalla.
  *
- * Va montado en <body> con un portal: el dashboard usa `transform` en contenedores
- * que convierten un `position: fixed` en algo relativo a ellos y no a la
- * pantalla (ya pasó con el modal de notificaciones).
+ * El marco (velo, entrada y salida, bloqueo del fondo, Escape, foco) es `Ventana`, que comparte con los diálogos.
+ * Va montado en <body> con un portal: el dashboard usa `transform` en contenedores que convierten un
+ * `position: fixed` en algo relativo a ellos y no a la pantalla (ya pasó con el modal de notificaciones).
+ * Quien la cierra desde fuera la envuelve en `Presencia` para que se despida y no desaparezca de golpe.
  */
 
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import Icono from '@/components/ui/Icono'
-import { Iconos } from '@/lib/iconos'
+import { useState } from 'react'
 import {
   coincideNombre, estadoDe, fmt, fmtRazon, razon, rotuloMeta, sinAsignar, tipoResponsable,
   type Indicador,
 } from '@/lib/pdm/plan'
 import { BarraAvance } from './Barras'
+import Ventana, { BotonCerrarVentana } from './Ventana'
+import { TextoEstable } from './Movimiento'
 import IconoSector from './IconoSector'
 import { EstadoTexto, Rotulo, Seccion, SituacionTexto } from './ui'
 import { T } from './tema'
@@ -81,31 +81,11 @@ export default function IndicadorModal({
   const [cargado, setCargado] = useState<{ firma: string; datos: EntradaHistorial[] } | null>(null)
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
   const [errorLeido, setErrorLeido] = useState<{ firma: string; mensaje: string } | null>(null)
-  const cerrarRef = useRef<HTMLButtonElement>(null)
 
-  // Escape, bloqueo del fondo y foco al abrir. Depende del id: que el padre se
-  // vuelva a pintar con el modal abierto no debe repetirlo.
-  const id = indicador?.id
   // Si cambia quién lleva el indicador, el historial que se había cargado ya no está al día: deja de contar.
   const firma = asignados?.map(a => `${a.usuarioId}${a.principal ? 'P' : 'A'}`).join(',') ?? ''
   const historial = cargado?.firma === firma ? cargado.datos : null
   const errorHistorial = errorLeido?.firma === firma ? errorLeido.mensaje : null
-  const cerrarFn = useRef(onCerrar)
-  useEffect(() => { cerrarFn.current = onCerrar })
-  useEffect(() => {
-    if (id === undefined) return
-    const previo = document.activeElement as HTMLElement | null
-    const overflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    cerrarRef.current?.focus()
-    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrarFn.current() }
-    document.addEventListener('keydown', tecla)
-    return () => {
-      document.removeEventListener('keydown', tecla)
-      document.body.style.overflow = overflow
-      previo?.focus?.()
-    }
-  }, [id])
 
   if (!indicador) return null
 
@@ -141,18 +121,8 @@ export default function IndicadorModal({
   // Al principal solo se le quita si es la única asignación; con apoyos se le reemplaza.
   const puedeQuitarPrincipal = !!principalVista && !principalVista.grupo && (asignados?.length ?? 0) === 1
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-[#192031]/55 sm:items-center sm:p-4"
-      onClick={onCerrar}
-      role="dialog"
-      aria-modal="true"
-      aria-label={indicador.indicador}
-    >
-      <div
-        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-xl bg-white shadow-xl sm:max-h-[88vh] sm:max-w-3xl sm:rounded-lg"
-        onClick={e => e.stopPropagation()}
-      >
+  return (
+    <Ventana etiqueta={indicador.indicador} onCerrar={onCerrar} ancho="sm:max-w-3xl">
         {/* Encabezado: código y estado a una línea, el indicador debajo */}
         <div className={`shrink-0 border-b ${T.regla} px-5 pb-4 pt-5 sm:px-7`}>
           <div className="flex items-start gap-3">
@@ -164,15 +134,9 @@ export default function IndicadorModal({
                 {(estado !== 'sin_reporte' || !enAnio) && <EstadoTexto estado={estado} />}
                 {enAnio && <SituacionTexto situacion={enAnio.situacion} />}
               </div>
-              <h2 className="mt-2 text-xl font-semibold leading-snug tracking-tight text-[#192031]">{indicador.indicador}</h2>
+              <h2 className="mt-2 text-xl font-semibold leading-snug tracking-tight text-[#192031] [overflow-wrap:anywhere]">{indicador.indicador}</h2>
             </div>
-            <button
-              ref={cerrarRef}
-              onClick={onCerrar}
-              className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031]"
-            >
-              <Icono glifo={Iconos.accion.cerrar} tamano="md" etiqueta="Cerrar" />
-            </button>
+            <BotonCerrarVentana />
           </div>
         </div>
 
@@ -243,7 +207,7 @@ export default function IndicadorModal({
                     disabled={quitando !== null}
                     className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031] disabled:opacity-50"
                   >
-                    {quitando === principalVista.usuarioId ? 'Quitando…' : 'Quitar'}
+                    <TextoEstable texto={quitando === principalVista.usuarioId ? 'Quitando…' : 'Quitar'} reserva="Quitando…" />
                   </button>
                 )}
                 {onAsignar && <button id="pdm-ficha-asignar" onClick={onAsignar} className={T.botonSecChico}>Asignar…</button>}
@@ -299,7 +263,7 @@ export default function IndicadorModal({
                                 disabled={quitando !== null}
                                 className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031] disabled:opacity-50"
                               >
-                                {quitando === a.usuarioId ? 'Quitando…' : 'Quitar'}
+                                <TextoEstable texto={quitando === a.usuarioId ? 'Quitando…' : 'Quitar'} reserva="Quitando…" />
                               </button>
                             )}
                           </li>
@@ -341,7 +305,7 @@ export default function IndicadorModal({
               rotulo="Cambios de responsable"
               acciones={historial === null && (
                 <button id="pdm-ficha-historial" onClick={cargarHistorial} disabled={cargandoHistorial} className={T.botonSecChico}>
-                  {cargandoHistorial ? 'Cargando…' : 'Ver historial'}
+                  <TextoEstable texto={cargandoHistorial ? 'Cargando…' : 'Ver historial'} reserva="Ver historial" />
                 </button>
               )}
             >
@@ -368,8 +332,6 @@ export default function IndicadorModal({
             </Seccion>
           )}
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Ventana>
   )
 }

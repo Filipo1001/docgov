@@ -11,6 +11,7 @@ import { fechaHoraBogota } from '@/lib/pdm/historial'
 import { ETIQUETA_NIVEL } from '@/lib/pdm/niveles'
 import { MAX_COMENTARIO, errorEnComentario, type AccionesSeguimiento, type ComentarioVista } from '@/lib/pdm/seguimiento-acciones'
 import { Seccion } from './ui'
+import BotonAccion, { Despliegue, useConfirmar, useNuevos } from './Movimiento'
 import { T } from './tema'
 
 export default function ComentariosIndicador({ indicadorUuid, comentarios, acciones, onHecho }: {
@@ -20,20 +21,20 @@ export default function ComentariosIndicador({ indicadorUuid, comentarios, accio
   onHecho: () => void
 }) {
   const [texto, setTexto] = useState('')
-  const [enviando, setEnviando] = useState(false)
+  const { fase, correr, ocupado: enviando } = useConfirmar()
   const [error, setError] = useState<string | null>(null)
+  // El comentario recién escrito se ilumina un momento al llegar a la lista: se ve dónde quedó.
+  const nuevos = useNuevos(comentarios.map(c => c.id))
 
   async function enviar() {
     if (enviando) return
     const mal = errorEnComentario(texto)
     if (mal) { setError(mal); return }
-    setEnviando(true)
     setError(null)
-    const r = await acciones.comentar({ indicador: indicadorUuid, texto })
-    setEnviando(false)
-    if (!r.ok) { setError(r.error); return }
-    setTexto('')
-    onHecho()
+    await correr(
+      () => acciones.comentar({ indicador: indicadorUuid, texto }),
+      { alTerminar: () => { setTexto(''); onHecho() }, alFallar: setError },
+    )
   }
 
   return (
@@ -43,7 +44,7 @@ export default function ComentariosIndicador({ indicadorUuid, comentarios, accio
       ) : (
         <ul className="space-y-2.5">
           {comentarios.map(c => (
-            <li key={c.id} className="rounded-lg border border-[#E6E9EF] bg-[#F7F8FA] px-3.5 py-2.5">
+            <li key={c.id} className={`rounded-lg border border-[#E6E9EF] bg-[#F7F8FA] px-3.5 py-2.5 ${nuevos.has(c.id) ? 'pdm-nuevo' : ''}`}>
               <p className="text-xs text-[#667085]">
                 <span className="font-semibold text-[#192031]">{c.autorNombre}</span> · {ETIQUETA_NIVEL[c.autorNivel]} · {fechaHoraBogota(c.creado)}
               </p>
@@ -67,11 +68,19 @@ export default function ComentariosIndicador({ indicadorUuid, comentarios, accio
             className={`${T.campo} resize-none`}
           />
         </label>
-        {error && <p role="alert" className="text-xs font-medium text-[#B42318]">{error}</p>}
+        <Despliegue abierto={!!error} separacion="">
+          {error ? <p role="alert" className="text-xs font-medium text-[#B42318]">{error}</p> : null}
+        </Despliegue>
         <div className="flex justify-end">
-          <button id="pdm-comentar" onClick={enviar} disabled={enviando || texto.trim() === ''} className={T.botonSecChico}>
-            {enviando ? 'Comentando…' : 'Comentar'}
-          </button>
+          <BotonAccion
+            id="pdm-comentar"
+            chico
+            variante="secundaria"
+            fase={fase}
+            inhabilitado={texto.trim() === ''}
+            onClick={enviar}
+            etiquetas={{ reposo: 'Comentar', trabajando: 'Comentando', hecho: 'Comentado' }}
+          />
         </div>
       </div>
     </Seccion>

@@ -35,6 +35,9 @@ import FormularioReporte from './FormularioReporte'
 import { useAbrirEvidencia } from './abrir-evidencia'
 import ComentariosIndicador from './ComentariosIndicador'
 import { Sello, Seccion, SituacionTexto } from './ui'
+import BotonAccion, { Despliegue, useConfirmar, useNuevos } from './Movimiento'
+import { useAvisar } from './Avisos'
+import { Bloque } from './Esqueleto'
 import { T } from './tema'
 
 /** Lo que la ficha necesita saber del seguimiento. Sin esto, la ficha no muestra esta parte. */
@@ -78,7 +81,9 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
           </li>
         ))}
       </ul>
-      {error && <p role="alert" className="mt-1 text-xs font-medium text-[#B42318]">{error}</p>}
+      <Despliegue abierto={!!error} separacion="">
+        {error ? <p role="alert" className="mt-1 text-xs font-medium text-[#B42318]">{error}</p> : null}
+      </Despliegue>
     </div>
   )
 }
@@ -86,13 +91,17 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
 function Validar({ reporte, acciones, onHecho }: {
   reporte: ReporteDetalle
   acciones: AccionesSeguimiento
-  onHecho: () => void
+  /** Se llama con lo que pasó, dicho a una persona, para que quien monta recargue y lo avise. */
+  onHecho: (mensaje: string) => void
 }) {
   const [devolviendo, setDevolviendo] = useState(false)
   const [comentario, setComentario] = useState('')
   // Los archivos que se devuelven: id → qué les pasa. El reporte vuelve completo; lo que no se marca pasa solo a la nueva versión.
   const [marcados, setMarcados] = useState<Record<string, string>>({})
-  const [enviando, setEnviando] = useState<'aprobado' | 'devuelto' | null>(null)
+  const { fase, correr, ocupado } = useConfirmar()
+  // Cuál de los dos botones está trabajando (el otro solo se apaga).
+  const [cual, setCual] = useState<'aprobado' | 'devuelto' | null>(null)
+  const enviando = ocupado ? cual : null
   const [error, setError] = useState<string | null>(null)
 
   const observaciones = Object.entries(marcados).map(([evidencia, motivo]) => ({ evidencia, motivo }))
@@ -103,22 +112,27 @@ function Validar({ reporte, acciones, onHecho }: {
   }
 
   async function enviar(estado: 'aprobado' | 'devuelto') {
-    if (enviando) return
+    if (ocupado) return
     const mal = errorEnValidacion(estado, comentario, estado === 'devuelto' ? observaciones : undefined)
     if (mal) { setError(mal); return }
-    setEnviando(estado)
+    setCual(estado)
     setError(null)
-    const r = await acciones.validarReporte({
-      reporte: reporte.id, estado,
-      comentario: estado === 'devuelto' ? comentario : undefined,
-      observaciones: estado === 'devuelto' && observaciones.length > 0 ? observaciones : undefined,
-    })
-    setEnviando(null)
-    if (!r.ok) { setError(r.error); return }
-    setDevolviendo(false)
-    setComentario('')
-    setMarcados({})
-    onHecho()
+    await correr(
+      () => acciones.validarReporte({
+        reporte: reporte.id, estado,
+        comentario: estado === 'devuelto' ? comentario : undefined,
+        observaciones: estado === 'devuelto' && observaciones.length > 0 ? observaciones : undefined,
+      }),
+      {
+        alTerminar: () => {
+          setDevolviendo(false); setComentario(''); setMarcados({})
+          onHecho(estado === 'aprobado' ? 'Reporte aprobado. Ya cuenta en el cumplimiento.' : 'Reporte devuelto. Quien lo reportó verá el motivo.')
+        },
+        alFallar: setError,
+        // Al recargar, este bloque desaparece (el reporte ya no se puede validar): hasta entonces no vuelve a decir «Aprobar».
+        quedarseHecho: true,
+      },
+    )
   }
 
   if (reporte.estado === 'devuelto') return null
@@ -128,21 +142,26 @@ function Validar({ reporte, acciones, onHecho }: {
       {!devolviendo ? (
         <div className="flex flex-wrap gap-2">
           {reporte.estado === 'pendiente' && (
-            <button id="pdm-aprobar" onClick={() => enviar('aprobado')} disabled={enviando !== null} className={T.botonChico}>
-              {enviando === 'aprobado' ? 'Aprobando…' : 'Aprobar'}
-            </button>
+            <BotonAccion
+              id="pdm-aprobar"
+              chico
+              fase={cual === 'aprobado' ? fase : 'reposo'}
+              inhabilitado={ocupado}
+              onClick={() => enviar('aprobado')}
+              etiquetas={{ reposo: 'Aprobar', trabajando: 'Aprobando', hecho: 'Aprobado' }}
+            />
           )}
           <button
             id="pdm-devolver"
             onClick={() => { setDevolviendo(true); setError(null) }}
-            disabled={enviando !== null}
-            className={T.botonSecChico}
+            disabled={ocupado}
+            className={T.accionSecundariaChica}
           >
             Devolver…
           </button>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="pdm-entra space-y-2">
           <label className="block">
             <span className={T.rotulo}>¿Qué falta o qué está mal?</span>
             <textarea
@@ -172,7 +191,7 @@ function Validar({ reporte, acciones, onHecho }: {
                         <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(ev.bytes)}</span>
                       </label>
                       {marcado && (
-                        <div className="mt-2 space-y-1.5 pl-6">
+                        <div className="pdm-entra mt-2 space-y-1.5 pl-6">
                           <input
                             type="text"
                             value={marcados[ev.id]}
@@ -208,30 +227,33 @@ function Validar({ reporte, acciones, onHecho }: {
           <div className="flex gap-2">
             <button
               onClick={() => { setDevolviendo(false); setComentario(''); setMarcados({}); setError(null) }}
-              disabled={enviando !== null}
-              className={T.botonSecChico}
+              disabled={ocupado}
+              className={T.accionSecundariaChica}
             >
               Cancelar
             </button>
-            <button
+            <BotonAccion
               id="pdm-devolver-confirmar"
+              chico
+              fase={cual === 'devuelto' ? fase : 'reposo'}
+              inhabilitado={comentario.trim().length < 10 || !notasListas}
               onClick={() => enviar('devuelto')}
-              disabled={enviando !== null || comentario.trim().length < 10 || !notasListas}
-              className={T.botonPeligro}
-            >
-              {enviando === 'devuelto' ? 'Devolviendo…' : 'Devolver el reporte'}
-            </button>
+              className="!bg-[#B42318] hover:!bg-[#912018]"
+              etiquetas={{ reposo: 'Devolver el reporte', trabajando: 'Devolviendo', hecho: 'Devuelto' }}
+            />
           </div>
         </div>
       )}
-      {error && <p role="alert" className="mt-1.5 text-xs font-medium text-[#B42318]">{error}</p>}
+      <Despliegue abierto={!!error} separacion="">
+        {error ? <p role="alert" className="mt-1.5 text-xs font-medium text-[#B42318]">{error}</p> : null}
+      </Despliegue>
     </div>
   )
 }
 
-function Version({ r, acciones, onHecho }: { r: ReporteDetalle; acciones: AccionesSeguimiento; onHecho: () => void }) {
+function Version({ r, acciones, onHecho, nueva }: { r: ReporteDetalle; acciones: AccionesSeguimiento; onHecho: (mensaje: string) => void; nueva: boolean }) {
   return (
-    <li className={`relative border-l-2 border-[#DCE0E8] pb-6 pl-5 last:pb-1 ${r.vigente ? '' : 'opacity-70'}`}>
+    <li className={`relative border-l-2 border-[#DCE0E8] pb-6 pl-5 last:pb-1 ${r.vigente ? '' : 'opacity-70'} ${nueva ? 'pdm-nuevo' : ''}`}>
       <span className={`absolute -left-[6px] top-1 h-2.5 w-2.5 rounded-[2px] ${r.vigente ? 'bg-[#192031]' : 'bg-[#B8BFCC]'}`} />
       <p className="text-xs text-[#667085]">
         <span className="font-semibold text-[#192031]">{fechaHoraBogota(r.creado)}</span> · {r.autorNombre}
@@ -265,7 +287,7 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
   const [detalle, setDetalle] = useState<DetalleIndicador | null>(null)
   const [errorCarga, setErrorCarga] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
-  const [aviso, setAviso] = useState<string | null>(null)
+  const avisar = useAvisar()
 
   // Lo que cambia en el servidor (alguien valida, o se reporta) llega aquí como una firma distinta: se vuelve a leer.
   const enAnio = indicador.enAnio
@@ -281,9 +303,11 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
   }, [acciones, indicador.uuid, version, firma])
 
   const recargar = useCallback((mensaje?: string) => {
-    setAviso(mensaje ?? null)
+    if (mensaje) avisar(mensaje)
     setVersion(v => v + 1)
-  }, [])
+  }, [avisar])
+  // Lo que llega después de la primera lectura (una versión nueva) se ilumina un momento: se ve dónde quedó.
+  const nuevas = useNuevos(detalle ? detalle.reportes.map(r => r.id) : null)
 
   const esDeQuienMira = indicador.asignados.some(a => a.usuarioId === yoId)
   // El detalle trae los reportes de todos los años; aquí se muestra el año que se mira. Vienen del más reciente
@@ -296,14 +320,22 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
   return (
     <>
       <Seccion rotulo={`Trazabilidad · ${indicador.anio}`}>
-        {aviso && <p role="status" className={`mb-3 ${T.avisoBien} text-xs font-medium`}>{aviso}</p>}
         {errorCarga ? (
           <div className={`flex items-center justify-between gap-3 ${T.avisoMal}`}>
             <p role="alert" className="text-xs font-medium">{errorCarga}</p>
             <button onClick={() => { setErrorCarga(null); recargar() }} className={T.botonSecChico}>Reintentar</button>
           </div>
         ) : detalle === null ? (
-          <p className="text-xs text-[#667085]">Cargando el seguimiento…</p>
+          // Con la altura de un seguimiento típico (una versión con su valor, su texto y sus archivos): así lo que hay
+          // debajo de esta sección casi no se mueve cuando llega el contenido real.
+          <div role="status" aria-busy="true" className="min-h-[9.5rem] space-y-3">
+            <span className="sr-only">Cargando el seguimiento…</span>
+            <Bloque className="h-3 w-2/5" />
+            <Bloque className="h-4 w-1/4" />
+            <Bloque className="h-3.5 w-3/4" />
+            <Bloque className="h-3.5 w-1/2" />
+            <div className="flex gap-2"><Bloque className="h-7 w-32" /><Bloque className="h-7 w-28" /></div>
+          </div>
         ) : delAnio.length === 0 ? (
           <ol>
             <li className="relative border-l-2 border-transparent pl-5">
@@ -316,7 +348,7 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
           </ol>
         ) : (
           <ol className="space-y-0">
-            {delAnio.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={() => recargar()} />)}
+            {delAnio.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={recargar} nueva={nuevas.has(r.id)} />)}
           </ol>
         )}
       </Seccion>

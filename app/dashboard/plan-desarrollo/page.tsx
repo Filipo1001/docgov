@@ -39,7 +39,8 @@ export const generateMetadata = () => metadataPdm('Resumen')
 export default async function ResumenPage({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
   const acceso = await exigirAccesoPdm()
   const p = await searchParams
-  const plan = await cargarPlanPdm()
+  // El plan y el directorio se piden a la vez: no dependen entre sí, y en serie sumaban dos vueltas de red.
+  const [plan, dir] = await Promise.all([cargarPlanPdm(), cargarDirectorio()])
   const { anioActual } = plan.seguimiento
   const anioInicial = anioDeParametro(p.anio, anioActual)
 
@@ -48,7 +49,6 @@ export default async function ResumenPage({ searchParams }: { searchParams: Prom
   // asignen uno, aquí aparecerá), así que solo un plan ilegible lo manda al aviso.
   if (acceso.nivel === 'responsable') {
     if (!plan.ok) return <PlanNoDisponible seLeyo={false} nivel={acceso.nivel} />
-    const dir = await cargarDirectorio()
     return (
       <MiTrabajoPdm
         indicadores={plan.indicadores}
@@ -64,6 +64,5 @@ export default async function ResumenPage({ searchParams }: { searchParams: Prom
   }
 
   if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
-  const { fichas } = await cargarDirectorio()
-  return <ResumenPdm indicadores={plan.indicadores} fichas={fichas} nivel={acceso.nivel} yoId={acceso.userId} anioActual={anioActual} anioInicial={anioInicial} />
+  return <ResumenPdm indicadores={plan.indicadores} fichas={dir.fichas} nivel={acceso.nivel} yoId={acceso.userId} anioActual={anioActual} anioInicial={anioInicial} />
 }

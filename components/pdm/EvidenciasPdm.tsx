@@ -12,7 +12,7 @@
  * historia, y lo que se conservó ya está en la versión nueva, así que mostrarlo repetiría los mismos archivos.
  */
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icono from '@/components/ui/Icono'
@@ -23,10 +23,11 @@ import { ANIOS_PLAN } from '@/lib/pdm/seguimiento'
 import { describirTamano, type AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import {
   CATEGORIAS, ESTADOS_FILTRO, ETIQUETA_CATEGORIA, ROTULO_CATEGORIA, ROTULO_ESTADO_FILTRO, TAMANO_PAGINA,
-  aParametros, hayFiltros, rangoDePagina,
-  type CategoriaTipo, type EvidenciaFila, type FiltroEvidencias,
+  agrupar, aParametros, hayFiltros, rangoDePagina,
+  type CategoriaTipo, type FiltroEvidencias, type GrupoEvidencia, type IndicadorRelacionado,
 } from '@/lib/pdm/evidencias-armar'
 import type { Evidencias } from '@/lib/pdm/evidencias'
+import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import IconoSector from './IconoSector'
 import { Sello, SituacionTexto } from './ui'
@@ -43,53 +44,114 @@ const GLIFO: Record<CategoriaTipo, typeof Iconos.documentos.adjunto> = {
   excel: Iconos.documentos.archivoHoja,
 }
 
-function Fila({ f, abrir, abriendo }: { f: EvidenciaFila; abrir: (id: string) => void; abriendo: boolean }) {
-  const etiqueta = f.categoria ? ETIQUETA_CATEGORIA[f.categoria] : 'Archivo'
+/** Cuántos indicadores se ven antes de «Ver los N restantes». */
+const VISIBLES = 3
+
+/** Un indicador con su icono de sector, su secretaría y año, y —si ese archivo se devolvió— por qué. */
+function IndicadorDelArchivo({ l }: { l: IndicadorRelacionado }) {
   return (
-    <li className={`grid grid-cols-1 gap-x-4 gap-y-2.5 px-4 py-3.5 sm:px-5 ${COLUMNAS} md:items-center`}>
-      <button
-        onClick={() => abrir(f.id)}
-        disabled={abriendo}
-        className="group flex min-w-0 items-start gap-3 text-left focus-visible:outline-none disabled:opacity-60"
-      >
-        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EDF0F5] text-[#192031] transition-colors group-hover:bg-[#E1E6EE] group-focus-visible:ring-2 group-focus-visible:ring-[#192031]">
-          <Icono glifo={f.categoria ? GLIFO[f.categoria] : Iconos.documentos.adjunto} tamano="md" />
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-[#192031] group-hover:underline" title={f.nombre}>{f.nombre}</span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#667085]">
-            <span className="tabular-nums">{etiqueta} · {describirTamano(f.bytes)}</span>
-            {f.conservada && <Sello>Conservada</Sello>}
-            {f.reemplazada && <Sello>Versión anterior</Sello>}
-          </span>
-          {f.observacion && (
-            <span className="mt-1 flex items-start gap-1.5 text-xs leading-snug text-[#912018]">
-              <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-px shrink-0" />
-              <span><b>Devuelto:</b> «{f.observacion}»</span>
-            </span>
-          )}
-        </span>
-      </button>
-
-      <div className="flex min-w-0 items-start gap-2.5">
-        <IconoSector sector={f.sector} />
-        <div className="min-w-0">
-          <p className="line-clamp-2 text-sm leading-snug text-[#192031]">
-            <span className="font-semibold tabular-nums text-[#667085]">{f.codigo}</span> · {f.indicador}
+    <div className="flex min-w-0 items-start gap-2.5">
+      <IconoSector sector={l.sector} />
+      <div className="min-w-0">
+        <p className="line-clamp-2 text-sm leading-snug text-[#192031] [overflow-wrap:anywhere]">
+          <span className="font-semibold tabular-nums text-[#667085]">{l.codigo}</span> · {l.indicador}
+        </p>
+        <p className="mt-0.5 truncate text-xs text-[#667085]">{l.dependencia} · {l.anio}</p>
+        {l.observacion && (
+          <p className="mt-1 flex items-start gap-1.5 text-xs leading-snug text-[#912018]">
+            <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-px shrink-0" />
+            <span className="min-w-0 [overflow-wrap:anywhere]"><b>Devuelto:</b> «{l.observacion}»</span>
           </p>
-          <p className="mt-0.5 truncate text-xs text-[#667085]">{f.dependencia} · {f.anio}</p>
-          <Link href={`${HREF_INDICADORES}?abrir=${f.indicadorFila}&anio=${f.anio}`} className={`mt-0.5 inline-block text-xs ${T.enlace}`}>
-            Ver indicador
-          </Link>
+        )}
+        <Link href={`${HREF_INDICADORES}?abrir=${l.indicadorFila}&anio=${l.anio}`} className={`mt-0.5 inline-block text-xs ${T.enlace}`}>
+          Ver indicador
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Un documento y los indicadores a los que sirve.
+ *
+ * Una fila por DOCUMENTO: a la izquierda el archivo (una sola celda, que abarca todas las sub-filas), a la derecha
+ * cada indicador al que sirve en su propia sub-fila, alineada con las columnas de la tabla —indicador, quién lo
+ * reportó, cómo va ese reporte—, porque autor, fecha y estado son del reporte de CADA indicador. Si el mismo
+ * archivo se subió por separado en varios reportes (que es como hoy un archivo llega a varios indicadores), aquí
+ * es una sola fila con tantas sub-filas como indicadores: «Respalda a 3 indicadores» y se ven los tres.
+ *
+ * Con más de tres indicadores se pliega («Ver los N restantes»). En una pantalla estrecha las sub-filas se apilan.
+ */
+function FilaDocumento({ g, abrir, abriendo }: { g: GrupoEvidencia; abrir: (id: string) => void; abriendo: boolean }) {
+  const f = g.archivo
+  const [desplegado, setDesplegado] = useState(false)
+  const n = g.lineas.length
+  const visibles = desplegado ? g.lineas : g.lineas.slice(0, VISIBLES)
+  const ocultos = n - visibles.length
+  const conPie = ocultos > 0 || (desplegado && n > VISIBLES)
+  // Filas de la rejilla que ocupa el archivo: el rótulo (si hay varios), cada indicador y el botón de plegar.
+  const filas = visibles.length + (n > 1 ? 1 : 0) + (conPie ? 1 : 0)
+  const etiqueta = f.categoria ? ETIQUETA_CATEGORIA[f.categoria] : 'Archivo'
+
+  return (
+    <li
+      style={{ '--n': filas } as CSSProperties}
+      className={`grid grid-cols-1 gap-x-4 px-4 py-3.5 sm:px-5 ${COLUMNAS} md:[grid-template-rows:repeat(var(--n),auto)]`}
+    >
+      <div className="min-w-0 md:col-start-1 md:[grid-row:1/span_var(--n)] md:self-center">
+        <button
+          onClick={() => abrir(f.id)}
+          disabled={abriendo}
+          // `w-full`: un botón no se estira solo a su celda, y sin eso el nombre largo no se recorta y pisa la columna de al lado.
+          className="group flex w-full min-w-0 items-start gap-3 text-left focus-visible:outline-none disabled:opacity-60"
+        >
+          <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EDF0F5] text-[#192031] transition-colors group-hover:bg-[#E1E6EE] group-focus-visible:ring-2 group-focus-visible:ring-[#192031]">
+            <Icono glifo={f.categoria ? GLIFO[f.categoria] : Iconos.documentos.adjunto} tamano="md" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-[#192031] group-hover:underline" title={f.nombre}>{f.nombre}</span>
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#667085]">
+              <span className="tabular-nums">{etiqueta} · {describirTamano(f.bytes)}</span>
+              {n > 1 && <Sello>En {n} indicadores</Sello>}
+            </span>
+          </span>
+        </button>
+      </div>
+
+      {n > 1 && (
+        <p className="mt-3 text-xs font-semibold text-[#192031] md:col-span-3 md:mt-0 md:pb-2">Respalda a {n} indicadores</p>
+      )}
+
+      {visibles.map((l, k) => (
+        <div
+          key={`${l.indicadorFila}:${l.anio}`}
+          className={`grid min-w-0 gap-x-4 gap-y-2 py-3 md:col-span-3 md:grid-cols-subgrid md:items-center ${n > 1 || k > 0 ? 'border-t border-[#E6E9EF]' : ''} ${k >= VISIBLES ? 'pdm-entra' : ''} ${n === 1 ? 'first:pt-0 last:pb-0' : ''}`}
+        >
+          <IndicadorDelArchivo l={l} />
+          <div className="min-w-0 text-xs leading-snug">
+            <p className="truncate font-medium text-[#192031]">{l.autor}</p>
+            <p className="mt-0.5 text-[#667085]">{fechaHoraBogota(l.reportadoEn)}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {l.estado && <SituacionTexto situacion={l.estado} />}
+            {l.conservada && <Sello>Conservada</Sello>}
+            {l.reemplazada && <Sello>Versión anterior</Sello>}
+          </div>
         </div>
-      </div>
+      ))}
 
-      <div className="min-w-0 text-xs leading-snug">
-        <p className="truncate font-medium text-[#192031]">{f.autor}</p>
-        <p className="mt-0.5 text-[#667085]">{fechaHoraBogota(f.reportadoEn)}</p>
-      </div>
-
-      <div>{f.estado && <SituacionTexto situacion={f.estado} />}</div>
+      {conPie && (
+        <div className="border-t border-[#E6E9EF] pt-2.5 md:col-span-3">
+          <button
+            onClick={() => setDesplegado(v => !v)}
+            aria-expanded={desplegado}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#192031] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031]"
+          >
+            {desplegado ? 'Ver menos' : `Ver los ${ocultos} restantes`}
+            <Icono glifo={Iconos.accion.desplegar} tamano="sm" className={`transition-transform duration-200 ${desplegado ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      )}
     </li>
   )
 }
@@ -109,11 +171,19 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
   const { abrir, abriendo, error } = useAbrirEvidencia(acciones)
   const filtroRef = useRef(filtro)
   useEffect(() => { filtroRef.current = filtro })
+  const lista = useRef<HTMLElement>(null)
 
-  /** Cambia filtros: vuelve a la primera página (salvo que el cambio sea de página). */
+  /**
+   * Cambia filtros: vuelve a la primera página (salvo que el cambio sea de página).
+   *
+   * Sin `scroll`: por defecto `router.push` sube la pantalla al inicio, y quien filtra o pasa de página estando abajo
+   * veía la pantalla dar un salto. Al cambiar de PÁGINA sí se lleva, con suavidad, al inicio de la lista (los archivos
+   * nuevos empiezan ahí); al filtrar, la persona se queda donde estaba.
+   */
   function ir(cambios: Partial<FiltroEvidencias>) {
     const siguiente = { ...filtroRef.current, pagina: 1, ...cambios }
-    empezar(() => router.push(`${base}?${aParametros(siguiente)}`))
+    empezar(() => router.push(`${base}?${aParametros(siguiente)}`, { scroll: false }))
+    if (cambios.pagina !== undefined) lista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   // La búsqueda espera a que se deje de escribir.
@@ -121,16 +191,19 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
     if (texto.trim() === filtroRef.current.q) return
     const t = setTimeout(() => {
       const siguiente = { ...filtroRef.current, pagina: 1, q: texto.trim() }
-      empezar(() => router.push(`${base}?${aParametros(siguiente)}`))
+      empezar(() => router.push(`${base}?${aParametros(siguiente)}`, { scroll: false }))
     }, 450)
     return () => clearTimeout(t)
   }, [texto, router, base])
 
   const { desde, hasta, paginas } = rangoDePagina(datos.pagina, datos.total)
   const filtrado = hayFiltros(filtro)
+  // Los archivos que son el mismo documento se muestran juntos, en una sola fila con sus indicadores.
+  const grupos = agrupar(datos.filas)
+  const hayJuntos = grupos.length < datos.filas.length
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <Pagina>
       <EncabezadoSeccion
         titulo="Evidencias"
         detalle="Los archivos que respaldan cada reporte"
@@ -188,7 +261,7 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-[#4A5568]">
+          <label className="-my-1.5 flex cursor-pointer items-center gap-2 py-1.5 text-sm text-[#4A5568]">
             <input
               id="pdm-evidencias-historico"
               type="checkbox"
@@ -221,22 +294,29 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
         </div>
       ) : (
         <>
-          <section className={`overflow-hidden ${T.panel} transition-opacity ${pendiente ? 'opacity-60' : ''}`} aria-busy={pendiente}>
+          {/* Con otros resultados (otro filtro u otra página) la lista se vuelve a montar y llega con el cruce suave de siempre. */}
+          <section
+            ref={lista}
+            key={`${filtro.q}|${filtro.anio}|${filtro.tipo}|${filtro.estado}|${filtro.dependencia}|${filtro.historico}|${datos.pagina}`}
+            className={`pdm-entra scroll-mt-24 overflow-hidden ${T.panel} transition-opacity ${pendiente ? 'opacity-60' : ''}`}
+            aria-busy={pendiente}
+          >
             <div className={`hidden gap-x-4 border-b ${T.regla} bg-[#F7F8FA] px-5 py-2 md:grid ${COLUMNAS}`}>
               <span className={T.rotulo}>Archivo</span>
-              <span className={T.rotulo}>Indicador</span>
+              <span className={T.rotulo}>Respalda a</span>
               <span className={T.rotulo}>Reportó</span>
               <span className={T.rotulo}>Estado del reporte</span>
             </div>
             <ul className={`divide-y ${T.divide}`}>
-              {datos.filas.map(f => <Fila key={f.id} f={f} abrir={abrir} abriendo={abriendo !== null} />)}
+              {grupos.map(g => <FilaDocumento key={g.archivo.id} g={g} abrir={abrir} abriendo={abriendo !== null} />)}
             </ul>
           </section>
 
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#667085]">
             <span>
-              Mostrando <b className="tabular-nums text-[#192031]">{desde}–{hasta}</b> de <b className="tabular-nums text-[#192031]">{datos.total}</b>
+              Mostrando <b className="tabular-nums text-[#192031]">{desde}–{hasta}</b> de <b className="tabular-nums text-[#192031]">{datos.total}</b> {datos.total === 1 ? 'archivo' : 'archivos'}
               {datos.total > TAMANO_PAGINA && <> · página <span className="tabular-nums">{datos.pagina}</span> de <span className="tabular-nums">{paginas}</span></>}
+              {hayJuntos && <> · lo que es el mismo documento se muestra junto</>}
             </span>
             {paginas > 1 && (
               <div className="flex gap-2">
@@ -251,6 +331,6 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, acciones = 
           </div>
         </>
       )}
-    </div>
+    </Pagina>
   )
 }
