@@ -8,7 +8,8 @@
 
 import type { ReactNode } from 'react'
 import { ESTADOS, type Estado } from '@/lib/pdm/plan'
-import { SITUACIONES, type SituacionAnio } from '@/lib/pdm/seguimiento'
+import { SITUACIONES, type EstadoReporte, type SituacionAnio } from '@/lib/pdm/seguimiento'
+import { LUCES, LUZ_DE, PALABRA_DE, type Luz } from '@/lib/pdm/semaforo'
 import { T } from './tema'
 
 /** Rótulo en mayúscula sostenida, como los de los formatos oficiales. */
@@ -47,6 +48,34 @@ export function SituacionTexto({ situacion, className = '' }: { situacion: Situa
       <Marcador clase={s.punto} hueco={situacion === 'falta'} />
       {s.rotulo}
     </span>
+  )
+}
+
+const COLOR_DE_LUZ: Record<Luz, string> = {
+  rojo: 'border-[#B42318] bg-[#B42318]',
+  ambar: 'border-[#B7791F] bg-[#B7791F]',
+  verde: 'border-[#2E7D5B] bg-[#2E7D5B]',
+}
+
+/**
+ * El semáforo de un reporte: tres cuadritos en fila —rojo, ámbar, verde— con solo uno encendido, la palabra de su estado
+ * y, debajo, a quién le toca moverse (ver `lib/pdm/semaforo.ts`). La palabra nunca falta: el color solo no dice nada a
+ * quien no lo distingue; el cuadrito encendido también dice la posición.
+ */
+export function SemaforoReporte({ estado, linea }: { estado: EstadoReporte; linea: string | null }) {
+  const luz = LUZ_DE[estado]
+  return (
+    <div className="min-w-0">
+      <p className="flex items-center gap-2 text-sm font-medium text-[#192031]">
+        <span aria-hidden className="inline-flex shrink-0 gap-[3px]">
+          {LUCES.map(l => (
+            <i key={l} className={`inline-block h-2.5 w-2.5 rounded-[2px] border ${l === luz ? COLOR_DE_LUZ[l] : 'border-[#C5CBD6] bg-transparent'}`} />
+          ))}
+        </span>
+        {PALABRA_DE[estado]}
+      </p>
+      {linea && <p className="mt-0.5 text-xs leading-snug text-[#667085] [overflow-wrap:anywhere]">{linea}</p>}
+    </div>
   )
 }
 

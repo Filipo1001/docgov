@@ -2,8 +2,8 @@ import 'server-only'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { Indicador } from './plan'
 import {
-  aplicarBusqueda, armarFilasIndicador, indicadoresConEvidencia, nombresPedibles, rangoDePagina, relacionar,
-  type FilaDeVista, type FilaIndicador, type FilaRelacionable, type FiltroEvidencias, type IndicadorRelacionado,
+  SIN_CONTEO, aplicarBusqueda, armarFilasIndicador, contarPorEstado, indicadoresConEvidencia, nombresPedibles, rangoDePagina, relacionar,
+  type ConteoEstados, type FilaDeVista, type FilaIndicador, type FilaRelacionable, type FiltroEvidencias, type IndicadorRelacionado,
 } from './evidencias-armar'
 
 /**
@@ -27,6 +27,8 @@ export interface Evidencias {
   filas: FilaIndicador[]
   /** Cuántos indicadores cumplen el filtro (no solo los de esta página). */
   total: number
+  /** Cuántos hay en cada estado del semáforo, con la secretaría y la búsqueda puestas pero sin el filtro de estado. */
+  conteo: ConteoEstados
   /** La página que de verdad se trajo (si se pidió una que no existe, la última). */
   pagina: number
 }
@@ -37,7 +39,7 @@ const COLUMNAS =
 const COLUMNAS_RELACIONADAS =
   'id, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, estado_reporte, nombre, bytes, tipo'
 
-const FALLO: Evidencias = { ok: false, filas: [], total: 0, pagina: 1 }
+const FALLO: Evidencias = { ok: false, filas: [], total: 0, conteo: SIN_CONTEO, pagina: 1 }
 
 /** Tope de seguridad de la búsqueda por tandas: 20 tandas de 1.000 archivos coincidentes. */
 const MAX_TANDAS = 20
@@ -66,9 +68,10 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
 
     // 2 · Los indicadores con evidencia en el año, filtrados y ordenados; se muestra una página.
     const todos = indicadoresConEvidencia(indicadores, f, ids)
+    const conteo = contarPorEstado(indicadores, f, ids)
     const { desde, hasta, pagina } = rangoDePagina(f.pagina, todos.length)
     const deLaPagina = todos.slice(desde === 0 ? 0 : desde - 1, hasta)
-    if (deLaPagina.length === 0) return { ok: true, filas: [], total: todos.length, pagina }
+    if (deLaPagina.length === 0) return { ok: true, filas: [], total: todos.length, conteo, pagina }
 
     // 3 · Los archivos vigentes de esos indicadores en ese año.
     const a = await supabase
@@ -102,7 +105,7 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
       else relaciones = relacionar(archivos, (otras.data ?? []) as unknown as FilaRelacionable[])
     }
 
-    return { ok: true, filas: armarFilasIndicador(deLaPagina, f.anio, archivos, relaciones), total: todos.length, pagina }
+    return { ok: true, filas: armarFilasIndicador(deLaPagina, f.anio, archivos, relaciones), total: todos.length, conteo, pagina }
   } catch (e) {
     console.error('[pdm/evidencias] excepción:', e)
     return FALLO

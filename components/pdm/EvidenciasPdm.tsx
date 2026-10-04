@@ -22,8 +22,10 @@ import { Iconos } from '@/lib/iconos'
 import { HREF_EVIDENCIAS, HREF_INDICADORES } from '@/lib/pdm/menu'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import { describirTamano, type AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
+import { SITUACIONES } from '@/lib/pdm/seguimiento'
+import { ESTADOS_POR_URGENCIA, PALABRA_DE, lineaDeSemaforo } from '@/lib/pdm/semaforo'
 import {
-  ESTADOS_FILTRO, ETIQUETA_CATEGORIA, ROTULO_ESTADO_FILTRO, TAMANO_PAGINA,
+  ETIQUETA_CATEGORIA, TAMANO_PAGINA,
   aParametros, hayFiltros, rangoDePagina, resumenDeTipos,
   type ArchivoDeIndicador, type CategoriaTipo, type FilaIndicador, type FiltroEvidencias,
 } from '@/lib/pdm/evidencias-armar'
@@ -33,7 +35,7 @@ import IconoSector from './IconoSector'
 import Pagina from './Pagina'
 import SelectorAnio from './SelectorAnio'
 import { Despliegue } from './Movimiento'
-import { Sello, SituacionTexto } from './ui'
+import { Marcador, Sello, SemaforoReporte, SituacionTexto } from './ui'
 import { useAbrirEvidencia } from './abrir-evidencia'
 import { ACCIONES_SEGUIMIENTO_REALES } from './acciones-seguimiento-reales'
 import { T } from './tema'
@@ -48,6 +50,14 @@ const GLIFO: Record<CategoriaTipo, typeof Iconos.documentos.adjunto> = {
   imagen: Iconos.documentos.archivoImagen,
   excel: Iconos.documentos.archivoHoja,
 }
+
+/** El chip de un filtro: el mismo de las listas de indicadores. */
+const claseChip = (activo: boolean) =>
+  `shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-1 ${
+    activo
+      ? 'border-[#192031] bg-[#192031] text-white'
+      : 'border-[#C5CBD6] bg-white text-[#4A5568] hover:border-[#192031] hover:text-[#192031]'
+  }`
 
 /** Cuántos indicadores se nombran en «También respalda a…» antes de «y N más». */
 const MAX_TAMBIEN = 3
@@ -180,13 +190,20 @@ function FilaDeIndicador({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir
       </div>
 
       {/* Apiladas, «Reportó» y el estado van lado a lado; con cuatro columnas (`lg:contents`) cada una vuelve a ser su celda. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 lg:contents">
+      <div className="flex flex-col gap-y-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-x-4 lg:contents">
         <div className="min-w-0 text-xs leading-snug">
           <p className="truncate font-medium text-[#192031]">{fila.autor}</p>
           <p className="mt-0.5 text-[#667085]">{fila.reportadoEn ? fechaHoraBogota(fila.reportadoEn) : ''}</p>
         </div>
 
-        <div>{fila.estado && <SituacionTexto situacion={fila.estado} />}</div>
+        <div className="min-w-0">
+          {fila.estado && (
+            <SemaforoReporte
+              estado={fila.estado}
+              linea={lineaDeSemaforo(fila.estado, { autor: fila.autor, dependencia: fila.dependencia, validador: fila.validador })}
+            />
+          )}
+        </div>
       </div>
     </li>
   )
@@ -265,24 +282,40 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, anioActual,
           />
         </label>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <label className="block">
-            <span className={T.rotulo}>Estado del reporte</span>
-            <select id="pdm-evidencias-estado" value={filtro.estado ?? ''} onChange={e => ir({ estado: (ESTADOS_FILTRO.find(s => s === e.target.value) ?? null) })} className={`${T.campo} mt-1.5`}>
-              <option value="">Todos</option>
-              {ESTADOS_FILTRO.map(s => <option key={s} value={s}>{ROTULO_ESTADO_FILTRO[s]}</option>)}
+        {/* Cada color es un filtro, con cuántos indicadores hay en él. Cuentan con la secretaría y la búsqueda puestas, pero sin el
+            estado elegido: así se ve cuántos habría al pasar de uno a otro. */}
+        <div role="group" aria-label="Filtrar por estado del reporte" className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
+          <button
+            id="pdm-evidencias-estado-todos"
+            onClick={() => ir({ estado: null })}
+            aria-pressed={filtro.estado === null}
+            className={claseChip(filtro.estado === null)}
+          >
+            Todos <span className="ml-1 tabular-nums opacity-70">{datos.conteo.devuelto + datos.conteo.pendiente + datos.conteo.aprobado}</span>
+          </button>
+          {ESTADOS_POR_URGENCIA.map(e => (
+            <button
+              key={e}
+              id={`pdm-evidencias-estado-${e}`}
+              onClick={() => ir({ estado: filtro.estado === e ? null : e })}
+              aria-pressed={filtro.estado === e}
+              className={`${claseChip(filtro.estado === e)} inline-flex items-center gap-1.5`}
+            >
+              <Marcador clase={SITUACIONES[e].punto} />
+              {PALABRA_DE[e]} <span className="tabular-nums opacity-70">{datos.conteo[e]}</span>
+            </button>
+          ))}
+        </div>
+
+        {dependencias.length > 1 && (
+          <label className="block sm:max-w-xs">
+            <span className={T.rotulo}>Secretaría</span>
+            <select id="pdm-evidencias-dependencia" value={filtro.dependencia ?? ''} onChange={e => ir({ dependencia: e.target.value || null })} className={`${T.campo} mt-1.5`}>
+              <option value="">Todas</option>
+              {dependencias.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </label>
-          {dependencias.length > 1 && (
-            <label className="block">
-              <span className={T.rotulo}>Secretaría</span>
-              <select id="pdm-evidencias-dependencia" value={filtro.dependencia ?? ''} onChange={e => ir({ dependencia: e.target.value || null })} className={`${T.campo} mt-1.5`}>
-                <option value="">Todas</option>
-                {dependencias.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </label>
-          )}
-        </div>
+        )}
 
         {filtrado && (
           <p className="text-right">

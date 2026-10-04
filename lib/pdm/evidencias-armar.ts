@@ -1,6 +1,7 @@
 import { nombrePropio } from './personas'
 import type { Indicador } from './plan'
-import { anioDeParametro, type EstadoReporte } from './seguimiento'
+import { anioDeParametro, type EstadoReporte, type ReporteAnio } from './seguimiento'
+import { ESTADOS_POR_URGENCIA } from './semaforo'
 
 /**
  * La vista de evidencias: lo que se pregunta y lo que se pinta, sin leer nada.
@@ -296,6 +297,8 @@ export interface FilaIndicador {
   autor: string
   /** ISO: cuándo se hizo el último reporte. */
   reportadoEn: string
+  /** Quién validó el último reporte (aprobó o devolvió), ya en forma de nombre propio; `null` si nadie lo ha validado. */
+  validador: string | null
   /** Los archivos vigentes del año, del más reciente al más antiguo. Uno solo: se muestra el archivo; varios: una carpeta. */
   archivos: ArchivoDeIndicador[]
 }
@@ -313,19 +316,51 @@ export function indicadoresConEvidencia(
   f: Pick<FiltroEvidencias, 'anio' | 'estado' | 'dependencia'>,
   ids: ReadonlySet<string> | null,
 ): Indicador[] {
-  const con: { i: Indicador; creado: string }[] = []
+  return conEvidencia(lista, f, ids)
+    .filter(x => f.estado === null || x.r.estado === f.estado)
+    .sort((a, b) => (a.r.creado < b.r.creado ? 1 : a.r.creado > b.r.creado ? -1 : a.i.id - b.i.id))
+    .map(x => x.i)
+}
+
+/** Los indicadores con evidencia en el año, con su último reporte, ANTES de filtrar por estado (el recuento lo necesita). */
+function conEvidencia(
+  lista: Indicador[],
+  f: Pick<FiltroEvidencias, 'anio' | 'dependencia'>,
+  ids: ReadonlySet<string> | null,
+): { i: Indicador; r: ReporteAnio }[] {
+  const con: { i: Indicador; r: ReporteAnio }[] = []
   for (const i of lista) {
     const r = i.anios.find(a => a.anio === f.anio)?.enAnio?.reporte
     if (!r || r.nEvidencias < 1) continue
     if (f.dependencia !== null && i.dependencia !== f.dependencia) continue
-    if (f.estado !== null && r.estado !== f.estado) continue
     if (ids !== null && !ids.has(i.uuid)) continue
-    con.push({ i, creado: r.creado })
+    con.push({ i, r })
   }
   return con
-    .sort((a, b) => (a.creado < b.creado ? 1 : a.creado > b.creado ? -1 : a.i.id - b.i.id))
-    .map(x => x.i)
 }
+
+/** Cuántos indicadores hay en cada estado del semáforo. */
+export type ConteoEstados = Record<EstadoReporte, number>
+
+export const SIN_CONTEO: ConteoEstados = { devuelto: 0, pendiente: 0, aprobado: 0 }
+
+/**
+ * Cuántos indicadores con evidencia hay en cada estado, con la secretaría y la búsqueda puestas pero SIN el filtro de
+ * estado: son los contadores de los chips, que dicen cuántos habría si se eligiera cada uno (si ya contaran solo los del
+ * estado elegido, los otros dirían «0» y no servirían para cambiar de uno a otro).
+ */
+export function contarPorEstado(
+  lista: Indicador[],
+  f: Pick<FiltroEvidencias, 'anio' | 'dependencia'>,
+  ids: ReadonlySet<string> | null,
+): ConteoEstados {
+  const c: ConteoEstados = { ...SIN_CONTEO }
+  for (const { r } of conEvidencia(lista, f, ids)) c[r.estado]++
+  return c
+}
+
+/** Los estados que se ofrecen como chips, de lo que más urge a lo que menos. */
+export { ESTADOS_POR_URGENCIA }
 
 /** Arma las filas de una página: cada indicador con SUS archivos de ese año (los vigentes). */
 export function armarFilasIndicador(
@@ -355,6 +390,7 @@ export function armarFilasIndicador(
       estado: r?.estado ?? null,
       autor: r ? nombrePropio(r.autorNombre) : '',
       reportadoEn: r?.creado ?? '',
+      validador: r?.validadorNombre && r.validadorNombre.trim() !== '' ? nombrePropio(r.validadorNombre) : null,
       archivos: propios.map(a => ({
         id: a.id,
         reporteId: a.reporte_id,
