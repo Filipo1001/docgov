@@ -50,6 +50,15 @@ export function SituacionTexto({ situacion, className = '' }: { situacion: Situa
   )
 }
 
+/** Un sello pequeño con borde, para marcar algo («Corrección», «Versión anterior», «Conservada»). */
+export function Sello({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-[4px] border border-[#C5CBD6] bg-white px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.1em] text-[#556072]">
+      {children}
+    </span>
+  )
+}
+
 /** Un panel: la unidad con que se ordena toda pantalla. Con rótulo opcional y regla debajo. */
 export function Panel({ titulo, nota, acciones, className = '', sinRelleno = false, children }: {
   titulo?: string

@@ -86,11 +86,13 @@ export interface SeccionPdm {
 const BASE = ITEM_PLAN_DESARROLLO.href
 export const HREF_INDICADORES = `${BASE}/indicadores`
 export const HREF_REPORTES = `${BASE}/reportes`
+export const HREF_EVIDENCIAS = `${BASE}/evidencias`
 export const HREF_RESPONSABLES = `${BASE}/responsables`
 export const SECCIONES_PDM: SeccionPdm[] = [
   { href: BASE, rotulo: 'Resumen', exacta: true },
   { href: HREF_INDICADORES, rotulo: 'Indicadores' },
   { href: HREF_REPORTES, rotulo: 'Reportes' },
+  { href: HREF_EVIDENCIAS, rotulo: 'Evidencias' },
   { href: HREF_RESPONSABLES, rotulo: 'Responsables' },
 ]
 
@@ -100,6 +102,8 @@ export const SECCIONES_PDM: SeccionPdm[] = [
  *   · «Responsables» (el directorio de personas) y «Reportes» (cómo va cada secretaría en el año):
  *     quienes gestionan y Control Interno. Quien solo responde por indicadores ve el estado de los
  *     suyos en «Indicadores».
+ *   · «Evidencias» es para todos: cada quien recorre los archivos que la base le deja ver (un responsable
+ *     los suyos, una secretaría los de su dependencia, Control Interno y el administrador todos).
  *   · La primera pestaña es «Resumen» (el tablero del plan) salvo para quien solo responde por indicadores:
  *     para él es «Mi trabajo», la misma ruta con otra pantalla.
  */

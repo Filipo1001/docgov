@@ -32,8 +32,9 @@ import {
   type AccionesSeguimiento, type DetalleIndicador, type EvidenciaVista, type ReporteDetalle,
 } from '@/lib/pdm/seguimiento-acciones'
 import FormularioReporte from './FormularioReporte'
+import { useAbrirEvidencia } from './abrir-evidencia'
 import ComentariosIndicador from './ComentariosIndicador'
-import { Seccion, SituacionTexto } from './ui'
+import { Sello, Seccion, SituacionTexto } from './ui'
 import { T } from './tema'
 
 /** Lo que la ficha necesita saber del seguimiento. Sin esto, la ficha no muestra esta parte. */
@@ -48,36 +49,8 @@ export interface ContextoSeguimiento {
 /** Quien reporta es quien tiene el indicador a su cargo y no es el administrador ni Control Interno. */
 const reportaPorSuCuenta = (nivel: NivelPdm) => nivel === 'responsable' || nivel === 'coordinador'
 
-function abrirVentana(): Window | null {
-  const w = window.open('about:blank', '_blank')
-  if (w) w.opener = null
-  return w
-}
-
-/** Un sello pequeño con borde, para marcar una versión («Corrección», «Versión anterior»). */
-function Sello({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-[4px] border border-[#C5CBD6] bg-white px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.1em] text-[#556072]">
-      {children}
-    </span>
-  )
-}
-
 function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: AccionesSeguimiento }) {
-  const [abriendo, setAbriendo] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  async function abrir(id: string) {
-    setError(null)
-    setAbriendo(id)
-    // La ventana se abre YA, en el clic: si se abriera después de esperar al servidor, el navegador la bloquearía.
-    const ventana = abrirVentana()
-    const r = await acciones.urlEvidencia(id)
-    setAbriendo(null)
-    if (!r.ok) { ventana?.close(); setError(r.error); return }
-    if (ventana) ventana.location.assign(r.datos.url)
-    else window.location.assign(r.datos.url)
-  }
+  const { abrir, abriendo, error } = useAbrirEvidencia(acciones)
 
   if (lista.length === 0) return null
   return (

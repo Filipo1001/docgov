@@ -37,6 +37,7 @@
  * datos y la redirección por sesión vencida: no hay un segundo login.
  */
 
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Icono from '@/components/ui/Icono'
@@ -76,6 +77,21 @@ export function BarraPdm({
   secciones?: SeccionPdm[]
 }) {
   const activa = seccionActiva(ruta)
+
+  // En un teléfono las pestañas no caben y la barra se desliza: la activa tiene que quedar a la vista al entrar.
+  // Se mueve la barra (no la página, que es lo que haría `scrollIntoView`).
+  const lista = useRef<HTMLUListElement>(null)
+  const pestana = useRef<HTMLAnchorElement>(null)
+  useEffect(() => {
+    const ul = lista.current
+    const a = pestana.current
+    if (!ul || !a) return
+    const visibleDesde = ul.scrollLeft
+    const visibleHasta = visibleDesde + ul.clientWidth
+    if (a.offsetLeft < visibleDesde || a.offsetLeft + a.offsetWidth > visibleHasta) {
+      ul.scrollTo({ left: Math.max(0, a.offsetLeft + a.offsetWidth - ul.clientWidth + 16) })
+    }
+  }, [activa, secciones.length])
 
   return (
     <header className="sticky top-0 z-30 bg-[#192031] text-white">
@@ -131,12 +147,13 @@ export function BarraPdm({
       </div>
 
       <nav aria-label="Secciones del plan" className="mx-auto max-w-7xl px-4 md:px-8">
-        <ul className="flex gap-1 overflow-x-auto">
+        <ul ref={lista} className="relative flex gap-1 overflow-x-auto">
           {secciones.map(s => {
             const esta = s.href === activa
             return (
               <li key={s.href} className="shrink-0">
                 <Link
+                  ref={esta ? pestana : undefined}
                   href={s.href}
                   aria-current={esta ? 'page' : undefined}
                   className={`block border-b-2 px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:bg-white/10 ${

@@ -54,6 +54,8 @@ import {
   // Sectores y líneas del Plan de Desarrollo
   HeartHandshake, Leaf, Sprout, HeartPulse, GraduationCap, MonitorSmartphone, Shield, Scale, Trophy,
   Drama, Droplets, Store, Map, Zap, Route, House, TreePine, Handshake,
+  // Tipos de archivo de las evidencias
+  FileImage,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -93,6 +95,11 @@ export const Iconos = {
     expediente: FolderOpen,
     descargar: Download,
     subir: Upload,
+    /** Los tipos de archivo que se admiten como evidencia: el icono dice qué es antes de abrirlo. */
+    archivoPdf: FileText,
+    archivoWord: FileText,
+    archivoImagen: FileImage,
+    archivoHoja: FileSpreadsheet,
   },
 
   estado: {
