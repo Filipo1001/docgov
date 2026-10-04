@@ -39,6 +39,7 @@ import { Seccion } from './ui'
 import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
 import ZonaEvidencias from './ZonaEvidencias'
 import { T } from './tema'
+import { nombrePropio } from '@/lib/pdm/personas'
 
 /** El borde rojo de un campo al que le falta algo. `!` porque el campo ya trae su borde gris. */
 const CAMPO_MAL = '!border-[#B42318] focus:!ring-[#B42318]'
@@ -246,7 +247,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
     <Seccion rotulo={titulo}>
       {modo === 'responder' && vigente && (
         <p className={`mb-3 text-xs leading-relaxed ${T.avisoMal}`}>
-          <b>La secretaría lo devolvió{vigente.validaciones.at(-1)?.validadorNombre ? ` (${vigente.validaciones.at(-1)!.validadorNombre})` : ''}:</b>{' '}
+          <b>La secretaría lo devolvió{vigente.validaciones.at(-1)?.validadorNombre ? ` (${nombrePropio(vigente.validaciones.at(-1)!.validadorNombre)})` : ''}:</b>{' '}
           {vigente.validaciones.at(-1)?.comentario ?? 'sin comentario'}
         </p>
       )}
@@ -331,7 +332,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
                       <span className="shrink-0 text-xs text-[#912018]">No se conserva</span>
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-[#912018]">
-                      Devuelto por {a.observacion.por}: «{a.observacion.motivo}». Reemplázalo con uno nuevo o déjalo fuera.
+                      Devuelto por {nombrePropio(a.observacion.por)}: «{a.observacion.motivo}». Reemplázalo con uno nuevo o déjalo fuera.
                     </p>
                   </li>
                 ) : (
@@ -344,7 +345,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
                         onChange={() => alternarConservado(a.id)}
                         className="h-4 w-4 shrink-0 accent-[#192031]"
                       />
-                      <span className={`min-w-0 flex-1 truncate ${conservar.has(a.id) ? 'text-[#192031]' : 'text-[#98A2B3] line-through'}`}>{a.nombre}</span>
+                      <span className={`min-w-0 flex-1 truncate ${conservar.has(a.id) ? 'text-[#192031]' : 'text-[#667085] line-through'}`}>{a.nombre}</span>
                       <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(a.bytes)}</span>
                       <span className="shrink-0 text-xs font-medium text-[#556072]">{conservar.has(a.id) ? 'Se conserva' : 'Se quita'}</span>
                     </label>

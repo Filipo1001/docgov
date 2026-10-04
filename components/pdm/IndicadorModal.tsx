@@ -46,6 +46,7 @@ import type { MotivoSinVincular, PersonaFicha } from '@/lib/pdm/personas'
 import type { AsignadoVista } from '@/lib/pdm/asignados'
 import type { Resultado } from '@/lib/pdm/acciones'
 import { fechaHoraBogota, type EntradaHistorial } from '@/lib/pdm/historial'
+import { nombrePropio } from '@/lib/pdm/personas'
 
 const NOTA_SIN_USUARIO: Record<MotivoSinVincular, string> = {
   planta: 'Personal de planta. Aún no tiene usuario en la plataforma.',
@@ -170,7 +171,7 @@ export default function IndicadorModal({
           <Seccion rotulo={`Avance validado · ${indicador.anio}`}>
             <div className="flex items-end justify-between gap-4">
               {indicador.avance === null ? (
-                <p className="text-2xl font-semibold leading-none tracking-tight text-[#98A2B3]">
+                <p className="text-2xl font-semibold leading-none tracking-tight text-[#667085]">
                   Sin avance validado
                   <span className="ml-2 text-base font-medium">· meta {fmt(indicador.meta)}</span>
                 </p>
@@ -193,10 +194,11 @@ export default function IndicadorModal({
                 const actual = a.anio === indicador.anio
                 const contenido = (
                   <>
-                    <span className={T.rotulo}>{a.anio}</span>
+                    {/* Sobre el fondo teñido del año elegido, el gris de apoyo (#667085) queda en 4,4:1: se oscurece un paso. */}
+                    <span className={`${T.rotulo} ${actual ? '!text-[#556072]' : ''}`}>{a.anio}</span>
                     <span className="mt-1 block text-sm font-semibold tabular-nums text-[#192031]">
                       {a.avance === null ? '—' : fmt(a.avance)}
-                      <span className="font-normal text-[#667085]"> / {a.meta === null ? 'sin meta' : fmt(a.meta)}</span>
+                      <span className={`font-normal ${actual ? 'text-[#556072]' : 'text-[#667085]'}`}> / {a.meta === null ? 'sin meta' : fmt(a.meta)}</span>
                     </span>
                     <span className="mt-1 block min-h-[1rem]">{a.enAnio && <SituacionTexto situacion={a.enAnio.situacion} className="text-[11px]" />}</span>
                   </>
@@ -241,11 +243,11 @@ export default function IndicadorModal({
           >
             <div className={`rounded-lg border px-4 py-3 ${huerfano ? 'border-[#F1C0BB] bg-[#FDF3F2]' : 'border-[#DCE0E8] bg-[#F7F8FA]'}`}>
               {!huerfano && persona && 'nombre' in persona ? (
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   <Avatar nombre={persona.nombre} fotoUrl={persona.fotoUrl} />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#192031]">{persona.nombre}</p>
-                    <p className="text-xs text-[#667085]">{persona.secretaria ?? 'Sin secretaría'}</p>
+                    <p className="text-sm font-semibold leading-5 text-[#192031]">{persona.nombre}</p>
+                    <p className="text-xs leading-4 text-[#667085]">{persona.secretaria ?? 'Sin secretaría'}</p>
                     <LineaContrato contrato={persona.contrato} />
                     {nombraAlgo && (tipoResponsable(indicador.responsable) !== 'persona' || !coincideNombre(persona.nombre, indicador.responsable)) && (
                       <p className="mt-0.5 text-[11px] text-[#667085]">En el archivo figuraba «{indicador.responsable}»</p>
@@ -278,10 +280,10 @@ export default function IndicadorModal({
                         {apoyos.map(a => (
                           <li key={a.usuarioId}>
                             <div className="flex items-center gap-3">
-                              <Avatar nombre={a.nombre} fotoUrl={a.fotoUrl} tamano="sm" apagado={!a.activo} />
+                              <Avatar nombre={a.nombre} fotoUrl={a.fotoUrl} tamano={a.grupo ? 'md' : 'sm'} apagado={!a.activo} />
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium text-[#192031]">{a.nombre}</span>
-                                {a.grupo && <span className="block truncate text-xs text-[#667085]">Por el grupo «{a.grupo}»</span>}
+                                <span className="block truncate text-sm font-medium leading-5 text-[#192031]">{a.nombre}</span>
+                                {a.grupo && <span className="block truncate text-xs leading-4 text-[#667085]">Por el grupo «{a.grupo}»</span>}
                               </span>
                               {onQuitar && !a.grupo && (
                                 <button
@@ -371,7 +373,7 @@ export default function IndicadorModal({
                       <li key={h.id} className="relative border-l-2 border-[#DCE0E8] pl-4">
                         <span className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-[2px] bg-[#98A2B3]" />
                         <p className="text-sm leading-snug text-[#192031]">{h.texto}</p>
-                        <p className="mt-0.5 text-xs text-[#667085]">{fechaHoraBogota(h.cuando)} · {h.quien}</p>
+                        <p className="mt-0.5 text-xs text-[#667085]">{fechaHoraBogota(h.cuando)} · {nombrePropio(h.quien)}</p>
                         {h.motivo && <p className="mt-0.5 text-xs italic text-[#667085]">«{h.motivo}»</p>}
                       </li>
                     ))}

@@ -54,14 +54,16 @@ function Encabezado({ detalle = true, celdas = 2 }: { detalle?: boolean; celdas?
 }
 
 function Fila({ ancho = 'w-2/3' }: { ancho?: string }) {
+  // La misma anatomía que las filas de verdad: el medio (36 px) arriba, mide lo que miden las dos líneas (20 + 16 px), y lo
+  // que va a la derecha parte de la línea del título.
   return (
-    <div className="flex items-center gap-3.5 px-4 py-3.5 sm:px-5">
+    <div className="flex items-start gap-3 px-4 py-3.5 sm:px-5">
       <Bloque className="h-9 w-9 shrink-0" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <Bloque className={`h-3.5 ${ancho} max-w-full`} />
-        <Bloque className="h-3 w-1/3" />
+      <div className="min-w-0 flex-1">
+        <div className="flex h-5 items-center"><Bloque className={`h-3.5 ${ancho} max-w-full`} /></div>
+        <div className="flex h-4 items-center"><Bloque className="h-3 w-1/3" /></div>
       </div>
-      <Bloque className="hidden h-3.5 w-24 sm:block" />
+      <div className="hidden h-5 items-center sm:flex"><Bloque className="h-3.5 w-24" /></div>
     </div>
   )
 }

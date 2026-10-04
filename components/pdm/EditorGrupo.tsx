@@ -183,7 +183,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
             onChange={e => { setNombre(e.target.value); setError(null) }}
             maxLength={MAX_NOMBRE_GRUPO}
             placeholder="Por ejemplo: Equipo de desarrollo rural"
-            className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
+            className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#667085] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
           />
         </label>
         <label className="block">
@@ -210,7 +210,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
           maxLength={MAX_DESCRIPCION}
           rows={2}
           placeholder="Para qué existe este grupo"
-          className="mt-1 w-full resize-none rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
+          className="mt-1 w-full resize-none rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#667085] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
 
@@ -237,7 +237,7 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Buscar persona"
-            className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
+            className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#667085] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
           />
         </label>
         {secretaria && !t && (
@@ -257,27 +257,30 @@ export default function EditorGrupo({ grupo, personas, secretarias, acciones, on
               const dentro = elegidos.has(p.id)
               const esLider = p.id === liderId
               return (
-                <li key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${dentro ? 'bg-[#EDF0F5]/60' : ''}`}>
+                <li key={p.id} className={`flex items-start gap-3 px-3 py-2.5 ${dentro ? 'bg-[#EDF0F5]/60' : ''}`}>
                   <button
                     onClick={() => alternar(p.id)}
                     aria-pressed={dentro}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] rounded-lg"
+                    className="flex min-w-0 flex-1 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] rounded-lg"
                   >
-                    <span
-                      aria-hidden
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${dentro ? 'border-[#192031] bg-[#192031] text-white' : 'border-[#C5CBD6] bg-white'}`}
-                    >
-                      {dentro && <Icono glifo={Iconos.estado.ok} tamano="sm" className="h-3.5 w-3.5" />}
+                    {/* La casilla se centra sobre la foto (36 px), no sobre todo el bloque de texto. */}
+                    <span className="flex h-9 shrink-0 items-center">
+                      <span
+                        aria-hidden
+                        className={`flex h-5 w-5 items-center justify-center rounded-md border ${dentro ? 'border-[#192031] bg-[#192031] text-white' : 'border-[#C5CBD6] bg-white'}`}
+                      >
+                        {dentro && <Icono glifo={Iconos.estado.ok} tamano="sm" className="h-3.5 w-3.5" />}
+                      </span>
                     </span>
-                    <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} tamano="sm" />
+                    <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-[#192031]">{p.nombre}</span>
-                      <span className="block truncate text-xs text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</span>
+                      <span className="block truncate text-sm font-semibold leading-5 text-[#192031]">{p.nombre}</span>
+                      <span className="block truncate text-xs leading-4 text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</span>
                       <LineaContrato contrato={p.contrato} />
                     </span>
                   </button>
                   {dentro && (
-                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-[#2D3648]">
+                    <label className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-[#2D3648]">
                       <input
                         type="radio"
                         name="pdm-lider"

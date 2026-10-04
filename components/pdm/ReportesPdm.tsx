@@ -25,12 +25,13 @@ import SelectorAnio from './SelectorAnio'
 import IconoSector from './IconoSector'
 import { Cifras } from './ui'
 import { T } from './tema'
+import { nombrePropio } from '@/lib/pdm/personas'
 
 const MAX_LISTA = 10
 
 /** Un número de la tabla: enlaza a la lista filtrada cuando se puede y hay algo que ver. */
 function Numero({ n, href }: { n: number; href?: string }) {
-  if (n === 0) return <span className="tabular-nums text-[#B8BFCC]">0</span>
+  if (n === 0) return <span className="tabular-nums text-[#667085]">0</span>
   if (!href) return <span className="font-semibold tabular-nums text-[#192031]">{n}</span>
   // La zona de pulsación crece con relleno y se compensa con margen negativo: la cifra no se mueve, pero un dedo la acierta
   // (antes medía 16×16 px). Al pasar el cursor se ve hasta dónde llega.
@@ -142,11 +143,11 @@ export default function ReportesPdm({ indicadores, anioActual, anioInicial, nive
                         href={`${HREF_INDICADORES}?abrir=${i.id}&anio=${anio}`}
                         className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[#F7F8FA] focus-visible:bg-[#F1F3F7] focus-visible:outline-none sm:px-5"
                       >
-                        <IconoSector sector={i.sector} />
+                        <IconoSector sector={i.sector} tamano="md" />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium leading-snug text-[#192031]">{i.indicador}</span>
-                          <span className="mt-0.5 block text-xs text-[#667085]">
-                            {i.dependencia} · {r.autorNombre} reportó <b className="tabular-nums text-[#192031]">{fmt(r.valor)}</b> · {fechaHoraBogota(r.creado)}
+                          <span className="block text-sm font-medium leading-5 text-[#192031]">{i.indicador}</span>
+                          <span className="block text-xs leading-4 text-[#667085]">
+                            {i.dependencia} · {nombrePropio(r.autorNombre)} reportó <b className="tabular-nums text-[#192031]">{fmt(r.valor)}</b> · {fechaHoraBogota(r.creado)}
                             {r.esCorreccion ? ' · corrección' : ''}
                           </span>
                         </span>

@@ -32,7 +32,7 @@ export default function SelectorAnio({ anio, anioActual, onCambiar, className = 
               className={`flex min-w-[5.25rem] flex-col items-start rounded-md border px-3 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-1 ${
                 elegido
                   ? 'border-[#192031] bg-[#192031] text-white'
-                  : 'border-[#C5CBD6] bg-white text-[#4A5568] hover:border-[#192031] hover:text-[#192031]'
+                  : 'border-[#C5CBD6] bg-white text-[#556072] hover:border-[#192031] hover:text-[#192031]'
               }`}
             >
               <span className="text-sm font-semibold tabular-nums">{a}</span>

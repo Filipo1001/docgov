@@ -63,13 +63,14 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
       ) : (
         <ul className="mt-2 divide-y divide-[#E6E9EF]">
           {grupos.map(g => (
-            <li key={g.id} className="flex items-center gap-3.5 py-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E6E9EF] text-[#556072]">
+            <li key={g.id} className="flex items-start gap-3 py-3">
+              {/* Misma anatomía que una persona: el círculo (36 px) mide las dos líneas que lo identifican y va arriba. */}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6E9EF] text-[#556072]">
                 <Icono glifo={Iconos.navegacion.usuarios} tamano="sm" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-[#192031]">{g.nombre}</p>
-                <p className="truncate text-xs text-[#667085]">
+                <p className="truncate text-sm font-semibold leading-5 text-[#192031]">{g.nombre}</p>
+                <p className="truncate text-xs leading-4 text-[#667085]">
                   {g.secretaria} · {g.liderId ? `Líder: ${nombreDe.get(g.liderId) ?? 'persona que ya no está activa'}` : 'Sin líder'}
                   {' · '}{plural(g.miembros.length, 'persona', 'personas')}
                 </p>
@@ -80,19 +81,22 @@ export default function GruposPdm({ grupos, personas, secretarias, acciones, pue
                   href={`${HREF_INDICADORES}?grupo=${encodeURIComponent(g.id)}`}
                   className="w-20 shrink-0 text-right transition-colors hover:text-[#192031]"
                 >
-                  <b className="block text-sm tabular-nums text-[#192031]">{g.indicadores}</b>
+                  <b className="block text-sm leading-5 tabular-nums text-[#192031]">{g.indicadores}</b>
                   <span className="text-[11px] text-[#667085]">{g.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
                 </Link>
               ) : (
-                <span className="w-20 shrink-0 text-right text-xs text-[#98A2B3]">Ninguno</span>
+                <span className="w-20 shrink-0 text-right text-xs leading-5 text-[#667085]">Ninguno</span>
               )}
               {puedeGestionar && (
-                <button
-                  onClick={() => setEditando(g)}
-                  className="shrink-0 rounded-lg border border-[#DCE0E8] px-3 py-1.5 text-xs font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]"
-                >
-                  Editar
-                </button>
+                // El botón se centra sobre el círculo (36 px), igual que los controles de las filas de personas.
+                <span className="flex h-9 shrink-0 items-center">
+                  <button
+                    onClick={() => setEditando(g)}
+                    className="rounded-lg border border-[#DCE0E8] px-3 py-1.5 text-xs font-semibold text-[#2D3648] transition-colors hover:bg-[#F4F5F8]"
+                  >
+                    Editar
+                  </button>
+                </span>
               )}
             </li>
           ))}

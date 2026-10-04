@@ -168,7 +168,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
               value={q}
               onChange={e => setQ(e.target.value)}
               placeholder="Buscar persona"
-              className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
+              className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#667085] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
             />
           </label>
 
@@ -197,21 +197,21 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
                     <button
                       onClick={() => { setPersonaId(p.id); setError(null) }}
                       aria-pressed={activo}
-                      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#192031] ${
+                      className={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#192031] ${
                         activo ? 'bg-[#EDF0F5]' : 'hover:bg-[#F4F5F8]'
                       }`}
                     >
-                      <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} tamano="sm" />
+                      <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-[#192031]">{p.nombre}</span>
-                        <span className="block truncate text-xs text-[#667085]">
+                        <span className="block truncate text-sm font-semibold leading-5 text-[#192031]">{p.nombre}</span>
+                        <span className="block truncate text-xs leading-4 text-[#667085]">
                           {p.secretaria ?? 'Sin secretaría'}
                           {p.indicadores > 0 && ` · ${plural(p.indicadores, 'indicador', 'indicadores')}`}
                         </span>
                         <LineaContrato contrato={p.contrato} />
                       </span>
                       {/* El sitio del visto está siempre: si apareciera al elegir, el nombre se reajustaría. */}
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                      <span className="flex h-5 w-4 shrink-0 items-center justify-center">
                         {activo && <Icono glifo={Iconos.estado.ok} tamano="sm" className="text-[#192031]" etiqueta="Elegida" />}
                       </span>
                     </button>
@@ -362,7 +362,7 @@ export default function SelectorAsignacion({ indicadores, personas, grupos, acci
           onChange={e => setMotivo(e.target.value)}
           maxLength={MAX_MOTIVO}
           placeholder="Por ejemplo: acordado con la secretaria"
-          className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
+          className="mt-1 w-full rounded-lg border border-[#DCE0E8] bg-white px-3 py-2.5 text-sm text-[#192031] placeholder-[#667085] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
     </Dialogo>

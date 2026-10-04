@@ -65,18 +65,24 @@ const hrefOrigen = (nombre: string) => `${HREF_INDICADORES}?origen=${encodeURICo
 function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimiento: boolean }) {
   const atencion = p.resumen ? p.resumen.atrasados + p.resumen.criticos : 0
   const enlace = p.indicadores > 0
+  const palabra = p.indicadores === 1 ? 'indicador' : 'indicadores'
   const contenido = (
     <>
       <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-[#192031]">{p.nombre}</p>
-        <p className="truncate text-xs text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</p>
+        {/* 20 + 16 px de línea = los 36 px de la foto: la foto identifica exactamente estas dos líneas. */}
+        <p className="truncate text-sm font-semibold leading-5 text-[#192031]" title={p.nombre}>{p.nombre}</p>
+        <p className="truncate text-xs leading-4 text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</p>
+        {/* Teléfono: la cifra no tiene columna propia (le quitaba al nombre la mitad del ancho); es una línea más. */}
+        <p className="text-xs leading-4 text-[#192031] sm:hidden">
+          {p.indicadores > 0 ? <><b className="tabular-nums">{p.indicadores}</b> {palabra}</> : <span className="text-[#667085]">Sin indicadores</span>}
+        </p>
         <LineaContrato contrato={p.contrato} />
         {p.acceso && (
           <p className="text-[11px] font-semibold text-[#192031]">Con acceso al módulo · {ETIQUETA_NIVEL[p.acceso.nivel]}</p>
         )}
         {p.excel && !coincideNombre(p.nombre, p.excel) && (
-          <p className="text-[11px] text-[#98A2B3]">En el Excel figura como «{p.excel}»</p>
+          <p className="text-[11px] text-[#667085]">En el Excel figura como «{p.excel}»</p>
         )}
         {atencion > 0 && (
           <p className="mt-0.5 text-xs font-medium text-[#B42318]">
@@ -84,27 +90,28 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
           </p>
         )}
       </div>
+      {/* Las columnas de datos se alinean con la línea del NOMBRE (20 px), no con el centro del bloque. */}
       {p.resumen && conSeguimiento && (
-        <div className="hidden w-32 shrink-0 sm:block">
+        <div className="mt-1.5 hidden w-32 shrink-0 sm:block">
           <BarraEstados r={p.resumen} alto="h-2" />
         </div>
       )}
-      <p className="w-16 shrink-0 text-right">
+      <p className="hidden w-16 shrink-0 text-right sm:block">
         {p.indicadores > 0 ? (
           <>
-            <b className="block text-sm tabular-nums text-[#192031]">{p.indicadores}</b>
-            <span className="text-[11px] text-[#667085]">{p.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
+            <b className="block text-sm leading-5 tabular-nums text-[#192031]">{p.indicadores}</b>
+            <span className="text-[11px] text-[#667085]">{palabra}</span>
           </>
         ) : (
-          <span className="text-xs text-[#98A2B3]">Ninguno</span>
+          <span className="block text-xs leading-5 text-[#667085]">Ninguno</span>
         )}
       </p>
-      {enlace
-        ? <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-[#B8BFCC]" />
-        : <span className="w-4 shrink-0" aria-hidden />}
+      <span className="flex h-5 w-4 shrink-0 items-center justify-center" aria-hidden={!enlace || undefined}>
+        {enlace && <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="text-[#98A2B3]" />}
+      </span>
     </>
   )
-  const clase = 'flex items-center gap-3.5 py-3'
+  const clase = 'flex items-start gap-3 py-3'
   return enlace ? (
     <Link
       href={hrefUsuario(p.id)}
@@ -211,7 +218,7 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
                   <p className="shrink-0 text-right text-xs text-[#667085]">
                     <b className="text-sm tabular-nums text-[#192031]">{s.sin}</b> de {s.total}
                   </p>
-                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-[#B8BFCC]" />
+                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-[#98A2B3]" />
                 </Link>
               </li>
             ))}
@@ -240,18 +247,21 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
               <li key={s.nombre}>
                 <Link
                   href={hrefOrigen(s.nombre)}
-                  className="flex items-center gap-3.5 py-3 transition-colors hover:bg-[#F4F5F8] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                  className="flex items-start gap-3 py-3 transition-colors hover:bg-[#F4F5F8] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
                 >
                   <Avatar nombre={s.nombre} apagado />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[#192031]">{s.nombre}</p>
-                    <p className="text-xs text-[#667085]">{MOTIVO[s.motivo]}</p>
+                    <p className="truncate text-sm font-semibold leading-5 text-[#192031]">{s.nombre}</p>
+                    <p className="text-xs leading-4 text-[#667085]">{MOTIVO[s.motivo]}</p>
+                    <p className="text-xs leading-4 text-[#192031] sm:hidden"><b className="tabular-nums">{s.indicadores}</b> {s.indicadores === 1 ? 'indicador' : 'indicadores'}</p>
                   </div>
-                  <p className="w-16 shrink-0 text-right">
-                    <b className="block text-sm tabular-nums text-[#192031]">{s.indicadores}</b>
+                  <p className="hidden w-16 shrink-0 text-right sm:block">
+                    <b className="block text-sm leading-5 tabular-nums text-[#192031]">{s.indicadores}</b>
                     <span className="text-[11px] text-[#667085]">{s.indicadores === 1 ? 'indicador' : 'indicadores'}</span>
                   </p>
-                  <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="shrink-0 text-[#B8BFCC]" />
+                  <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+                    <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="text-[#98A2B3]" />
+                  </span>
                 </Link>
               </li>
             ))}
@@ -291,7 +301,7 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
                 value={q}
                 onChange={e => { setQ(e.target.value); setLimite(PAGINA) }}
                 placeholder="Buscar persona"
-                className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
+                className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2 pl-10 pr-3 text-sm text-[#192031] placeholder-[#667085] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
               />
             </label>
             <select

@@ -39,6 +39,7 @@ import BotonAccion, { Despliegue, useConfirmar, useNuevos } from './Movimiento'
 import { useAvisar } from './Avisos'
 import { Bloque } from './Esqueleto'
 import { T } from './tema'
+import { nombrePropio } from '@/lib/pdm/personas'
 
 /** Lo que la ficha necesita saber del seguimiento. Sin esto, la ficha no muestra esta parte. */
 export interface ContextoSeguimiento {
@@ -75,7 +76,7 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
             </span>
             {e.observacion && (
               <span className="mt-1 block text-xs leading-snug text-[#912018]">
-                <b>Devuelto</b> por {e.observacion.por}: «{e.observacion.motivo}»
+                <b>Devuelto</b> por {nombrePropio(e.observacion.por)}: «{e.observacion.motivo}»
               </span>
             )}
           </li>
@@ -209,7 +210,7 @@ function Validar({ reporte, acciones, onHecho }: {
                                 type="button"
                                 disabled={enviando !== null}
                                 onClick={() => setMarcados(prev => ({ ...prev, [ev.id]: m }))}
-                                className="rounded-md border border-[#C5CBD6] bg-white px-2 py-1 text-[11px] font-medium text-[#4A5568] transition-colors hover:border-[#192031] hover:text-[#192031] disabled:opacity-60"
+                                className="rounded-md border border-[#C5CBD6] bg-white px-2 py-1 text-[11px] font-medium text-[#556072] transition-colors hover:border-[#192031] hover:text-[#192031] disabled:opacity-60"
                               >
                                 {m}
                               </button>
@@ -256,7 +257,7 @@ function Version({ r, acciones, onHecho, nueva }: { r: ReporteDetalle; acciones:
     <li className={`relative border-l-2 border-[#DCE0E8] pb-6 pl-5 last:pb-1 ${r.vigente ? '' : 'opacity-70'} ${nueva ? 'pdm-nuevo' : ''}`}>
       <span className={`absolute -left-[6px] top-1 h-2.5 w-2.5 rounded-[2px] ${r.vigente ? 'bg-[#192031]' : 'bg-[#B8BFCC]'}`} />
       <p className="text-xs text-[#667085]">
-        <span className="font-semibold text-[#192031]">{fechaHoraBogota(r.creado)}</span> · {r.autorNombre}
+        <span className="font-semibold text-[#192031]">{fechaHoraBogota(r.creado)}</span> · {nombrePropio(r.autorNombre)}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="text-sm font-semibold tabular-nums text-[#192031]">
@@ -273,7 +274,7 @@ function Version({ r, acciones, onHecho, nueva }: { r: ReporteDetalle; acciones:
           key={k}
           className={`mt-2 text-xs leading-snug ${v.estado === 'aprobado' ? 'text-[#1F5D43]' : 'text-[#912018]'} ${k < r.validaciones.length - 1 ? 'opacity-70' : ''}`}
         >
-          <b>{v.estado === 'aprobado' ? 'Aprobado' : 'Devuelto'}</b> por {v.validadorNombre} · {fechaHoraBogota(v.creado)}
+          <b>{v.estado === 'aprobado' ? 'Aprobado' : 'Devuelto'}</b> por {nombrePropio(v.validadorNombre)} · {fechaHoraBogota(v.creado)}
           {v.comentario ? `: «${v.comentario}»` : ''}
         </p>
       ))}

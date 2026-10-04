@@ -52,7 +52,7 @@ function Tarjeta({ t, elegida, onElegir }: { t: TarjetaAnio; elegida: boolean; o
       }`}
     >
       <span className="flex items-baseline justify-between gap-2">
-        <span className={`text-[22px] font-semibold leading-none tracking-tight tabular-nums ${proximo ? 'text-[#98A2B3]' : 'text-[#192031]'}`}>{t.anio}</span>
+        <span className={`text-[22px] font-semibold leading-none tracking-tight tabular-nums ${proximo ? 'text-[#667085]' : 'text-[#192031]'}`}>{t.anio}</span>
         <span className={`text-[11px] font-semibold uppercase tracking-[0.1em] ${t.estado === 'en_curso' ? 'text-[#192031]' : 'text-[#667085]'}`}>
           {ROTULO_ESTADO_ANIO[t.estado]}
         </span>

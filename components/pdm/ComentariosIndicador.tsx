@@ -13,6 +13,7 @@ import { MAX_COMENTARIO, errorEnComentario, type AccionesSeguimiento, type Comen
 import { Seccion } from './ui'
 import BotonAccion, { Despliegue, useConfirmar, useNuevos } from './Movimiento'
 import { T } from './tema'
+import { nombrePropio } from '@/lib/pdm/personas'
 
 export default function ComentariosIndicador({ indicadorUuid, comentarios, acciones, onHecho }: {
   indicadorUuid: string
@@ -46,7 +47,7 @@ export default function ComentariosIndicador({ indicadorUuid, comentarios, accio
           {comentarios.map(c => (
             <li key={c.id} className={`rounded-lg border border-[#E6E9EF] bg-[#F7F8FA] px-3.5 py-2.5 ${nuevos.has(c.id) ? 'pdm-nuevo' : ''}`}>
               <p className="text-xs text-[#667085]">
-                <span className="font-semibold text-[#192031]">{c.autorNombre}</span> · {ETIQUETA_NIVEL[c.autorNivel]} · {fechaHoraBogota(c.creado)}
+                <span className="font-semibold text-[#192031]">{nombrePropio(c.autorNombre)}</span> · {ETIQUETA_NIVEL[c.autorNivel]} · {fechaHoraBogota(c.creado)}
               </p>
               <p className="mt-1 whitespace-pre-line text-sm leading-snug text-[#2D3648]">{c.texto}</p>
             </li>

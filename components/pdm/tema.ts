@@ -75,5 +75,5 @@ export const T = {
   // Avisos (el color dice qué clase de aviso es; la palabra, qué pasó)
   avisoBien: 'rounded-lg border border-[#B7DEC9] bg-[#F1F8F4] px-3.5 py-2.5 text-sm text-[#1F5D43]',
   avisoMal: 'rounded-lg border border-[#F1C0BB] bg-[#FDF3F2] px-3.5 py-2.5 text-sm text-[#912018]',
-  avisoNota: 'rounded-lg border border-[#DCE0E8] bg-[#F4F5F8] px-3.5 py-2.5 text-sm text-[#4A5568]',
+  avisoNota: 'rounded-lg border border-[#DCE0E8] bg-[#F4F5F8] px-3.5 py-2.5 text-sm text-[#556072]',
 } as const

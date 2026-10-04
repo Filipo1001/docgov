@@ -29,6 +29,7 @@ import { Presencia } from './Ventana'
 import { useAvisar } from './Avisos'
 import { T } from './tema'
 import { Avatar, LineaContrato } from './PersonaVista'
+import { nombrePropio } from '@/lib/pdm/personas'
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
 
@@ -100,7 +101,7 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
           value={q}
           onChange={e => setQ(e.target.value)}
           placeholder="Buscar persona"
-          className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#98A2B3] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
+          className="w-full rounded-lg border border-[#DCE0E8] bg-white py-2.5 pl-10 pr-3 text-sm text-[#192031] placeholder-[#667085] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031]"
         />
       </label>
 
@@ -119,18 +120,21 @@ function DialogoHabilitar({ candidatas, niveles, acciones, onCerrar, onHecho }: 
                 <button
                   onClick={() => { setElegida(p.id); setError(null) }}
                   aria-pressed={activa}
-                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#192031] ${activa ? 'bg-[#EDF0F5]' : 'hover:bg-[#F4F5F8]'}`}
+                  className={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#192031] ${activa ? 'bg-[#EDF0F5]' : 'hover:bg-[#F4F5F8]'}`}
                 >
-                  <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} tamano="sm" />
+                  <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-[#192031]">{p.nombre}</span>
-                    <span className="block truncate text-xs text-[#667085]">
+                    <span className="block truncate text-sm font-semibold leading-5 text-[#192031]">{p.nombre}</span>
+                    <span className="block truncate text-xs leading-4 text-[#667085]">
                       {p.secretaria ?? 'Sin secretaría'}
                       {p.indicadores > 0 && ` · ${plural(p.indicadores, 'indicador', 'indicadores')}`}
                     </span>
                     <LineaContrato contrato={p.contrato} />
                   </span>
-                  {activa && <Icono glifo={Iconos.estado.ok} tamano="sm" className="shrink-0 text-[#192031]" etiqueta="Elegida" />}
+                  {/* El visto va en la línea del nombre, como todo lo que acompaña a la foto. */}
+                  <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+                    {activa && <Icono glifo={Iconos.estado.ok} tamano="sm" className="text-[#192031]" etiqueta="Elegida" />}
+                  </span>
                 </button>
               </li>
             )
@@ -252,42 +256,45 @@ export default function AccesoPdm({ personas, nivel, yoId, acciones }: {
             // Una secretaría solo toca el acceso de «responsable»; el administrador, todos.
             const toca = puede && !esYo && (esAdmin || a.nivel === 'responsable')
             return (
-              <li key={p.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-2 py-3">
+              <li key={p.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 py-3">
                 <Avatar nombre={p.nombre} fotoUrl={p.fotoUrl} />
                 <div className="min-w-0 flex-1 basis-48">
-                  <p className="truncate text-sm font-semibold text-[#192031]">{p.nombre}</p>
-                  <p className="truncate text-xs text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</p>
-                  <p className="truncate text-[11px] text-[#98A2B3]">
-                    {a.por ? `Habilitada por ${a.por}` : 'Habilitada'}{a.desde ? ` · ${fechaCorta(a.desde.slice(0, 10))}` : ''}
+                  <p className="truncate text-sm font-semibold leading-5 text-[#192031]">{p.nombre}</p>
+                  <p className="truncate text-xs leading-4 text-[#667085]">{p.secretaria ?? 'Sin secretaría'}</p>
+                  <p className="truncate text-[11px] text-[#667085]">
+                    {a.por ? `Habilitada por ${nombrePropio(a.por)}` : 'Habilitada'}{a.desde ? ` · ${fechaCorta(a.desde.slice(0, 10))}` : ''}
                   </p>
                 </div>
-                {toca && esAdmin ? (
-                  <select
-                    aria-label={`Nivel de ${p.nombre}`}
-                    value={a.nivel}
-                    disabled={trabajando !== null}
-                    onChange={e => cambiarNivel(p, e.target.value as NivelHabilitable)}
-                    className="rounded-lg border border-[#DCE0E8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#192031] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031] disabled:opacity-50"
-                  >
-                    {NIVELES_HABILITABLES.map(n => <option key={n} value={n}>{ETIQUETA_NIVEL[n]}</option>)}
-                  </select>
-                ) : (
-                  <span className="rounded-md bg-[#EDF0F5] px-3 py-1 text-xs font-semibold text-[#192031] ring-1 ring-inset ring-[#DCE0E8]">{ETIQUETA_NIVEL[a.nivel]}</span>
-                )}
-                {toca && (
-                  confirmaQuitar === p.id ? (
-                    <span className="flex items-center gap-2">
-                      <button onClick={() => quitar(p)} disabled={trabajando !== null} className="rounded-lg bg-[#B42318] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
-                        {trabajando === p.id ? 'Quitando…' : 'Sí, quitar'}
-                      </button>
-                      <button onClick={() => setConfirmaQuitar(null)} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#556072] hover:bg-[#E6E9EF]">No</button>
-                    </span>
+                {/* Los controles se centran sobre la foto (36 px): no flotan a la altura del bloque entero. */}
+                <div className="flex h-9 shrink-0 items-center gap-3">
+                  {toca && esAdmin ? (
+                    <select
+                      aria-label={`Nivel de ${p.nombre}`}
+                      value={a.nivel}
+                      disabled={trabajando !== null}
+                      onChange={e => cambiarNivel(p, e.target.value as NivelHabilitable)}
+                      className="rounded-lg border border-[#DCE0E8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#192031] outline-none focus:border-[#192031] focus:ring-1 focus:ring-[#192031] disabled:opacity-50"
+                    >
+                      {NIVELES_HABILITABLES.map(n => <option key={n} value={n}>{ETIQUETA_NIVEL[n]}</option>)}
+                    </select>
                   ) : (
-                    <button onClick={() => { setError(null); setConfirmaQuitar(p.id) }} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031]">
-                      Quitar acceso
-                    </button>
-                  )
-                )}
+                    <span className="rounded-md bg-[#EDF0F5] px-3 py-1 text-xs font-semibold text-[#192031] ring-1 ring-inset ring-[#DCE0E8]">{ETIQUETA_NIVEL[a.nivel]}</span>
+                  )}
+                  {toca && (
+                    confirmaQuitar === p.id ? (
+                      <span className="flex items-center gap-2">
+                        <button onClick={() => quitar(p)} disabled={trabajando !== null} className="rounded-lg bg-[#B42318] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
+                          {trabajando === p.id ? 'Quitando…' : 'Sí, quitar'}
+                        </button>
+                        <button onClick={() => setConfirmaQuitar(null)} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#556072] hover:bg-[#E6E9EF]">No</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => { setError(null); setConfirmaQuitar(p.id) }} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#556072] transition-colors hover:bg-[#E6E9EF] hover:text-[#192031]">
+                        Quitar acceso
+                      </button>
+                    )
+                  )}
+                </div>
               </li>
             )
           })}

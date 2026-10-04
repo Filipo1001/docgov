@@ -108,7 +108,7 @@ function Miniatura({ archivo, vista }: { archivo: File; vista?: string }) {
     return <img src={vista} alt="" decoding="async" onError={() => setFallo(true)} className="h-9 w-9 shrink-0 rounded-md border border-[#DCE0E8] object-cover" />
   }
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EEF0F4] text-[#4A5568]">
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EEF0F4] text-[#556072]">
       <Icono glifo={categoria ? GLIFO_DE_CATEGORIA[categoria] : Iconos.documentos.adjunto} tamano="sm" />
     </span>
   )

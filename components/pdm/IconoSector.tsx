@@ -9,8 +9,12 @@
 import Icono from '@/components/ui/Icono'
 import { iconoDeLinea, iconoDeSector } from '@/lib/pdm/iconos-plan'
 
+/**
+ * La misma escala que `Avatar` (ver `PersonaVista.tsx`): `sm` 32 px junto a UNA línea; `md` 36 px junto a DOS (título +
+ * subtítulo). Antes `sm` medía 28: una cuarta medida entre 28, 32, 36 y 40 que no respondía a nada.
+ */
 const TILE = {
-  sm: { caja: 'h-7 w-7', icono: 'sm' as const },
+  sm: { caja: 'h-8 w-8', icono: 'sm' as const },
   md: { caja: 'h-9 w-9', icono: 'md' as const },
 }
 

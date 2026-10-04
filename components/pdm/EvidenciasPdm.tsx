@@ -52,7 +52,7 @@ const claseChip = (activo: boolean) =>
   `shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-1 ${
     activo
       ? 'border-[#192031] bg-[#192031] text-white'
-      : 'border-[#C5CBD6] bg-white text-[#4A5568] hover:border-[#192031] hover:text-[#192031]'
+      : 'border-[#C5CBD6] bg-white text-[#556072] hover:border-[#192031] hover:text-[#192031]'
   }`
 
 /** Cuántos indicadores se nombran en «También respalda a…» antes de «y N más». */
@@ -162,10 +162,12 @@ function Carpeta({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir: (id: s
 function FilaDeIndicador({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir: (id: string) => void; abriendo: boolean }) {
   return (
     <li className={`grid grid-cols-1 gap-x-4 gap-y-3 px-4 py-4 sm:px-5 ${COLUMNAS} lg:items-start`}>
-      <div className="flex min-w-0 items-start gap-2.5">
-        <IconoSector sector={fila.sector} />
+      {/* Mismo medio (36 px) y misma separación (12 px) que la fila del archivo: así el título y el archivo arrancan en el
+          mismo margen cuando la tarjeta se apila en el teléfono (antes: 38 px frente a 48 px). */}
+      <div className="flex min-w-0 items-start gap-3">
+        <IconoSector sector={fila.sector} tamano="md" />
         <div className="min-w-0">
-          <p className="line-clamp-2 text-sm leading-snug text-[#192031] [overflow-wrap:anywhere]">
+          <p className="line-clamp-2 text-sm leading-5 text-[#192031] [overflow-wrap:anywhere]">
             <span className="font-semibold tabular-nums text-[#667085]">{fila.codigo}</span> · {fila.indicador}
           </p>
           <p className="mt-0.5 truncate text-xs text-[#667085]">{fila.dependencia}</p>

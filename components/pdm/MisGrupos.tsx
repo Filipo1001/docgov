@@ -40,12 +40,13 @@ export default function MisGrupos({ grupos }: { grupos: GrupoMio[] }) {
             <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-2.5">
               {g.miembros.map(m => (
                 <li key={m.id} className="flex min-w-0 items-center gap-2.5">
-                  <Avatar nombre={m.nombre} fotoUrl={m.fotoUrl} tamano="sm" apagado={!m.activo} />
+                  {/* La foto mide lo que miden sus líneas: 32 px si es una (el nombre), 36 px si son dos (nombre + «Líder»). */}
+                  <Avatar nombre={m.nombre} fotoUrl={m.fotoUrl} tamano={m.esLider ? 'md' : 'sm'} apagado={!m.activo} />
                   <span className="min-w-0">
-                    <span className={`block truncate text-sm font-medium ${m.activo ? T.tinta : T.tenue}`}>
+                    <span className={`block truncate text-sm font-medium leading-5 ${m.activo ? T.tinta : T.tenue}`}>
                       {m.nombre}{m.soyYo && <span className={`font-normal ${T.tenue}`}> (tú)</span>}
                     </span>
-                    {m.esLider && <span className={`block text-[11px] font-semibold uppercase tracking-[0.1em] ${T.tenue}`}>Líder</span>}
+                    {m.esLider && <span className={`block text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] ${T.tenue}`}>Líder</span>}
                   </span>
                 </li>
               ))}

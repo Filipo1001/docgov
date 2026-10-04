@@ -22,7 +22,7 @@ import IconoSector from './IconoSector'
 import { EstadoTexto, SituacionTexto } from './ui'
 import { T } from './tema'
 import { FILTROS_DEL_ANIO, cumpleFiltro, type Filtro } from '@/lib/pdm/filtros'
-import type { PersonaFicha } from '@/lib/pdm/personas'
+import { nombrePropio, type PersonaFicha } from '@/lib/pdm/personas'
 
 const PAGINA = 25
 
@@ -33,13 +33,13 @@ const COLUMNAS_SEL = 'md:grid-cols-[1.5rem_4.25rem_minmax(0,1fr)_12rem_9.5rem_12
 function Responsable({ i, asignado }: { i: Indicador; asignado?: string }) {
   if (sinAsignar(i)) {
     return (
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-[#B42318]">
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium leading-5 text-[#B42318]">
         <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="shrink-0" />
         <span className="truncate">{tipoResponsable(i.responsable) === 'persona' ? `${i.responsable} · sin usuario` : 'Sin responsable'}</span>
       </span>
     )
   }
-  return <span className="block truncate text-xs text-[#4A5568]">{asignado ?? i.responsable}</span>
+  return <span className="block truncate text-xs leading-5 text-[#556072]">{asignado ?? i.responsable}</span>
 }
 
 export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yoId }: {
@@ -64,7 +64,7 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
     <button
       onClick={onAbrir}
       aria-pressed={seleccionable ? elegido === true : undefined}
-      className={`grid w-full grid-cols-1 gap-x-4 gap-y-2 px-4 py-3.5 text-left transition-colors focus-visible:bg-[#F1F3F7] focus-visible:outline-none sm:px-5 ${seleccionable ? COLUMNAS_SEL : COLUMNAS} md:items-center ${
+      className={`grid w-full grid-cols-1 gap-x-4 gap-y-2 px-4 py-3.5 text-left transition-colors focus-visible:bg-[#F1F3F7] focus-visible:outline-none sm:px-5 ${seleccionable ? COLUMNAS_SEL : COLUMNAS} md:items-start ${
         elegido ? 'bg-[#EDF0F5]' : 'hover:bg-[#F7F8FA]'
       }`}
     >
@@ -103,15 +103,15 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
       </span>
 
       <div className="min-w-0">
-        <p className="line-clamp-2 text-sm font-medium leading-snug text-[#192031]">{i.indicador}</p>
+        <p className="line-clamp-2 text-sm font-medium leading-5 text-[#192031]">{i.indicador}</p>
         <p className="mt-0.5 truncate text-xs text-[#667085]">{i.programa}</p>
         {reporte && enAnio?.situacion === 'pendiente' && (
-          <p className="mt-1 truncate text-xs text-[#8A5A12]">
-            {yoId && reporte.autorId === yoId ? 'Tú' : reporte.autorNombre} reportó <b className="tabular-nums">{fmt(reporte.valor)}</b>; falta que la secretaría lo valide
+          <p className="mt-1 line-clamp-2 text-xs text-[#8A5A12]">
+            {yoId && reporte.autorId === yoId ? 'Tú' : nombrePropio(reporte.autorNombre)} reportó <b className="tabular-nums">{fmt(reporte.valor)}</b>; falta que la secretaría lo valide
           </p>
         )}
         {reporte && enAnio?.situacion === 'devuelto' && (
-          <p className="mt-1 truncate text-xs text-[#B42318]">
+          <p className="mt-1 line-clamp-2 text-xs text-[#B42318]">
             Devuelto{reporte.validacionComentario ? `: ${reporte.validacionComentario}` : ''}
           </p>
         )}
@@ -122,7 +122,7 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
       </div>
 
       <div>
-        <div className="flex items-baseline justify-between gap-2 text-xs">
+        <div className="flex items-baseline justify-between gap-2 text-xs leading-5">
           <span className="text-[#667085]">
             <b className="font-semibold tabular-nums text-[#192031]">{fmt(i.avance)}</b>
             <span> / </span>
@@ -134,9 +134,9 @@ export function FilaIndicador({ i, onAbrir, asignado, seleccionable, elegido, yo
         <div className="mt-1.5"><BarraAvance razon={r} estado={estado} /></div>
       </div>
 
-      <div className="hidden flex-col items-start gap-1 md:flex">
-        {mostrarEstado && <EstadoTexto estado={estado} />}
-        {enAnio && <SituacionTexto situacion={enAnio.situacion} />}
+      <div className="hidden flex-col items-start md:flex">
+        {mostrarEstado && <EstadoTexto estado={estado} className="leading-5" />}
+        {enAnio && <SituacionTexto situacion={enAnio.situacion} className="leading-5" />}
       </div>
     </button>
   )
@@ -251,7 +251,7 @@ export default function ListaIndicadores({
             className={`shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-1 ${
               filtroActivo === f
                 ? 'border-[#192031] bg-[#192031] text-white'
-                : 'border-[#C5CBD6] bg-white text-[#4A5568] hover:border-[#192031] hover:text-[#192031]'
+                : 'border-[#C5CBD6] bg-white text-[#556072] hover:border-[#192031] hover:text-[#192031]'
             }`}
           >
             {ROTULO_FILTRO[f]} <span className="ml-1 tabular-nums opacity-70">{cuenta[f]}</span>
@@ -268,7 +268,7 @@ export default function ListaIndicadores({
             className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-1 ${
               seleccion.activa
                 ? 'border-[#192031] bg-[#EDF0F5] text-[#192031]'
-                : 'border-[#C5CBD6] bg-white text-[#4A5568] hover:border-[#192031] hover:text-[#192031]'
+                : 'border-[#C5CBD6] bg-white text-[#556072] hover:border-[#192031] hover:text-[#192031]'
             }`}
           >
             {seleccion.activa ? 'Terminar selección' : 'Seleccionar varios'}
