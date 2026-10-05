@@ -165,7 +165,8 @@ export default function IndicadorModal({
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
+        {/* `relative`: lo escondido con `sr-only` (posición absoluta) se ancla a ESTE cuerpo y se desplaza con él, no al panel. */}
+        <div className="relative flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
 
           {/* Avance del año: el último reporte aprobado */}
           <Seccion rotulo={`Avance validado · ${indicador.anio}`}>

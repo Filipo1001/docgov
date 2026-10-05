@@ -218,6 +218,10 @@ export default function Ventana({ etiqueta, onCerrar, ancho = 'sm:max-w-xl', chi
           tabIndex={-1}
           // El clic que empieza en el panel (seleccionar texto, por ejemplo) nunca cuenta como «clic en el velo».
           onPointerDown={() => { empezoEnElVelo.current = false }}
+          // El panel recorta (`overflow-hidden`) y NO tiene barra: quien se desplaza es el cuerpo de dentro. Pero el navegador sí puede
+          // desplazar un contenedor recortado por su cuenta, por ejemplo al devolver el foco a un campo que quedó fuera de él (así se
+          // veía la ventana en blanco, sin manera de volver). Aquí se le impide: el panel siempre está en su sitio.
+          onScroll={e => { const el = e.currentTarget; if (el.scrollTop !== 0 || el.scrollLeft !== 0) { el.scrollTop = 0; el.scrollLeft = 0 } }}
           className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl bg-white shadow-xl outline-none sm:max-h-[calc(100dvh-7dvh-2rem)] sm:rounded-lg ${ancho} ${saliendo ? 'pdm-hoja-sale' : 'pdm-hoja-entra'}`}
         >
           {children}

@@ -209,10 +209,16 @@ export default function ZonaEvidencias({ cola, conservadas, bloqueada, error, av
         </div>
       </Despliegue>
 
-      <Despliegue abierto={!llena} separacion="">
+      {/* El anillo de foco (2 px + 2 de separación) sale del recuadro y el pliegue recorta lo que sobresale: se le da 4 px de aire por
+          dentro y se compensa por fuera, así el anillo cabe entero y el resto de la pantalla no se mueve. */}
+      <div className="-m-1">
+      <Despliegue abierto={!llena} separacion="p-1">
         <div className="flex gap-2">
           <label
-            className={`group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-4 py-5 text-center transition-colors focus-within:ring-2 focus-within:ring-[#192031] focus-within:ring-offset-2 ${
+            // `relative`: el campo de archivos está escondido con `sr-only` (posición absoluta). Sin esto su bloque contenedor era la VENTANA y el
+            // campo quedaba a ~1.800 px de altura; al cerrarse el selector de archivos (cancelar o elegir) el navegador le devuelve el foco y
+            // desplaza la ventana hasta él: el contenido sube fuera de la vista y la ventana queda en blanco.
+            className={`group relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-4 py-5 text-center transition-colors focus-within:ring-2 focus-within:ring-[#192031] focus-within:ring-offset-2 ${
               bloqueada ? 'cursor-not-allowed border-[#C5CBD6] opacity-60'
                 : arrastrando ? 'cursor-copy border-[#192031] bg-[#EEF0F4]'
                   : error ? 'cursor-pointer border-[#B42318] bg-[#FDF3F2] hover:border-[#912018]'
@@ -245,13 +251,14 @@ export default function ZonaEvidencias({ cola, conservadas, bloqueada, error, av
           </label>
 
           {/* Solo en pantallas táctiles: abrir la cámara directamente. */}
-          <label className={`hidden shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-[#C5CBD6] bg-white px-4 text-xs font-semibold text-[#192031] transition-colors focus-within:ring-2 focus-within:ring-[#192031] focus-within:ring-offset-2 [@media(pointer:coarse)]:flex ${bloqueada ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:bg-[#F4F5F8]'}`}>
+          <label className={`relative hidden shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-[#C5CBD6] bg-white px-4 text-xs font-semibold text-[#192031] transition-colors focus-within:ring-2 focus-within:ring-[#192031] focus-within:ring-offset-2 [@media(pointer:coarse)]:flex ${bloqueada ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:bg-[#F4F5F8]'}`}>
             <Icono glifo={Iconos.dominio.evidencia} tamano="md" />
             Tomar foto
             <input type="file" accept="image/*" capture="environment" disabled={bloqueada} className="sr-only" onChange={alElegir} />
           </label>
         </div>
       </Despliegue>
+      </div>
 
       {llena && <p className="text-xs text-[#667085]">Llegaste al máximo de {MAX_EVIDENCIAS} archivos. Quita uno si necesitas cambiarlo.</p>}
 

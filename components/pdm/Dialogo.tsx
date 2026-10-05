@@ -29,7 +29,8 @@ export default function Dialogo({ titulo, subtitulo, onCerrar, pie, ancho = 'sm:
         </div>
         <BotonCerrarVentana />
       </div>
-      <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">{children}</div>
+      {/* `relative`: lo escondido con `sr-only` (posición absoluta) se ancla a ESTE cuerpo y se desplaza con él, no al panel. */}
+      <div className="relative flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">{children}</div>
       {pie && <div className="shrink-0 border-t border-[#E6E9EF] bg-white px-5 py-4 sm:px-6">{pie}</div>}
     </Ventana>
   )
