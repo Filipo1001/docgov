@@ -11,15 +11,20 @@
  * que es justo lo que el archivo de Excel no puede decir de su hoja de gráficos.
  */
 
+import { useMemo } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
+import { cuentasPorAnio, cuentasPorGrupo, lecturaDelAnio } from '@/lib/pdm/graficos'
 import {
   agrupar, estadoDe, fmt, fmtPct, haySeguimiento, resumir, sinAsignar,
   type Indicador, type Resumen,
 } from '@/lib/pdm/plan'
 import { ROTULO_ESTADO_ANIO, anioIniciado, estadoDelAnio, resumirAnio } from '@/lib/pdm/seguimiento'
+import AvancePorAnio from './AvancePorAnio'
+import AvancePorGrupo from './AvancePorGrupo'
 import { BarraEstados, Leyenda } from './Barras'
 import IconoSector from './IconoSector'
+import Lectura from './Lectura'
 import { Cifras, EstadoTexto, Panel, type Cifra } from './ui'
 import { T } from './tema'
 
@@ -57,7 +62,7 @@ function FilaGrupo({ nombre, r, conSeguimiento, onClick, conIconoDeLinea = false
 }
 
 export default function Tablero({
-  lista, anio, anioActual, controles, onAbrir, onVerDependencia,
+  lista, anio, anioActual, controles, conGraficos = false, onElegirAnio, onAbrir, onVerDependencia,
 }: {
   /** Los indicadores ya proyectados al año que se mira. */
   lista: Indicador[]
@@ -66,6 +71,13 @@ export default function Tablero({
   anioActual: number
   /** Vista de Control Interno: añade los controles de integridad. */
   controles?: boolean
+  /**
+   * Los gráficos de avance (frase, tarjetas por año, secretarías y líneas) en lugar de las cifras y las barras de
+   * estado de siempre. Por ahora solo los ve el administrador; Control Interno y el Alcalde, después.
+   */
+  conGraficos?: boolean
+  /** Con `conGraficos`, las tarjetas de año SON el selector: elegir una cambia el año del detalle. */
+  onElegirAnio?: (anio: number) => void
   onAbrir: (id: number) => void
   onVerDependencia?: (dependencia: string) => void
 }) {
@@ -77,6 +89,19 @@ export default function Tablero({
   const lineas = agrupar(lista, i => i.linea).sort((a, b) => a[0].localeCompare(b[0]))
   const iniciado = anioIniciado(anio, anioActual)
   const esperados = resumirAnio(lista.map(i => i.enAnio?.situacion ?? null))
+
+  // Las cuentas de los gráficos salen de la misma lista; solo se hacen donde se pintan.
+  const graficos = useMemo(() => {
+    if (!conGraficos) return null
+    const porSecretaria = cuentasPorGrupo(lista, anio, anioActual, i => i.dependencia)
+    const porAnio = cuentasPorAnio(lista, anioActual)
+    return {
+      porAnio,
+      porSecretaria,
+      porLinea: cuentasPorGrupo(lista, anio, anioActual, i => i.linea).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+      lectura: lecturaDelAnio(porAnio.find(c => c.anio === anio) ?? porAnio[0], porSecretaria),
+    }
+  }, [conGraficos, lista, anio, anioActual])
 
   const peso = (i: Indicador) => {
     const e = estadoDe(i)
@@ -122,55 +147,77 @@ export default function Tablero({
 
   return (
     <div className="space-y-5">
-      <Cifras items={cifras} />
+      {graficos ? (
+        <>
+          <Lectura titular={graficos.lectura.titular} detalle={graficos.lectura.detalle} />
+          <AvancePorAnio cuentas={graficos.porAnio} anio={anio} onElegir={onElegirAnio ?? (() => {})} />
+        </>
+      ) : (
+        <>
+          <Cifras items={cifras} />
 
-      <Panel titulo="Estado del plan">
-        {conSeg ? (
-          <>
-            <BarraEstados r={r} />
-            <div className="mt-3"><Leyenda r={r} /></div>
-          </>
-        ) : (
-          <p className="text-sm leading-relaxed text-[#556072]">
-            {iniciado
-              ? `En ${anio} todavía no hay avances validados. Cada reporte cuenta cuando la secretaría lo aprueba; desde entonces aquí se verá cómo va cada indicador.`
-              : `El ${anio} está ${ROTULO_ESTADO_ANIO[estadoDelAnio(anio, anioActual)].toLowerCase()}: sus metas están cargadas y empieza a medirse el 1 de enero.`}
-          </p>
-        )}
-        {r.sinMeta > 0 && (
-          <p className="mt-3 text-xs text-[#667085]">
-            {r.sinMeta} indicadores no tienen meta y no entran en el cálculo.
-          </p>
-        )}
-      </Panel>
+          <Panel titulo="Estado del plan">
+            {conSeg ? (
+              <>
+                <BarraEstados r={r} />
+                <div className="mt-3"><Leyenda r={r} /></div>
+              </>
+            ) : (
+              <p className="text-sm leading-relaxed text-[#556072]">
+                {iniciado
+                  ? `En ${anio} todavía no hay avances validados. Cada reporte cuenta cuando la secretaría lo aprueba; desde entonces aquí se verá cómo va cada indicador.`
+                  : `El ${anio} está ${ROTULO_ESTADO_ANIO[estadoDelAnio(anio, anioActual)].toLowerCase()}: sus metas están cargadas y empieza a medirse el 1 de enero.`}
+              </p>
+            )}
+            {r.sinMeta > 0 && (
+              <p className="mt-3 text-xs text-[#667085]">
+                {r.sinMeta} indicadores no tienen meta y no entran en el cálculo.
+              </p>
+            )}
+          </Panel>
+        </>
+      )}
 
-      {/* `min-w-0` en los paneles: un elemento de una cuadrícula no se encoge por debajo de su
-          contenido, y el nombre de una secretaría en una sola línea empujaba el panel a 404 px
-          dentro de un teléfono de 375. */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <section className={`min-w-0 overflow-hidden ${T.panel}`}>
-          <h2 className={`${T.rotulo} border-b ${T.regla} px-4 py-3 sm:px-5`}>Por secretaría</h2>
-          <div className={`divide-y ${T.divide}`}>
-            {dependencias.map(([nombre, l]) => (
-              <FilaGrupo
-                key={nombre}
-                nombre={nombre}
-                r={resumir(l)}
-                conSeguimiento={conSeg}
-                onClick={onVerDependencia ? () => onVerDependencia(nombre) : undefined}
-              />
-            ))}
-          </div>
-        </section>
-        <section className={`min-w-0 overflow-hidden ${T.panel}`}>
-          <h2 className={`${T.rotulo} border-b ${T.regla} px-4 py-3 sm:px-5`}>Por línea estratégica</h2>
-          <div className={`divide-y ${T.divide}`}>
-            {lineas.map(([nombre, l]) => (
-              <FilaGrupo key={nombre} nombre={nombre} r={resumir(l)} conSeguimiento={conSeg} conIconoDeLinea />
-            ))}
-          </div>
-        </section>
-      </div>
+      {graficos ? (
+        <>
+          <AvancePorGrupo
+            titulo="Por secretaría"
+            rotuloGrupo="Secretaría"
+            anio={anio}
+            grupos={graficos.porSecretaria}
+            onVer={onVerDependencia}
+          />
+          <AvancePorGrupo titulo="Por línea estratégica" rotuloGrupo="Línea" anio={anio} grupos={graficos.porLinea} conIconoDeLinea />
+        </>
+      ) : (
+        /* `min-w-0` en los paneles: un elemento de una cuadrícula no se encoge por debajo de su
+           contenido, y el nombre de una secretaría en una sola línea empujaba el panel a 404 px
+           dentro de un teléfono de 375. */
+        <div className="grid gap-5 lg:grid-cols-2">
+          <section className={`min-w-0 overflow-hidden ${T.panel}`}>
+            <h2 className={`${T.rotulo} border-b ${T.regla} px-4 py-3 sm:px-5`}>Por secretaría</h2>
+            <div className={`divide-y ${T.divide}`}>
+              {dependencias.map(([nombre, l]) => (
+                <FilaGrupo
+                  key={nombre}
+                  nombre={nombre}
+                  r={resumir(l)}
+                  conSeguimiento={conSeg}
+                  onClick={onVerDependencia ? () => onVerDependencia(nombre) : undefined}
+                />
+              ))}
+            </div>
+          </section>
+          <section className={`min-w-0 overflow-hidden ${T.panel}`}>
+            <h2 className={`${T.rotulo} border-b ${T.regla} px-4 py-3 sm:px-5`}>Por línea estratégica</h2>
+            <div className={`divide-y ${T.divide}`}>
+              {lineas.map(([nombre, l]) => (
+                <FilaGrupo key={nombre} nombre={nombre} r={resumir(l)} conSeguimiento={conSeg} conIconoDeLinea />
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Controles de integridad (Control Interno) */}
       {controles && (

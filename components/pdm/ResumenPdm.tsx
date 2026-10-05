@@ -50,6 +50,8 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
   // Una secretaría también reporta los indicadores que lleva ella misma, y entre los de toda su
   // dependencia no los distinguiría: se le avisa de los suyos, con un enlace que los lista.
   const propiosPorReportar = nivel === 'coordinador' ? pendientesDeReportar(lista, yoId) : 0
+  // Los gráficos de avance: por ahora solo el administrador. Control Interno y el Alcalde, después.
+  const conGraficos = nivel === 'admin'
 
   return (
     <Pagina>
@@ -62,7 +64,8 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
         ]}
       />
 
-      <SelectorAnio anio={anio} anioActual={anioActual} onCambiar={setAnio} />
+      {/* Con los gráficos, las tarjetas de año son el selector: un segundo control para lo mismo sería ruido. */}
+      {!conGraficos && <SelectorAnio anio={anio} anioActual={anioActual} onCambiar={setAnio} />}
 
       {propiosPorReportar > 0 && (
         <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ${T.avisoNota}`}>
@@ -78,6 +81,8 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
         lista={lista}
         anio={anio}
         anioActual={anioActual}
+        conGraficos={conGraficos}
+        onElegirAnio={setAnio}
         onAbrir={setAbierto}
         onVerDependencia={d => router.push(`${HREF_INDICADORES}?dependencia=${encodeURIComponent(d)}&anio=${anio}`)}
       />
