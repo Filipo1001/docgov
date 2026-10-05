@@ -36,7 +36,7 @@
  */
 
 import { agrupar, type Indicador } from './plan'
-import { ANIOS_PLAN, anioIniciado, estadoDelAnio, type EstadoDelAnio } from './seguimiento'
+import { ANIOS_PLAN, anioIniciado, estadoDelAnio, type EstadoDelAnio, type EstadoReporte } from './seguimiento'
 
 /** Los cinco puntos del reporte en que se reparten los indicadores con meta, de lo hecho a lo que nadie hará. */
 export type ParteDeReportes = 'aprobados' | 'porValidar' | 'devueltos' | 'faltan' | 'sinResponsable'
@@ -118,6 +118,113 @@ export function cuentasPorGrupo(
   lista: Indicador[], anio: number, anioActual: number, clave: (i: Indicador) => string,
 ): CuentaDeGrupo[] {
   return agrupar(lista, clave).map(([nombre, l]) => ({ nombre, cuenta: cuentaDeAnio(l, anio, anioActual) }))
+}
+
+/**
+ * La cuenta de cada persona: sobre los indicadores que tiene asignados, como principal o de apoyo (el mismo criterio de
+ * «Mi trabajo» y de la cifra que ya muestra la lista de personas: quien tiene un indicador a su cargo, de cualquier
+ * modo, es quien tiene que reportarlo). Habla de GESTIÓN —qué le falta, qué le devolvieron, qué espera validación—
+ * y no del resultado de los indicadores: que una meta se cumpla depende de más cosas de las que una persona controla.
+ */
+export function cuentasPorPersona(lista: Indicador[], anio: number, anioActual: number): Map<string, CuentaDeAnio> {
+  const suyos = new Map<string, Indicador[]>()
+  for (const i of lista) {
+    for (const id of new Set(i.asignados.map(a => a.usuarioId))) {
+      const l = suyos.get(id) ?? []
+      l.push(i)
+      suyos.set(id, l)
+    }
+  }
+  return new Map([...suyos].map(([id, l]) => [id, cuentaDeAnio(l, anio, anioActual)]))
+}
+
+// ─── El mapa: una cuenta por cada cruce de dos grupos ─────────────────────────
+
+export interface MapaDeGrupos {
+  /** Del grupo con más indicadores al que menos. */
+  filas: string[]
+  /** En orden alfabético (las líneas se llaman «Línea 1…», «Línea 2…»). */
+  columnas: string[]
+  /** `celdas[fila][columna]`: la cuenta del año para los indicadores de ese cruce. */
+  celdas: CuentaDeAnio[][]
+  /** Cuántos indicadores con meta tiene el cruce más cargado: la escala del sombreado. */
+  maximo: number
+}
+
+/** La cuenta de un año en cada cruce de dos agrupaciones (secretaría × línea). Todos los cruces suman el total. */
+export function mapaDeGrupos(
+  lista: Indicador[], anio: number, anioActual: number,
+  fila: (i: Indicador) => string, columna: (i: Indicador) => string,
+): MapaDeGrupos {
+  const filas = agrupar(lista, fila).map(([nombre]) => nombre)
+  const columnas = [...new Set(lista.map(columna))].sort((a, b) => a.localeCompare(b, 'es'))
+  const celdas = filas.map(f => columnas.map(c =>
+    cuentaDeAnio(lista.filter(i => fila(i) === f && columna(i) === c), anio, anioActual),
+  ))
+  return { filas, columnas, celdas, maximo: Math.max(0, ...celdas.flat().map(c => c.conMeta)) }
+}
+
+// ─── La carga: cuántos indicadores lleva cada persona ─────────────────────────
+
+/** Los tramos de carga: lo bastante pocos para leerse de un vistazo, y cortados donde cambia lo que se le puede pedir a alguien. */
+const TRAMOS_DE_CARGA: { rotulo: string; hasta: number }[] = [
+  { rotulo: '1 a 5', hasta: 5 },
+  { rotulo: '6 a 10', hasta: 10 },
+  { rotulo: '11 a 20', hasta: 20 },
+  { rotulo: '21 a 40', hasta: 40 },
+  { rotulo: '41 o más', hasta: Infinity },
+]
+
+export interface DistribucionDeCarga {
+  tramos: { rotulo: string; personas: number }[]
+  /** Personas con al menos un indicador: las que no llevan nada no entran (no son «carga baja», son otra cosa). */
+  personas: number
+  minimo: number | null
+  mediana: number | null
+  maximo: number | null
+}
+
+/**
+ * Cuántas personas hay en cada tramo de carga. No nombra a nadie: dice si el trabajo está repartido parejo, y quién lleva
+ * qué lo dice la lista de personas, que ya viene ordenada por carga.
+ */
+export function distribucionDeCarga(cargas: number[]): DistribucionDeCarga {
+  const con = cargas.filter(n => n > 0).sort((a, b) => a - b)
+  const tramos = TRAMOS_DE_CARGA.map(t => ({ rotulo: t.rotulo, personas: 0 }))
+  for (const n of con) tramos[TRAMOS_DE_CARGA.findIndex(t => n <= t.hasta)].personas++
+  const mitad = Math.floor(con.length / 2)
+  return {
+    tramos,
+    personas: con.length,
+    minimo: con[0] ?? null,
+    mediana: con.length === 0 ? null : con.length % 2 === 1 ? con[mitad] : (con[mitad - 1] + con[mitad]) / 2,
+    maximo: con[con.length - 1] ?? null,
+  }
+}
+
+// ─── La serie: cómo fue creciendo lo reportado en un año ──────────────────────
+
+export interface PuntoDeSerie {
+  /** Milisegundos desde 1970: el eje del tiempo. */
+  t: number
+  valor: number
+  estado: EstadoReporte
+}
+
+/**
+ * Los reportes VIGENTES de un año, del más antiguo al más reciente. Las versiones reemplazadas por una corrección son
+ * historia (siguen en la trazabilidad) y no entran: la serie es lo que quedó dicho en cada momento, no cada intento.
+ * Cada reporte trae el avance del año hasta ese día, así que la serie sube (o no) con cada uno.
+ */
+export function serieDelAnio(
+  reportes: { anio: number; creado: string; valor: number; estado: EstadoReporte; vigente: boolean }[],
+  anio: number,
+): PuntoDeSerie[] {
+  return reportes
+    .filter(r => r.anio === anio && r.vigente)
+    .map(r => ({ t: Date.parse(r.creado), valor: r.valor, estado: r.estado }))
+    .filter(p => Number.isFinite(p.t))
+    .sort((a, b) => a.t - b.t)
 }
 
 // ─── Palabras ─────────────────────────────────────────────────────────────────

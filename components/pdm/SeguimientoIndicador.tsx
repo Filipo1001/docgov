@@ -25,6 +25,7 @@ import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
 import { anioIniciado } from '@/lib/pdm/seguimiento'
+import { serieDelAnio } from '@/lib/pdm/graficos'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import type { NivelPdm } from '@/lib/pdm/niveles'
 import {
@@ -34,6 +35,7 @@ import {
 import FormularioReporte from './FormularioReporte'
 import { useAbrirEvidencia } from './abrir-evidencia'
 import ComentariosIndicador from './ComentariosIndicador'
+import EvolucionDelAnio from './EvolucionDelAnio'
 import { Sello, Seccion, SituacionTexto } from './ui'
 import BotonAccion, { Despliegue, useConfirmar, useNuevos } from './Movimiento'
 import { useAvisar } from './Avisos'
@@ -317,6 +319,8 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
   const ultimoDelAnio = delAnio[0] ?? null
   const reportaria = esDeQuienMira && reportaPorSuCuenta(nivel)
   const puedeReportar = reportaria && anioIniciado(indicador.anio, anioActual)
+  // La evolución del año (solo el administrador, por ahora): con dos reportes vigentes o más; con uno no hay evolución que dibujar.
+  const serie = nivel === 'admin' && detalle ? serieDelAnio(detalle.reportes, indicador.anio) : []
 
   return (
     <>
@@ -348,9 +352,12 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
             </li>
           </ol>
         ) : (
-          <ol className="space-y-0">
-            {delAnio.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={recargar} nueva={nuevas.has(r.id)} />)}
-          </ol>
+          <>
+            <EvolucionDelAnio puntos={serie} meta={indicador.meta} anio={indicador.anio} />
+            <ol className="space-y-0">
+              {delAnio.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={recargar} nueva={nuevas.has(r.id)} />)}
+            </ol>
+          </>
         )}
       </Seccion>
 

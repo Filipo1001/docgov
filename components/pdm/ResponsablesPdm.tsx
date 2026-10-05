@@ -34,11 +34,15 @@ import { Iconos } from '@/lib/iconos'
 import {
   agrupar, coincideNombre, haySeguimiento, sinAsignar, type Indicador,
 } from '@/lib/pdm/plan'
+import {
+  PARTES, cuentasPorPersona, distribucionDeCarga, textoDeParte, type CuentaDeAnio, type ParteDeReportes,
+} from '@/lib/pdm/graficos'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import type { Directorio, MotivoSinVincular, PersonaDirectorio } from '@/lib/pdm/personas'
 import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
-import { BarraEstados } from './Barras'
+import { BarraEstados, BarraReportes, MarcadorDeParte } from './Barras'
+import CargaPorPersona from './CargaPorPersona'
 import { Avatar, LineaContrato } from './PersonaVista'
 import GruposPdm from './GruposPdm'
 import AccesoPdm from './AccesoPdm'
@@ -62,8 +66,21 @@ const hrefUsuario = (id: string) => `${HREF_INDICADORES}?usuario=${encodeURIComp
 /** Los indicadores cuyo Excel nombraba a alguien que todavía no tiene usuario. */
 const hrefOrigen = (nombre: string) => `${HREF_INDICADORES}?origen=${encodeURIComponent(nombre)}`
 
-function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimiento: boolean }) {
-  const atencion = p.resumen ? p.resumen.atrasados + p.resumen.criticos : 0
+/** Lo que a una persona le toca hacer con sus reportes: lo devuelto, lo que espera validación y lo que falta. Lo aprobado no pide nada. */
+const PARTES_DE_GESTION: readonly ParteDeReportes[] = PARTES.filter(p => p === 'devueltos' || p === 'porValidar' || p === 'faltan')
+
+function FilaPersona({ p, conSeguimiento, gestion }: {
+  p: PersonaDirectorio
+  conSeguimiento: boolean
+  /**
+   * Sus reportes del año en curso (ver `cuentasPorPersona`). Con esto la fila habla de GESTIÓN, con hechos, en lugar de
+   * los estados provisionales «atrasado / crítico»; sin esto, la fila es la de siempre. `null`: no tiene nada.
+   */
+  gestion?: CuentaDeAnio | null
+}) {
+  const conGestion = gestion !== undefined
+  const atencion = !conGestion && p.resumen ? p.resumen.atrasados + p.resumen.criticos : 0
+  const pendientes = gestion ? PARTES_DE_GESTION.filter(k => gestion[k] > 0) : []
   const enlace = p.indicadores > 0
   const palabra = p.indicadores === 1 ? 'indicador' : 'indicadores'
   const contenido = (
@@ -89,9 +106,23 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
             {atencion} {atencion === 1 ? 'atrasado o crítico' : 'atrasados o críticos'}
           </p>
         )}
+        {pendientes.length > 0 && gestion && (
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs leading-4 text-[#556072]">
+            {pendientes.map(k => (
+              <span key={k} className="inline-flex items-center gap-1.5">
+                <MarcadorDeParte parte={k} />
+                <span className="tabular-nums">{textoDeParte(k, gestion[k])}</span>
+              </span>
+            ))}
+          </p>
+        )}
       </div>
       {/* Las columnas de datos se alinean con la línea del NOMBRE (20 px), no con el centro del bloque. */}
-      {p.resumen && conSeguimiento && (
+      {conGestion ? (
+        <div className="mt-1.5 hidden w-32 shrink-0 sm:block">
+          {gestion && gestion.conMeta > 0 && <BarraReportes c={gestion} alto="h-2" />}
+        </div>
+      ) : p.resumen && conSeguimiento && (
         <div className="mt-1.5 hidden w-32 shrink-0 sm:block">
           <BarraEstados r={p.resumen} alto="h-2" />
         </div>
@@ -124,9 +155,14 @@ function FilaPersona({ p, conSeguimiento }: { p: PersonaDirectorio; conSeguimien
   )
 }
 
-export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, acciones = ACCIONES_REALES }: {
+export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, anioActual, acciones = ACCIONES_REALES }: {
   directorio: Directorio
   indicadores: Indicador[]
+  /**
+   * El año calendario. Con él el administrador ve la carga por persona y, en cada fila, cómo van sus reportes del año en
+   * curso. Sin él (o para los demás niveles, por ahora) la pantalla es la de siempre.
+   */
+  anioActual?: number
   /** Qué puede hacer quien mira. */
   nivel: NivelPdm
   /** Quién mira. */
@@ -147,6 +183,12 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
   }, [huerfanos, indicadores])
 
   const { personas, sinUsuario } = directorio
+  const conGraficos = nivel === 'admin' && anioActual !== undefined
+  const gestionDe = useMemo(
+    () => (conGraficos ? cuentasPorPersona(indicadores, anioActual, anioActual) : null),
+    [conGraficos, indicadores, anioActual],
+  )
+  const carga = useMemo(() => (conGraficos ? distribucionDeCarga(personas.map(p => p.indicadores)) : null), [conGraficos, personas])
   const secretarias = useMemo(
     () => [...new Set(personas.map(p => p.secretaria).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b, 'es')),
     [personas],
@@ -283,12 +325,17 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
       {/* 3b · Quién entra al módulo */}
       {directorio.ok && <AccesoPdm personas={directorio.personas} nivel={nivel} yoId={yoId} acciones={acciones} />}
 
+      {/* 3c · Cómo está repartido el trabajo */}
+      {directorio.ok && carga && <CargaPorPersona d={carga} />}
+
       {/* 4 · Las personas de la plataforma */}
       {directorio.ok && (
         <section className="overflow-hidden rounded-lg border border-[#DCE0E8] bg-white px-4 py-4 sm:px-5">
           <div className="flex items-baseline gap-3 -mx-4 -mt-4 mb-3 border-b border-[#E6E9EF] px-4 py-3 sm:-mx-5 sm:px-5">
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#667085]">Personas</h2>
-            <span className="text-xs text-[#667085]">{personas.length} usuarios de Contratista Digital</span>
+            <span className="text-xs text-[#667085]">
+              {conGraficos ? `${personas.length} usuarios · reportes de ${anioActual}` : `${personas.length} usuarios de Contratista Digital`}
+            </span>
           </div>
 
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
@@ -339,7 +386,7 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
             <>
               <ul className="mt-2 divide-y divide-[#E6E9EF]">
                 {visibles.slice(0, limite).map(p => (
-                  <li key={p.id}><FilaPersona p={p} conSeguimiento={conSeguimiento} /></li>
+                  <li key={p.id}><FilaPersona p={p} conSeguimiento={conSeguimiento} gestion={gestionDe ? gestionDe.get(p.id) ?? null : undefined} /></li>
                 ))}
               </ul>
               {visibles.length > limite && (

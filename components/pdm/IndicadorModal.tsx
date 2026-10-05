@@ -32,7 +32,7 @@ import {
   coincideNombre, estadoDe, fmt, fmtRazon, razon, rotuloMeta, sinAsignar, tipoResponsable,
   type Indicador,
 } from '@/lib/pdm/plan'
-import { BarraAvance } from './Barras'
+import { BarraAnio, BarraAvance } from './Barras'
 import Ventana, { BotonCerrarVentana } from './Ventana'
 import { TextoEstable, useConfirmar } from './Movimiento'
 import { useAvisar } from './Avisos'
@@ -104,6 +104,8 @@ export default function IndicadorModal({
   // (Si el Excel nombraba a alguien que aún no tiene usuario, se muestra su nombre y por qué.)
   const huerfano = sinAsignar(indicador) && tipoResponsable(indicador.responsable) !== 'persona'
   const nombraAlgo = /\p{L}/u.test(indicador.responsable)
+  // Las barras por año de la ficha: por ahora solo el administrador (como los gráficos del Resumen).
+  const conGraficos = seguimiento?.nivel === 'admin'
   const principalVista = asignados?.find(a => a.principal)
   const apoyos = asignados?.filter(a => !a.principal) ?? []
 
@@ -201,7 +203,12 @@ export default function IndicadorModal({
                       {a.avance === null ? '—' : fmt(a.avance)}
                       <span className={`font-normal ${actual ? 'text-[#556072]' : 'text-[#667085]'}`}> / {a.meta === null ? 'sin meta' : fmt(a.meta)}</span>
                     </span>
-                    <span className="mt-1 block min-h-[1rem]">{a.enAnio && <SituacionTexto situacion={a.enAnio.situacion} className="text-[11px]" />}</span>
+                    {conGraficos && (
+                      <span className="mt-2 block">
+                        <BarraAnio meta={a.meta} avance={a.avance} reporte={a.enAnio?.reporte ?? null} />
+                      </span>
+                    )}
+                    <span className="mt-1.5 block min-h-[1rem]">{a.enAnio && <SituacionTexto situacion={a.enAnio.situacion} className="text-[11px]" />}</span>
                   </>
                 )
                 const clase = `flex flex-col items-stretch justify-start px-3.5 py-2.5 text-left ${actual ? 'bg-[#EDF0F5]' : 'bg-white'}`
@@ -219,7 +226,10 @@ export default function IndicadorModal({
                 )
               })}
             </div>
-            <p className="mt-2 text-xs text-[#667085]">Avance validado / meta de cada año.</p>
+            <p className="mt-2 text-xs text-[#667085]">
+              Avance validado / meta de cada año.
+              {conGraficos && ' La barra oscura es lo validado; el tramo claro, lo reportado que aún no cuenta.'}
+            </p>
           </Seccion>
 
           {/* Responsable */}

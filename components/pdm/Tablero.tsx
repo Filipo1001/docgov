@@ -14,7 +14,7 @@
 import { useMemo } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
-import { cuentasPorAnio, cuentasPorGrupo, lecturaDelAnio } from '@/lib/pdm/graficos'
+import { cuentasPorAnio, cuentasPorGrupo, lecturaDelAnio, mapaDeGrupos } from '@/lib/pdm/graficos'
 import {
   agrupar, estadoDe, fmt, fmtPct, haySeguimiento, resumir, sinAsignar,
   type Indicador, type Resumen,
@@ -25,6 +25,7 @@ import AvancePorGrupo from './AvancePorGrupo'
 import { BarraEstados, Leyenda } from './Barras'
 import IconoSector from './IconoSector'
 import Lectura from './Lectura'
+import Mapa from './MapaDeGrupos'
 import { Cifras, EstadoTexto, Panel, type Cifra } from './ui'
 import { T } from './tema'
 
@@ -100,6 +101,7 @@ export default function Tablero({
       porSecretaria,
       porLinea: cuentasPorGrupo(lista, anio, anioActual, i => i.linea).sort((a, b) => a.nombre.localeCompare(b.nombre)),
       lectura: lecturaDelAnio(porAnio.find(c => c.anio === anio) ?? porAnio[0], porSecretaria),
+      mapa: mapaDeGrupos(lista, anio, anioActual, i => i.dependencia, i => i.linea),
     }
   }, [conGraficos, lista, anio, anioActual])
 
@@ -188,6 +190,7 @@ export default function Tablero({
             onVer={onVerDependencia}
           />
           <AvancePorGrupo titulo="Por línea estratégica" rotuloGrupo="Línea" anio={anio} grupos={graficos.porLinea} conIconoDeLinea />
+          <Mapa mapa={graficos.mapa} anio={anio} titulo="Secretaría por línea estratégica" rotuloFilas="secretaría" />
         </>
       ) : (
         /* `min-w-0` en los paneles: un elemento de una cuadrícula no se encoge por debajo de su

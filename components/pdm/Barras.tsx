@@ -143,3 +143,33 @@ export function BarraReportes({ c, alto = 'h-1.5', oculta = false }: { c: Cuenta
     </span>
   )
 }
+
+/**
+ * Un año de un indicador contra su meta, para la ficha: lo VALIDADO en la tinta y, detrás, lo reportado que todavía no
+ * cuenta (sin validar, o devuelto) en un tono claro de su color. Las dos se topan en 100 %: pasarse no ensancha la barra.
+ * Sin meta no hay nada que medir: la pista queda vacía, con el mismo alto, para que las cuatro celdas no se desnivelen.
+ */
+export function BarraAnio({ meta, avance, reporte }: {
+  meta: number | null
+  avance: number | null
+  /** El último reporte del año, si lo hay: solo se pinta si todavía no está aprobado. */
+  reporte: { valor: number; estado: 'pendiente' | 'aprobado' | 'devuelto' } | null
+}) {
+  const sobre = (v: number | null) => (!meta || meta <= 0 || v === null || v <= 0 ? 0 : Math.min(100, (100 * v) / meta))
+  const validado = sobre(avance)
+  const reportado = reporte && reporte.estado !== 'aprobado' ? sobre(reporte.valor) : 0
+  // Lo que hay pero es diminuto (1 de 400) no puede desaparecer.
+  const visible = (p: number) => (p > 0 ? Math.max(p, 1.5) : 0)
+  return (
+    <span className="relative block h-1.5 w-full overflow-hidden rounded-[3px] bg-[#E6E9EF]" aria-hidden="true">
+      <span
+        className={`absolute inset-0 origin-left transition-transform duration-500 ease-out motion-reduce:transition-none ${reporte?.estado === 'devuelto' ? 'bg-[#E8B4AE]' : 'bg-[#E3CB97]'}`}
+        style={{ transform: `scaleX(${visible(reportado) / 100})` }}
+      />
+      <span
+        className="absolute inset-0 origin-left bg-[#192031] transition-transform duration-500 ease-out motion-reduce:transition-none"
+        style={{ transform: `scaleX(${visible(validado) / 100})` }}
+      />
+    </span>
+  )
+}

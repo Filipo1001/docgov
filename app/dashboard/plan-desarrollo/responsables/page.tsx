@@ -12,5 +12,5 @@ export default async function ResponsablesPage() {
   const acceso = await exigirAccesoPdm('gestor_o_consulta')
   const [plan, directorio] = await Promise.all([cargarPlanPdm(), cargarDirectorio()])
   if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
-  return <ResponsablesPdm directorio={directorio} indicadores={plan.indicadores} nivel={acceso.nivel} yoId={acceso.userId} />
+  return <ResponsablesPdm directorio={directorio} indicadores={plan.indicadores} nivel={acceso.nivel} yoId={acceso.userId} anioActual={plan.seguimiento.anioActual} />
 }
