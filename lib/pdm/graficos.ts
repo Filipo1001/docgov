@@ -36,6 +36,7 @@
  */
 
 import { agrupar, type Indicador } from './plan'
+import type { NivelPdm } from './niveles'
 import { ANIOS_PLAN, anioIniciado, estadoDelAnio, type EstadoDelAnio, type EstadoReporte } from './seguimiento'
 
 /** Los cinco puntos del reporte en que se reparten los indicadores con meta, de lo hecho a lo que nadie hará. */
@@ -54,6 +55,8 @@ export interface CuentaDeAnio {
   conAvance: number
   /** Llegaron a su meta con avance validado. */
   alcanzaron: number
+  /** Con avance validado MAYOR que cero pero sin llegar a la meta: van en camino. */
+  parciales: number
   /**
    * 0–100, o `null` si no se puede decir: el año no ha empezado, no hay indicadores con meta o todavía no hay ni un
    * avance validado (un «0 %» sonaría a un plan que no cumple, cuando es un plan que aún no se mide).
@@ -74,7 +77,7 @@ export function cuentaDeAnio(lista: Indicador[], anio: number, anioActual: numbe
   const estado = estadoDelAnio(anio, anioActual)
   const iniciado = anioIniciado(anio, anioActual)
   const c: CuentaDeAnio = {
-    anio, estado, total: lista.length, conMeta: 0, conAvance: 0, alcanzaron: 0, avancePromedio: null,
+    anio, estado, total: lista.length, conMeta: 0, conAvance: 0, alcanzaron: 0, parciales: 0, avancePromedio: null,
     aprobados: 0, porValidar: 0, devueltos: 0, faltan: 0, sinResponsable: 0,
   }
   let suma = 0
@@ -98,6 +101,7 @@ export function cuentaDeAnio(lista: Indicador[], anio: number, anioActual: numbe
       c.conAvance++
       suma += Math.min(a.avance / meta, 1)
       if (a.avance >= meta) c.alcanzaron++
+      else if (a.avance > 0) c.parciales++
     }
   }
   if (iniciado && c.conMeta > 0 && c.conAvance > 0) c.avancePromedio = (100 * suma) / c.conMeta
@@ -225,6 +229,100 @@ export function serieDelAnio(
     .map(r => ({ t: Date.parse(r.creado), valor: r.valor, estado: r.estado }))
     .filter(p => Number.isFinite(p.t))
     .sort((a, b) => a.t - b.t)
+}
+
+// ─── El cumplimiento: tres tramos, sobre uno o varios años ───────────────────
+
+/**
+ * El cumplimiento de un grupo de indicadores en uno o varios años, repartido en tres tramos que suman SIEMPRE el total:
+ *
+ *   cumplidos   llegaron a su meta (con avance validado)
+ *   parciales   tienen avance validado, sin llegar a la meta
+ *   sinAvance   todavía no tienen avance validado (los que no han reportado, los que esperan validación o fueron devueltos,
+ *               y los que nadie lleva)
+ *
+ * Es un reparto de HECHOS: no usa los umbrales «en ruta / atrasado / crítico», que siguen provisionales.
+ *
+ * La unidad es la META ANUAL: un indicador con meta en 2025 y en 2026 cuenta dos veces si se piden los dos años, cada una
+ * contra su propia meta (la decisión de la Alcaldía). Con un solo año, meta anual e indicador son lo mismo. Los años que
+ * todavía no empiezan no se cuentan: no se espera nada de ellos y sumarían «sin avance» que no es cierto.
+ */
+export interface Cumplimiento {
+  /** Los años que se sumaron (los pedidos que ya empezaron), de menor a mayor. */
+  anios: number[]
+  /** Metas anuales con meta mayor que cero: el denominador. */
+  total: number
+  cumplidos: number
+  parciales: number
+  sinAvance: number
+  /** 0–100, o `null` si en ninguna meta hay todavía un avance validado (un «0 %» sonaría a un plan que no cumple, no que no se mide). */
+  pctCumplido: number | null
+  // El estado de los reportes, sumado en los mismos años (ver `CuentaDeAnio`): lo aprobado y lo que hay que hacer.
+  aprobados: number
+  sinResponsable: number
+  faltan: number
+  devueltos: number
+  porValidar: number
+}
+
+export function cumplimientoDe(cuentas: CuentaDeAnio[], anios?: number[]): Cumplimiento {
+  const usadas = cuentas
+    .filter(c => c.estado !== 'proximo' && (anios === undefined || anios.includes(c.anio)))
+    .sort((a, b) => a.anio - b.anio)
+  const suma = (f: (c: CuentaDeAnio) => number) => usadas.reduce((t, c) => t + f(c), 0)
+  const total = suma(c => c.conMeta)
+  const cumplidos = suma(c => c.alcanzaron)
+  const parciales = suma(c => c.parciales)
+  return {
+    anios: usadas.map(c => c.anio),
+    total,
+    cumplidos,
+    parciales,
+    sinAvance: total - cumplidos - parciales,
+    pctCumplido: total > 0 && suma(c => c.conAvance) > 0 ? (100 * cumplidos) / total : null,
+    aprobados: suma(c => c.aprobados),
+    sinResponsable: suma(c => c.sinResponsable),
+    faltan: suma(c => c.faltan),
+    devueltos: suma(c => c.devueltos),
+    porValidar: suma(c => c.porValidar),
+  }
+}
+
+/**
+ * Lo que viaja del servidor al panel de inicio: las cuentas de cada año (no los indicadores), que son pocas y bastan para
+ * elegir años en el navegador sin volver a preguntar nada. Quién ve qué lo decide la base (ver `datos.ts`): el administrador y
+ * Control Interno el plan entero, una secretaría su dependencia, un responsable sus indicadores.
+ */
+export interface DatosCumplimiento {
+  nivel: NivelPdm
+  /** El año calendario (hora de Colombia): de él depende qué años ya empezaron. */
+  anioActual: number
+  /** De quién habla el diagrama: del plan entero, de una secretaría, o de los indicadores de quien mira. */
+  alcance: 'plan' | 'secretaria' | 'mios'
+  /** Con alcance «secretaria»: cómo se llama. */
+  secretaria: string | null
+  /** Las cuentas de cada año del plan para ese alcance. */
+  total: CuentaDeAnio[]
+  /** Solo con alcance «plan»: una secretaría por fila, del grupo con más indicadores al que menos. */
+  porSecretaria: { nombre: string; porAnio: CuentaDeAnio[] }[]
+}
+
+/** `null`: no hay nada que mostrar (el módulo no existe aquí, no se tiene acceso, o no hay indicadores). */
+export type RespuestaCumplimiento = { estado: 'ok'; datos: DatosCumplimiento } | { estado: 'error' } | null
+
+/** Los años que ya empezaron: los únicos que se pueden elegir para mirar el cumplimiento. */
+export const aniosIniciados = (anioActual: number): number[] => ANIOS_PLAN.filter(a => anioIniciado(a, anioActual))
+
+/** Los años elegidos, dichos: «2026», «2024 y 2025», «2024 a 2026», «todos los años». */
+export function rotuloDeAnios(elegidos: number[], anioActual: number): string {
+  const a = [...elegidos].sort((x, y) => x - y)
+  const todos = aniosIniciados(anioActual)
+  if (a.length === 0) return ''
+  if (a.length === todos.length && a.length > 1 && a.every((v, i) => v === todos[i])) return 'todos los años'
+  if (a.length === 1) return String(a[0])
+  const seguidos = a.every((v, i) => i === 0 || v === a[i - 1] + 1)
+  if (a.length === 2) return `${a[0]} y ${a[1]}`
+  return seguidos ? `${a[0]} a ${a[a.length - 1]}` : `${a.slice(0, -1).join(', ')} y ${a[a.length - 1]}`
 }
 
 // ─── Palabras ─────────────────────────────────────────────────────────────────
