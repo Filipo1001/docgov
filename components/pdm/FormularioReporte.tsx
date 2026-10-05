@@ -34,6 +34,8 @@ import {
 } from '@/lib/pdm/seguimiento-acciones'
 import { clasificarSeleccion, entradaNueva, esImagenDibujable, mensajeDeFallos, resumenDeSubida, type ArchivoEnCola, type Rechazo } from '@/lib/pdm/evidencias-cola'
 import { subirArchivo } from '@/lib/pdm/subir'
+import { crearMiniatura } from '@/lib/pdm/miniatura'
+import { limpio, marcar } from '@/lib/pdm/diagnostico'
 import { subirCola } from '@/lib/pdm/subir-cola'
 import { Seccion } from './ui'
 import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
@@ -78,10 +80,37 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
 
   // Las direcciones temporales de las vistas previas de las fotos: se crean al elegir y se liberan al quitar o al cerrar.
   const vistas = useRef(new Set<string>())
+  // Las miniaturas se hacen una a una (cada una decodifica su foto reducida y la libera antes de seguir con la otra).
+  const cadenaMiniaturas = useRef<Promise<void>>(Promise.resolve())
+  const vivo = useRef(true)
+  const colaRef = useRef<ArchivoEnCola<File>[]>([])
+  useEffect(() => { colaRef.current = cola })
   useEffect(() => {
+    vivo.current = true
     const creadas = vistas.current
-    return () => { creadas.forEach(u => URL.revokeObjectURL(u)); creadas.clear() }
+    return () => { vivo.current = false; creadas.forEach(u => URL.revokeObjectURL(u)); creadas.clear() }
   }, [])
+
+  // El rastro de la subida (ver `lib/pdm/diagnostico.ts`): abrir el formulario, cualquier error de la página mientras está abierto, y
+  // si la página se oculta o se descarga a media subida (una recarga, el sistema cerrando la pestaña).
+  useEffect(() => {
+    if (!abierto) return
+    marcar('abre', { modo })
+    const error = (e: ErrorEvent) => marcar('error-js', { mensaje: limpio(e.message) })
+    const rechazo = (e: PromiseRejectionEvent) => marcar('rechazo-js', { mensaje: limpio((e.reason as Error | undefined)?.message ?? e.reason) })
+    const oculta = () => marcar(document.visibilityState === 'hidden' ? 'pagina-oculta' : 'pagina-visible')
+    const sale = () => marcar('pagina-se-descarga')
+    window.addEventListener('error', error)
+    window.addEventListener('unhandledrejection', rechazo)
+    document.addEventListener('visibilitychange', oculta)
+    window.addEventListener('pagehide', sale)
+    return () => {
+      window.removeEventListener('error', error)
+      window.removeEventListener('unhandledrejection', rechazo)
+      document.removeEventListener('visibilitychange', oculta)
+      window.removeEventListener('pagehide', sale)
+    }
+  }, [abierto, modo])
 
   // Mientras se sube, cerrar la pestaña perdería el envío: el navegador pregunta antes.
   useEffect(() => {
@@ -137,13 +166,22 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
     const sel = clasificarSeleccion(cola.map(c => c.archivo), conservar.size, lista)
     // De cada archivo que no sirve se dice cuál es y por qué; los que sí sirven se adjuntan igual.
     setAvisos([...carpetas.map(nombre => ({ nombre, motivo: 'Es una carpeta: adjunta los archivos que contiene, no la carpeta.' })), ...sel.rechazados])
+    marcar('elegidos', { n: lista.length, aceptados: sel.aceptados.length, rechazados: sel.rechazados.length, mb: Math.round(lista.reduce((t, f) => t + f.size, 0) / 1e5) / 10 })
     if (sel.aceptados.length > 0) {
-      const entradas = sel.aceptados.map(f => {
-        const e = entradaNueva(f)
-        if (esImagenDibujable(f)) { e.vista = URL.createObjectURL(f); vistas.current.add(e.vista) }
-        return e
-      })
+      const entradas = sel.aceptados.map(entradaNueva)
       setCola(a => [...a, ...entradas])
+      // Miniaturas: una por una, ya reducidas (no se decodifica la foto entera para dibujar un cuadro de 36 px).
+      for (const e of entradas) {
+        if (!esImagenDibujable(e.archivo)) continue
+        cadenaMiniaturas.current = cadenaMiniaturas.current.then(async () => {
+          const url = await crearMiniatura(e.archivo)
+          if (!url) return
+          // Si mientras tanto se quitó el archivo o se cerró el formulario, la miniatura sobra.
+          if (!vivo.current || !colaRef.current.some(c => c.clave === e.clave)) { URL.revokeObjectURL(url); return }
+          vistas.current.add(url)
+          setCola(a => a.map(c => (c.clave === e.clave ? { ...c, vista: url } : c)))
+        })
+      }
     }
   }
 
@@ -168,6 +206,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
       ?? errorEnArchivos(cola.map(c => ({ nombre: c.archivo.name, tipo: c.archivo.type, bytes: c.archivo.size })), conservar.size)
     if (mal || numero === null) { setError(mal ?? 'Escribe el valor del avance.'); return }
 
+    marcar('enviar', { modo, nuevos: cola.filter(c => !subidas.current.has(c.clave)).length, total: total, mb: Math.round(cola.reduce((t, c) => t + c.archivo.size, 0) / 1e5) / 10 })
     await correr(async () => {
       // Solo se sube lo que no está ya subido: tras un fallo parcial, se reintentan únicamente los que fallaron.
       const pendientes = cola.filter(c => !subidas.current.has(c.clave))
@@ -178,6 +217,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
           anio,
           archivos: pendientes.map(c => ({ nombre: c.archivo.name, tipo: c.archivo.type, bytes: c.archivo.size })),
         })
+        marcar('preparado', { ok: prep.ok })
         if (!prep.ok) return prep
         if (prep.datos.length !== pendientes.length) return { ok: false as const, error: 'No se pudo preparar la subida. Intenta de nuevo.' }
         const destino = new Map(pendientes.map((c, k) => [c.clave, prep.datos[k]]))
@@ -191,11 +231,16 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
             subidas.current.set(c.clave, { ruta: d.ruta, tipo: d.tipo })
           },
           {
-            alCambio: (clave, cambio) => setCola(actual => actual.map(c => {
+            alCambio: (clave, cambio) => {
+              if (cambio.estado === 'subiendo' && cambio.progreso === 0) marcar('sube')
+              else if (cambio.estado === 'subido') marcar('subido')
+              else if (cambio.estado === 'error') marcar('falla-subida', { error: limpio(cambio.error, 80) })
+              setCola(actual => actual.map(c => {
               if (c.clave !== clave) return c
               if (cambio.estado === 'error') return { ...c, estado: 'error', error: cambio.error }
               return { ...c, estado: cambio.estado, progreso: cambio.progreso, error: undefined }
-            })),
+              }))
+            },
           },
         )
         const fallidos = pendientes.flatMap(c => {
@@ -206,6 +251,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
       }
 
       setEtapa('registrando')
+      marcar('registrando')
       const r = await acciones.reportar({
         indicador: indicador.uuid,
         anio,
@@ -218,6 +264,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
         conservar: correccion ? [...conservar] : undefined,
         motivo: correccion ? motivo : undefined,
       })
+      marcar('registrado', { ok: r.ok })
       if (!r.ok) {
         // El servidor puede haber retirado lo recién subido: la próxima vez se vuelve a subir, pero NO hay que volver a
         // elegir los archivos (antes se vaciaba la lista y se perdía todo el trabajo).
@@ -227,6 +274,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
       return r
     }, {
       alTerminar: datos => {
+        marcar('hecho')
         vistas.current.forEach(u => URL.revokeObjectURL(u))
         vistas.current.clear()
         setCola([])
