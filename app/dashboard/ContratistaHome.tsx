@@ -9,7 +9,6 @@ import { conLimite } from '@/lib/con-limite'
 import { ESTADO_LABEL, ESTADO_COLOR, HISTORICO_COLOR, HISTORICO_LABEL, MESES, ROL_LABEL } from '@/lib/constants'
 import { tiempoRelativo } from '@/lib/format'
 import Icono from '@/components/ui/Icono'
-import CumplimientoPdm from '@/components/pdm/CumplimientoPdm'
 import { Iconos } from '@/lib/iconos'
 import type { EstadoPeriodo } from '@/lib/types'
 import PageHeader from '@/components/ui/PageHeader'
@@ -510,9 +509,6 @@ export default function ContratistaHome({
               </div>
             </Card>
           )}
-
-          {/* ── Cumplimiento de tus indicadores del Plan de Desarrollo (solo donde el módulo existe y para quien tiene acceso) ── */}
-          <CumplimientoPdm />
 
           {/* ── Period history ── */}
           {periodos.length > 0 && (

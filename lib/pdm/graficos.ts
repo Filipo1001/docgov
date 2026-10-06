@@ -36,7 +36,6 @@
  */
 
 import { agrupar, type Indicador } from './plan'
-import type { NivelPdm } from './niveles'
 import { ANIOS_PLAN, anioIniciado, estadoDelAnio, type EstadoDelAnio, type EstadoReporte } from './seguimiento'
 
 /** Los cinco puntos del reporte en que se reparten los indicadores con meta, de lo hecho a lo que nadie hará. */
@@ -289,12 +288,11 @@ export function cumplimientoDe(cuentas: CuentaDeAnio[], anios?: number[]): Cumpl
 }
 
 /**
- * Lo que viaja del servidor al panel de inicio: las cuentas de cada año (no los indicadores), que son pocas y bastan para
- * elegir años en el navegador sin volver a preguntar nada. Quién ve qué lo decide la base (ver `datos.ts`): el administrador y
- * Control Interno el plan entero, una secretaría su dependencia, un responsable sus indicadores.
+ * Lo que necesita el diagrama de cumplimiento del módulo: las cuentas de cada año (no los indicadores), que son pocas y bastan
+ * para elegir años en el navegador sin volver a calcular. Se arman con la lista que la pantalla YA tiene, y esa lista ya viene
+ * recortada por la base: el administrador ve todo el plan, una secretaría su dependencia, un responsable sus indicadores.
  */
 export interface DatosCumplimiento {
-  nivel: NivelPdm
   /** El año calendario (hora de Colombia): de él depende qué años ya empezaron. */
   anioActual: number
   /** De quién habla el diagrama: del plan entero, de una secretaría, o de los indicadores de quien mira. */
@@ -307,8 +305,24 @@ export interface DatosCumplimiento {
   porSecretaria: { nombre: string; porAnio: CuentaDeAnio[] }[]
 }
 
-/** `null`: no hay nada que mostrar (el módulo no existe aquí, no se tiene acceso, o no hay indicadores). */
-export type RespuestaCumplimiento = { estado: 'ok'; datos: DatosCumplimiento } | { estado: 'error' } | null
+/**
+ * Las cuentas del diagrama para una lista de indicadores. La lista ya es la que le corresponde a quien mira (ver arriba): esta
+ * función solo decide qué se cuenta y cómo se llama. `null` si no hay indicadores (no hay nada que repartir).
+ */
+export function datosDeCumplimiento(
+  indicadores: Indicador[], alcance: DatosCumplimiento['alcance'], anioActual: number,
+): DatosCumplimiento | null {
+  if (indicadores.length === 0) return null
+  return {
+    anioActual,
+    alcance,
+    secretaria: alcance === 'secretaria' ? [...new Set(indicadores.map(i => i.dependencia))].join(', ') : null,
+    total: cuentasPorAnio(indicadores, anioActual),
+    porSecretaria: alcance === 'plan'
+      ? agrupar(indicadores, i => i.dependencia).map(([nombre, l]) => ({ nombre, porAnio: cuentasPorAnio(l, anioActual) }))
+      : [],
+  }
+}
 
 /** Los años que ya empezaron: los únicos que se pueden elegir para mirar el cumplimiento. */
 export const aniosIniciados = (anioActual: number): number[] => ANIOS_PLAN.filter(a => anioIniciado(a, anioActual))

@@ -32,16 +32,16 @@ export default function BarrasCumplimiento({ filas, resaltado = null }: {
         return (
           <li key={nombre} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_3.25rem] sm:items-center" aria-label={descripcion}>
             <div className="min-w-0 sm:col-start-1">
-              <p className="text-sm font-medium leading-snug text-gray-900 [overflow-wrap:anywhere]">{nombre}</p>
-              <p className="text-xs leading-4 text-gray-500">
+              <p className="text-sm font-medium leading-snug text-[#192031] [overflow-wrap:anywhere]">{nombre}</p>
+              <p className="text-xs leading-4 text-[#667085]">
                 {c.total === 0 ? 'Sin metas en este período' : `${c.total} ${c.total === 1 ? 'meta' : 'metas'}`}
                 {pocos && ' · pocas: lee el porcentaje con cuidado'}
               </p>
             </div>
-            <p className="text-right text-sm font-semibold tabular-nums text-gray-900 sm:col-start-3 sm:row-start-1" aria-hidden>
-              {c.pctCumplido === null ? <span className="font-normal text-gray-500">—</span> : `${pctDe(c.cumplidos, c.total)} %`}
+            <p className="text-right text-sm font-semibold tabular-nums text-[#192031] sm:col-start-3 sm:row-start-1" aria-hidden>
+              {c.pctCumplido === null ? <span className="font-normal text-[#667085]">—</span> : `${pctDe(c.cumplidos, c.total)} %`}
             </p>
-            <span aria-hidden className="col-span-2 flex h-3 w-full gap-px overflow-hidden rounded-[4px] bg-gray-100 sm:col-span-1 sm:col-start-2 sm:row-start-1">
+            <span aria-hidden className="col-span-2 flex h-3 w-full gap-px overflow-hidden rounded-[4px] bg-[#E6E9EF] sm:col-span-1 sm:col-start-2 sm:row-start-1">
               {TRAMOS.map(t => (
                 <span
                   key={t.clave}

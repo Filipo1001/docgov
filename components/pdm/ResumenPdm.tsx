@@ -13,6 +13,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { agrupar, proyectarLista, type Indicador } from '@/lib/pdm/plan'
+import { datosDeCumplimiento } from '@/lib/pdm/graficos'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
 import { pendientesDeReportar } from '@/lib/pdm/mi-trabajo'
 import type { NivelPdm } from '@/lib/pdm/niveles'
@@ -20,6 +21,7 @@ import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import { Presencia } from './Ventana'
 import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
+import CumplimientoPdm from './CumplimientoPdm'
 import SelectorAnio from './SelectorAnio'
 import Tablero from './Tablero'
 import IndicadorModal from './IndicadorModal'
@@ -52,6 +54,13 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
   const propiosPorReportar = nivel === 'coordinador' ? pendientesDeReportar(lista, yoId) : 0
   // Los gráficos de avance: por ahora solo el administrador. Control Interno y el Alcalde, después.
   const conGraficos = nivel === 'admin'
+  // El diagrama de cumplimiento: la torta del plan y las barras por secretaría para el administrador; la torta de su secretaría para
+  // la secretaría (la base ya le recortó los indicadores a su dependencia). Control Interno, después.
+  const cumplimiento = useMemo(() => {
+    if (nivel === 'admin') return datosDeCumplimiento(indicadores, 'plan', anioActual)
+    if (nivel === 'coordinador') return datosDeCumplimiento(indicadores, 'secretaria', anioActual)
+    return null
+  }, [nivel, indicadores, anioActual])
 
   return (
     <Pagina>
@@ -63,6 +72,8 @@ export default function ResumenPdm({ indicadores, fichas, nivel, yoId, anioActua
           { rotulo: 'Año', valor: String(anio) },
         ]}
       />
+
+      {cumplimiento && <CumplimientoPdm datos={cumplimiento} anioInicial={anioInicial} />}
 
       {/* Con los gráficos, las tarjetas de año son el selector: un segundo control para lo mismo sería ruido. */}
       {!conGraficos && <SelectorAnio anio={anio} anioActual={anioActual} onCambiar={setAnio} />}

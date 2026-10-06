@@ -1,5 +1,5 @@
 /**
- * Cómo se ve cada tramo del cumplimiento, en los diagramas del panel de inicio (ver `cumplimientoDe` en `lib/pdm/graficos.ts`).
+ * Cómo se ve cada tramo del cumplimiento, en los diagramas de cumplimiento del módulo (ver `cumplimientoDe` en `lib/pdm/graficos.ts`).
  *
  * Tres tonos que van de lo hecho a lo que falta: verde hondo (cumplido), verde medio (en avance) y gris claro (sin avance). Se
  * separan por CLARIDAD, no solo por tono: del más oscuro al más claro hay un salto parecido entre uno y otro, así que se distinguen

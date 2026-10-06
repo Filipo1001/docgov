@@ -14,7 +14,6 @@ import { capitalizarNombre } from '@/lib/format'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
 import Icono from '@/components/ui/Icono'
-import CumplimientoPdm from '@/components/pdm/CumplimientoPdm'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -214,9 +213,6 @@ export default function AdminHome({
           </div>
         </Link>
       </div>
-
-      {/* ── Cumplimiento del Plan de Desarrollo (solo donde el módulo existe y para quien tiene acceso) ── */}
-      <CumplimientoPdm />
 
       {/* ── Recent activity ── */}
       <Card>

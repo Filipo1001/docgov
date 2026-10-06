@@ -44,7 +44,7 @@ export default function Torta({ tramos, centro, nota, descripcion, resaltado = n
   const empieza = tramos.map((_, k) => (total > 0 ? tramos.slice(0, k).reduce((t, x) => t + x.valor, 0) / total : 0))
   return (
     <svg viewBox={`0 0 ${TAM} ${TAM}`} role="img" aria-label={descripcion} className="h-[168px] w-[168px] shrink-0">
-      <circle cx={C0} cy={C0} r={R} fill="none" stroke="#EEF0F4" strokeWidth={GROSOR} />
+      <circle cx={C0} cy={C0} r={R} fill="none" stroke="#E6E9EF" strokeWidth={GROSOR} />
       {tramos.map((t, k) => {
         const parte = total > 0 ? t.valor / total : 0
         const largo = Math.max(parte - (conVarios && parte > 0 ? RENDIJA : 0), 0) * LARGO
@@ -66,8 +66,8 @@ export default function Torta({ tramos, centro, nota, descripcion, resaltado = n
           </circle>
         )
       })}
-      <text x={C0} y={C0 + 2} textAnchor="middle" fontSize="30" fontWeight="600" className="fill-gray-900 tabular-nums">{centro}</text>
-      <text x={C0} y={C0 + 22} textAnchor="middle" fontSize="11" className="fill-gray-500">{nota}</text>
+      <text x={C0} y={C0 + 2} textAnchor="middle" fontSize="30" fontWeight="600" fill="#192031" className="tabular-nums">{centro}</text>
+      <text x={C0} y={C0 + 22} textAnchor="middle" fontSize="11" fill="#556072">{nota}</text>
     </svg>
   )
 }

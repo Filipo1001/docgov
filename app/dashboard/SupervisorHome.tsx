@@ -16,7 +16,6 @@ import { conLimite } from '@/lib/con-limite'
 import { getMesActual, MESES } from '@/lib/constants'
 import { capitalizarNombre } from '@/lib/format'
 import Icono from '@/components/ui/Icono'
-import CumplimientoPdm from '@/components/pdm/CumplimientoPdm'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
 import ErrorState from '@/components/ui/ErrorState'
 
@@ -481,9 +480,6 @@ export default function SupervisorHome({
 
       {/* ── Pipeline Bar ── */}
       <PipelineBar pipeline={data.pipeline} mes={mes} anio={anio} />
-
-      {/* ── Cumplimiento del Plan de Desarrollo de tu secretaría (solo donde el módulo existe y para quien tiene acceso) ── */}
-      <CumplimientoPdm />
 
       {/* ── Alertas Inteligentes ── */}
       {(data.alertasTardios.length > 0 || data.alertasRechazados.length > 0) && (

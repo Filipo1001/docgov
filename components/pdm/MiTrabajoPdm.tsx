@@ -16,6 +16,7 @@
 import { useMemo, useState } from 'react'
 import type { Indicador } from '@/lib/pdm/plan'
 import { proyectarLista } from '@/lib/pdm/plan'
+import { datosDeCumplimiento } from '@/lib/pdm/graficos'
 import { ROTULO_ESTADO_ANIO, anioIniciado } from '@/lib/pdm/seguimiento'
 import {
   esMio, miPapel, ordenarMiTrabajo, tarjetasDeAnios,
@@ -26,6 +27,7 @@ import type { PersonaFicha } from '@/lib/pdm/personas'
 import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 import { Presencia } from './Ventana'
 import Pagina from './Pagina'
+import CumplimientoPdm from './CumplimientoPdm'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import IndicadorModal from './IndicadorModal'
 import { COLUMNAS, FilaIndicador } from './ListaIndicadores'
@@ -148,6 +150,8 @@ export default function MiTrabajoPdm({
   const secciones = useMemo(() => ordenarMiTrabajo(delAnio, yoId), [delAnio, yoId])
   const mios = useMemo(() => indicadores.filter(i => esMio(i, yoId)), [indicadores, yoId])
   const tarjetas = useMemo(() => tarjetasDeAnios(indicadores, yoId, anioActual), [indicadores, yoId, anioActual])
+  // El diagrama de cumplimiento de MIS indicadores, en los años que se elijan (el mismo selector de años del panel).
+  const cumplimiento = useMemo(() => datosDeCumplimiento(mios, 'mios', anioActual), [mios, anioActual])
   const nombreDeGrupo = useMemo(() => new Map(grupos.map(g => [g.id, g.nombre])), [grupos])
 
   const iniciado = anioIniciado(anio, anioActual)
@@ -178,6 +182,8 @@ export default function MiTrabajoPdm({
         </Panel>
       ) : (
         <>
+          {cumplimiento && <CumplimientoPdm datos={cumplimiento} anioInicial={anioInicial} />}
+
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {tarjetas.map(t => <Tarjeta key={t.anio} t={t} elegida={t.anio === anio} onElegir={() => setAnio(t.anio)} />)}
           </div>
