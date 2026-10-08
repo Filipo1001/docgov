@@ -1,0 +1,41 @@
+# Pruebas del módulo Plan de Desarrollo.
+#
+# Corren solas en cada envío que toque el módulo (o estas pruebas), en `plan-desarrollo`, en `main` y en cualquier
+# solicitud de fusión. No tocan ninguna base de datos ni necesitan secretos: son la lógica pura del módulo
+# (reglas de reporte, cumplimiento, interruptor de producción, correos, evidencias…). No despliegan nada: el
+# despliegue sigue siendo el de Vercel.
+name: Pruebas del Plan de Desarrollo
+
+on:
+  push:
+    branches: [plan-desarrollo, main]
+    paths:
+      - 'lib/pdm/**'
+      - 'components/pdm/**'
+      - 'app/dashboard/plan-desarrollo/**'
+      - 'app/actions/pdm*.ts'
+      - 'tests/pdm/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/pdm-pruebas.yml'
+  pull_request:
+    paths:
+      - 'lib/pdm/**'
+      - 'components/pdm/**'
+      - 'app/dashboard/plan-desarrollo/**'
+      - 'app/actions/pdm*.ts'
+      - 'tests/pdm/**'
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run test:pdm

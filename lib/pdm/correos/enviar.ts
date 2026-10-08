@@ -1,6 +1,6 @@
 import 'server-only'
 import { enviarCorreo } from '@/lib/resend'
-import { entornoPermiteModulo } from '../entorno'
+import { entornoPermiteModulo, produccionAbierta } from '../entorno'
 import {
   completarContextoDeReporte, insigniaDeAprobacion, leerBaseDeReporte, leerContextoDeLote, leerLoteDeGrupo, leerValidacion,
   type Persona,
@@ -30,14 +30,17 @@ function registrar(linea: string, detalle: Record<string, string | number | bool
   console.info(`[pdm/correos] ${linea} ${Object.entries(detalle).map(([k, v]) => `${k}=${v}`).join(' ')}`)
 }
 
-const habilitado = () => entornoPermiteModulo(process.env.VERCEL_ENV, process.env.NODE_ENV)
+const habilitado = () => entornoPermiteModulo(process.env.VERCEL_ENV, process.env.NODE_ENV, process.env.PDM_PRODUCCION)
+
+/** En producción abierta le escribe a quien corresponda; en vista previa (que comparte la base real), solo a la lista de prueba. */
+const abierto = () => produccionAbierta(process.env.VERCEL_ENV, process.env.PDM_PRODUCCION)
 
 /** `true` salvo en producción: el pie de cada correo avisa de que el módulo está en vista previa. */
 const vistaPrevia = () => process.env.VERCEL_ENV !== 'production'
 
 async function entregar(tipo: string, referencia: string, para: Persona, correo: CorreoListo): Promise<void> {
   // Doble candado: aunque un llamador futuro se olvide de filtrar, aquí no sale nada a quien no corresponde.
-  if (!puedeRecibirCorreoPdm(para.id)) { registrar('omitido', { tipo, ref: referenciaDe(referencia), motivo: 'politica' }); return }
+  if (!puedeRecibirCorreoPdm(para.id, abierto())) { registrar('omitido', { tipo, ref: referenciaDe(referencia), motivo: 'politica' }); return }
   if (!esCorreoEntregable(para.correo)) { registrar('omitido', { tipo, ref: referenciaDe(referencia), motivo: 'sin-direccion' }); return }
   const r = await enviarCorreo({ to: para.correo, subject: correo.asunto, html: correo.html, text: correo.texto })
   if (r.ok) registrar('enviado', { tipo, ref: referenciaDe(referencia), resend: r.id ?? '?' })
@@ -61,7 +64,7 @@ export function avisarReporteEnviado(a: { reporteId: string; origen: string }): 
   return aislado('reporte-enviado', async () => {
     const base = await leerBaseDeReporte(a.reporteId)
     if (!base) return
-    if (!puedeRecibirCorreoPdm(base.autorId)) { registrar('omitido', { tipo: 'reporte-enviado', ref: referenciaDe(a.reporteId), motivo: 'politica' }); return }
+    if (!puedeRecibirCorreoPdm(base.autorId, abierto())) { registrar('omitido', { tipo: 'reporte-enviado', ref: referenciaDe(a.reporteId), motivo: 'politica' }); return }
     const ctx = await completarContextoDeReporte(base)
     if (ctx.archivos.length === 0) return // un reporte sin evidencia no existe; si pasara, no hay nada honesto que decir
     const correo = correoReporteEnviado({
@@ -89,7 +92,7 @@ export function avisarValidacion(a: { reporteId: string; cambio: 'aprobado' | 'd
   return aislado(tipo, async () => {
     const base = await leerBaseDeReporte(a.reporteId)
     if (!base) return
-    if (!puedeRecibirCorreoPdm(base.autorId)) { registrar('omitido', { tipo, ref: referenciaDe(a.reporteId), motivo: 'politica' }); return }
+    if (!puedeRecibirCorreoPdm(base.autorId, abierto())) { registrar('omitido', { tipo, ref: referenciaDe(a.reporteId), motivo: 'politica' }); return }
     const ctx = await completarContextoDeReporte(base)
     const validacion = await leerValidacion(base.id, a.cambio, ctx.archivos)
     if (!validacion) return
@@ -120,7 +123,7 @@ export function avisarValidacion(a: { reporteId: string; cambio: 'aprobado' | 'd
 /** Se repartieron indicadores (lote de la base): se le escribe a cada persona afectada, un correo por persona. */
 export function avisarCambioDeReparto(a: { lote: string; origen: string }): Promise<void> {
   return aislado('reparto', async () => {
-    const ctx = await leerContextoDeLote(a.lote)
+    const ctx = await leerContextoDeLote(a.lote, abierto())
     if (!ctx) return
     if (ctx.omitidas > 0) registrar('omitido', { tipo: 'reparto', ref: referenciaDe(a.lote), personas: ctx.omitidas, motivo: 'politica' })
     for (const aviso of ctx.avisos) {

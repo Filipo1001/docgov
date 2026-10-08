@@ -43,10 +43,13 @@ import Pagina from './Pagina'
 import EncabezadoSeccion from './EncabezadoSeccion'
 import { BarraEstados, BarraReportes, MarcadorDeParte } from './Barras'
 import CargaPorPersona from './CargaPorPersona'
+import ContinuidadResponsables from './ContinuidadResponsables'
 import { Avatar, LineaContrato } from './PersonaVista'
 import GruposPdm from './GruposPdm'
 import AccesoPdm from './AccesoPdm'
 import { ETIQUETA_NIVEL, gestiona, type NivelPdm } from '@/lib/pdm/niveles'
+import { responsablesEnRiesgo } from '@/lib/pdm/continuidad'
+import { ANIOS_PLAN } from '@/lib/pdm/seguimiento'
 import { ACCIONES_REALES } from './acciones-reales'
 import type { AccionesPdm } from '@/lib/pdm/acciones'
 
@@ -188,6 +191,11 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
     () => (conGraficos ? cuentasPorPersona(indicadores, anioActual, anioActual) : null),
     [conGraficos, indicadores, anioActual],
   )
+  // Quién responde como principal sin contrato, o con uno que termina antes de que acabe el plan: solo para quien reparte.
+  const enRiesgo = useMemo(
+    () => (gestiona(nivel) && directorio.ok ? responsablesEnRiesgo(personas, indicadores, `${ANIOS_PLAN[ANIOS_PLAN.length - 1]}-12-31`) : []),
+    [nivel, directorio.ok, personas, indicadores],
+  )
   const carga = useMemo(() => (conGraficos ? distribucionDeCarga(personas.map(p => p.indicadores)) : null), [conGraficos, personas])
   const secretarias = useMemo(
     () => [...new Set(personas.map(p => p.secretaria).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b, 'es')),
@@ -267,6 +275,9 @@ export default function ResponsablesPdm({ directorio, indicadores, nivel, yoId, 
           </ul>
         </section>
       )}
+
+      {/* 1b · Quién deja de responder cuando termine su contrato */}
+      <ContinuidadResponsables lista={enRiesgo} />
 
       {!directorio.ok && (
         <div role="alert" className="flex items-start gap-3 rounded-lg border border-[#EBD9A8] bg-[#FBF6E7] px-4 py-3">

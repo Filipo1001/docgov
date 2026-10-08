@@ -24,9 +24,10 @@ import { entornoPermiteModulo } from '@/lib/pdm/entorno'
  * vea el botón y haya que decirlo. El de equivocarse hacia el otro lado es un
  * módulo a medias frente a usuarios reales de una alcaldía.
  *
- * Dejará de existir cuando el módulo se abra en producción de forma
- * deliberada: ese día esta función pasa a leer una habilitación por usuario.
+ * En producción se abre de forma DELIBERADA con la variable `PDM_PRODUCCION=si` del
+ * proyecto en Vercel (ver `entorno.ts`). Dentro del módulo, quién entra lo siguen
+ * decidiendo el rol de administrador y `pdm_permisos`.
  */
 export function pdmHabilitado(): boolean {
-  return entornoPermiteModulo(process.env.VERCEL_ENV, process.env.NODE_ENV)
+  return entornoPermiteModulo(process.env.VERCEL_ENV, process.env.NODE_ENV, process.env.PDM_PRODUCCION)
 }

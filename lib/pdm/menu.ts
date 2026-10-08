@@ -37,12 +37,14 @@ export function insertarDebajoDeInicio(items: ItemMenu[], extra: ItemMenu): Item
  * Es la misma pregunta que `pdmHabilitado()` responde en el servidor, con la
  * misma regla (`entornoPermiteModulo`). `VERCEL_ENV` solo existe en el servidor;
  * `next.config.ts` la copia a `NEXT_PUBLIC_ENTORNO_VERCEL` al compilar para que
- * el layout —que es un componente de cliente— pueda preguntarlo. Ha de
- * escribirse literal, sin desestructurar: solo así Next la sustituye.
+ * el layout —que es un componente de cliente— pueda preguntarlo; lo mismo con el
+ * interruptor de producción (`PDM_PRODUCCION` → `NEXT_PUBLIC_PDM_PRODUCCION`). Han de
+ * escribirse literales, sin desestructurar: solo así Next las sustituye.
  */
 export const MARCO_PDM_DISPONIBLE = entornoPermiteModulo(
   process.env.NEXT_PUBLIC_ENTORNO_VERCEL,
   process.env.NODE_ENV,
+  process.env.NEXT_PUBLIC_PDM_PRODUCCION,
 )
 
 /**

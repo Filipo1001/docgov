@@ -40,7 +40,8 @@ export default async function PlanDesarrolloLayout({ children }: { children: Rea
   return (
     <ProveedorAvisos>
       <BarraPdmConectada nivel={nivel} />
-      <AvisoVistaPrevia />
+      {/* En producción no hay «vista previa» que avisar. */}
+      {process.env.VERCEL_ENV !== 'production' && <AvisoVistaPrevia />}
       <main className="px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:px-8 md:py-8">
         {children}
       </main>

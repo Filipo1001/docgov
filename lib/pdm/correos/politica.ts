@@ -12,20 +12,23 @@
  * «FELIPE RESTREPO CEBALLOS» (el real, con su correo, y uno de prueba con un correo `@pendiente.local`). Un filtro por
  * nombre le habría escrito a los dos.
  *
- * Abrirlo a todos el día que toque es borrar esta lista y dejar `puedeRecibirCorreoPdm` devolviendo `true`: ninguna
- * otra pieza de los correos asume que hay un único destinatario.
+ * ── En producción, a quien corresponda ───────────────────────────────────
+ *
+ * Cuando el módulo se abre en producción (`PDM_PRODUCCION=si`, ver `entorno.ts`), el remitente pasa `abierto = true` y
+ * la lista deja de aplicar: le llega a quien le toca. En la vista previa sigue aplicando SIEMPRE, aunque producción ya
+ * esté abierta: la vista previa comparte la base real, y una prueba no debe escribirle a nadie que no esté en la lista.
  */
 
 export const RECEPTORES_DE_PRUEBA: ReadonlySet<string> = new Set([
   '32d89e0e-b3a4-44d2-b08f-fc7929955030', // Felipe Restrepo Ceballos (contratista; correo real)
 ])
 
-export const puedeRecibirCorreoPdm = (usuarioId: string | null | undefined): boolean =>
-  typeof usuarioId === 'string' && RECEPTORES_DE_PRUEBA.has(usuarioId)
+export const puedeRecibirCorreoPdm = (usuarioId: string | null | undefined, abierto = false): boolean =>
+  typeof usuarioId === 'string' && usuarioId !== '' && (abierto || RECEPTORES_DE_PRUEBA.has(usuarioId))
 
 /** Quién de una lista puede recibir, y a cuántos se dejó sin correo (para el registro, que cuenta pero no nombra). */
-export function filtrarReceptores<T extends { id: string }>(lista: readonly T[]): { permitidos: T[]; omitidos: number } {
-  const permitidos = lista.filter(p => puedeRecibirCorreoPdm(p.id))
+export function filtrarReceptores<T extends { id: string }>(abierto: boolean, lista: readonly T[]): { permitidos: T[]; omitidos: number } {
+  const permitidos = lista.filter(p => puedeRecibirCorreoPdm(p.id, abierto))
   return { permitidos, omitidos: lista.length - permitidos.length }
 }
 

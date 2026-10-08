@@ -220,7 +220,7 @@ export interface ContextoDeLote {
  * La política se aplica ANTES de leer nada más: mientras el módulo esté en pruebas, casi todo reparto afecta a gente
  * a la que no se le escribe, y no tiene sentido leer sus datos para después descartarlos.
  */
-export async function leerContextoDeLote(lote: string): Promise<ContextoDeLote | null> {
+export async function leerContextoDeLote(lote: string, abierto: boolean): Promise<ContextoDeLote | null> {
   const admin = createAdminSupabaseClient()
   const { data, error } = await admin
     .from('pdm_historial')
@@ -236,7 +236,8 @@ export async function leerContextoDeLote(lote: string): Promise<ContextoDeLote |
 
   const porPersona = agruparPorUsuario(cambiosDeLote(filas))
   const afectadas = [...porPersona.keys()]
-  const permitidas = afectadas.filter(puedeRecibirCorreoPdm)
+  // Con flecha y no pasando la función suelta: `filter` le daría la POSICIÓN como segundo argumento («abierto»).
+  const permitidas = afectadas.filter(id => puedeRecibirCorreoPdm(id, abierto))
   const omitidas = afectadas.length - permitidas.length
 
   const primera = filas[0]

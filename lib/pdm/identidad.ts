@@ -26,11 +26,11 @@ export const PLAN = {
 } as const
 
 /**
- * Mientras el módulo esté en vista previa (solo administrador, solo en el entorno
- * de pruebas), lo dice en pantalla: una línea, sin ocupar una tarjeta. Se apaga
- * aquí, y solo debe apagarse el día que el módulo se abra de verdad.
+ * En la vista previa, una línea que recuerda lo que más fácil se olvida: que comparte la base de datos con
+ * producción. Lo que alguien reporte, apruebe o asigne aquí es real. En producción no se pinta (lo decide el
+ * layout del módulo).
  */
 export const VISTA_PREVIA = {
   activa: true,
-  texto: 'Plan cargado del archivo de la Alcaldía, sin avances: el seguimiento empieza aquí.',
+  texto: 'Usa la base de datos real: lo que reportes, apruebes o asignes aquí queda registrado de verdad.',
 } as const

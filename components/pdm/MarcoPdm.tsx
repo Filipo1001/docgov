@@ -265,8 +265,8 @@ export function BarraPdm({
 }
 
 /**
- * Mientras los datos salgan de un archivo y no de la base, se dice: una línea,
- * sin ocupar una tarjeta. Se apaga en `VISTA_PREVIA.activa`.
+ * El aviso de la vista previa: una línea, sin ocupar una tarjeta (ver `VISTA_PREVIA`). El layout del módulo no lo pinta
+ * en producción.
  */
 export function AvisoVistaPrevia() {
   if (!VISTA_PREVIA.activa) return null
