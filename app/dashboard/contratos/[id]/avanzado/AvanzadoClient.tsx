@@ -8,8 +8,8 @@ import { Toaster, toast } from 'sonner'
 import { calcularDistribucionPeriodos } from '@/services/contratos'
 import { actualizarValorCobroPeriodo, actualizarPlanillaHistorica, subirPlanilla, actualizarBaseCotizacion, guardarMesCotizacion } from '@/app/actions/periodos'
 import {
-  crearOtrosi, eliminarOtrosi, actualizarOtrosi, previsualizarOtrosi, aplicarOtrosi,
-  type Otrosi, type TipoOtrosi, type PrevisualizacionOtrosi, type PeriodoPropuesto,
+  crearOtrosi, eliminarOtrosi, actualizarOtrosi, previsualizarOtrosi, aplicarOtrosi, previsualizarEliminacionOtrosi,
+  type Otrosi, type TipoOtrosi, type PrevisualizacionOtrosi, type PeriodoPropuesto, type PrevisualizacionEliminacion,
 } from '@/app/actions/otrosies'
 import { getAvanzadoData, type PeriodoAvanzado, type ContratoAvanzado } from '@/app/actions/avanzado'
 import EliminarContrato from './EliminarContrato'
@@ -50,6 +50,13 @@ const PLANILLA_ESTADO_COLOR: Record<string, string> = {
 }
 
 // Admin has full power — all periods editable regardless of state or historico flag.
+/** `2026-09-30` → `30/09/2026`. Las fechas civiles se formatean a mano: sin zona horaria no hay día que se corra. */
+function fechaCorta(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const [a, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${a}`
+}
+
 function esPeriodoEditableValor(_p: PeriodoRow): boolean { return true }
 function esPeriodoEditablePlanilla(_p: PeriodoRow): boolean { return true }
 
@@ -92,6 +99,9 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   const [mostrarFormOtrosi, setMostrarFormOtrosi] = useState(false)
   const [guardandoOtrosi, setGuardandoOtrosi] = useState(false)
   const [eliminandoOtrosiId, setEliminandoOtrosiId] = useState<string | null>(null)
+  // Eliminar un otrosí aplicado lo deshace: antes de hacerlo se muestra exactamente qué va a pasar.
+  const [confirmandoEliminacionId, setConfirmandoEliminacionId] = useState<string | null>(null)
+  const [vistaEliminacion, setVistaEliminacion] = useState<PrevisualizacionEliminacion | null>(null)
   // Edición de un otrosí ya registrado. Se digita a partir de un documento
   // firmado, así que los errores de transcripción aparecen después.
   const [editandoOtrosiId, setEditandoOtrosiId] = useState<string | null>(null)
@@ -197,33 +207,18 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   /**
    * ¿Este otrosí ya se aplicó al contrato?
    *
-   * Es la pregunta que la pantalla no respondía: se veía el botón «Aplicar»
-   * sin saber si ya se había usado, y quien llegaba después no tenía forma de
-   * distinguir un otrosí pendiente de uno ya reflejado.
-   *
-   * Se responde con los periodos, no con la fecha del contrato: la fecha dice
-   * que hubo una extensión, pero solo los periodos dicen si el contratista
-   * puede efectivamente reportar esos meses, que es lo que importa.
+   * Se responde con el registro de la aplicación (migración 061), no deduciéndolo de los meses que tienen periodo:
+   * esa deducción marcaba «Aplicado» a un otrosí que nunca se aplicó cuando sus meses los había creado otro (el
+   * caso del 045/2026, cuyo otrosí eliminado había dejado los periodos de octubre a diciembre).
    */
-  function estadoOtrosi(o: Otrosi): 'sin_plazo' | 'pendiente' | 'parcial' | 'aplicado' {
+  function estadoOtrosi(o: Otrosi): 'sin_plazo' | 'pendiente' | 'aplicado' {
+    if (o.aplicado_en) return 'aplicado'
     if (!o.plazo_dias_adicion || o.plazo_dias_adicion <= 0) return 'sin_plazo'
-    const inicio = new Date(o.fecha_inicio + 'T00:00:00')
-    const fin = new Date(inicio)
-    fin.setDate(fin.getDate() + o.plazo_dias_adicion - 1)
-
-    const meses = new Set<string>()
-    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1)
-    while (cursor <= fin) {
-      meses.add(`${MESES[cursor.getMonth()].toLowerCase()}-${cursor.getFullYear()}`)
-      cursor.setMonth(cursor.getMonth() + 1)
-    }
-    const existentes = new Set(periodos.map(pe => `${pe.mes.toLowerCase()}-${pe.anio}`))
-    const cubiertos = [...meses].filter(m => existentes.has(m)).length
-    if (cubiertos === 0) return 'pendiente'
-    return cubiertos === meses.size ? 'aplicado' : 'parcial'
+    return 'pendiente'
   }
 
-
+  // Un otrosí aplicado no cambia su fecha de inicio ni su plazo (la base lo impide): el formulario los deja quietos.
+  const editandoAplicado = !!editandoOtrosiId && !!otrosies.find(x => x.id === editandoOtrosiId)?.aplicado_en
 
   // ── Otrosíes handlers ───────────────────────────────────────
 
@@ -320,12 +315,36 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
     await cargarDatos()
   }
 
+  /** Primer paso de «Eliminar»: pregunta a la base qué se desharía, sin tocar nada, y lo muestra para confirmar. */
+  async function abrirEliminacion(id: string) {
+    setConfirmandoEliminacionId(id)
+    setVistaEliminacion(null)
+    const res = await previsualizarEliminacionOtrosi(id, contratoId)
+    if (res.error || !res.data) {
+      toast.error(res.error ?? 'No se pudo revisar el otrosí')
+      setConfirmandoEliminacionId(null)
+      return
+    }
+    setVistaEliminacion(res.data)
+  }
+
+  function cerrarEliminacion() {
+    setConfirmandoEliminacionId(null)
+    setVistaEliminacion(null)
+  }
+
   async function borrarOtrosi(id: string) {
     setEliminandoOtrosiId(id)
     const res = await eliminarOtrosi(id, contratoId)
     setEliminandoOtrosiId(null)
     if (res.error) { toast.error(res.error); return }
-    toast.success('Otrosí eliminado')
+    const r = res.data
+    toast.success(
+      r?.revertido
+        ? `Otrosí eliminado: se ${r.periodos === 1 ? 'borró 1 periodo' : `borraron ${r.periodos} periodos`} y la terminación volvió al ${fechaCorta(r.fechaFin)}`
+        : 'Otrosí eliminado',
+    )
+    cerrarEliminacion()
     await cargarDatos()
   }
 
@@ -1028,11 +1047,6 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                           Sin aplicar
                         </span>
                       )}
-                      {estado === 'parcial' && (
-                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
-                          Aplicado a medias
-                        </span>
-                      )}
                       <span className="text-xs text-gray-400">Inicia: {o.fecha_inicio}</span>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
@@ -1042,29 +1056,30 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                       {o.crp && <span>CRP: {o.crp}</span>}
                     </div>
                     {o.nota && <p className="text-xs text-gray-500 italic mt-1.5 break-words">{o.nota}</p>}
+                    {/* Lo que hizo al aplicarse: es lo que se deshace si se elimina. */}
+                    {estado === 'aplicado' && (() => {
+                      const creados = periodos.filter(pe => pe.otrosi_id === o.id).length
+                      return (
+                        <p className="text-xs text-gray-500 mt-1.5">
+                          {o.aplicado_por ? `Aplicado el ${fechaCorta(o.aplicado_en)}` : 'Aplicado antes del 08/10/2026'}
+                          {o.fecha_fin_anterior && o.fecha_fin_aplicada && <>: la terminación pasó del {fechaCorta(o.fecha_fin_anterior)} al {fechaCorta(o.fecha_fin_aplicada)}</>}
+                          {creados > 0 && <> · {creados === 1 ? '1 periodo creado' : `${creados} periodos creados`}</>}
+                        </p>
+                      )
+                    })()}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {/* Un otrosí ya aplicado no ofrece «Aplicar»: sería
                         invitar a repetir algo hecho. Se ofrece revisar, que
                         no escribe nada y sirve para comprobar que quedó bien.
                         El de «a medias» sí invita a completar lo que falta. */}
-                    {o.plazo_dias_adicion > 0 && (
+                    {estado === 'pendiente' && (
                       <button
                         onClick={() => abrirPrevisualizacion(o.id)}
                         disabled={aplicandoEste}
-                        className={`text-xs font-medium disabled:opacity-50 ${
-                          estado === 'aplicado'
-                            ? 'text-gray-500 hover:text-gray-700'
-                            : 'text-emerald-700 hover:text-emerald-900'
-                        }`}
+                        className="text-xs font-medium text-emerald-700 hover:text-emerald-900 disabled:opacity-50"
                       >
-                        {aplicandoEste && !previsualizacion
-                          ? 'Calculando…'
-                          : estado === 'aplicado'
-                            ? 'Revisar'
-                            : estado === 'parcial'
-                              ? 'Completar aplicación'
-                              : 'Aplicar al contrato'}
+                        {aplicandoEste && !previsualizacion ? 'Calculando…' : 'Aplicar al contrato'}
                       </button>
                     )}
                     <button
@@ -1074,14 +1089,75 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                       Editar
                     </button>
                     <button
-                      onClick={() => borrarOtrosi(o.id)}
-                      disabled={eliminandoOtrosiId === o.id}
+                      onClick={() => abrirEliminacion(o.id)}
+                      disabled={confirmandoEliminacionId === o.id}
                       className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                     >
-                      {eliminandoOtrosiId === o.id ? '…' : 'Eliminar'}
+                      {confirmandoEliminacionId === o.id && !vistaEliminacion ? 'Revisando…' : 'Eliminar'}
                     </button>
                   </div>
                 </div>
+
+              {/* Confirmación de «Eliminar»: dice exactamente qué se deshace, o por qué no se puede. */}
+              {confirmandoEliminacionId === o.id && vistaEliminacion && (
+                <div className={`border-t px-4 py-4 space-y-3 ${vistaEliminacion.bloqueo ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+                  {vistaEliminacion.bloqueo ? (
+                    <p className="text-sm text-red-800">
+                      <strong>No se puede eliminar todavía.</strong> {vistaEliminacion.bloqueo}
+                    </p>
+                  ) : !vistaEliminacion.aplicado ? (
+                    <p className="text-sm text-gray-700">
+                      El otrosí N.° {vistaEliminacion.numero} no se ha aplicado: se elimina su registro y el contrato no cambia.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-700">
+                        Se deshará lo que hizo el otrosí N.° {vistaEliminacion.numero}:
+                      </p>
+                      <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
+                        {vistaEliminacion.periodos.length > 0 && (
+                          <li>
+                            Se {vistaEliminacion.periodos.length === 1 ? 'eliminará el periodo de' : 'eliminarán los periodos de'}{' '}
+                            {vistaEliminacion.periodos.map(pe => `${pe.mes} ${pe.anio}`).join(', ')} (en borrador y sin información).
+                          </li>
+                        )}
+                        {vistaEliminacion.fechaFinAnterior && (
+                          <li>
+                            La terminación del contrato volverá del {fechaCorta(vistaEliminacion.fechaFinActual)} al{' '}
+                            <strong>{fechaCorta(vistaEliminacion.fechaFinAnterior)}</strong>.
+                          </li>
+                        )}
+                      </ul>
+                      {vistaEliminacion.reconstruido && (
+                        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          Este otrosí se aplicó antes de que el sistema registrara sus cambios: la fecha a la que vuelve
+                          ({fechaCorta(vistaEliminacion.fechaFinAnterior)}) es la del último periodo original. Confírmela con el contrato.
+                        </p>
+                      )}
+                    </>
+                  )}
+                  <div className="flex gap-2">
+                    {!vistaEliminacion.bloqueo && (
+                      <button
+                        onClick={() => borrarOtrosi(o.id)}
+                        disabled={eliminandoOtrosiId === o.id}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        {eliminandoOtrosiId === o.id
+                          ? 'Eliminando…'
+                          : vistaEliminacion.aplicado ? 'Sí, eliminar y deshacer' : 'Sí, eliminar'}
+                      </button>
+                    )}
+                    <button
+                      onClick={cerrarEliminacion}
+                      disabled={eliminandoOtrosiId === o.id}
+                      className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-white disabled:opacity-50"
+                    >
+                      {vistaEliminacion.bloqueo ? 'Cerrar' : 'Cancelar'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Previsualización antes de aplicar. Es el momento en que el software
                   propone y contratación decide: las cifras llegan calculadas pero
@@ -1172,6 +1248,10 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                     </p>
                   )}
 
+                  {previsualizacion.advertencias.map(a => (
+                    <p key={a} className="text-xs text-red-800 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{a}</p>
+                  ))}
+
                   {previsualizacion.mesesOmitidos.length > 0 && (
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                       Ya existen y no se tocan: {previsualizacion.mesesOmitidos.join(' · ')}
@@ -1239,7 +1319,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                     type="date"
                     value={formOtrosi.fecha_inicio}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, fecha_inicio: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                    disabled={editandoAplicado}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                   />
                 </div>
                 <div>
@@ -1257,9 +1338,16 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                     type="text" inputMode="numeric" placeholder="0"
                     value={formOtrosi.plazo_dias_adicion}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, plazo_dias_adicion: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                    disabled={editandoAplicado}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                   />
                 </div>
+                {editandoAplicado && (
+                  <p className="sm:col-span-2 text-xs text-gray-500">
+                    Este otrosí ya se aplicó: su fecha de inicio y su plazo no se cambian aquí. Para corregirlos, elimínelo
+                    (se deshacen sus cambios en el contrato) y regístrelo de nuevo.
+                  </p>
+                )}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">CDP del otrosí</label>
                   <input

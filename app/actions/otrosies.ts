@@ -33,6 +33,23 @@ export interface Otrosi {
   crp: string | null
   nota: string | null
   created_at: string
+  /** Cuándo se aplicó al contrato; `null` si solo está registrado (migración 061). */
+  aplicado_en: string | null
+  /** Quién lo aplicó. `null` con `aplicado_en` lleno: se aplicó antes del 8-oct-2026 y el registro se reconstruyó. */
+  aplicado_por: string | null
+  /** La fecha de terminación que tenía el contrato antes de aplicarlo: la que vuelve si se elimina. */
+  fecha_fin_anterior: string | null
+  /** La fecha de terminación que dejó al aplicarlo. */
+  fecha_fin_aplicada: string | null
+}
+
+/**
+ * Las funciones de la base (`aplicar_otrosi`, `eliminar_otrosi` y el disparador que protege a un otrosí aplicado)
+ * escriben sus negativas para leerse, con el prefijo `OTROSI:`. Cualquier otro error es técnico y no se muestra tal cual.
+ */
+function mensajeDeLaBase(error: { message?: string } | null, porDefecto: string): string {
+  const m = error?.message ?? ''
+  return m.startsWith('OTROSI: ') ? m.slice('OTROSI: '.length) : porDefecto
 }
 
 /**
@@ -212,7 +229,8 @@ export async function actualizarOtrosi(input: ActualizarOtrosiInput): Promise<Ac
       })
       .eq('id', input.otrosiId)
 
-    if (error) return { error: `Error al guardar el otrosí: ${error.message}` }
+    // Un otrosí ya aplicado no cambia su fecha de inicio ni su plazo (lo impide la base): el mensaje dice qué hacer.
+    if (error) return { error: mensajeDeLaBase(error, `Error al guardar el otrosí: ${error.message}`) }
 
     await invalidarCacheContrato(adminClient, input.contratoId)
     revalidatePath(`/dashboard/contratos/${input.contratoId}`)
@@ -259,6 +277,8 @@ export interface PrevisualizacionOtrosi {
   periodosPropuestos: PeriodoPropuesto[]
   /** Meses que ya tienen periodo y por eso no se proponen de nuevo. */
   mesesOmitidos: string[]
+  /** Lo que conviene revisar antes de confirmar (p. ej. un periodo de un solo día en $0). */
+  advertencias: string[]
 }
 
 /**
@@ -340,6 +360,12 @@ export async function previsualizarOtrosi(
       })
     }
 
+    // Un mes de un solo día y en $0 casi siempre es un día de más en el plazo (el caso del 045/2026: 62 días desde
+    // el 1 de octubre llegan al 1 de diciembre). No se quita solo —puede ser real—, pero se avisa antes de crearlo.
+    const advertencias = periodosPropuestos
+      .filter(p => p.fecha_inicio === p.fecha_fin && p.valor_cobro === 0)
+      .map(p => `${p.mes} ${p.anio} quedaría de un solo día y en $0: revise el plazo del otrosí o la fecha de terminación.`)
+
     return {
       data: {
         fechaFinActual: contrato.fecha_fin as string,
@@ -347,6 +373,7 @@ export async function previsualizarOtrosi(
         valorAdicion: Number(otrosi.valor_adicion) || 0,
         periodosPropuestos,
         mesesOmitidos,
+        advertencias,
       },
     }
   } catch (e: unknown) {
@@ -379,85 +406,159 @@ export async function aplicarOtrosi(
     const adminClient = createAdminSupabaseClient()
     const { data: otrosi } = await adminClient
       .from('otrosies')
-      .select('id, contrato_id, numero')
+      .select('id, contrato_id')
       .eq('id', otrosiId)
       .single()
     if (!otrosi) return { error: 'El otrosí no existe' }
 
-    const { data: contrato } = await adminClient
-      .from('contratos')
-      .select('id, fecha_fin')
-      .eq('id', otrosi.contrato_id)
-      .single()
-    if (!contrato) return { error: 'El contrato no existe' }
-
-    // La fecha nueva no puede acortar el contrato: eso dejaría periodos ya
-    // creados fuera de su vigencia. Para recortar hay que ir por otra vía.
-    if (fechaFinNueva < (contrato.fecha_fin as string)) {
-      return { error: 'La nueva fecha de terminación no puede ser anterior a la actual' }
-    }
-
-    // 1. Extender la vigencia del contrato. Sin esto el contratista sigue
-    //    bloqueado aunque los periodos existan.
-    const { error: eContrato } = await adminClient
-      .from('contratos')
-      .update({ fecha_fin: fechaFinNueva })
-      .eq('id', otrosi.contrato_id)
-    if (eContrato) return { error: `Error al extender el contrato: ${eContrato.message}` }
-
-    // 2. Crear los periodos nuevos, en borrador. Se omite lo que ya exista
-    //    —comprobado otra vez aquí, no solo en la previsualización, porque
-    //    entre una y otra pudo crearse algo.
-    let creados = 0
-    if (periodos.length) {
-      const { data: existentes } = await adminClient
-        .from('periodos')
-        .select('mes, anio')
-        .eq('contrato_id', otrosi.contrato_id)
-      const yaExiste = new Set(
-        (existentes ?? []).map((p: { mes: string; anio: number }) => `${p.mes.toLowerCase()}-${p.anio}`),
-      )
-      const filas = periodos
-        .filter(p => !yaExiste.has(`${p.mes.toLowerCase()}-${p.anio}`))
-        .map(p => ({
-          contrato_id: otrosi.contrato_id,
-          numero_periodo: p.numero_periodo,
-          mes: p.mes,
-          anio: p.anio,
-          fecha_inicio: p.fecha_inicio,
-          fecha_fin: p.fecha_fin,
-          valor_cobro: Math.round(p.valor_cobro),
-          estado: 'borrador',
-          es_historico: false,
-        }))
-      if (filas.length) {
-        const { error: ePeriodos } = await adminClient.from('periodos').insert(filas)
-        if (ePeriodos) return { error: `Error creando los periodos: ${ePeriodos.message}` }
-        creados = filas.length
-      }
-    }
+    // Todo en la base y en una transacción (migración 061): se extiende el contrato, se crean los periodos ligados al
+    // otrosí y queda registrado qué cambió (la fecha anterior, la nueva, quién y cuándo). Antes eran dos escrituras
+    // sueltas, y si la segunda fallaba el contrato quedaba extendido sin periodos. La base también comprueba que ningún
+    // periodo termine después de la nueva fecha de terminación.
+    const { data, error } = await adminClient.rpc('aplicar_otrosi', {
+      p_otrosi: otrosiId,
+      p_fecha_fin: fechaFinNueva,
+      p_periodos: periodos.map(p => ({ ...p, valor_cobro: Math.round(p.valor_cobro) })),
+      p_usuario: gestorId,
+    })
+    if (error) return { error: mensajeDeLaBase(error, `Error al aplicar el otrosí: ${error.message}`) }
 
     await invalidarCacheContrato(adminClient, otrosi.contrato_id)
     revalidatePath(`/dashboard/contratos/${otrosi.contrato_id}`)
     revalidatePath('/dashboard')
-    return { data: { creados } }
+    return { data: { creados: Number((data as { creados?: number } | null)?.creados ?? 0) } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
 }
 
-export async function eliminarOtrosi(otrosiId: string, contratoId: string): Promise<ActionResult> {
+// ─── Eliminar (y deshacer lo que hizo) ──────────────────────────────────────
+//
+// Eliminar un otrosí aplicado lo DESHACE: borra los periodos que creó, devuelve la fecha de terminación anterior y lo
+// elimina, todo en una transacción (`eliminar_otrosi`, migración 061). Hasta el 8 de octubre de 2026 solo se borraba
+// la fila del otrosí y el contrato quedaba extendido (caso del 045/2026).
+//
+// La base se niega —y dice por qué— si algún periodo del otrosí ya avanzó o tiene información (lo presentado no se
+// borra), si hay un otrosí aplicado después, o si la fecha de terminación cambió a mano después de aplicarlo.
+
+export interface PeriodoQueSeBorra {
+  mes: string
+  anio: number
+  estado: string
+  /** Ya avanzó o tiene información: impide deshacer. */
+  conInformacion: boolean
+}
+
+export interface PrevisualizacionEliminacion {
+  numero: number
+  aplicado: boolean
+  /** Se aplicó antes del 8-oct-2026: su registro se reconstruyó y la fecha anterior es una estimación. */
+  reconstruido: boolean
+  periodos: PeriodoQueSeBorra[]
+  fechaFinActual: string | null
+  fechaFinAnterior: string | null
+  /** Por qué no se puede eliminar todavía; `null` si se puede. */
+  bloqueo: string | null
+}
+
+const TABLAS_CON_INFORMACION = [
+  'actividades', 'aprobaciones', 'preaprobaciones', 'documentos', 'documentos_emitidos',
+  'obligacion_revisiones', 'actas_terminacion', 'historial_periodos',
+] as const
+
+/** Qué pasaría al eliminar el otrosí, sin tocar nada: lo que muestra la confirmación. La base lo vuelve a comprobar. */
+export async function previsualizarEliminacionOtrosi(
+  otrosiId: string,
+  contratoId: string,
+): Promise<ActionResult<PrevisualizacionEliminacion>> {
+  try {
+    const gestorId = await requireAdminId()
+    if (!gestorId) return { error: 'No autorizado' }
+
+    const adminClient = createAdminSupabaseClient()
+    const { data: o } = await adminClient
+      .from('otrosies')
+      .select('id, contrato_id, numero, aplicado_en, aplicado_por, fecha_fin_anterior, fecha_fin_aplicada')
+      .eq('id', otrosiId)
+      .single()
+    if (!o) return { error: 'El otrosí no existe' }
+    if (o.contrato_id !== contratoId) return { error: 'El otrosí no pertenece a este contrato' }
+
+    const [{ data: contrato }, { data: periodos }, { data: otros }] = await Promise.all([
+      adminClient.from('contratos').select('fecha_fin').eq('id', contratoId).single(),
+      adminClient.from('periodos').select('id, mes, anio, estado, es_historico, fecha_inicio').eq('otrosi_id', otrosiId).order('fecha_inicio'),
+      adminClient.from('otrosies').select('numero, aplicado_en').eq('contrato_id', contratoId).neq('id', otrosiId).not('aplicado_en', 'is', null),
+    ])
+    const filas = (periodos ?? []) as { id: string; mes: string; anio: number; estado: string; es_historico: boolean }[]
+    const aplicado = o.aplicado_en !== null || filas.length > 0
+
+    // Qué periodos tienen algo adentro (una consulta por tabla, no por periodo).
+    const ids = filas.map(p => p.id)
+    const conAlgo = new Set<string>()
+    if (ids.length) {
+      const respuestas = await Promise.all(
+        TABLAS_CON_INFORMACION.map(t => adminClient.from(t).select('periodo_id').in('periodo_id', ids)),
+      )
+      for (const r of respuestas) for (const x of (r.data ?? []) as { periodo_id: string }[]) conAlgo.add(x.periodo_id)
+    }
+    const periodosQueSeBorran: PeriodoQueSeBorra[] = filas.map(p => ({
+      mes: p.mes,
+      anio: p.anio,
+      estado: p.estado,
+      conInformacion: p.estado !== 'borrador' || p.es_historico || conAlgo.has(p.id),
+    }))
+
+    let bloqueo: string | null = null
+    const posterior = ((otros ?? []) as { numero: number; aplicado_en: string }[])
+      .filter(x => o.aplicado_en && x.aplicado_en > o.aplicado_en)
+      .sort((a, b) => b.aplicado_en.localeCompare(a.aplicado_en))[0]
+    const conInfo = periodosQueSeBorran.filter(p => p.conInformacion)
+    if (aplicado && posterior) {
+      bloqueo = `Primero hay que eliminar el otrosí N.º ${posterior.numero}, que se aplicó después de este.`
+    } else if (conInfo.length) {
+      bloqueo = `Estos periodos ya avanzaron o tienen información registrada: ${conInfo.map(p => `${p.mes} ${p.anio}`).join(', ')}. Lo que ya se presentó no se borra.`
+    } else if (aplicado && o.fecha_fin_aplicada && contrato?.fecha_fin !== o.fecha_fin_aplicada) {
+      bloqueo = `La fecha de terminación del contrato cambió después de aplicar este otrosí (hoy es ${contrato?.fecha_fin}; el otrosí la dejó en ${o.fecha_fin_aplicada}). Revísela antes de eliminarlo.`
+    }
+
+    return {
+      data: {
+        numero: o.numero as number,
+        aplicado,
+        reconstruido: aplicado && !o.aplicado_por,
+        periodos: periodosQueSeBorran,
+        fechaFinActual: (contrato?.fecha_fin as string | undefined) ?? null,
+        fechaFinAnterior: (o.fecha_fin_anterior as string | null) ?? null,
+        bloqueo,
+      },
+    }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+export async function eliminarOtrosi(
+  otrosiId: string,
+  contratoId: string,
+): Promise<ActionResult<{ revertido: boolean; periodos: number; fechaFin: string | null }>> {
   try {
     const adminId = await requireAdminId()
     if (!adminId) return { error: 'No autorizado' }
 
     const adminClient = createAdminSupabaseClient()
-    const { error } = await adminClient.from('otrosies').delete().eq('id', otrosiId)
-    if (error) return { error: `Error al eliminar: ${error.message}` }
+    // Como al editar: un id de otro contrato no puede colarse.
+    const { data: actual } = await adminClient.from('otrosies').select('contrato_id').eq('id', otrosiId).single()
+    if (!actual) return { error: 'El otrosí no existe' }
+    if (actual.contrato_id !== contratoId) return { error: 'El otrosí no pertenece a este contrato' }
+
+    const { data, error } = await adminClient.rpc('eliminar_otrosi', { p_otrosi: otrosiId })
+    if (error) return { error: mensajeDeLaBase(error, `Error al eliminar: ${error.message}`) }
 
     await invalidarCacheContrato(adminClient, contratoId)
     revalidatePath(`/dashboard/contratos/${contratoId}`)
-    return {}
+    revalidatePath('/dashboard')
+    const r = (data ?? {}) as { revertido?: boolean; periodos?: number; fecha_fin?: string | null }
+    return { data: { revertido: !!r.revertido, periodos: Number(r.periodos ?? 0), fechaFin: r.fecha_fin ?? null } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
