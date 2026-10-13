@@ -41,6 +41,12 @@ where attrelid = 'public.TABLA'::regclass and attnum > 0 and not attisdropped;
 
 Si devuelve > 0, la migración necesita su `GRANT SELECT (columna)`.
 
+La escritura sigue la lógica contraria. Desde la migración 062 una sesión de usuario solo puede actualizar
+`usuarios.telefono`. Si una función nueva deja al usuario editar otra columna de su perfil, necesita su
+`GRANT UPDATE (columna)`; `rol`, `activo`, `dependencia_id`, `municipio_id`, `cedula` y `email` no se conceden
+nunca (el disparador `usuarios_proteger_columnas` los rechaza aunque alguien lo haga por error). Vigilancia de
+solo lectura: `supabase/tests/usuarios_permisos_de_columna.sql` debe dar 0 fallas.
+
 **3. Un documento ya emitido no se reescribe.** Los códigos de verificación son
 estables e idempotentes; los cambios de datos no reescriben lo ya radicado. Los
 estados cacheables (`enviado`, `revision`, `aprobado`, `radicado`) y los editables
