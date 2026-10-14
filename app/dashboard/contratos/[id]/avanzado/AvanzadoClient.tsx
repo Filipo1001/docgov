@@ -305,10 +305,11 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
     const res = await aplicarOtrosi(otrosiAplicandoId, fechaFinPropuesta, periodos)
     setAplicando(false)
     if (res.error) { toast.error(res.error); return }
+    const notaActa = res.data?.actasSinEfecto ? ' · el acta de terminación anterior quedó sin efecto' : ''
     toast.success(
-      res.data?.creados
+      (res.data?.creados
         ? `Otrosí aplicado — ${res.data.creados} periodo(s) creado(s)`
-        : 'Otrosí aplicado — el contrato quedó extendido',
+        : 'Otrosí aplicado — el contrato quedó extendido') + notaActa,
     )
     setOtrosiAplicandoId(null)
     setPrevisualizacion(null)
@@ -341,7 +342,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
     const r = res.data
     toast.success(
       r?.revertido
-        ? `Otrosí eliminado: se ${r.periodos === 1 ? 'borró 1 periodo' : `borraron ${r.periodos} periodos`} y la terminación volvió al ${fechaCorta(r.fechaFin)}`
+        ? `Otrosí eliminado: se ${r.periodos === 1 ? 'borró 1 periodo' : `borraron ${r.periodos} periodos`} y la terminación volvió al ${fechaCorta(r.fechaFin)}${r.actasRepuestas ? '; el acta de terminación anterior volvió a ser vigente' : ''}`
         : 'Otrosí eliminado',
     )
     cerrarEliminacion()
@@ -1127,6 +1128,9 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                             <strong>{fechaCorta(vistaEliminacion.fechaFinAnterior)}</strong>.
                           </li>
                         )}
+                        {vistaEliminacion.actasPorReponer > 0 && (
+                          <li>El acta de terminación que este otrosí dejó sin efecto volverá a ser vigente.</li>
+                        )}
                       </ul>
                       {vistaEliminacion.reconstruido && (
                         <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -1250,6 +1254,10 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
                   {previsualizacion.advertencias.map(a => (
                     <p key={a} className="text-xs text-red-800 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{a}</p>
+                  ))}
+
+                  {previsualizacion.avisos.map(a => (
+                    <p key={a} className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{a}</p>
                   ))}
 
                   {previsualizacion.mesesOmitidos.length > 0 && (

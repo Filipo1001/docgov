@@ -261,6 +261,12 @@ export async function actualizarOtrosi(input: ActualizarOtrosiInput): Promise<Ac
 // —y sobre todo los radicados— quedan intactos: reescribirlos contradiría un
 // expediente ya presentado en SECOP II.
 
+/** 'YYYY-MM-DD' → 'DD/MM/AAAA' (sin pasar por Date: evita el corrimiento de un día por la zona horaria). */
+function fechaDDMMAAAA(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '—'
+}
+
 export interface PeriodoPropuesto {
   numero_periodo: number
   mes: string
@@ -279,6 +285,8 @@ export interface PrevisualizacionOtrosi {
   mesesOmitidos: string[]
   /** Lo que conviene revisar antes de confirmar (p. ej. un periodo de un solo día en $0). */
   advertencias: string[]
+  /** Lo que conviene saber —no son errores— (p. ej. que un acta de terminación firmada quedará sin efecto). */
+  avisos: string[]
 }
 
 /**
@@ -366,6 +374,21 @@ export async function previsualizarOtrosi(
       .filter(p => p.fecha_inicio === p.fecha_fin && p.valor_cobro === 0)
       .map(p => `${p.mes} ${p.anio} quedaría de un solo día y en $0: revise el plazo del otrosí o la fecha de terminación.`)
 
+    // Un acta de terminación firmada antes de esta prórroga quedará «sin efecto» al aplicarla (migración 063). Es lo
+    // normal cuando el otrosí se decide después del último informe: se avisa, no se impide.
+    const { data: actas } = await adminClient
+      .from('actas_terminacion')
+      .select('fecha_terminacion, emitida_en')
+      .eq('contrato_id', otrosi.contrato_id)
+      .eq('vigencia', 'vigente')
+    const avisos = ((actas ?? []) as { fecha_terminacion: string | null; emitida_en: string | null }[])
+      .filter(a => a.fecha_terminacion && a.fecha_terminacion < fechaFinPropuesta)
+      .map(a =>
+        `Este contrato tiene un acta de terminación del ${fechaDDMMAAAA(a.fecha_terminacion)}` +
+        `${a.emitida_en ? ', que ya se emitió' : ', aceptada por el contratista y todavía sin emitir'}. ` +
+        'Al aplicar el otrosí quedará sin efecto —el documento no se modifica— y con el último informe se pedirá un acta nueva.',
+      )
+
     return {
       data: {
         fechaFinActual: contrato.fecha_fin as string,
@@ -374,6 +397,7 @@ export async function previsualizarOtrosi(
         periodosPropuestos,
         mesesOmitidos,
         advertencias,
+        avisos,
       },
     }
   } catch (e: unknown) {
@@ -391,7 +415,7 @@ export async function aplicarOtrosi(
   otrosiId: string,
   fechaFinNueva: string,
   periodos: PeriodoPropuesto[],
-): Promise<ActionResult<{ creados: number }>> {
+): Promise<ActionResult<{ creados: number; actasSinEfecto: number }>> {
   try {
     const gestorId = await requireAdminId()
     if (!gestorId) return { error: 'No autorizado' }
@@ -426,7 +450,8 @@ export async function aplicarOtrosi(
     await invalidarCacheContrato(adminClient, otrosi.contrato_id)
     revalidatePath(`/dashboard/contratos/${otrosi.contrato_id}`)
     revalidatePath('/dashboard')
-    return { data: { creados: Number((data as { creados?: number } | null)?.creados ?? 0) } }
+    const r = (data ?? {}) as { creados?: number; actas_sin_efecto?: number }
+    return { data: { creados: Number(r.creados ?? 0), actasSinEfecto: Number(r.actas_sin_efecto ?? 0) } }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }
@@ -459,6 +484,8 @@ export interface PrevisualizacionEliminacion {
   fechaFinAnterior: string | null
   /** Por qué no se puede eliminar todavía; `null` si se puede. */
   bloqueo: string | null
+  /** Actas de terminación que este otrosí dejó sin efecto y que volverían a ser vigentes al eliminarlo. */
+  actasPorReponer: number
 }
 
 const TABLAS_CON_INFORMACION = [
@@ -521,6 +548,16 @@ export async function previsualizarEliminacionOtrosi(
       bloqueo = `La fecha de terminación del contrato cambió después de aplicar este otrosí (hoy es ${contrato?.fecha_fin}; el otrosí la dejó en ${o.fecha_fin_aplicada}). Revísela antes de eliminarlo.`
     }
 
+    // Si este otrosí dejó sin efecto un acta, eliminarlo la repone; pero si ya se firmó una nueva, no hay a quién reponer.
+    const [{ data: dejadasSinEfecto }, { data: vigentes }] = await Promise.all([
+      adminClient.from('actas_terminacion').select('id').eq('sin_efecto_otrosi_id', otrosiId),
+      adminClient.from('actas_terminacion').select('id').eq('contrato_id', contratoId).eq('vigencia', 'vigente'),
+    ])
+    const actasPorReponer = (dejadasSinEfecto ?? []).length
+    if (!bloqueo && actasPorReponer > 0 && (vigentes ?? []).length > 0) {
+      bloqueo = 'El contrato ya tiene un acta de terminación vigente, firmada después de este otrosí. Hay que resolverla antes de eliminarlo.'
+    }
+
     return {
       data: {
         numero: o.numero as number,
@@ -530,6 +567,7 @@ export async function previsualizarEliminacionOtrosi(
         fechaFinActual: (contrato?.fecha_fin as string | undefined) ?? null,
         fechaFinAnterior: (o.fecha_fin_anterior as string | null) ?? null,
         bloqueo,
+        actasPorReponer,
       },
     }
   } catch (e: unknown) {
@@ -540,7 +578,7 @@ export async function previsualizarEliminacionOtrosi(
 export async function eliminarOtrosi(
   otrosiId: string,
   contratoId: string,
-): Promise<ActionResult<{ revertido: boolean; periodos: number; fechaFin: string | null }>> {
+): Promise<ActionResult<{ revertido: boolean; periodos: number; fechaFin: string | null; actasRepuestas: number }>> {
   try {
     const adminId = await requireAdminId()
     if (!adminId) return { error: 'No autorizado' }
@@ -557,8 +595,15 @@ export async function eliminarOtrosi(
     await invalidarCacheContrato(adminClient, contratoId)
     revalidatePath(`/dashboard/contratos/${contratoId}`)
     revalidatePath('/dashboard')
-    const r = (data ?? {}) as { revertido?: boolean; periodos?: number; fecha_fin?: string | null }
-    return { data: { revertido: !!r.revertido, periodos: Number(r.periodos ?? 0), fechaFin: r.fecha_fin ?? null } }
+    const r = (data ?? {}) as { revertido?: boolean; periodos?: number; fecha_fin?: string | null; actas_repuestas?: number }
+    return {
+      data: {
+        revertido: !!r.revertido,
+        periodos: Number(r.periodos ?? 0),
+        fechaFin: r.fecha_fin ?? null,
+        actasRepuestas: Number(r.actas_repuestas ?? 0),
+      },
+    }
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
   }

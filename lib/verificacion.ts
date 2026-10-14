@@ -155,12 +155,28 @@ export async function actualizarHashDocumento(codigo: string, hash: string): Pro
   await admin.from('documentos_emitidos').update({ hash_sha256: hash }).eq('codigo', codigo)
 }
 
+/**
+ * Algo que la página pública debe decir del documento además de sus datos. Hoy solo existe uno: un acta de
+ * terminación que un otrosí posterior dejó sin efecto (migración 063). El documento no cambia; cambia lo que se dice
+ * de su vigencia.
+ */
+export interface AvisoVerificacion {
+  tipo: 'sin_efecto'
+  /** Cuándo quedó sin efecto (ISO). */
+  desde: string
+  /** Número del otrosí que la dejó así. */
+  otrosi: number | null
+  /** Nueva fecha de terminación del contrato tras ese otrosí (YYYY-MM-DD). */
+  nuevoFin: string | null
+}
+
 /** Registro completo para la página de verificación (o null si el código no existe). */
 export async function getVerificacion(codigo: string): Promise<{
   codigo: string
   datos: DatosVerificacion
   hash: string | null
   emitidoEn: string
+  aviso: AvisoVerificacion | null
 } | null> {
   const admin = createAdminSupabaseClient()
   const { data } = await admin
@@ -185,9 +201,39 @@ export async function getVerificacion(codigo: string): Promise<{
     if (p?.estado) datos.estado = p.estado
   }
 
+  // Un acta de terminación «sin efecto» (la prórroga se decidió después de firmarla) sigue siendo un documento
+  // AUTÉNTICO, pero ya no describe cómo termina el contrato. Se dice aquí, sin tocar el PDF ni su código.
+  // Todo envuelto en try: la verificación pública no puede dejar de responder por esto (regla 1 de CLAUDE.md), y si
+  // la columna aún no existe la consulta devuelve error y la página se comporta como hasta ahora.
+  let aviso: AvisoVerificacion | null = null
+  if (datos.tipo === 'acta-terminacion') {
+    try {
+      const { data: acta } = await admin
+        .from('actas_terminacion')
+        .select('vigencia, sin_efecto_en, sin_efecto_otrosi_id')
+        .eq('codigo', data.codigo)
+        .maybeSingle()
+      if (acta?.vigencia === 'sin_efecto' && acta.sin_efecto_en) {
+        const { data: o } = acta.sin_efecto_otrosi_id
+          ? await admin.from('otrosies').select('numero, fecha_fin_aplicada').eq('id', acta.sin_efecto_otrosi_id).maybeSingle()
+          : { data: null }
+        datos.estado = 'sin_efecto'
+        aviso = {
+          tipo: 'sin_efecto',
+          desde: acta.sin_efecto_en as string,
+          otrosi: (o?.numero as number | undefined) ?? null,
+          nuevoFin: (o?.fecha_fin_aplicada as string | undefined) ?? null,
+        }
+      }
+    } catch {
+      /* sin aviso: se muestra el documento como siempre */
+    }
+  }
+
   return {
     codigo: data.codigo,
     datos,
+    aviso,
     hash: data.hash_sha256,
     // created_at (primera emisión) y no updated_at: la fecha mostrada debe
     // ser estable — no cambiar cada vez que alguien re-descarga el PDF.

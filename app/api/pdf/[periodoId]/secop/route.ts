@@ -100,6 +100,7 @@ export async function GET(
         .from('actas_terminacion')
         .select('pdf_path')
         .eq('periodo_id', periodoId)
+        .eq('vigencia', 'vigente')   // un acta «sin efecto» no viaja a SECOP II
         .maybeSingle()
       if (!acta?.pdf_path) return null
       const { data: blob } = await admin.storage.from('actas-terminacion').download(acta.pdf_path)
