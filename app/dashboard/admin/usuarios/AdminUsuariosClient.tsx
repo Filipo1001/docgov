@@ -7,6 +7,7 @@ import { activarContratista, eliminarUsuario } from '@/app/actions/admin'
 import { avatarThumb } from '@/lib/avatar'
 import { formatCedula } from '@/lib/format'
 import type { UsuarioAdmin, ContratistaPendiente, Dependencia } from '@/services/admin'
+import { MARCO_PDM_DISPONIBLE } from '@/lib/pdm/menu'
 
 /** Normaliza tildes y mayúsculas para búsqueda tolerante */
 function norm(s: string) {
@@ -457,7 +458,11 @@ export default function AdminUsuariosClient({
             <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)}
               className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400">
               <option value="">Todos los roles</option>
-              {['admin','supervisor','contratista','asesor','funcionario','gobierno','hacienda'].map(r =>
+              {['admin','supervisor','contratista','asesor','funcionario','gobierno','hacienda']
+                // «Funcionario» solo existe para el módulo del plan: mientras el módulo no exista, no se ofrece (salvo que ya
+                // haya alguien con ese rol: entonces hay que poder filtrarlo).
+                .filter(r => r !== 'funcionario' || MARCO_PDM_DISPONIBLE || usuarios.some(u => u.rol === 'funcionario'))
+                .map(r =>
                 <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
             </select>
           )}

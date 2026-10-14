@@ -1,10 +1,16 @@
 import type { NextConfig } from 'next'
+import { entornoPermiteModulo } from './lib/pdm/entorno'
 
 // LAN origins allowed during development.
 // Add IPs/hostnames separated by commas in ALLOWED_DEV_ORIGINS env var.
 const devOrigins = process.env.ALLOWED_DEV_ORIGINS
   ? process.env.ALLOWED_DEV_ORIGINS.split(',').map((s) => s.trim())
   : ['192.168.1.197']
+
+// ¿Existe el módulo de Plan de Desarrollo en este entorno? La misma regla que usa el resto del módulo
+// (lib/pdm/entorno.ts), evaluada al compilar: en Vercel `VERCEL_ENV` y `PDM_PRODUCCION` ya están al compilar, y
+// la bandera del menú se hornea igual (ver `env` más abajo). Si algo no llega, la respuesta es «no»: falla cerrado.
+const moduloExiste = entornoPermiteModulo(process.env.VERCEL_ENV, process.env.NODE_ENV, process.env.PDM_PRODUCCION)
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: devOrigins,
@@ -18,6 +24,22 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_ENTORNO_VERCEL: process.env.VERCEL_ENV ?? '',
     NEXT_PUBLIC_PDM_PRODUCCION: process.env.PDM_PRODUCCION ?? '',
+  },
+
+  // Donde el módulo no existe, sus direcciones son un 404 de verdad.
+  //
+  // La comprobación que hay dentro del módulo (`notFound()` en su layout y en cada página) no basta para el CÓDIGO
+  // DE ESTADO: el panel tiene un `loading.tsx` propio, y Next transmite esa maqueta —con un 200— antes de que el
+  // módulo llegue a decidir. El resultado era un 200 con la marca de «no encontrado» y la maqueta de carga del módulo
+  // en el cuerpo. Con la reescritura la petición ni entra al panel: responde lo mismo que cualquier dirección que no
+  // existe. Las comprobaciones de dentro siguen ahí como segunda cerradura.
+  async rewrites() {
+    if (moduloExiste) return []
+    return {
+      beforeFiles: [{ source: '/dashboard/plan-desarrollo/:path*', destination: '/ruta-inexistente-pdm' }],
+      afterFiles: [],
+      fallback: [],
+    }
   },
 
   // Keep @react-pdf/renderer and canvas on the Node.js server only.

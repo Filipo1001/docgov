@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:pdm": "tsx --test tests/pdm/*.test.ts"
+    "test:pdm": "tsx --test tests/pdm/*.test.ts",
+    "test:modulo-apagado": "bash scripts/comprobar-modulo-apagado.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

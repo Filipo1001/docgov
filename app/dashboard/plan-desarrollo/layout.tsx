@@ -25,6 +25,10 @@ import { pdmHabilitado } from '@/lib/pdm/habilitado'
  * El layout del panel no usa este marco fuera de la vista previa (`usaMarcoPdm`), así que quien llegara aquí
  * lo vería con la barra lateral de siempre.
  *
+ * OJO: esto es la SEGUNDA cerradura. El código de estado 404 lo da la reescritura de `next.config.ts`, que responde
+ * antes de que el panel transmita nada: desde aquí no se puede, porque el `loading.tsx` del panel ya ha enviado su
+ * maqueta con un 200 cuando este layout llega a decidir. Lo comprueba `npm run test:modulo-apagado`.
+ *
  * ── Si no se pudo comprobar el acceso ────────────────────────────────────
  *
  * No se inventa una barra recortada: `nivel` va `undefined` y la barra pregunta al servidor desde el navegador,

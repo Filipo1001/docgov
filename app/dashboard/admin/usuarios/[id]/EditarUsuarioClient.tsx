@@ -10,6 +10,7 @@ import { comprimirFoto } from '@/lib/compress'
 import { useUsuario } from '@/lib/user-context'
 import { avatarThumb } from '@/lib/avatar'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
+import { MARCO_PDM_DISPONIBLE } from '@/lib/pdm/menu'
 
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'alcalde', 'funcionario', 'gobierno', 'hacienda']
 const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
@@ -237,7 +238,11 @@ export default function EditarUsuarioClient({
               onChange={e => setRol(e.target.value as typeof rol)}
               disabled={editorEsContratacion}
             >
-              {ROLES.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
+              {/* «Funcionario» solo existe para el módulo del plan: no se ofrece mientras el módulo no exista, salvo que esta
+                  persona ya lo tenga (si no, el campo quedaría sin su valor actual). */}
+              {ROLES
+                .filter(r => r !== 'funcionario' || MARCO_PDM_DISPONIBLE || usuario.rol === 'funcionario')
+                .map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
             </select>
             {editorEsContratacion && (
               <p className="text-xs text-gray-400 mt-1">Contratación no puede cambiar el rol de un usuario</p>

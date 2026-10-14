@@ -7,6 +7,7 @@ import { Toaster, toast } from 'sonner'
 import { crearUsuario } from '@/app/actions/admin'
 import { useUsuario } from '@/lib/user-context'
 import type { Dependencia } from '@/services/admin'
+import { MARCO_PDM_DISPONIBLE } from '@/lib/pdm/menu'
 
 const ROLES = [
   { value: 'contratista',  label: 'Contratista' },
@@ -172,6 +173,8 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
               disabled={soloContratistas}
             >
               {(soloContratistas ? ROLES.filter(r => r.value === 'contratista') : ROLES)
+                // «Funcionario» solo existe para el módulo del plan: no se ofrece mientras el módulo no exista.
+                .filter(r => r.value !== 'funcionario' || MARCO_PDM_DISPONIBLE)
                 .map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
             {soloContratistas && (

@@ -64,7 +64,8 @@ export type Requisito = 'cualquiera' | 'gestor' | 'gestor_o_consulta' | 'admin'
  * las demás. Con una función y una línea por página, olvidarla salta a la vista.
  *
  * 1. Fuera de vista previa o desarrollo el módulo no existe: 404, y falla hacia
- *    lo cerrado (ver `pdmHabilitado`).
+ *    lo cerrado (ver `pdmHabilitado`). El código de estado lo da primero la reescritura de `next.config.ts`;
+ *    esta comprobación es la segunda cerradura (y la que impide que se sirva nada si la primera faltara).
  * 2. Sin sesión, al inicio de sesión. Con sesión pero sin acceso al módulo, al panel. Si NO se pudo
  *    comprobar (un fallo pasajero), no se redirige a ninguna parte: ver `acceso-leer.ts`.
  * 3. Cada pantalla dice qué nivel exige. Quien tiene acceso pero no el suficiente va al
