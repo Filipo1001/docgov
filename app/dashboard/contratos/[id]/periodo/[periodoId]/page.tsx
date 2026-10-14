@@ -179,14 +179,15 @@ export default async function PeriodoDetallePage({
   // entra, y en el paquete no iba nunca.
   const certDisponible = (await certificacionParaPaquete(periodoId)) !== null
 
-  // Acta de terminación: única por contrato. Su descarga se ofrece solo en el
-  // último periodo y solo si ya fue aceptada.
+  // Acta de terminación VIGENTE: una por contrato a la vez (las que un otrosí dejó «sin efecto» no cuentan). Su
+  // descarga se ofrece solo en el último periodo y solo si ya fue aceptada.
   // Solo cuenta si ya está EMITIDA: aceptada sin aprobar todavía no es un
   // documento descargable.
   const { data: actaRow } = await supabase
     .from('actas_terminacion')
     .select('id, emitida_en')
     .eq('contrato_id', (contrato as { id: string }).id)
+    .eq('vigencia', 'vigente')
     .maybeSingle()
   const actaTerminacionDisponible = !!actaRow?.emitida_en
 

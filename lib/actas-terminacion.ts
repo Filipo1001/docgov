@@ -36,7 +36,8 @@ const BUCKET = 'actas-terminacion'
  * Espejo de `certificacionPendiente`: aquella se pide en el PRIMER informe del
  * contrato, esta en el ÚLTIMO. Se exige solo cuando:
  *
- *   1. Aún no existe acta para el contrato (es única: se termina una vez), y
+ *   1. Aún no existe un acta VIGENTE para el contrato (hay una sola vigente a la vez: se termina una vez, salvo que
+ *      un otrosí posterior la deje «sin efecto», migración 063), y
  *   2. Este periodo es genuinamente el último.
  *
  * ── Qué cuenta como "el último" ──────────────────────────────────────────
@@ -62,10 +63,13 @@ export async function actaTerminacionPendiente(
 ): Promise<boolean> {
   const admin = createAdminSupabaseClient()
 
+  // Solo cuenta un acta VIGENTE. Una que un otrosí dejó «sin efecto» ya no describe cómo termina el contrato, y el
+  // nuevo último informe debe traer la suya.
   const { data: acta } = await admin
     .from('actas_terminacion')
     .select('id')
     .eq('contrato_id', contratoId)
+    .eq('vigencia', 'vigente')
     .maybeSingle()
   if (acta) return false
 
@@ -199,6 +203,7 @@ export async function emitirActaTerminacion(
       .from('actas_terminacion')
       .select('id, contrato_id, pdf_path, fecha_terminacion')
       .eq('periodo_id', periodoId)
+      .eq('vigencia', 'vigente')   // un acta «sin efecto» que no llegó a emitirse ya no se emite
       .maybeSingle()
     if (!acta || acta.pdf_path) return false   // no aceptada, o ya emitida
 
@@ -282,7 +287,10 @@ export async function emitirActaTerminacion(
     ) as unknown as Buffer
 
     const hash = createHash('sha256').update(buffer).digest('hex')
-    const pdfPath = `${ctx.contratoId}.pdf`
+    // Una ruta por ACTA y no por contrato. Con `${contratoId}.pdf` y `upsert: true`, una segunda acta del mismo contrato
+    // (la que sigue a una prórroga) habría SOBRESCRITO el PDF de la primera: reescribir un documento ya emitido. Las
+    // actas anteriores a este cambio conservan su ruta antigua; `pdf_path` dice cuál es en cada caso.
+    const pdfPath = `${ctx.contratoId}/${acta.id}.pdf`
 
     await admin.storage.from(BUCKET).upload(pdfPath, buffer, {
       contentType: 'application/pdf', upsert: true,

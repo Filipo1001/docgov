@@ -39,6 +39,8 @@ export interface PeriodoAvanzado {
   planilla_estado: 'pendiente' | 'aprobada' | 'rechazada' | null
   base_cotizacion_ss: number | null
   cotizacion_mes: string | null
+  /** El otrosí que creó este periodo; `null` si es del contrato original (migración 061). */
+  otrosi_id: string | null
   cotizacion_origen: 'inferido' | 'confirmado' | null
 }
 
@@ -92,7 +94,7 @@ export async function getAvanzadoData(
         .single(),
       admin
         .from('periodos')
-        .select('id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, es_historico, planilla_ss_url, numero_planilla, planilla_estado, base_cotizacion_ss, cotizacion_mes, cotizacion_origen')
+        .select('id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, es_historico, planilla_ss_url, numero_planilla, planilla_estado, base_cotizacion_ss, cotizacion_mes, cotizacion_origen, otrosi_id')
         .eq('contrato_id', contratoId)
         .order('numero_periodo'),
       admin

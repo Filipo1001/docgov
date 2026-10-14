@@ -79,7 +79,7 @@ export async function verificarActaTerminacionRequerida(periodoId: string): Prom
  * fecha de terminación vigente, para que una prórroga posterior no altere lo
  * que se aceptó. El PDF se emite después, al aprobar el supervisor.
  *
- * Idempotente: si ya existe acta para el contrato, no hace nada.
+ * Idempotente: si el contrato ya tiene un acta vigente, no hace nada.
  */
 export async function aceptarActaTerminacion(periodoId: string): Promise<ActionResult> {
   try {
@@ -104,7 +104,10 @@ export async function aceptarActaTerminacion(periodoId: string): Promise<ActionR
     const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
     const userAgent = h.get('user-agent') ?? null
 
-    const { error: insErr } = await admin.from('actas_terminacion').upsert({
+    // `insert` y no `upsert … onConflict: 'contrato_id'`: desde la migración 064 la unicidad es por acta VIGENTE (índice
+    // parcial) y PostgREST no puede nombrar un índice parcial como árbitro. La repetición la cubre
+    // `actaTerminacionPendiente` arriba, y una carrera entre dos aceptaciones la resuelve el propio índice.
+    const { error: insErr } = await admin.from('actas_terminacion').insert({
       contrato_id: ctx.contratoId,
       contratista_id: ctx.contratistaId,
       periodo_id: periodoId,
@@ -125,9 +128,10 @@ export async function aceptarActaTerminacion(periodoId: string): Promise<ActionR
       fecha_aceptacion: fechaAceptacion,
       ip_aceptacion: ip,
       user_agent: userAgent,
-    }, { onConflict: 'contrato_id' })
+    })
 
-    if (insErr) return { error: `No se pudo registrar el acta de terminación: ${insErr.message}` }
+    // 23505 = el contrato ya tiene su acta vigente (otra aceptación se adelantó): no hay nada más que registrar.
+    if (insErr && insErr.code !== '23505') return { error: `No se pudo registrar el acta de terminación: ${insErr.message}` }
 
     return {}
   } catch (e: unknown) {

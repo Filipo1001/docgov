@@ -38,6 +38,13 @@ const ESTADO_LABEL: Record<string, string> = {
   radicado: 'Radicado',
   rechazado: 'Devuelto',
   vigente: 'Vigente',
+  sin_efecto: 'Sin efecto',
+}
+
+/** Fecha legible. Las de solo-día ('2026-12-17') se fijan a mediodía para que la zona horaria no las corra un día. */
+function fechaLarga(iso: string): string {
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso)
+  return Number.isNaN(d.getTime()) ? iso : new Intl.DateTimeFormat('es-CO', { dateStyle: 'long' }).format(d)
 }
 
 function Fila({ label, value }: { label: string; value: string }) {
@@ -83,6 +90,19 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
                   {TIPO_LABEL[resultado.datos.tipo as TipoDocumento] ?? resultado.datos.tipo}
                 </span>
               </div>
+
+              {resultado.aviso?.tipo === 'sin_efecto' && (
+                <div style={{ margin: '12px 0 4px', padding: '12px 14px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#92400e' }}>Esta acta quedó sin efecto</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+                    El {fechaLarga(resultado.aviso.desde)} el contrato fue prorrogado
+                    {resultado.aviso.otrosi ? ` mediante el otrosí N.° ${resultado.aviso.otrosi}` : ''}
+                    {resultado.aviso.nuevoFin ? `, con nueva terminación el ${fechaLarga(resultado.aviso.nuevoFin)}` : ''}.
+                    Por eso esta acta no corresponde a la terminación definitiva del contrato. El documento es auténtico y no
+                    fue modificado: esta nota solo informa su vigencia.
+                  </p>
+                </div>
+              )}
 
               {resultado.datos.municipio && <Fila label="Municipio" value={resultado.datos.municipio} />}
               <Fila label="Contrato" value={`N.° ${resultado.datos.contratoNumero}-${resultado.datos.contratoAnio}`} />

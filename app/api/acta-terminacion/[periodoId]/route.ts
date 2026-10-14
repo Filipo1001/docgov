@@ -34,11 +34,14 @@ export async function GET(
     .single()
   if (!periodo) return NextResponse.json({ error: 'Periodo no encontrado' }, { status: 404 })
 
-  const { data: acta } = await admin
+  // Un contrato puede conservar actas anteriores «sin efecto» (migración 063). Se sirve la aceptada en ESTE periodo; y si
+  // en este no se aceptó ninguna, la vigente del contrato (que es lo que se servía cuando solo había una).
+  const { data: actas } = await admin
     .from('actas_terminacion')
-    .select('pdf_path')
+    .select('pdf_path, periodo_id, vigencia')
     .eq('contrato_id', periodo.contrato_id)
-    .maybeSingle()
+    .order('created_at', { ascending: false })
+  const acta = actas?.find(a => a.periodo_id === periodoId) ?? actas?.find(a => a.vigencia === 'vigente') ?? null
 
   // Sin `pdf_path` el acta fue aceptada por el contratista pero la
   // administración aún no la ha suscrito: no hay documento que servir.
