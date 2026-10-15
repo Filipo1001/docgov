@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:pdm": "tsx --test tests/pdm/*.test.ts",
+    "test:cd": "tsx --test tests/cd/*.test.ts",
     "test:modulo-apagado": "bash scripts/comprobar-modulo-apagado.sh"
   },
   "dependencies": {
