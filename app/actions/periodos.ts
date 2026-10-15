@@ -735,6 +735,9 @@ export async function aprobarPeriodos(periodoIds: string[]): Promise<ActionResul
   }
 }
 
+/** Estados desde los que la secretaría puede devolver un informe a los asesores (→ enviado). */
+const ESTADOS_DEVOLVIBLES_A_ASESORES: EstadoPeriodo[] = ['enviado', 'revision']
+
 /**
  * Secretary rejects one or more periods back to asesor review (→ enviado).
  * Logs in historial but does NOT notify contratista.
@@ -767,15 +770,21 @@ export async function rechazarPeriodos(
       return { error: 'Solo la secretaria puede rechazar informes' }
     }
 
-    // 1 query: fetch all periods + contract info together (exclude historical)
+    // 1 query: fetch all periods + contract info together (exclude historical).
+    // Solo se devuelve a los asesores lo que está esperando revisión: un periodo aprobado o radicado no vuelve
+    // atrás por aquí (BE-07). Desde la migración 065 la base también lo rechaza; este filtro evita que un solo
+    // periodo fuera de estado tumbe el lote entero y deja un mensaje claro.
     const { data: periodos, error: fetchError } = await supabase
       .from('periodos')
       .select('id, estado, contrato_id, mes, anio, contrato:contratos(numero, dependencia_id)')
       .in('id', periodoIds)
       .eq('es_historico', false)
+      .in('estado', ESTADOS_DEVOLVIBLES_A_ASESORES)
 
     if (fetchError) return { error: fetchError.message }
-    if (!periodos || periodos.length === 0) return { data: { rechazados: 0 } }
+    if (!periodos || periodos.length === 0) {
+      return { error: 'Solo se pueden devolver a los asesores los informes enviados o en revisión' }
+    }
 
 
     // Ver rechazarComoAsesor: con obligaciones marcadas el motivo general
@@ -788,6 +797,7 @@ export async function rechazarPeriodos(
       .from('periodos')
       .update({ estado: 'enviado', motivo_rechazo: motivoLimpio || null })
       .in('id', periodos.map(p => p.id))
+      .in('estado', ESTADOS_DEVOLVIBLES_A_ASESORES)
       .select('id')
 
     if (updateError) return { error: updateError.message }

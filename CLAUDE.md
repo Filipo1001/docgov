@@ -47,6 +47,14 @@ La escritura sigue la lógica contraria. Desde la migración 062 una sesión de 
 nunca (el disparador `usuarios_proteger_columnas` los rechaza aunque alguien lo haga por error). Vigilancia de
 solo lectura: `supabase/tests/usuarios_permisos_de_columna.sql` debe dar 0 fallas.
 
+`periodos` sigue la misma lógica desde la migración 065: una sesión de usuario solo actualiza `estado`, `fecha_envio`,
+`motivo_rechazo`, `fecha_aprobacion`, `planilla_estado` y `planilla_comentario`, y el disparador `periodos_proteger_cambios`
+decide qué transiciones vale cada rol (`periodos_transicion_permitida`: una línea por transición). Radicar, valores, planilla,
+factura, histórico y devoluciones del administrador van por `createAdminSupabaseClient`. Una función nueva que escriba otra
+columna con la sesión necesita su `GRANT UPDATE (columna)`, nunca el de `valor_cobro`, `numero_radicado` ni las URLs; una
+transición nueva necesita su línea en la función. Vigilancia de solo lectura: `supabase/tests/periodos_permisos_y_transiciones.sql`
+debe dar 0 fallas.
+
 **3. Un documento ya emitido no se reescribe.** Los códigos de verificación son
 estables e idempotentes; los cambios de datos no reescriben lo ya radicado. Los
 estados cacheables (`enviado`, `revision`, `aprobado`, `radicado`) y los editables
