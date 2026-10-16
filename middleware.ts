@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ORIGEN_APP, HOSTS_REDIRIGIDOS, HOSTS_COMERCIALES, esRutaComercial } from '@/lib/dominio'
 import { SITIO } from '@/lib/seo'
 import { necesitaRenovacion } from '@/lib/jwt-cookie'
+import { debeIrAlLogin } from '@/lib/navegacion'
 
 /**
  * Rutas que nunca deben aparecer en un buscador.
@@ -114,6 +115,16 @@ export async function middleware(request: NextRequest) {
     c => c.name.includes('-auth-token')
   )
   if (!hasSessionCookie) {
+    // Quien abre en el navegador un PDF, una foto o un listado de /api sin haber iniciado sesión va al login, no a un
+    // JSON de error. Solo las navegaciones: una imagen o un fetch que pide la misma ruta sigue recibiendo su 401.
+    if (debeIrAlLogin(pathname, request.headers)) {
+      const login = request.nextUrl.clone()
+      login.pathname = '/login'
+      login.search = ''
+      const res = NextResponse.redirect(login)
+      res.headers.set('Cache-Control', 'no-store')
+      return conDirectivas(res)
+    }
     return conDirectivas(NextResponse.next({ request }))
   }
 

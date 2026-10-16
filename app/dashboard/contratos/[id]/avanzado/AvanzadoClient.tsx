@@ -15,6 +15,7 @@ import { getAvanzadoData, type PeriodoAvanzado, type ContratoAvanzado } from '@/
 import EliminarContrato from './EliminarContrato'
 import type { EstadoPeriodo } from '@/lib/types'
 import { DEFAULT_BASE_COTIZACION_SS, calcularBaseCotizacionSS, MESES } from '@/lib/constants'
+import { adicionDeOtrosies, valorVigenteDelContrato } from '@/lib/plan-pagos'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -483,7 +484,10 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
   // ── Computed ────────────────────────────────────────────────
 
   const sumaPeriodos = periodos.reduce((acc, p) => acc + (p.valor_cobro ?? 0), 0)
-  const delta = (contrato?.valor_total ?? 0) - sumaPeriodos
+  // El valor del contrato incluye lo que añaden los otrosíes: `valor_total` es el firmado y no se mueve (lib/plan-pagos.ts).
+  const adicionOtrosi = adicionDeOtrosies(otrosies)
+  const valorVigente = valorVigenteDelContrato(contrato?.valor_total, otrosies)
+  const delta = valorVigente - sumaPeriodos
   const cuadra = delta === 0
 
   // ── Render ──────────────────────────────────────────────────
@@ -548,7 +552,12 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             </span>
             <div className={`flex gap-4 text-xs ${cuadra ? 'text-emerald-700' : 'text-red-700'}`}>
               <span>Suma periodos: <strong>${sumaPeriodos.toLocaleString('es-CO')}</strong></span>
-              <span>Total contrato: <strong>${contrato.valor_total.toLocaleString('es-CO')}</strong></span>
+              <span>
+                Total contrato: <strong>${valorVigente.toLocaleString('es-CO')}</strong>
+                {adicionOtrosi > 0 && (
+                  <span className="font-normal"> (incluye ${adicionOtrosi.toLocaleString('es-CO')} de otrosíes)</span>
+                )}
+              </span>
               {!cuadra && <span>Δ <strong>${delta.toLocaleString('es-CO')}</strong></span>}
             </div>
           </div>
