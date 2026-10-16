@@ -22,6 +22,7 @@ import { extraerPath } from '@/lib/storage-firmado'
 import {
   SOPORTE_PAGO_BUCKET, SOPORTE_PAGO_MAX_BYTES, esNombrePdf, esRutaDeSoportePago, rutaNuevaSoportePago,
 } from '@/lib/soporte-pago'
+import { esCabeceraPdf, tamanoTotalDeContentRange } from '@/lib/pdf-cabecera'
 import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
@@ -1416,15 +1417,25 @@ export async function confirmarUploadSoportePago(
     // La ruta se deriva del periodo: una que apunte a otro periodo, a otra carpeta o que se escape con `..` se rechaza.
     if (!esRutaDeSoportePago(periodoId, storagePath)) return { error: 'Ruta de archivo inválida.' }
 
-    // Verificación del contenido REAL: la subida va directa del navegador a Storage, así que el tipo declarado no
-    // prueba nada.
-    const { data: blob } = await adminClient.storage.from(SOPORTE_PAGO_BUCKET).download(storagePath)
-    if (!blob) return { error: 'No se encontró el archivo subido. Intenta de nuevo.' }
-    const { validarPDF } = await import('@/lib/pdf-validacion')
-    const validacion = await validarPDF(Buffer.from(await blob.arrayBuffer()))
-    if (!validacion.ok) {
-      await adminClient.storage.from(SOPORTE_PAGO_BUCKET).remove([storagePath]).catch(() => {})
-      return { error: validacion.error ?? 'El archivo no es un PDF válido.' }
+    // Verificación del contenido REAL, pero ligera: la subida va directa del navegador a Storage, así que el tipo
+    // declarado no prueba nada. Se piden solo los primeros bytes (y el tamaño total sale de Content-Range): antes se
+    // descargaba el archivo entero y se abría con pdf-lib, entre uno y tres segundos de servidor mientras el usuario
+    // miraba «Subiendo…». Este documento solo viaja dentro del ZIP: basta con que SEA un PDF y no pase el tope.
+    const { data: firmadaMuestra } = await adminClient.storage.from(SOPORTE_PAGO_BUCKET).createSignedUrl(storagePath, 60)
+    if (!firmadaMuestra?.signedUrl) return { error: 'No se encontró el archivo subido. Intenta de nuevo.' }
+    const muestra = await fetch(firmadaMuestra.signedUrl, { headers: { Range: 'bytes=0-1023' }, cache: 'no-store' })
+    if (!muestra.ok) return { error: 'No se encontró el archivo subido. Intenta de nuevo.' }
+    const cabecera = new Uint8Array(await muestra.arrayBuffer())
+    // Un servidor que ignorase `Range` devolvería el archivo entero: entonces el largo de lo recibido ES el tamaño.
+    const tamanoTotal = tamanoTotalDeContentRange(muestra.headers.get('content-range')) ?? cabecera.length
+    const descartar = () => adminClient.storage.from(SOPORTE_PAGO_BUCKET).remove([storagePath]).catch(() => {})
+    if (!esCabeceraPdf(cabecera)) {
+      await descartar()
+      return { error: 'El archivo no es un PDF válido. Verifica que no se haya renombrado otro tipo de archivo.' }
+    }
+    if (tamanoTotal > SOPORTE_PAGO_MAX_BYTES) {
+      await descartar()
+      return { error: `El archivo supera el máximo de ${Math.round(SOPORTE_PAGO_MAX_BYTES / 1024 / 1024)} MB.` }
     }
 
     // El soporte que se reemplaza, para no dejarlo huérfano en el bucket.
@@ -1444,7 +1455,10 @@ export async function confirmarUploadSoportePago(
       await adminClient.storage.from(SOPORTE_PAGO_BUCKET).remove([anterior]).catch(() => {})
     }
 
-    revalidar(periodo.contrato_id, periodoId)
+    // Sin `revalidar()`: llamarlo hace que el servidor vuelva a pintar la página ENTERA dentro de esta misma respuesta
+    // (unas 30 lecturas a la base, de dos a tres segundos) y el usuario esperaba todo eso mirando «Subiendo…». La
+    // pantalla ya se actualiza al instante con lo que devuelve esta acción y se reconcilia con una lectura aparte; las
+    // demás pantallas leen la base al abrirse (son dinámicas), así que no hay caché que invalidar.
     // El bucket es privado: sin la URL firmada el enlace «ver» no abriría hasta recargar la página.
     return { data: { url: publicUrl, urlFirmada: await firmarUrl(SOPORTE_PAGO_BUCKET, publicUrl) } }
   } catch (e: unknown) {
@@ -1482,7 +1496,7 @@ export async function eliminarSoportePago(periodoId: string): Promise<ActionResu
     // El archivo se borra DESPUÉS de soltar la referencia: si fallara, queda un archivo suelto, no un enlace roto.
     if (ruta) await adminClient.storage.from(SOPORTE_PAGO_BUCKET).remove([ruta]).catch(() => {})
 
-    revalidar(periodo.contrato_id, periodoId)
+    // Sin `revalidar()`: ver confirmarUploadSoportePago.
     return {}
   } catch (e: unknown) {
     return { error: e instanceof Error ? e.message : 'Error inesperado' }
