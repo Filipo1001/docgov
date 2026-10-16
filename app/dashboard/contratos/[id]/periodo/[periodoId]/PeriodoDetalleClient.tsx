@@ -73,6 +73,7 @@ import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
 import PanelDocumentos from '@/components/ui/PanelDocumentos'
 import { AYUDA_DOCUMENTO } from '@/lib/ayudas-documentos'
+import { lecturaVigente } from '@/lib/cambio-local'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
 import Avatar from '@/components/ui/Avatar'
@@ -689,7 +690,20 @@ export default function PeriodoDetallePage({
     } catch { /* storage full or private mode — silent */ }
   }, [pendienteRegistro, PENDING_KEY])
 
-  const cargarDatos = useCallback(async (silencioso = false) => {
+  // Marca del último cambio hecho aquí mismo (subir o quitar un documento). Ver lib/cambio-local.ts.
+  const ultimoCambioLocal = useRef(0)
+
+  /**
+   * Refleja AL INSTANTE un cambio que la acción del servidor ya confirmó, sin esperar a la recarga de datos. Antes el
+   * botón seguía diciendo «Subir» y el informe no se dejaba enviar hasta que esa recarga volvía.
+   */
+  const aplicarCambioLocal = useCallback((cambios: Partial<Periodo>) => {
+    ultimoCambioLocal.current = Date.now()
+    setPeriodo(p => (p ? { ...p, ...cambios } : p))
+  }, [])
+
+  const cargarDatos = useCallback(async (silencioso = false): Promise<boolean> => {
+    const inicio = Date.now()
     try {
       const datos = await getPeriodoConContrato(periodoId, contratoId)
 
@@ -714,15 +728,21 @@ export default function PeriodoDetallePage({
        * vacío legítimo (un periodo sin actividades) siempre llega acompañado
        * de su periodo, así que no se pierde.
        */
-      if (!datos.periodo || !datos.contrato) return
+      if (!datos.periodo || !datos.contrato) return false
+
+      // Una lectura lanzada ANTES de un cambio local (el sondeo, por ejemplo) devolvería el estado de antes y
+      // desharía lo que el usuario ya ve. La que se lanza tras el cambio sí vale.
+      if (!lecturaVigente(inicio, ultimoCambioLocal.current)) return false
 
       setContrato(datos.contrato)
       setPeriodo(datos.periodo)
       setObligaciones(datos.obligaciones)
       setActividades(datos.actividades)
       if (datos.periodo?.numero_planilla) setNumPlanilla(datos.periodo.numero_planilla)
+      return true
     } catch {
       // Keep showing existing data on transient network errors
+      return false
     } finally {
       if (!silencioso) setCargando(false)
     }
@@ -1851,9 +1871,12 @@ export default function PeriodoDetallePage({
         setUrlsFirmadas(prev => ({ ...prev, [publicUrl]: confirm.data!.urlFirmada! }))
       }
 
+      // Al instante: el botón pasa a «cargado» y el informe se puede enviar sin esperar la recarga.
+      aplicarCambioLocal({ planilla_ss_url: publicUrl, planilla_estado: 'pendiente', planilla_comentario: null })
+
       toast.success('Planilla subida exitosamente')
       setPlanillaMenuAbierto(false)
-      cargarDatos()
+      void cargarDatos(true)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al subir la planilla')
     } finally {
@@ -1889,8 +1912,9 @@ export default function PeriodoDetallePage({
       if (confirm.data?.urlFirmada) {
         setUrlsFirmadas(prev => ({ ...prev, [publicUrl]: confirm.data!.urlFirmada! }))
       }
+      aplicarCambioLocal({ factura_electronica_url: publicUrl })
       toast.success('Factura electrónica adjuntada')
-      cargarDatos()
+      void cargarDatos(true)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al subir la factura')
     } finally {
@@ -1901,13 +1925,16 @@ export default function PeriodoDetallePage({
   async function handleEliminarFactura() {
     const res = await eliminarFactura(periodoId)
     if (res.error) toast.error(res.error)
-    else { toast.success('Factura eliminada'); cargarDatos() }
+    else { aplicarCambioLocal({ factura_electronica_url: null }); toast.success('Factura eliminada'); void cargarDatos(true) }
   }
 
   async function handleEliminarPlanilla() {
     const result = await eliminarPlanilla(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Planilla eliminada'); setPlanillaMenuAbierto(false); setNumPlanilla(''); cargarDatos() }
+    else {
+      aplicarCambioLocal({ planilla_ss_url: null, numero_planilla: null, planilla_estado: 'pendiente' })
+      toast.success('Planilla eliminada'); setPlanillaMenuAbierto(false); setNumPlanilla(''); void cargarDatos(true)
+    }
   }
 
   /**
@@ -1939,9 +1966,10 @@ export default function PeriodoDetallePage({
       if (confirm.data.urlFirmada) {
         setUrlsFirmadas(prev => ({ ...prev, [confirm.data!.url]: confirm.data!.urlFirmada! }))
       }
+      aplicarCambioLocal({ soporte_pago_url: confirm.data.url, planilla_estado: 'pendiente', planilla_comentario: null })
       toast.success('Soporte del pago subido')
       setPlanillaMenuAbierto(false)
-      cargarDatos()
+      void cargarDatos(true)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al subir el soporte del pago')
     } finally {
@@ -1952,7 +1980,10 @@ export default function PeriodoDetallePage({
   async function handleEliminarSoportePago() {
     const result = await eliminarSoportePago(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Soporte del pago eliminado'); setPlanillaMenuAbierto(false); cargarDatos() }
+    else {
+      aplicarCambioLocal({ soporte_pago_url: null, planilla_estado: 'pendiente' })
+      toast.success('Soporte del pago eliminado'); setPlanillaMenuAbierto(false); void cargarDatos(true)
+    }
   }
 
   async function handleRevisarPlanilla(estado: 'aprobada' | 'rechazada', comentario?: string) {
