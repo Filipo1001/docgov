@@ -13,7 +13,9 @@ import {
   ESTADOS_EDITABLES,
   DEFAULT_BASE_COTIZACION_SS,
   MESES,
+  calcularBaseCotizacionSS,
 } from '@/lib/constants'
+import { mostrarControlDeBaseEnPeriodo } from '@/lib/base-cotizacion'
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
@@ -2034,6 +2036,21 @@ export default function PeriodoDetallePage({
 
   // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
   const puedeRevisarPlanilla = (esAsesor || esSecretaria)
+
+  // Base de cotización SS: la secretaría (supervisor del contrato) la ajusta mientras el informe se revisa. La regla de
+  // quién y cuándo es la misma que valida el servidor (lib/base-cotizacion.ts). El valor por defecto se calcula igual
+  // que en el Acta de Supervisión: sobre el mayor entre lo que cobra el periodo y el valor mensual del contrato.
+  const mostrarBase = !!periodo && !!contrato && mostrarControlDeBaseEnPeriodo({
+    rol: usuario?.rol,
+    usuarioId: usuario?.id,
+    supervisorId: contrato.supervisor_id,
+    estado: periodo.estado,
+    esHistorico: periodo.es_historico === true,
+  })
+  const baseDefecto = calcularBaseCotizacionSS(
+    Math.max(Number(periodo?.valor_cobro ?? 0), Number(contrato?.valor_mensual ?? 0)),
+  )
+  const baseActual = periodo?.base_cotizacion_ss ?? baseDefecto
 
   // Franja de alerta de planilla (naranja / roja). Visible para revisores.
   // Mensaje completo siempre visible (sin depender de hover) — claro y directo.
@@ -4311,6 +4328,74 @@ export default function PeriodoDetallePage({
                           </div>
                         </button>
                       )
+                    )}
+
+                    {/* Base de cotización SS: se ajusta mientras el informe se revisa (el acta la imprime) */}
+                    {mostrarBase && (
+                      <div className="px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900">Base de cotización SS</p>
+                            <p className="text-xs text-gray-500">
+                              {periodo.base_cotizacion_ss != null ? 'Personalizada' : 'Por defecto'}:{' '}
+                              <span className="font-mono font-semibold text-gray-700">
+                                $ {baseActual.toLocaleString('es-CO')}
+                              </span>
+                            </p>
+                          </div>
+                          {!editandoBase && (
+                            <button
+                              onClick={() => { setValorBaseInput(String(baseActual)); setEditandoBase(true) }}
+                              className="shrink-0 px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                            >
+                              Editar
+                            </button>
+                          )}
+                        </div>
+                        {editandoBase && (
+                          <div className="mt-2.5 space-y-2">
+                            <input
+                              id="base-cotizacion-ss"
+                              type="text"
+                              inputMode="numeric"
+                              value={valorBaseInput}
+                              onChange={(e) => setValorBaseInput(e.target.value.replace(/\D/g, ''))}
+                              placeholder={baseDefecto.toLocaleString('es-CO')}
+                              disabled={guardandoBase}
+                              aria-label="Base de cotización a la seguridad social"
+                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={handleGuardarBase}
+                                disabled={guardandoBase || !valorBaseInput.trim()}
+                                className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg hover:bg-gray-800 disabled:opacity-50"
+                              >
+                                {guardandoBase ? '...' : 'Guardar'}
+                              </button>
+                              <button
+                                onClick={() => setEditandoBase(false)}
+                                disabled={guardandoBase}
+                                className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                Cancelar
+                              </button>
+                              {periodo.base_cotizacion_ss != null && (
+                                <button
+                                  onClick={handleRestablecerBase}
+                                  disabled={guardandoBase}
+                                  className="px-3 py-1.5 text-xs text-gray-600 underline disabled:opacity-50"
+                                >
+                                  Volver al valor por defecto
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              Es la base que imprime el acta de supervisión. Después de aprobado el informe ya no se puede cambiar desde aquí.
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {/* Eliminar (contratista, hasta aprobado) */}

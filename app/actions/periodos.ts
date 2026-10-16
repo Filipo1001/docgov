@@ -22,6 +22,7 @@ import { extraerPath } from '@/lib/storage-firmado'
 import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
+import { puedeEditarBaseCotizacion } from '@/lib/base-cotizacion'
 import { precalentarPDFs } from '@/lib/pdf/precalentar'
 import { certificacionPendiente } from '@/lib/certificaciones'
 import { actaTerminacionPendiente, emitirActaTerminacion } from '@/lib/actas-terminacion'
@@ -1942,8 +1943,13 @@ export async function adminDevolverPeriodo(
 // ─── Admin: Base de cotización SS ────────────────────────────
 
 /**
- * Admin override for the base de cotización a la seguridad social shown
- * in the Acta de Supervisión. Pass null to reset to the system default.
+ * Override of the base de cotización a la seguridad social shown in the Acta de Supervisión. Pass null to reset to
+ * the system default.
+ *
+ * Quién puede, y cuándo, lo decide `puedeEditarBaseCotizacion` (lib/base-cotizacion.ts): el administrador siempre; el
+ * supervisor del contrato mientras el informe está enviado o en revisión, nunca ya aprobado (el acta emitida no se
+ * reescribe). La escritura va por el cliente administrador: la sesión del usuario no tiene permiso sobre esta columna
+ * (migración 065), y no debe tenerlo.
  */
 export async function actualizarBaseCotizacion(
   periodoId: string,
@@ -1952,10 +1958,6 @@ export async function actualizarBaseCotizacion(
   try {
     const { supabase, usuario } = await getAuthContext()
 
-    if (usuario.rol !== 'admin') {
-      return { error: 'Solo el administrador puede editar la base de cotización' }
-    }
-
     if (valor !== null && (!Number.isFinite(valor) || valor <= 0)) {
       return { error: 'El valor debe ser un número positivo' }
     }
@@ -1963,6 +1965,17 @@ export async function actualizarBaseCotizacion(
     const cargado = await getPeriodo(supabase, periodoId)
     if (!cargado.ok) return { error: cargado.error }
     const periodo = cargado.periodo
+
+    // El contrato solo se consulta cuando importa: para el supervisor. El administrador no depende de él.
+    const contrato = usuario.rol === 'supervisor' ? await getContratoIds(supabase, periodo.contrato_id) : null
+    const decision = puedeEditarBaseCotizacion({
+      rol: usuario.rol,
+      usuarioId: usuario.id,
+      supervisorId: contrato?.supervisor_id,
+      estado: periodo.estado,
+      esHistorico: periodo.es_historico,
+    })
+    if (!decision.ok) return { error: decision.error }
 
     const adminClient = createAdminSupabaseClient()
     const { data: updated, error } = await adminClient
