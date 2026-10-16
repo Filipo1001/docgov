@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mostrarControlDeBaseEnPeriodo, puedeEditarBaseCotizacion } from '../../lib/base-cotizacion'
+import { mostrarControlDeBaseEnPeriodo, motivoBaseBloqueada, puedeEditarBaseCotizacion } from '../../lib/base-cotizacion'
 
 const YO = 'u-supervisor'
 const OTRO = 'u-otro'
@@ -53,4 +53,14 @@ test('la pantalla del periodo solo pinta el control dentro de la ventana de revi
   assert.equal(mostrarControlDeBaseEnPeriodo({ ...base, rol: 'admin', esHistorico: true }), false)
   assert.equal(mostrarControlDeBaseEnPeriodo({ ...base, rol: 'contratista' }), false)
   assert.equal(mostrarControlDeBaseEnPeriodo({ ...base, supervisorId: OTRO }), false)
+})
+
+test('el motivo del candado: null si puede, y una frase que dice qué hacer si no', () => {
+  assert.equal(motivoBaseBloqueada(base), null)                                                 // supervisor del contrato, enviado
+  assert.equal(motivoBaseBloqueada({ ...base, rol: 'admin', supervisorId: OTRO, estado: 'revision' }), null)
+  assert.match(motivoBaseBloqueada({ ...base, rol: 'asesor' }) ?? '', /supervisor/)
+  assert.match(motivoBaseBloqueada({ ...base, estado: 'aprobado' }) ?? '', /administrador/)      // el supervisor ya no, aprobado
+  assert.match(motivoBaseBloqueada({ ...base, supervisorId: OTRO }) ?? '', /supervisor de este contrato/)
+  assert.match(motivoBaseBloqueada({ ...base, rol: 'admin', estado: 'aprobado' }) ?? '', /Avanzado/)
+  assert.ok(motivoBaseBloqueada({ ...base, rol: 'contratista' }))
 })

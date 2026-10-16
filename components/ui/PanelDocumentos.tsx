@@ -67,7 +67,7 @@ interface Props {
 
 // ─── El letrero y su convivencia con el menú ─────────────────────────────────
 
-function useLetrero() {
+export function useLetrero() {
   const [activo, setActivo] = useState<string | null>(null)
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null)
   const [sobreAcciones, setSobreAcciones] = useState(false)
@@ -108,7 +108,7 @@ function useLetrero() {
 
 // ─── Los tres puntitos ───────────────────────────────────────────────────────
 
-const ENFOQUE = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400'
+export const ENFOQUE = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400'
 
 const ITEM_MENU =
   'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none'

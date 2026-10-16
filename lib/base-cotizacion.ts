@@ -58,3 +58,16 @@ export function mostrarControlDeBaseEnPeriodo(p: Parameters<typeof puedeEditarBa
     (ESTADOS_BASE_EDITABLE_POR_SUPERVISOR as readonly string[]).includes(p.estado)
   )
 }
+
+/**
+ * Por qué el candado: el motivo, en una frase, de que quien mira NO pueda cambiar la base ahora; o null si puede.
+ * Lo usa el panel de revisión de la planilla para el letrero del candado, sin repetir las reglas de arriba.
+ */
+export function motivoBaseBloqueada(p: Parameters<typeof puedeEditarBaseCotizacion>[0]): string | null {
+  if (mostrarControlDeBaseEnPeriodo(p)) return null
+  if (p.rol === 'asesor') return 'La cambia el supervisor del contrato.'
+  const decision = puedeEditarBaseCotizacion(p)
+  if (!decision.ok) return decision.error
+  // El administrador puede, pero solo dentro de la ventana de revisión: lo ya aprobado se corrige desde Avanzado.
+  return 'Con el informe ya aprobado se corrige desde Avanzado, no aquí.'
+}
