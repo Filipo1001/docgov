@@ -223,7 +223,7 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
         .eq('periodo_id', periodoId),
       supabase
         .from('periodos')
-        .select('planilla_ss_url, numero_planilla')
+        .select('planilla_ss_url, numero_planilla, soporte_pago_url')
         .eq('id', periodoId)
         .single(),
       estadoFacturaPeriodo(periodoId),
@@ -248,6 +248,12 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
     // Planilla de seguridad social obligatoria
     if (!planillaData?.planilla_ss_url || !planillaData?.numero_planilla?.trim()) {
       return { error: 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida' }
+    }
+
+    // El soporte del pago, el segundo documento de seguridad social que pide Hacienda (lib/soporte-pago.ts). Se exige
+    // igual que la planilla y para quien envíe, sea contratista o administrador. Obligatorio desde el 16-oct-2026.
+    if (!planillaData?.soporte_pago_url) {
+      return { error: 'Para enviar el informe, adjunta también el soporte del pago de la seguridad social' }
     }
 
     // La factura electrónica sustituye a la Cuenta de Cobro para quien está

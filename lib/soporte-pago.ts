@@ -5,6 +5,8 @@
  * electrónica: PDF en el bucket privado `documentos`, subida directa del navegador con URL prefirmada, y registro por
  * el cliente administrador. Se revisa junto con la planilla (un solo `planilla_estado`) y va al paquete de SECOP justo
  * después de ella.
+ *
+ * Es OBLIGATORIO para enviar el informe, igual que la planilla (`enviarPeriodo`, desde el 16-oct-2026). Solo PDF, hasta 10 MB.
  */
 export const SOPORTE_PAGO_BUCKET = 'documentos'
 export const SOPORTE_PAGO_MAX_BYTES = 10 * 1024 * 1024

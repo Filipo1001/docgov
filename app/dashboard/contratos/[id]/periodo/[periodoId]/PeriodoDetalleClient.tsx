@@ -436,7 +436,7 @@ export default function PeriodoDetallePage({
   const [lightbox, setLightbox] = useState<{ url: string; alt: string; evId?: string } | null>(null)
 
   // Inline planilla validation (submit section)
-  const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
+  const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false, soporte: false })
   const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
 
   // Admin: base cotización SS
@@ -1212,15 +1212,22 @@ export default function PeriodoDetallePage({
 
     const faltaPlanilla = !periodo?.planilla_ss_url
     const faltaNumero = !numPlanilla.trim()
+    const faltaSoporte = !periodo?.soporte_pago_url
 
-    if (faltaPlanilla || faltaNumero) {
-      setErroresCampos({ planilla: faltaPlanilla, numero: faltaNumero })
-      toast.error('Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida')
+    if (faltaPlanilla || faltaNumero || faltaSoporte) {
+      setErroresCampos({ planilla: faltaPlanilla, numero: faltaNumero, soporte: faltaSoporte })
+      toast.error(
+        faltaPlanilla || faltaNumero
+          ? (faltaSoporte
+              ? 'Para enviar el informe, adjunta la planilla de seguridad social con su número y el soporte del pago'
+              : 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida')
+          : 'Para enviar el informe, adjunta también el soporte del pago de la seguridad social',
+      )
       seccionEnvioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
 
-    setErroresCampos({ planilla: false, numero: false })
+    setErroresCampos({ planilla: false, numero: false, soporte: false })
 
     // El botón se bloquea YA —sin esperar la verificación del acta—, pero
     // `EnvioInforme` todavía no se abre. Se probó a abrirla en este mismo
@@ -3469,10 +3476,10 @@ export default function PeriodoDetallePage({
           </h3>
           <p className="text-sm text-gray-500 mb-4">
             {rechazado
-              ? 'Verifica que la planilla esté adjunta y reenvía el informe a revisión.'
+              ? 'Verifica que la planilla y el soporte del pago estén adjuntos y reenvía el informe a revisión.'
               : exigeFacturaElectronica
-                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número y tu factura electrónica.'
-                : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
+                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número, el soporte del pago y tu factura electrónica.'
+                : 'Antes de enviar, adjunta la planilla de seguridad social con su número y el soporte del pago.'
             }
           </p>
 
@@ -3644,20 +3651,24 @@ export default function PeriodoDetallePage({
             </div>
 
             {/* Soporte del pago — el segundo documento de seguridad social que pide Hacienda: el comprobante de que se
-                pagó la planilla. No bloquea el envío; quien revisa ve que falta. */}
+                pagó la planilla. Obligatorio para enviar, igual que la planilla. */}
             <div className="sm:col-span-2">
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
-                periodo.soporte_pago_url ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                erroresCampos.soporte
+                  ? 'bg-red-50 border-red-400'
+                  : periodo.soporte_pago_url ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
               }`}>
                 <Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" className="shrink-0 text-gray-400" />
                 <label className="flex-1 min-w-0 cursor-pointer hover:opacity-75 transition-opacity">
                   <p className="text-sm font-medium text-gray-900">Soporte del pago</p>
-                  <p className="text-xs text-gray-400">
+                  <p className={`text-xs ${erroresCampos.soporte ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
                     {subiendoSoporte
                       ? 'Subiendo...'
                       : periodo.soporte_pago_url
                         ? 'Cargado — reemplazar'
-                        : 'El comprobante de que pagaste la planilla. Subir PDF'}
+                        : erroresCampos.soporte
+                          ? 'Requerido — adjunta el comprobante de pago'
+                          : 'El comprobante de que pagaste la planilla. Subir PDF'}
                   </p>
                   <input
                     type="file"
@@ -3666,7 +3677,10 @@ export default function PeriodoDetallePage({
                     disabled={subiendoSoporte}
                     onChange={(e) => {
                       const file = e.target.files?.[0]
-                      if (file) handleSubirSoportePago(file)
+                      if (file) {
+                        handleSubirSoportePago(file)
+                        setErroresCampos(prev => ({ ...prev, soporte: false }))
+                      }
                       e.target.value = ''
                     }}
                   />
