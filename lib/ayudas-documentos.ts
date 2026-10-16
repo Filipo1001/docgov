@@ -19,6 +19,23 @@ export const AYUDA_DOCUMENTO = {
     'Tu factura electrónica del mes. En tu caso reemplaza a la Cuenta de Cobro, que por eso el sistema no genera.',
 } as const
 
+/**
+ * Lo mismo, dicho a quien REVISA (supervisor, asesor, administrador) en el panel de la planilla: habla del contratista en
+ * tercera persona y explica también los dos datos que el revisor verifica (el mes y la base de cotización).
+ */
+export const AYUDA_REVISION = {
+  planilla:
+    'La planilla PILA del mes: el documento donde constan los aportes del contratista a salud, pensión y riesgos laborales.',
+  numeroPlanilla:
+    'El número que identifica la planilla, tal como aparece en el documento. Lo escribe el contratista.',
+  soportePago:
+    'El comprobante de que esa planilla se pagó: el recibo o la confirmación del banco o del operador de pagos. Hacienda lo pide junto con la planilla.',
+  mesCotizacion:
+    'El mes que cubre la planilla. El sistema sugiere el del informe; confírmalo o cámbialo si la planilla es de otro.',
+  baseCotizacion:
+    'La base sobre la que se cotiza (IBC). La calcula el acta con el valor del contrato; si la planilla trae otra, se corrige aquí.',
+} as const
+
 export type ClaveAyudaDocumento = keyof typeof AYUDA_DOCUMENTO
 
 /** Largo máximo para que el letrero se lea de un vistazo, también en una pantalla de 320 px. */

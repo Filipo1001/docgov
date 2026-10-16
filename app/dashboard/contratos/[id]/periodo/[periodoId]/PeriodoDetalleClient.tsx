@@ -13,9 +13,9 @@ import {
   ESTADOS_EDITABLES,
   DEFAULT_BASE_COTIZACION_SS,
   MESES,
-  calcularBaseCotizacionSS,
 } from '@/lib/constants'
-import { mostrarControlDeBaseEnPeriodo } from '@/lib/base-cotizacion'
+import { motivoBaseBloqueada, mostrarControlDeBaseEnPeriodo } from '@/lib/base-cotizacion'
+import { explicarBasePorDefecto } from '@/lib/importe'
 import type { Contrato, Periodo, Obligacion, Actividad, EstadoPeriodo, DuplicadoMatch, EvidenciaParaBackfill } from '@/lib/types'
 import { createClient } from '@/lib/supabase'
 import { getPeriodoConContrato } from '@/services/periodos'
@@ -72,7 +72,8 @@ import MejorarRedaccion from '@/components/MejorarRedaccion'
 import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
 import PanelDocumentos from '@/components/ui/PanelDocumentos'
-import { AYUDA_DOCUMENTO } from '@/lib/ayudas-documentos'
+import PanelRevisionPlanilla from '@/components/ui/PanelRevisionPlanilla'
+import { AYUDA_DOCUMENTO, AYUDA_REVISION } from '@/lib/ayudas-documentos'
 import { lecturaVigente } from '@/lib/cambio-local'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
@@ -322,8 +323,6 @@ export default function PeriodoDetallePage({
       if (initialPeriodo?.numero_planilla) {
         setNumPlanilla(initialPeriodo.numero_planilla)
       }
-      // Keep mes de cotización in sync with server-side value
-      setMesCotizacion(initialPeriodo?.cotizacion_mes ?? initialPeriodo?.mes ?? '')
     }
   }, [initialPeriodo])
 
@@ -379,10 +378,8 @@ export default function PeriodoDetallePage({
   const [numPlanilla, setNumPlanilla] = useState(initialPeriodo.numero_planilla ?? '')
   const [guardandoPlanilla, setGuardandoPlanilla] = useState(false)
 
-  // Mes de cotización (validado por asesor/supervisor/admin durante la revisión)
-  const [mesCotizacion, setMesCotizacion] = useState(
-    initialPeriodo.cotizacion_mes ?? initialPeriodo.mes ?? ''
-  )
+  // Mes de cotización (validado por asesor/supervisor/admin durante la revisión). El valor vigente sale de `periodo`
+  // (`cotizacion_mes`), que se actualiza al instante al confirmarlo; aquí solo se sabe si se está guardando.
   const [guardandoMesCotizacion, setGuardandoMesCotizacion] = useState(false)
 
 
@@ -423,14 +420,21 @@ export default function PeriodoDetallePage({
 
   // Planilla dropdown state
   const [planillaMenuAbierto, setPlanillaMenuAbierto] = useState(false)
+  // El desplegable recorta (`overflow-hidden`) mientras se anima; ya abierto del todo debe dejar de hacerlo, o recortaría
+  // el letrero «qué es» de las fichas cuando cae por debajo de la última fila. Los modales van en un portal: no les afecta.
+  const [planillaMenuAsentado, setPlanillaMenuAsentado] = useState(false)
+  useEffect(() => {
+    setPlanillaMenuAsentado(false)
+    if (!planillaMenuAbierto) return
+    const id = setTimeout(() => setPlanillaMenuAsentado(true), 220)
+    return () => clearTimeout(id)
+  }, [planillaMenuAbierto])
   // Descarga del paquete desde el pipeline (con feedback)
   const [descargandoPaquete, setDescargandoPaquete] = useState(false)
   const [subiendoPlanilla, setSubiendoPlanilla] = useState(false)
 
-  // Inline planilla rejection form (replaces window.prompt)
-  const [mostrarFormRechazo, setMostrarFormRechazo] = useState(false)
-  const [motivoRechazoInline, setMotivoRechazoInline] = useState('')
-  const [rechazandoPlanilla, setRechazandoPlanilla] = useState(false)
+  // Aprobando o devolviendo la planilla (el motivo de la devolución lo recoge el propio panel de revisión)
+  const [decidiendoPlanilla, setDecidiendoPlanilla] = useState(false)
 
   // Supervisor observation on the acta
   const [editandoObservacion, setEditandoObservacion] = useState(false)
@@ -444,9 +448,7 @@ export default function PeriodoDetallePage({
   const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false, soporte: false })
   const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
 
-  // Admin: base cotización SS
-  const [editandoBase, setEditandoBase] = useState(false)
-  const [valorBaseInput, setValorBaseInput] = useState('')
+  // Base de cotización SS: guardando (el valor y su edición viven en el modal del panel de revisión)
   const [guardandoBase, setGuardandoBase] = useState(false)
 
   // Admin: devoluciones forzadas
@@ -1490,9 +1492,10 @@ export default function PeriodoDetallePage({
     setProcesandoDevolver(false)
   }
 
-  async function handleGuardarBase() {
-    const valor = parseInt(valorBaseInput.replace(/\D/g, ''), 10)
-    if (!valorBaseInput.trim() || isNaN(valor) || valor <= 0) {
+  // La base y el mes se reflejan al instante (`aplicarCambioLocal`) en cuanto el servidor confirma: la ficha del panel no
+  // espera a la recarga de datos para mostrar el valor nuevo.
+  async function handleGuardarBase(valor: number) {
+    if (!Number.isFinite(valor) || valor <= 0) {
       toast.error('Ingresa un valor numérico válido')
       return
     }
@@ -1500,9 +1503,9 @@ export default function PeriodoDetallePage({
     const result = await actualizarBaseCotizacion(periodoId, valor)
     if (result.error) toast.error(result.error)
     else {
+      aplicarCambioLocal({ base_cotizacion_ss: valor })
       toast.success('Base de cotización actualizada')
-      setEditandoBase(false)
-      cargarDatos()
+      void cargarDatos(true)
     }
     setGuardandoBase(false)
   }
@@ -1512,9 +1515,9 @@ export default function PeriodoDetallePage({
     const result = await actualizarBaseCotizacion(periodoId, null)
     if (result.error) toast.error(result.error)
     else {
+      aplicarCambioLocal({ base_cotizacion_ss: null })
       toast.success('Base restablecida al valor por defecto')
-      setEditandoBase(false)
-      cargarDatos()
+      void cargarDatos(true)
     }
     setGuardandoBase(false)
   }
@@ -1987,13 +1990,16 @@ export default function PeriodoDetallePage({
   }
 
   async function handleRevisarPlanilla(estado: 'aprobada' | 'rechazada', comentario?: string) {
+    setDecidiendoPlanilla(true)
     const res = await revisarPlanilla(periodoId, estado, comentario)
     if (res.error) toast.error(res.error)
     else {
+      aplicarCambioLocal({ planilla_estado: estado, planilla_comentario: estado === 'rechazada' ? (comentario?.trim() ?? null) : null })
       toast.success(estado === 'aprobada' ? 'Planilla aprobada' : 'Planilla rechazada')
       setPlanillaMenuAbierto(false)
-      cargarDatos()
+      void cargarDatos(true)
     }
+    setDecidiendoPlanilla(false)
   }
 
   async function handleGuardarNumeroPlanilla() {
@@ -2045,11 +2051,11 @@ export default function PeriodoDetallePage({
   }
 
   async function handleGuardarMesCotizacion(mes: string) {
-    setMesCotizacion(mes)
     setGuardandoMesCotizacion(true)
     const result = await guardarMesCotizacion(periodoId, mes)
     if (result.error) toast.error(result.error)
     else {
+      aplicarCambioLocal({ cotizacion_mes: mes, cotizacion_origen: 'confirmado' })
       toast.success('Mes de cotización confirmado')
       router.refresh()
     }
@@ -2123,83 +2129,36 @@ export default function PeriodoDetallePage({
     }
   }
 
-  // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
+  // Quién REVISA la planilla (supervisor, asesor, administrador) ve el panel de revisión; el resto —el contratista que sube
+  // sus documentos, o quien solo mira— conserva el desplegable de siempre.
   const puedeRevisarPlanilla = (esAsesor || esSecretaria)
 
   // Base de cotización SS: la secretaría (supervisor del contrato) la ajusta mientras el informe se revisa. La regla de
   // quién y cuándo es la misma que valida el servidor (lib/base-cotizacion.ts). El valor por defecto se calcula igual
   // que en el Acta de Supervisión: sobre el mayor entre lo que cobra el periodo y el valor mensual del contrato.
-  const mostrarBase = !!periodo && !!contrato && mostrarControlDeBaseEnPeriodo({
+  const contextoBase = periodo && contrato ? {
     rol: usuario?.rol,
     usuarioId: usuario?.id,
     supervisorId: contrato.supervisor_id,
     estado: periodo.estado,
     esHistorico: periodo.es_historico === true,
-  })
-  const baseDefecto = calcularBaseCotizacionSS(
+  } : null
+  const puedeCambiarBase = !!contextoBase && mostrarControlDeBaseEnPeriodo(contextoBase)
+  const motivoBloqueoBase = contextoBase ? motivoBaseBloqueada(contextoBase) : null
+  const baseExplicada = explicarBasePorDefecto(
     Math.max(Number(periodo?.valor_cobro ?? 0), Number(contrato?.valor_mensual ?? 0)),
   )
+  const baseDefecto = baseExplicada.valor
   const baseActual = periodo?.base_cotizacion_ss ?? baseDefecto
+
+  // El mes de cotización lo confirma quien revisa; el supervisor, solo en SUS contratos (lo mismo que valida el servidor).
+  const puedeCambiarMesCotizacion = !!periodo?.planilla_ss_url &&
+    (usuario?.rol !== 'supervisor' || contrato?.supervisor_id === usuario?.id)
+  // Las opciones del modal y el mes vigente salen de la misma lista: se empareja sin importar mayúsculas.
+  const mesCotizacionVigente = mesesContrato.find(m => m.toLowerCase() === mesCotizacionActual.toLowerCase()) ?? mesCotizacionActual
 
   // El mensaje de error del número de la planilla en el formulario de envío (lo pinta PanelDocumentos).
   const errorNumeroPlanilla = errorFormatoPlanilla ?? (erroresCampos.numero ? 'Ingresa el número de planilla' : null)
-
-  // Franja de alerta de planilla (naranja / roja). Visible para revisores.
-  // Mensaje completo siempre visible (sin depender de hover) — claro y directo.
-  const franjaAlertaPlanilla = nivelAlertaPlanilla && (esAsesor || esSecretaria) ? (
-    <div className="px-4 py-3">
-      <div
-        className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl border ${
-          nivelAlertaPlanilla === 'roja'
-            ? 'bg-red-50 border-red-200'
-            : 'bg-orange-50 border-orange-200'
-        }`}
-      >
-        <Icono glifo={Iconos.estado.advertencia} tamano="sm" className={`flex-shrink-0 mt-0.5 ${nivelAlertaPlanilla === 'roja' ? 'text-red-600' : 'text-amber-600'}`} />
-        <div className="min-w-0">
-          <p className={`text-xs font-semibold ${nivelAlertaPlanilla === 'roja' ? 'text-red-700' : 'text-orange-700'}`}>
-            {nivelAlertaPlanilla === 'roja'
-              ? 'Posible cotización faltante'
-              : 'Pago por mes vencido'}
-          </p>
-          <p className={`text-[11px] leading-relaxed mt-0.5 ${nivelAlertaPlanilla === 'roja' ? 'text-red-600/90' : 'text-orange-700/80'}`}>
-            {mensajeAlertaPlanilla}
-          </p>
-        </div>
-      </div>
-    </div>
-  ) : null
-
-  // Selector de mes de cotización (asesor / supervisor / admin) dentro de la tarjeta.
-  const selectorMesCotizacion = (esAsesor || esSecretaria) && periodo?.planilla_ss_url ? (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-2 mb-2">
-        <Icono glifo={Iconos.dominio.periodo} tamano="sm" className="text-gray-400" />
-        <p className="text-sm font-medium text-gray-900">Mes de cotización</p>
-        {mesCotizacionSinVerificar ? (
-          <span className="text-[10px] font-medium text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-full">sin verificar</span>
-        ) : (
-          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">confirmado</span>
-        )}
-      </div>
-      <p className="text-[11px] text-gray-400 mb-2">
-        Mes del informe: <strong className="text-gray-600">{periodo.mes}</strong>. Confirma el mes que realmente cubre la planilla.
-      </p>
-      <div className="flex items-center gap-2">
-        <select
-          value={mesCotizacion}
-          onChange={(e) => handleGuardarMesCotizacion(e.target.value)}
-          disabled={guardandoMesCotizacion}
-          className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none disabled:opacity-50"
-        >
-          {mesesContrato.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-        {guardandoMesCotizacion && <span className="text-xs text-gray-400">Guardando…</span>}
-      </div>
-    </div>
-  ) : null
 
   // ── Render ──────────────────────────────────────────────────
 
@@ -4158,13 +4117,73 @@ export default function PeriodoDetallePage({
                 </button>
 
                 {/* Dropdown */}
-                <div className={`overflow-hidden transition-all duration-200 ease-in-out ${
-                  planillaMenuAbierto ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
-                }`}>
-                  <div className="mt-2 bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100">
+                <div
+                  inert={!planillaMenuAbierto}
+                  className={`transition-all duration-200 ease-in-out ${
+                    planillaMenuAbierto ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
+                  } ${planillaMenuAbierto && planillaMenuAsentado ? 'overflow-visible' : 'overflow-hidden'}`}
+                >
+                  {/* Quien REVISA ve el panel de fichas (documentos, mes y base de cotización, decisión). */}
+                  {puedeRevisarPlanilla && (
+                    <div className="mt-2 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+                      <PanelRevisionPlanilla
+                        planilla={{
+                          icono: Iconos.documentos.planilla,
+                          etiqueta: 'Planilla',
+                          ayuda: AYUDA_REVISION.planilla,
+                          url: periodo.planilla_ss_url ? resolverUrl(periodo.planilla_ss_url) : null,
+                        }}
+                        soporte={{
+                          icono: Iconos.documentos.soportePago,
+                          etiqueta: 'Soporte de pago',
+                          ayuda: AYUDA_REVISION.soportePago,
+                          url: periodo.soporte_pago_url ? resolverUrl(periodo.soporte_pago_url) : null,
+                        }}
+                        numero={{ ayuda: AYUDA_REVISION.numeroPlanilla, valor: periodo.numero_planilla ?? null }}
+                        mes={{
+                          ayuda: AYUDA_REVISION.mesCotizacion,
+                          mesDelInforme: periodo.mes,
+                          anio: periodo.anio ?? null,
+                          valor: mesCotizacionVigente,
+                          confirmado: !mesCotizacionSinVerificar,
+                          opciones: mesesContrato,
+                          puedeCambiar: puedeCambiarMesCotizacion,
+                          guardando: guardandoMesCotizacion,
+                          onCambiar: (mes) => { void handleGuardarMesCotizacion(mes) },
+                        }}
+                        base={{
+                          ayuda: AYUDA_REVISION.baseCotizacion,
+                          valor: baseActual,
+                          porDefecto: baseDefecto,
+                          explicacion: baseExplicada.texto,
+                          piso: DEFAULT_BASE_COTIZACION_SS,
+                          personalizada: periodo.base_cotizacion_ss != null,
+                          puedeCambiar: puedeCambiarBase,
+                          motivoBloqueo: motivoBloqueoBase,
+                          guardando: guardandoBase,
+                          onGuardar: (valor) => { void handleGuardarBase(valor) },
+                          onRestablecer: () => { void handleRestablecerBase() },
+                        }}
+                        alerta={nivelAlertaPlanilla ? {
+                          nivel: nivelAlertaPlanilla,
+                          titulo: nivelAlertaPlanilla === 'roja' ? 'Posible cotización faltante' : 'Pago por mes vencido',
+                          mensaje: mensajeAlertaPlanilla,
+                        } : null}
+                        decision={{
+                          estado: periodo.planilla_estado ?? null,
+                          motivoAnterior: periodo.planilla_comentario ?? null,
+                          puedeDecidir: !!periodo.planilla_ss_url,
+                          decidiendo: decidiendoPlanilla,
+                          onAprobar: () => { void handleRevisarPlanilla('aprobada') },
+                          onDevolver: (motivo) => { void handleRevisarPlanilla('rechazada', motivo) },
+                        }}
+                      />
+                    </div>
+                  )}
 
-                    {/* Franja de alerta (naranja / roja) con tooltip — solo revisores */}
-                    {franjaAlertaPlanilla}
+                  {/* El resto —el contratista que gestiona sus documentos, o quien solo mira— conserva la lista de siempre. */}
+                  {!puedeRevisarPlanilla && (
+                  <div className="mt-2 bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100">
 
                     {/* Ver documento */}
                     {periodo.planilla_ss_url && (
@@ -4191,9 +4210,6 @@ export default function PeriodoDetallePage({
                         <span className="text-sm text-gray-700 font-medium">Ver soporte del pago</span>
                       </a>
                     )}
-
-                    {/* Mes de cotización — confirmación del revisor */}
-                    {selectorMesCotizacion}
 
                     {/* Subir / Reemplazar (contratista, hasta aprobado) */}
                     {esPlanillaGestionable && (
@@ -4287,143 +4303,6 @@ export default function PeriodoDetallePage({
                       </div>
                     )}
 
-                    {/* Asesor: Aprobar */}
-                    {(esAsesor || esSecretaria) && periodo.planilla_ss_url && (
-                      <button
-                        onClick={() => handleRevisarPlanilla('aprobada')}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-green-50 transition-colors text-left"
-                      >
-                        <Icono glifo={Iconos.estado.aprobado} tamano="sm" />
-                        <div>
-                          <p className="text-sm font-medium text-green-700">Aprobar planilla</p>
-                          <p className="text-xs text-gray-400">
-                            {periodo.planilla_estado === 'pendiente'
-                              ? 'Pendiente tu revisión — confirma que la planilla es correcta'
-                              : 'Confirmar que la planilla está correcta'}
-                          </p>
-                        </div>
-                      </button>
-                    )}
-
-                    {/* Asesor: Rechazar — inline form (replaces window.prompt) */}
-                    {(esAsesor || esSecretaria) && periodo.planilla_ss_url && (
-                      mostrarFormRechazo ? (
-                        <div className="px-4 py-3 space-y-2 bg-red-50 rounded-b-xl">
-                          <p className="text-sm font-semibold text-red-700">Motivo del rechazo</p>
-                          <textarea
-                            value={motivoRechazoInline}
-                            onChange={(e) => setMotivoRechazoInline(e.target.value)}
-                            placeholder="Explica al contratista qué debe corregir..."
-                            rows={3}
-                            autoFocus
-                            className="w-full px-3 py-2 bg-white border border-red-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-400 outline-none resize-none"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={async () => {
-                                setRechazandoPlanilla(true)
-                                await handleRevisarPlanilla('rechazada', motivoRechazoInline.trim())
-                                setMostrarFormRechazo(false)
-                                setMotivoRechazoInline('')
-                                setRechazandoPlanilla(false)
-                              }}
-                              disabled={rechazandoPlanilla || !motivoRechazoInline.trim()}
-                              className="flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {rechazandoPlanilla ? 'Rechazando...' : 'Confirmar rechazo'}
-                            </button>
-                            <button
-                              onClick={() => { setMostrarFormRechazo(false); setMotivoRechazoInline('') }}
-                              className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setMostrarFormRechazo(true)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left"
-                        >
-                          <Icono glifo={Iconos.estado.rechazado} tamano="sm" />
-                          <div>
-                            <p className="text-sm font-medium text-red-600">Devolver planilla</p>
-                            {periodo.planilla_comentario
-                              ? <p className="text-xs text-gray-400">Motivo anterior: {periodo.planilla_comentario}</p>
-                              : <p className="text-xs text-gray-400">Solicitar corrección al contratista</p>}
-                          </div>
-                        </button>
-                      )
-                    )}
-
-                    {/* Base de cotización SS: se ajusta mientras el informe se revisa (el acta la imprime) */}
-                    {mostrarBase && (
-                      <div className="px-4 py-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900">Base de cotización SS</p>
-                            <p className="text-xs text-gray-500">
-                              {periodo.base_cotizacion_ss != null ? 'Personalizada' : 'Por defecto'}:{' '}
-                              <span className="font-mono font-semibold text-gray-700">
-                                $ {baseActual.toLocaleString('es-CO')}
-                              </span>
-                            </p>
-                          </div>
-                          {!editandoBase && (
-                            <button
-                              onClick={() => { setValorBaseInput(String(baseActual)); setEditandoBase(true) }}
-                              className="shrink-0 px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                            >
-                              Editar
-                            </button>
-                          )}
-                        </div>
-                        {editandoBase && (
-                          <div className="mt-2.5 space-y-2">
-                            <input
-                              id="base-cotizacion-ss"
-                              type="text"
-                              inputMode="numeric"
-                              value={valorBaseInput}
-                              onChange={(e) => setValorBaseInput(e.target.value.replace(/\D/g, ''))}
-                              placeholder={baseDefecto.toLocaleString('es-CO')}
-                              disabled={guardandoBase}
-                              aria-label="Base de cotización a la seguridad social"
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
-                            />
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                onClick={handleGuardarBase}
-                                disabled={guardandoBase || !valorBaseInput.trim()}
-                                className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg hover:bg-gray-800 disabled:opacity-50"
-                              >
-                                {guardandoBase ? '...' : 'Guardar'}
-                              </button>
-                              <button
-                                onClick={() => setEditandoBase(false)}
-                                disabled={guardandoBase}
-                                className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                              >
-                                Cancelar
-                              </button>
-                              {periodo.base_cotizacion_ss != null && (
-                                <button
-                                  onClick={handleRestablecerBase}
-                                  disabled={guardandoBase}
-                                  className="px-3 py-1.5 text-xs text-gray-600 underline disabled:opacity-50"
-                                >
-                                  Volver al valor por defecto
-                                </button>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-400">
-                              Es la base que imprime el acta de supervisión. Después de aprobado el informe ya no se puede cambiar desde aquí.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     {/* Eliminar (contratista, hasta aprobado) */}
                     {esPlanillaGestionable && periodo.planilla_ss_url && (
                       <button
@@ -4445,6 +4324,7 @@ export default function PeriodoDetallePage({
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               </div>
             )}
