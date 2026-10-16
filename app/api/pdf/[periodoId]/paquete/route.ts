@@ -7,6 +7,7 @@
  *   Acta_de_Supervision.pdf
  *   Acta_de_Pago.pdf
  *   Planilla_Seguridad_Social.{ext}   (si está adjunta)
+ *   Soporte_Pago_Seguridad_Social.pdf (si está adjunto; va justo después de la planilla)
  *   Certificacion_de_Retencion.pdf    (solo en la PRIMERA cuenta del año)
  *
  * Acceso: solo asesor / supervisor / admin
@@ -24,6 +25,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { descargarObjeto } from '@/lib/storage-firmado'
 import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-electronica'
+import { NOMBRE_ARCHIVO_SOPORTE_PAGO } from '@/lib/soporte-pago'
 import { buildPDFData } from '@/lib/pdf/data'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
@@ -97,7 +99,7 @@ export async function GET(
   // ── Fetch planilla URL in parallel with PDF generation ───────
   const planillaPromise = supabase
     .from('periodos')
-    .select('planilla_ss_url')
+    .select('planilla_ss_url, soporte_pago_url')
     .eq('id', periodoId)
     .single()
 
@@ -176,6 +178,11 @@ export async function GET(
     }
   }
 
+  // El soporte del pago, el segundo documento que Hacienda pide junto a la planilla. Tampoco es fatal: sin él el ZIP
+  // sale igual, con lo demás.
+  const soporteUrl = planillaResult.data?.soporte_pago_url
+  const soporteBuffer = soporteUrl ? await descargarObjeto('documentos', soporteUrl) : null
+
   // ── Build ZIP ────────────────────────────────────────────────
   const nombreNorm = normalizeNombre(data.contrato.contratista.nombre_completo)
   const mesNorm    = data.periodo.mes.toUpperCase()
@@ -194,6 +201,10 @@ export async function GET(
   folder.file('Acta_de_Pago.pdf',           pagoBuffer)
   if (planillaBuffer) {
     folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
+  }
+  // Justo después de la planilla: el paquete lleva los dos documentos en ese orden.
+  if (soporteBuffer) {
+    folder.file(NOMBRE_ARCHIVO_SOPORTE_PAGO, soporteBuffer)
   }
 
   // STORE (level 0): PDFs are already compressed — DEFLATE wastes CPU with no size gain

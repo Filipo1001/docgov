@@ -50,6 +50,9 @@ import {
   eliminarFactura,
   confirmarUploadPlanilla,
   eliminarPlanilla,
+  prepararUploadSoportePago,
+  confirmarUploadSoportePago,
+  eliminarSoportePago,
   guardarNumeroPlanilla,
   guardarMesCotizacion,
   revisarPlanilla,
@@ -68,6 +71,8 @@ import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 import MejorarRedaccion from '@/components/MejorarRedaccion'
 import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
+import PanelDocumentos from '@/components/ui/PanelDocumentos'
+import { AYUDA_DOCUMENTO } from '@/lib/ayudas-documentos'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
 import Avatar from '@/components/ui/Avatar'
@@ -394,6 +399,7 @@ export default function PeriodoDetallePage({
   const [subiendoAdjunto, setSubiendoAdjunto] = useState<Record<string, string>>({})
   const [visorPDF, setVisorPDF] = useState<{ url: string; nombre: string } | null>(null)
   const [subiendoFactura, setSubiendoFactura] = useState(false)
+  const [subiendoSoporte, setSubiendoSoporte] = useState(false)
   // Byte-level progress 0-100 per activity (M-1)
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
   // Persisted to localStorage so the user can retry step 3 after a page refresh.
@@ -434,7 +440,7 @@ export default function PeriodoDetallePage({
   const [lightbox, setLightbox] = useState<{ url: string; alt: string; evId?: string } | null>(null)
 
   // Inline planilla validation (submit section)
-  const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false })
+  const [erroresCampos, setErroresCampos] = useState({ planilla: false, numero: false, soporte: false })
   const [errorFormatoPlanilla, setErrorFormatoPlanilla] = useState<string | null>(null)
 
   // Admin: base cotización SS
@@ -1210,15 +1216,22 @@ export default function PeriodoDetallePage({
 
     const faltaPlanilla = !periodo?.planilla_ss_url
     const faltaNumero = !numPlanilla.trim()
+    const faltaSoporte = !periodo?.soporte_pago_url
 
-    if (faltaPlanilla || faltaNumero) {
-      setErroresCampos({ planilla: faltaPlanilla, numero: faltaNumero })
-      toast.error('Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida')
+    if (faltaPlanilla || faltaNumero || faltaSoporte) {
+      setErroresCampos({ planilla: faltaPlanilla, numero: faltaNumero, soporte: faltaSoporte })
+      toast.error(
+        faltaPlanilla || faltaNumero
+          ? (faltaSoporte
+              ? 'Para enviar el informe, adjunta la planilla de seguridad social con su número y el soporte del pago'
+              : 'Para enviar el informe de actividades, debes adjuntar la planilla de seguridad social valida')
+          : 'Para enviar el informe, adjunta también el soporte del pago de la seguridad social',
+      )
       seccionEnvioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
 
-    setErroresCampos({ planilla: false, numero: false })
+    setErroresCampos({ planilla: false, numero: false, soporte: false })
 
     // El botón se bloquea YA —sin esperar la verificación del acta—, pero
     // `EnvioInforme` todavía no se abre. Se probó a abrirla en este mismo
@@ -1894,7 +1907,52 @@ export default function PeriodoDetallePage({
   async function handleEliminarPlanilla() {
     const result = await eliminarPlanilla(periodoId)
     if (result.error) toast.error(result.error)
-    else { toast.success('Planilla eliminada'); setPlanillaMenuAbierto(false); cargarDatos() }
+    else { toast.success('Planilla eliminada'); setPlanillaMenuAbierto(false); setNumPlanilla(''); cargarDatos() }
+  }
+
+  /**
+   * Soporte del pago de la seguridad social — el segundo documento que Hacienda pide junto a la planilla. Mismo
+   * recorrido que la factura: URL prefirmada y subida directa del navegador a Storage, sin pasar por Vercel. El
+   * servidor deriva la URL del archivo desde la ruta, así que aquí solo se devuelve la ruta.
+   */
+  async function handleSubirSoportePago(file: File) {
+    setSubiendoSoporte(true)
+    try {
+      const prep = await prepararUploadSoportePago(periodoId, file.name, file.size)
+      if (prep.error || !prep.data) { toast.error(prep.error ?? 'Error al preparar la subida'); return }
+      const { signedUrl, path } = prep.data
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.timeout = 120_000
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+          ? resolve() : reject(new Error(`Error al subir: HTTP ${xhr.status}`))
+        xhr.onerror = () => reject(new Error('Error de red al subir el soporte del pago'))
+        xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado. Verifica tu conexión.'))
+        xhr.open('PUT', signedUrl)
+        xhr.setRequestHeader('Content-Type', 'application/pdf')
+        xhr.send(file)
+      })
+
+      const confirm = await confirmarUploadSoportePago(periodoId, path)
+      if (confirm.error || !confirm.data) { toast.error(confirm.error ?? 'No se pudo registrar el soporte'); return }
+      if (confirm.data.urlFirmada) {
+        setUrlsFirmadas(prev => ({ ...prev, [confirm.data!.url]: confirm.data!.urlFirmada! }))
+      }
+      toast.success('Soporte del pago subido')
+      setPlanillaMenuAbierto(false)
+      cargarDatos()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir el soporte del pago')
+    } finally {
+      setSubiendoSoporte(false)
+    }
+  }
+
+  async function handleEliminarSoportePago() {
+    const result = await eliminarSoportePago(periodoId)
+    if (result.error) toast.error(result.error)
+    else { toast.success('Soporte del pago eliminado'); setPlanillaMenuAbierto(false); cargarDatos() }
   }
 
   async function handleRevisarPlanilla(estado: 'aprobada' | 'rechazada', comentario?: string) {
@@ -2051,6 +2109,9 @@ export default function PeriodoDetallePage({
     Math.max(Number(periodo?.valor_cobro ?? 0), Number(contrato?.valor_mensual ?? 0)),
   )
   const baseActual = periodo?.base_cotizacion_ss ?? baseDefecto
+
+  // El mensaje de error del número de la planilla en el formulario de envío (lo pinta PanelDocumentos).
+  const errorNumeroPlanilla = errorFormatoPlanilla ?? (erroresCampos.numero ? 'Ingresa el número de planilla' : null)
 
   // Franja de alerta de planilla (naranja / roja). Visible para revisores.
   // Mensaje completo siempre visible (sin depender de hover) — claro y directo.
@@ -3437,179 +3498,65 @@ export default function PeriodoDetallePage({
           </h3>
           <p className="text-sm text-gray-500 mb-4">
             {rechazado
-              ? 'Verifica que la planilla esté adjunta y reenvía el informe a revisión.'
+              ? 'Revisa los documentos y reenvía el informe a revisión.'
               : exigeFacturaElectronica
-                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número y tu factura electrónica.'
-                : 'Antes de enviar, adjunta la planilla de seguridad social e ingresa su número.'
+                ? 'Adjunta tus documentos de seguridad social y tu factura electrónica.'
+                : 'Adjunta tus documentos de seguridad social.'
             }
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-            {/* Factura electrónica — solo para quien está obligado a emitirla.
-                Va aquí, junto a la planilla, y no en la sección de documentos:
-                esa sección solo aparece DESPUÉS de enviar, y sin factura no se
-                puede enviar. Debe estar donde se prepara el envío. */}
-            {exigeFacturaElectronica && (
-              <div className="sm:col-span-2">
-                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
-                  periodo.factura_electronica_url
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-amber-50 border-amber-300'
-                }`}>
-                  <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-400" />
-
-                  <label className={`flex-1 min-w-0 transition-opacity ${
-                    puedeAdjuntarFactura ? 'cursor-pointer hover:opacity-75' : ''
-                  }`}>
-                    <p className="text-sm font-medium text-gray-900">Factura electrónica</p>
-                    <p className={`text-xs ${
-                      periodo.factura_electronica_url ? 'text-gray-400' : 'text-amber-700 font-medium'
-                    }`}>
-                      {subiendoFactura
-                        ? 'Subiendo...'
-                        : periodo.factura_electronica_url
-                          ? 'Adjuntada — reemplazar'
-                          : 'Requerida — sustituye a la Cuenta de Cobro'}
-                    </p>
-                    {puedeAdjuntarFactura && (
-                      <input
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        className="hidden"
-                        disabled={subiendoFactura}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          e.target.value = ''
-                          if (file) void handleSubirFactura(file)
-                        }}
-                      />
-                    )}
-                  </label>
-
-                  {periodo.factura_electronica_url && (
-                    <>
-                      <a
-                        href={resolverUrl(periodo.factura_electronica_url)}
-                        target="_blank" rel="noopener noreferrer"
-                        title="Ver la factura"
-                        className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </a>
-                      {puedeAdjuntarFactura && (
-                        <button
-                          type="button"
-                          onClick={handleEliminarFactura}
-                          title="Quitar la factura"
-                          className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Planilla file upload */}
-            <div>
-              {/*
-                Outer div owns the visual card styling.
-                Inner label only covers the text area — triggers the file input.
-                Eye icon anchor sits beside it as a sibling, preventing the
-                click from bubbling into the label and opening the file picker.
-              */}
-              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
-                erroresCampos.planilla
-                  ? 'bg-red-50 border-red-400'
-                  : periodo.planilla_ss_url
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-gray-50 border-gray-200'
-              }`}>
-                <Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" className="shrink-0 text-gray-400" />
-
-                {/* Clickable label area */}
-                <label className="flex-1 min-w-0 cursor-pointer hover:opacity-75 transition-opacity">
-                  <p className="text-sm font-medium text-gray-900">Planilla Seguridad Social</p>
-                  {/* Sin `truncate`: a 320 px este rótulo se cortaba en
-                      «Cargada — clic para reem…», justo donde estaba la
-                      instrucción. Y «clic» no es la palabra en un teléfono,
-                      que es desde donde se usa esto. */}
-                  <p className={`text-xs ${erroresCampos.planilla ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                    {subiendoPlanilla
-                      ? 'Subiendo...'
-                      : periodo.planilla_ss_url
-                        ? 'Cargada — reemplazar'
-                        : erroresCampos.planilla
-                          ? 'Requerida — adjunta el archivo'
-                          : 'Subir PDF'}
-                  </p>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    disabled={subiendoPlanilla}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        handleSubirPlanilla(file)
-                        setErroresCampos(prev => ({ ...prev, planilla: false }))
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-
-                {/* Eye icon — preview without opening the file picker */}
-                {periodo.planilla_ss_url && (
-                  <a
-                    href={resolverUrl(periodo.planilla_ss_url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Ver planilla cargada"
-                    className="p-1.5 rounded-lg text-green-600 hover:text-green-800 hover:bg-green-100 active:bg-green-200 transition-colors shrink-0"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {/* Número de planilla */}
-            <div className="flex flex-col justify-center">
-              <label className="block text-xs text-gray-500 mb-1">N.° de planilla</label>
-              <input
-                value={numPlanilla}
-                onChange={(e) => {
-                  setNumPlanilla(e.target.value)
+          {/* Los documentos de seguridad social, en una sola fila (PanelDocumentos): planilla, soporte del pago y el número de
+              la planilla —del doble de ancho—, más la factura electrónica cuando el contratista está obligado a emitirla.
+              La factura va aquí, junto a lo demás, y no en la sección de documentos: esa sección solo aparece DESPUÉS de
+              enviar, y sin factura no se puede enviar. Debe estar donde se prepara el envío. */}
+          <div className="mb-4">
+            <PanelDocumentos
+              factura={exigeFacturaElectronica ? {
+                icono: Iconos.documentos.cuentaCobro,
+                etiqueta: 'Factura electrónica',
+                ayuda: AYUDA_DOCUMENTO.factura,
+                estado: subiendoFactura ? 'subiendo' : periodo.factura_electronica_url ? 'cargado' : 'vacio',
+                urlVer: periodo.factura_electronica_url ? resolverUrl(periodo.factura_electronica_url) : null,
+                onSubir: puedeAdjuntarFactura ? (archivo) => { void handleSubirFactura(archivo) } : undefined,
+                onQuitar: puedeAdjuntarFactura ? () => { void handleEliminarFactura() } : undefined,
+              } : null}
+              planilla={{
+                icono: Iconos.documentos.planilla,
+                etiqueta: 'Planilla',
+                ayuda: AYUDA_DOCUMENTO.planilla,
+                estado: subiendoPlanilla ? 'subiendo' : periodo.planilla_ss_url ? 'cargado' : erroresCampos.planilla ? 'error' : 'vacio',
+                urlVer: periodo.planilla_ss_url ? resolverUrl(periodo.planilla_ss_url) : null,
+                onSubir: (archivo) => {
+                  void handleSubirPlanilla(archivo)
+                  setErroresCampos(prev => ({ ...prev, planilla: false }))
+                },
+                onQuitar: () => { void handleEliminarPlanilla() },
+              }}
+              soporte={{
+                icono: Iconos.documentos.soportePago,
+                etiqueta: 'Soporte de pago',
+                ayuda: AYUDA_DOCUMENTO.soportePago,
+                estado: subiendoSoporte ? 'subiendo' : periodo.soporte_pago_url ? 'cargado' : erroresCampos.soporte ? 'error' : 'vacio',
+                urlVer: periodo.soporte_pago_url ? resolverUrl(periodo.soporte_pago_url) : null,
+                onSubir: (archivo) => {
+                  void handleSubirSoportePago(archivo)
+                  setErroresCampos(prev => ({ ...prev, soporte: false }))
+                },
+                onQuitar: () => { void handleEliminarSoportePago() },
+              }}
+              numero={{
+                etiqueta: 'N.° de planilla',
+                ayuda: AYUDA_DOCUMENTO.numeroPlanilla,
+                valor: numPlanilla,
+                onCambio: (valor) => {
+                  setNumPlanilla(valor)
                   setErrorFormatoPlanilla(null)
-                  if (e.target.value.trim()) setErroresCampos(prev => ({ ...prev, numero: false }))
-                }}
-                onBlur={handleGuardarNumeroPlanilla}
-                placeholder="Ej. 6016087440"
-                inputMode="text"
-                className={`w-full px-3 py-2.5 border rounded-xl text-sm text-gray-900 outline-none focus:ring-2 transition-colors ${
-                  erroresCampos.numero || errorFormatoPlanilla
-                    ? 'bg-red-50 border-red-400 focus:ring-red-300 placeholder-red-400'
-                    : 'bg-gray-50 border-gray-200 focus:ring-blue-400 focus:border-blue-500 placeholder-gray-400'
-                }`}
-              />
-              {errorFormatoPlanilla && (
-                <p className="text-xs text-red-500 mt-1">{errorFormatoPlanilla}</p>
-              )}
-              {erroresCampos.numero && !errorFormatoPlanilla && (
-                <p className="text-xs text-red-500 mt-1">Ingresa el número de planilla</p>
-              )}
-            </div>
+                  if (valor.trim()) setErroresCampos(prev => ({ ...prev, numero: false }))
+                },
+                onSalir: handleGuardarNumeroPlanilla,
+                error: errorNumeroPlanilla,
+              }}
+            />
           </div>
 
           {/* Apilado en móvil, en línea en desktop — mismo criterio que el
@@ -4127,7 +4074,7 @@ export default function PeriodoDetallePage({
 
             {/* ── Planilla de Seguridad Social — dropdown ── */}
             {/* Hidden in editable mode: contratista uses the inline fields in the submit card above */}
-            {(esPlanillaGestionable || periodo.planilla_ss_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && (
+            {(esPlanillaGestionable || periodo.planilla_ss_url || periodo.soporte_pago_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && (
               <div className="relative col-span-1 sm:col-span-2">
                 {/* Trigger button — el borde refleja la alerta más grave aunque esté cerrado */}
                 <button
@@ -4168,6 +4115,7 @@ export default function PeriodoDetallePage({
                               : periodo.numero_planilla
                                 ? `No. ${periodo.numero_planilla} · Pendiente revisión asesor`
                                 : 'Cargada · Pendiente No. planilla y revisión'}
+                      {!subiendoPlanilla && !subiendoSoporte && periodo.planilla_ss_url && !periodo.soporte_pago_url && ' · Falta el soporte del pago'}
                     </p>
                   </div>
                   <svg
@@ -4196,7 +4144,20 @@ export default function PeriodoDetallePage({
                         className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
                       >
                         <Icono glifo={Iconos.accion.ver} tamano="sm" />
-                        <span className="text-sm text-gray-700 font-medium">Ver documento</span>
+                        <span className="text-sm text-gray-700 font-medium">Ver planilla</span>
+                      </a>
+                    )}
+
+                    {/* Ver el soporte del pago, el segundo documento */}
+                    {periodo.soporte_pago_url && (
+                      <a
+                        href={resolverUrl(periodo.soporte_pago_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                      >
+                        <Icono glifo={Iconos.accion.ver} tamano="sm" />
+                        <span className="text-sm text-gray-700 font-medium">Ver soporte del pago</span>
                       </a>
                     )}
 
@@ -4226,6 +4187,40 @@ export default function PeriodoDetallePage({
                           }}
                         />
                       </label>
+                    )}
+
+                    {/* Subir / Reemplazar el soporte del pago (contratista, hasta aprobado) */}
+                    {esPlanillaGestionable && (
+                      <label className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                        <Icono glifo={periodo.soporte_pago_url ? Iconos.accion.recargar : Iconos.documentos.subir} tamano="sm" />
+                        <span className="text-sm text-gray-700 font-medium">
+                          {subiendoSoporte
+                            ? 'Subiendo...'
+                            : periodo.soporte_pago_url
+                              ? 'Reemplazar soporte del pago'
+                              : 'Subir soporte del pago (PDF)'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          disabled={subiendoSoporte}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleSubirSoportePago(file)
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                    )}
+                    {esPlanillaGestionable && periodo.soporte_pago_url && (
+                      <button
+                        onClick={handleEliminarSoportePago}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left"
+                      >
+                        <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
+                        <span className="text-sm text-red-600 font-medium">Eliminar soporte del pago</span>
+                      </button>
                     )}
 
                     {/* N.° planilla (contratista, hasta aprobado) */}
@@ -4918,6 +4913,17 @@ export default function PeriodoDetallePage({
               abierto
               icono={Iconos.documentos.cuentaCobro}
               etiqueta="Subiendo factura electrónica"
+              detalle="No cierres esta página."
+            />
+          )
+        }
+
+        if (subiendoSoporte) {
+          return (
+            <SubiendoArchivo
+              abierto
+              icono={Iconos.documentos.soportePago}
+              etiqueta="Subiendo soporte del pago"
               detalle="No cierres esta página."
             />
           )

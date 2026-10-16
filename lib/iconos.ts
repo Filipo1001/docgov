@@ -39,7 +39,7 @@ import {
   Landmark, Archive, Settings, UserCog,
   // Documentos
   FileCheck2, Receipt, FileSignature, FileSpreadsheet, Files, Paperclip,
-  Download, Upload, FolderOpen, ScrollText,
+  Download, Upload, FolderOpen, ScrollText, Banknote,
   // Estado y retroalimentación
   Check, CheckCircle2, XCircle, AlertTriangle, Info, CircleDashed, Clock,
   Lock, Unlock, ShieldCheck, Ban,
@@ -90,6 +90,12 @@ export const Iconos = {
     actaTerminacion: ScrollText,
     certificacion: FileSpreadsheet,
     planilla: Stethoscope,
+    /**
+     * El comprobante de que la planilla se pagó (recibo o confirmación del banco o del operador de pagos). Hacienda lo
+     * pide junto a la planilla. Billete y no recibo: `Receipt` ya es la cuenta de cobro y la factura, y este documento
+     * no puede confundirse con ellos al lado. Tampoco el estetoscopio: ese es de la planilla.
+     */
+    soportePago: Banknote,
     paquete: Files,
     adjunto: Paperclip,
     expediente: FolderOpen,
