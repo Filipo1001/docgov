@@ -48,6 +48,9 @@ import {
   eliminarFactura,
   confirmarUploadPlanilla,
   eliminarPlanilla,
+  prepararUploadSoportePago,
+  confirmarUploadSoportePago,
+  eliminarSoportePago,
   guardarNumeroPlanilla,
   guardarMesCotizacion,
   revisarPlanilla,
@@ -392,6 +395,7 @@ export default function PeriodoDetallePage({
   const [subiendoAdjunto, setSubiendoAdjunto] = useState<Record<string, string>>({})
   const [visorPDF, setVisorPDF] = useState<{ url: string; nombre: string } | null>(null)
   const [subiendoFactura, setSubiendoFactura] = useState(false)
+  const [subiendoSoporte, setSubiendoSoporte] = useState(false)
   // Byte-level progress 0-100 per activity (M-1)
   // Pending DB registration: file uploaded to Storage but registrarEvidencia failed.
   // Persisted to localStorage so the user can retry step 3 after a page refresh.
@@ -1893,6 +1897,51 @@ export default function PeriodoDetallePage({
     const result = await eliminarPlanilla(periodoId)
     if (result.error) toast.error(result.error)
     else { toast.success('Planilla eliminada'); setPlanillaMenuAbierto(false); cargarDatos() }
+  }
+
+  /**
+   * Soporte del pago de la seguridad social — el segundo documento que Hacienda pide junto a la planilla. Mismo
+   * recorrido que la factura: URL prefirmada y subida directa del navegador a Storage, sin pasar por Vercel. El
+   * servidor deriva la URL del archivo desde la ruta, así que aquí solo se devuelve la ruta.
+   */
+  async function handleSubirSoportePago(file: File) {
+    setSubiendoSoporte(true)
+    try {
+      const prep = await prepararUploadSoportePago(periodoId, file.name, file.size)
+      if (prep.error || !prep.data) { toast.error(prep.error ?? 'Error al preparar la subida'); return }
+      const { signedUrl, path } = prep.data
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.timeout = 120_000
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+          ? resolve() : reject(new Error(`Error al subir: HTTP ${xhr.status}`))
+        xhr.onerror = () => reject(new Error('Error de red al subir el soporte del pago'))
+        xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado. Verifica tu conexión.'))
+        xhr.open('PUT', signedUrl)
+        xhr.setRequestHeader('Content-Type', 'application/pdf')
+        xhr.send(file)
+      })
+
+      const confirm = await confirmarUploadSoportePago(periodoId, path)
+      if (confirm.error || !confirm.data) { toast.error(confirm.error ?? 'No se pudo registrar el soporte'); return }
+      if (confirm.data.urlFirmada) {
+        setUrlsFirmadas(prev => ({ ...prev, [confirm.data!.url]: confirm.data!.urlFirmada! }))
+      }
+      toast.success('Soporte del pago subido')
+      setPlanillaMenuAbierto(false)
+      cargarDatos()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir el soporte del pago')
+    } finally {
+      setSubiendoSoporte(false)
+    }
+  }
+
+  async function handleEliminarSoportePago() {
+    const result = await eliminarSoportePago(periodoId)
+    if (result.error) toast.error(result.error)
+    else { toast.success('Soporte del pago eliminado'); setPlanillaMenuAbierto(false); cargarDatos() }
   }
 
   async function handleRevisarPlanilla(estado: 'aprobada' | 'rechazada', comentario?: string) {
@@ -3593,6 +3642,58 @@ export default function PeriodoDetallePage({
                 <p className="text-xs text-red-500 mt-1">Ingresa el número de planilla</p>
               )}
             </div>
+
+            {/* Soporte del pago — el segundo documento de seguridad social que pide Hacienda: el comprobante de que se
+                pagó la planilla. No bloquea el envío; quien revisa ve que falta. */}
+            <div className="sm:col-span-2">
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                periodo.soporte_pago_url ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <Icono glifo={Iconos.dominio.seguridadSocial} tamano="md" className="shrink-0 text-gray-400" />
+                <label className="flex-1 min-w-0 cursor-pointer hover:opacity-75 transition-opacity">
+                  <p className="text-sm font-medium text-gray-900">Soporte del pago</p>
+                  <p className="text-xs text-gray-400">
+                    {subiendoSoporte
+                      ? 'Subiendo...'
+                      : periodo.soporte_pago_url
+                        ? 'Cargado — reemplazar'
+                        : 'El comprobante de que pagaste la planilla. Subir PDF'}
+                  </p>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    disabled={subiendoSoporte}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleSubirSoportePago(file)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                {periodo.soporte_pago_url && (
+                  <>
+                    <a
+                      href={resolverUrl(periodo.soporte_pago_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Ver el soporte del pago"
+                      className="p-1.5 rounded-lg text-green-600 hover:text-green-800 hover:bg-green-100 active:bg-green-200 transition-colors shrink-0"
+                    >
+                      <Icono glifo={Iconos.accion.ver} tamano="sm" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleEliminarSoportePago}
+                      title="Quitar el soporte del pago"
+                      className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Apilado en móvil, en línea en desktop — mismo criterio que el
@@ -4110,7 +4211,7 @@ export default function PeriodoDetallePage({
 
             {/* ── Planilla de Seguridad Social — dropdown ── */}
             {/* Hidden in editable mode: contratista uses the inline fields in the submit card above */}
-            {(esPlanillaGestionable || periodo.planilla_ss_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && (
+            {(esPlanillaGestionable || periodo.planilla_ss_url || periodo.soporte_pago_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && (
               <div className="relative col-span-1 sm:col-span-2">
                 {/* Trigger button — el borde refleja la alerta más grave aunque esté cerrado */}
                 <button
@@ -4151,6 +4252,7 @@ export default function PeriodoDetallePage({
                               : periodo.numero_planilla
                                 ? `No. ${periodo.numero_planilla} · Pendiente revisión asesor`
                                 : 'Cargada · Pendiente No. planilla y revisión'}
+                      {!subiendoPlanilla && !subiendoSoporte && periodo.planilla_ss_url && !periodo.soporte_pago_url && ' · Falta el soporte del pago'}
                     </p>
                   </div>
                   <svg
@@ -4183,6 +4285,19 @@ export default function PeriodoDetallePage({
                       </a>
                     )}
 
+                    {/* Ver el soporte del pago, el segundo documento */}
+                    {periodo.soporte_pago_url && (
+                      <a
+                        href={resolverUrl(periodo.soporte_pago_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                      >
+                        <Icono glifo={Iconos.accion.ver} tamano="sm" />
+                        <span className="text-sm text-gray-700 font-medium">Ver soporte del pago</span>
+                      </a>
+                    )}
+
                     {/* Mes de cotización — confirmación del revisor */}
                     {selectorMesCotizacion}
 
@@ -4209,6 +4324,40 @@ export default function PeriodoDetallePage({
                           }}
                         />
                       </label>
+                    )}
+
+                    {/* Subir / Reemplazar el soporte del pago (contratista, hasta aprobado) */}
+                    {esPlanillaGestionable && (
+                      <label className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                        <Icono glifo={periodo.soporte_pago_url ? Iconos.accion.recargar : Iconos.documentos.subir} tamano="sm" />
+                        <span className="text-sm text-gray-700 font-medium">
+                          {subiendoSoporte
+                            ? 'Subiendo...'
+                            : periodo.soporte_pago_url
+                              ? 'Reemplazar soporte del pago'
+                              : 'Subir soporte del pago (PDF)'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          disabled={subiendoSoporte}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleSubirSoportePago(file)
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                    )}
+                    {esPlanillaGestionable && periodo.soporte_pago_url && (
+                      <button
+                        onClick={handleEliminarSoportePago}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left"
+                      >
+                        <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
+                        <span className="text-sm text-red-600 font-medium">Eliminar soporte del pago</span>
+                      </button>
                     )}
 
                     {/* N.° planilla (contratista, hasta aprobado) */}
@@ -4833,6 +4982,17 @@ export default function PeriodoDetallePage({
               abierto
               icono={Iconos.documentos.cuentaCobro}
               etiqueta="Subiendo factura electrónica"
+              detalle="No cierres esta página."
+            />
+          )
+        }
+
+        if (subiendoSoporte) {
+          return (
+            <SubiendoArchivo
+              abierto
+              icono={Iconos.documentos.planilla}
+              etiqueta="Subiendo soporte del pago"
               detalle="No cierres esta página."
             />
           )

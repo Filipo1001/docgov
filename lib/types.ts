@@ -176,6 +176,7 @@ export interface Periodo {
   /** PDF de la factura electrónica. Sustituye a la Cuenta de Cobro para los
       contratistas obligados a emitirla. */
   factura_electronica_url?: string | null
+  soporte_pago_url?: string | null       // Segundo documento de seguridad social: el soporte del pago (lib/soporte-pago.ts)
   numero_planilla: string | null     // Planilla number
   cotizacion_mes?: string | null     // Mes real cotizado (puede diferir de `mes` por "mes vencido")
   cotizacion_origen?: 'inferido' | 'confirmado' | null  // Trazabilidad: sugerido por el sistema vs validado por humano

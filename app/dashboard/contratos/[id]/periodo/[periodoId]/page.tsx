@@ -221,6 +221,7 @@ export default async function PeriodoDetallePage({
     firmarUrls('documentos', [
       (periodo as { planilla_ss_url?: string | null }).planilla_ss_url,
       (periodo as { factura_electronica_url?: string | null }).factura_electronica_url,
+      (periodo as { soporte_pago_url?: string | null }).soporte_pago_url,
     ]),
     // 160×160 para la grilla, solo en las fotos que superan el umbral. En la
     // gran mayoría de periodos esta lista va vacía y no se hace ni una llamada.

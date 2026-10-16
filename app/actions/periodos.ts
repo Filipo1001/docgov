@@ -19,6 +19,9 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { estadoFacturaPeriodo, FACTURA_BUCKET, FACTURA_MAX_BYTES } from '@/lib/factura-electronica'
 import { extraerPath } from '@/lib/storage-firmado'
+import {
+  SOPORTE_PAGO_BUCKET, SOPORTE_PAGO_MAX_BYTES, esNombrePdf, esRutaDeSoportePago, rutaNuevaSoportePago,
+} from '@/lib/soporte-pago'
 import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
@@ -1323,6 +1326,155 @@ export async function eliminarPlanilla(periodoId: string): Promise<ActionResult>
 
     if (error) return { error: `Error al eliminar: ${error.message}` }
     if (!updated?.length) return { error: 'No se pudo eliminar la planilla. El periodo no fue encontrado.' }
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+// ─── Soporte del pago de la seguridad social ─────────────────────────────────
+//
+// El segundo documento que Hacienda pide junto a la planilla (lib/soporte-pago.ts). Mismo recorrido de dos pasos que la
+// factura —URL prefirmada y registro— y las mismas reglas de estado que la planilla: el contratista lo gestiona hasta que
+// el informe se aprueba, porque quien revisa puede pedirlo ya enviado. Se revisa JUNTO con la planilla: subirlo,
+// reemplazarlo o quitarlo devuelve la revisión a «pendiente», porque el conjunto cambió.
+//
+// A diferencia de la planilla, el servidor deriva la URL del archivo desde la ruta que él mismo entregó: no se fía de
+// la que mande el navegador al confirmar.
+
+export async function prepararUploadSoportePago(
+  periodoId: string,
+  fileName: string,
+  fileSize: number,
+): Promise<ActionResult<{ signedUrl: string; path: string }>> {
+  try {
+    if (!esNombrePdf(fileName)) return { error: 'El soporte del pago debe ser un archivo PDF.' }
+    if (fileSize > SOPORTE_PAGO_MAX_BYTES) {
+      return { error: `El archivo no puede superar ${Math.round(SOPORTE_PAGO_MAX_BYTES / 1024 / 1024)} MB.` }
+    }
+
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede subir el soporte del pago' }
+    }
+
+    // La lectura va con la sesión del usuario: el contratista solo ve sus periodos, y eso es lo que impide subir a
+    // un periodo ajeno.
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
+
+    if (usuario.rol !== 'admin') {
+      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+        return { error: 'No se puede reemplazar el soporte de un periodo ya aprobado o radicado' }
+      }
+    }
+
+    const path = rutaNuevaSoportePago(periodoId)
+    const adminClient = createAdminSupabaseClient()
+    const { data: signedData, error: signedError } = await adminClient.storage
+      .from(SOPORTE_PAGO_BUCKET).createSignedUploadUrl(path)
+    if (signedError || !signedData) {
+      return { error: `Error al preparar la subida: ${signedError?.message}` }
+    }
+    return { data: { signedUrl: signedData.signedUrl, path } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al preparar la subida' }
+  }
+}
+
+export async function confirmarUploadSoportePago(
+  periodoId: string,
+  storagePath: string,
+): Promise<ActionResult<{ urlFirmada: string | null; url: string }>> {
+  const adminClient = createAdminSupabaseClient()
+  try {
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede subir el soporte del pago' }
+    }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
+
+    if (usuario.rol !== 'admin') {
+      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+        return { error: 'No se puede reemplazar el soporte de un periodo ya aprobado o radicado' }
+      }
+    }
+
+    // La ruta se deriva del periodo: una que apunte a otro periodo, a otra carpeta o que se escape con `..` se rechaza.
+    if (!esRutaDeSoportePago(periodoId, storagePath)) return { error: 'Ruta de archivo inválida.' }
+
+    // Verificación del contenido REAL: la subida va directa del navegador a Storage, así que el tipo declarado no
+    // prueba nada.
+    const { data: blob } = await adminClient.storage.from(SOPORTE_PAGO_BUCKET).download(storagePath)
+    if (!blob) return { error: 'No se encontró el archivo subido. Intenta de nuevo.' }
+    const { validarPDF } = await import('@/lib/pdf-validacion')
+    const validacion = await validarPDF(Buffer.from(await blob.arrayBuffer()))
+    if (!validacion.ok) {
+      await adminClient.storage.from(SOPORTE_PAGO_BUCKET).remove([storagePath]).catch(() => {})
+      return { error: validacion.error ?? 'El archivo no es un PDF válido.' }
+    }
+
+    // El soporte que se reemplaza, para no dejarlo huérfano en el bucket.
+    const { data: actual } = await adminClient
+      .from('periodos').select('soporte_pago_url').eq('id', periodoId).single()
+
+    const { data: { publicUrl } } = adminClient.storage.from(SOPORTE_PAGO_BUCKET).getPublicUrl(storagePath)
+    const { error } = await adminClient
+      .from('periodos')
+      // El conjunto cambió: quien revisa la planilla tiene que volver a mirarlo.
+      .update({ soporte_pago_url: publicUrl, planilla_estado: 'pendiente', planilla_comentario: null })
+      .eq('id', periodoId)
+    if (error) return { error: `Error al registrar el soporte: ${error.message}` }
+
+    const anterior = actual?.soporte_pago_url ? extraerPath(actual.soporte_pago_url, SOPORTE_PAGO_BUCKET) : null
+    if (anterior && anterior !== storagePath) {
+      await adminClient.storage.from(SOPORTE_PAGO_BUCKET).remove([anterior]).catch(() => {})
+    }
+
+    revalidar(periodo.contrato_id, periodoId)
+    // El bucket es privado: sin la URL firmada el enlace «ver» no abriría hasta recargar la página.
+    return { data: { url: publicUrl, urlFirmada: await firmarUrl(SOPORTE_PAGO_BUCKET, publicUrl) } }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado al registrar el soporte' }
+  }
+}
+
+export async function eliminarSoportePago(periodoId: string): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede eliminar el soporte del pago' }
+    }
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+      return { error: 'No se puede eliminar el soporte de un periodo ya aprobado o radicado' }
+    }
+
+    const adminClient = createAdminSupabaseClient()
+    const { data: actual } = await adminClient
+      .from('periodos').select('soporte_pago_url').eq('id', periodoId).single()
+    const ruta = actual?.soporte_pago_url ? extraerPath(actual.soporte_pago_url, SOPORTE_PAGO_BUCKET) : null
+
+    const { data: updated, error } = await adminClient
+      .from('periodos')
+      .update({ soporte_pago_url: null, planilla_estado: 'pendiente' })
+      .eq('id', periodoId)
+      .select('id')
+    if (error) return { error: `Error al eliminar: ${error.message}` }
+    if (!updated?.length) return { error: 'No se pudo eliminar el soporte. El periodo no fue encontrado.' }
+
+    // El archivo se borra DESPUÉS de soltar la referencia: si fallara, queda un archivo suelto, no un enlace roto.
+    if (ruta) await adminClient.storage.from(SOPORTE_PAGO_BUCKET).remove([ruta]).catch(() => {})
 
     revalidar(periodo.contrato_id, periodoId)
     return {}

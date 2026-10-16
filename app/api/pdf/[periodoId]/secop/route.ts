@@ -5,6 +5,7 @@
  *   Informe_de_Actividades.pdf
  *   Cuenta_de_Cobro.pdf
  *   Planilla_Seguridad_Social.{ext}   (si está adjunta)
+ *   Soporte_Pago_Seguridad_Social.pdf (si está adjunto; va justo después de la planilla)
  *   Certificacion_de_Retencion.pdf    (solo en la PRIMERA cuenta del año)
  *   Contrato.pdf                      (el expediente, solo en la PRIMERA cuenta)
  *   Acta_de_Terminacion.pdf           (solo en el periodo donde se aceptó)
@@ -21,6 +22,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { verificarAccesoPeriodo } from '@/lib/pdf/auth'
 import { descargarObjeto } from '@/lib/storage-firmado'
 import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-electronica'
+import { NOMBRE_ARCHIVO_SOPORTE_PAGO } from '@/lib/soporte-pago'
 import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 import { mensajeDatosFaltantes } from '@/lib/pdf/validar'
@@ -81,7 +83,7 @@ export async function GET(
   // Fetch planilla in parallel with PDF generation
   const planillaPromise = supabase
     .from('periodos')
-    .select('planilla_ss_url')
+    .select('planilla_ss_url, soporte_pago_url')
     .eq('id', periodoId)
     .single()
 
@@ -157,6 +159,10 @@ export async function GET(
     }
   }
 
+  // El soporte del pago, junto a la planilla. No es fatal: sin él el ZIP sale igual.
+  const soporteUrl = planillaResult.data?.soporte_pago_url
+  const soporteBuffer = soporteUrl ? await descargarObjeto('documentos', soporteUrl) : null
+
   const nombreNorm = normalizeNombre(data.contrato.contratista.nombre_completo)
   const mesNorm    = data.periodo.mes.toUpperCase()
   const folderName = `${nombreNorm}_${mesNorm}_SECOP`
@@ -170,6 +176,9 @@ export async function GET(
   }
   if (planillaBuffer) {
     folder.file(`Planilla_Seguridad_Social.${planillaExt}`, planillaBuffer)
+  }
+  if (soporteBuffer) {
+    folder.file(NOMBRE_ARCHIVO_SOPORTE_PAGO, soporteBuffer)
   }
 
   // La carta de no retención acompaña por norma a la PRIMERA cuenta de cobro.

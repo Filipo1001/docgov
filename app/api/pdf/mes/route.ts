@@ -51,6 +51,7 @@ import { buildPDFData } from '@/lib/pdf/data'
 import { getOrGeneratePDFBuffer } from '@/lib/pdf/cache'
 import { MESES } from '@/lib/constants'
 import { estadoFacturaPeriodo, NOMBRE_ARCHIVO_FACTURA } from '@/lib/factura-electronica'
+import { NOMBRE_ARCHIVO_SOPORTE_PAGO } from '@/lib/soporte-pago'
 import type { PDFData } from '@/lib/pdf/types'
 
 export const runtime = 'nodejs'
@@ -111,13 +112,13 @@ export async function GET(req: NextRequest) {
   const admin = createAdminSupabaseClient()
   const { data: periodosRaw } = await admin
     .from('periodos')
-    .select('id, estado, mes, anio, planilla_ss_url, contrato:contratos(numero, dependencia_id, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
+    .select('id, estado, mes, anio, planilla_ss_url, soporte_pago_url, contrato:contratos(numero, dependencia_id, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
     .eq('mes', mes)
     .eq('anio', anio)
     .in('estado', ['aprobado', 'radicado'])
     .eq('es_historico', false)
   type Row = {
-    id: string; estado: string; mes: string; anio: number; planilla_ss_url: string | null
+    id: string; estado: string; mes: string; anio: number; planilla_ss_url: string | null; soporte_pago_url: string | null
     contrato: { numero: string; dependencia_id: string | null; supervisor_id: string | null; contratista: { nombre_completo: string } | null } | null
   }
   let periodos = ((periodosRaw ?? []) as unknown as Row[])
@@ -217,18 +218,28 @@ export async function GET(req: NextRequest) {
       }),
       (async () => {
         if (!incluirPlanilla) return
+        // La planilla y su soporte del pago van juntos y en ese orden: se añaden uno tras otro en el mismo bloque, no
+        // en dos tareas paralelas cuyo orden de llegada no está garantizado.
         if (!p.planilla_ss_url) {
           errores.push(`${etiqueta}: sin planilla adjunta`)
-          return
+        } else {
+          const buffer = await descargarObjeto('documentos', p.planilla_ss_url)
+          if (!buffer) {
+            errores.push(`${etiqueta}: no se pudo descargar la planilla`)
+          } else {
+            const ext = new URL(p.planilla_ss_url).pathname.split('.').pop()?.toLowerCase()
+            const extOk = ext && ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext) ? (ext === 'jpeg' ? 'jpg' : ext) : 'pdf'
+            carpeta.file(`Planilla_Seguridad_Social.${extOk}`, buffer)
+          }
         }
-        const buffer = await descargarObjeto('documentos', p.planilla_ss_url)
-        if (!buffer) {
-          errores.push(`${etiqueta}: no se pudo descargar la planilla`)
-          return
+        if (p.soporte_pago_url) {
+          const soporte = await descargarObjeto('documentos', p.soporte_pago_url)
+          if (soporte) carpeta.file(NOMBRE_ARCHIVO_SOPORTE_PAGO, soporte)
+          else errores.push(`${etiqueta}: no se pudo descargar el soporte del pago`)
+        } else if (p.planilla_ss_url) {
+          // Solo se avisa cuando la planilla sí está: sin ella el aviso de arriba ya dice lo que falta.
+          errores.push(`${etiqueta}: sin soporte del pago adjunto`)
         }
-        const ext = new URL(p.planilla_ss_url).pathname.split('.').pop()?.toLowerCase()
-        const extOk = ext && ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext) ? (ext === 'jpeg' ? 'jpg' : ext) : 'pdf'
-        carpeta.file(`Planilla_Seguridad_Social.${extOk}`, buffer)
       })(),
     ])
   }
