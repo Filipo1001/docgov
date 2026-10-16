@@ -8,11 +8,13 @@
  * a la derecha, para reemplazar o eliminar el documento; y el campo del número de planilla, del doble de ancho que los
  * demás. Poco texto, y que el apartado no sea el protagonista de la página.
  *
- * Orden: [factura, si aplica] · planilla · número de planilla (doble) · soporte del pago.
+ * Orden: [factura, si aplica] · planilla · soporte del pago · número de planilla (doble, siempre el último).
  *
  * Comportamiento común:
  *   · Botón vacío: un clic abre el selector de archivos (PDF).
  *   · Botón con documento: un clic lo abre; los tres puntitos ofrecen Ver, Reemplazar y Eliminar.
+ *   · Los tres puntitos están en TODOS los botones de documento, para que ninguno se vea distinto de otro: con el botón
+ *     vacío solo ofrecen «Subir PDF».
  *   · El letrero «qué es» sale al pasar el cursor o enfocar con el teclado (un solo letrero para todo el panel, bajo la
  *     fila: así cabe siempre, también en un teléfono). En pantallas táctiles no hay cursor: el botón lleva su etiqueta.
  *   · Responde al ancho de SU tarjeta (consultas de contenedor), no al de la ventana.
@@ -80,11 +82,13 @@ const ITEM_MENU =
   'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none'
 
 function MenuPuntitos({
-  etiqueta, urlVer, alinear, onReemplazar, onEliminar,
+  etiqueta, urlVer, alinear, cargado, onReemplazar, onEliminar,
 }: {
   etiqueta: string
   urlVer?: string | null
   alinear: 'izquierda' | 'derecha'
+  /** Con documento: Ver, Reemplazar, Eliminar. Sin él: solo Subir PDF. */
+  cargado: boolean
   onReemplazar: () => void
   onEliminar: () => void
 }) {
@@ -124,22 +128,30 @@ function MenuPuntitos({
             alinear === 'derecha' ? 'right-0' : 'left-0'
           }`}
         >
-          {urlVer && (
-            <a role="menuitem" href={urlVer} target="_blank" rel="noopener noreferrer" onClick={() => setAbierto(false)} className={ITEM_MENU}>
-              <Icono glifo={Iconos.accion.ver} tamano="sm" /> Ver
-            </a>
+          {cargado ? (
+            <>
+              {urlVer && (
+                <a role="menuitem" href={urlVer} target="_blank" rel="noopener noreferrer" onClick={() => setAbierto(false)} className={ITEM_MENU}>
+                  <Icono glifo={Iconos.accion.ver} tamano="sm" /> Ver
+                </a>
+              )}
+              <button type="button" role="menuitem" onClick={() => { setAbierto(false); onReemplazar() }} className={ITEM_MENU}>
+                <Icono glifo={Iconos.accion.recargar} tamano="sm" /> Reemplazar
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setAbierto(false); onEliminar() }}
+                className={`${ITEM_MENU} !text-red-600 hover:!bg-red-50`}
+              >
+                <Icono glifo={Iconos.accion.eliminar} tamano="sm" /> Eliminar
+              </button>
+            </>
+          ) : (
+            <button type="button" role="menuitem" onClick={() => { setAbierto(false); onReemplazar() }} className={ITEM_MENU}>
+              <Icono glifo={Iconos.documentos.subir} tamano="sm" /> Subir PDF
+            </button>
           )}
-          <button type="button" role="menuitem" onClick={() => { setAbierto(false); onReemplazar() }} className={ITEM_MENU}>
-            <Icono glifo={Iconos.accion.recargar} tamano="sm" /> Reemplazar
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setAbierto(false); onEliminar() }}
-            className={`${ITEM_MENU} !text-red-600 hover:!bg-red-50`}
-          >
-            <Icono glifo={Iconos.accion.eliminar} tamano="sm" /> Eliminar
-          </button>
         </div>
       )}
     </div>
@@ -309,11 +321,12 @@ function TileDocumento({
 
       {v === 'segmentada' && <Barrita e={d.estado} />}
 
-      {cargado && (d.onSubir || d.onQuitar) && (
+      {!subiendo && (d.onSubir || d.onQuitar) && (
         <MenuPuntitos
           etiqueta={d.etiqueta}
           urlVer={d.urlVer}
           alinear={alinear}
+          cargado={cargado}
           onReemplazar={elegir}
           onEliminar={() => d.onQuitar?.()}
         />
@@ -404,10 +417,10 @@ export default function PanelDocumentos({ variante: v, planilla, soporte, factur
   const conFactura = !!factura
   const { activo, enlazar } = useLetrero()
 
-  // Cuatro unidades: planilla 1 · número 2 · soporte 1. Con factura son cinco; en una tarjeta estrecha no caben en
+  // Cuatro unidades: planilla 1 · soporte 1 · número 2. Con factura son cinco; en una tarjeta estrecha no caben en
   // fila y el número baja a una segunda fila a todo el ancho.
   const columnas = conFactura ? 'grid-cols-3 @md:grid-cols-5' : 'grid-cols-4'
-  const spanNumero = conFactura ? 'col-span-3 order-last @md:order-none @md:col-span-2' : 'col-span-2'
+  const spanNumero = conFactura ? 'col-span-3 @md:col-span-2' : 'col-span-2'
 
   // La variante segmentada es UN solo campo dividido en celdas; las otras, botones sueltos con un hueco.
   const contenedor = v === 'segmentada'
@@ -430,7 +443,7 @@ export default function PanelDocumentos({ variante: v, planilla, soporte, factur
     { d: planilla, alinear: 'izquierda' as const },
   ]
   const total = docs.length + 2
-  // Posición de cada celda en el orden de pantalla: factura?, planilla, número, soporte.
+  // Posición de cada celda en el orden de pantalla: factura?, planilla, soporte, número.
   let i = 0
   const siguiente = () => { const p = i++; return celda(p === 0, p === total - 1) }
 
@@ -439,8 +452,10 @@ export default function PanelDocumentos({ variante: v, planilla, soporte, factur
       <div className={contenedor}>
         {factura && <TileDocumento v={v} d={factura} conFactura alinear="izquierda" enlazar={enlazar} claseCelda={siguiente()} />}
         <TileDocumento v={v} d={planilla} conFactura={conFactura} alinear="izquierda" enlazar={enlazar} claseCelda={siguiente()} />
+        {/* El menú del soporte se abre hacia la izquierda cuando hay factura: en una tarjeta estrecha queda en la tercera
+            columna, pegado al borde derecho. */}
+        <TileDocumento v={v} d={soporte} conFactura={conFactura} alinear={conFactura ? 'derecha' : 'izquierda'} enlazar={enlazar} claseCelda={siguiente()} />
         <TileNumero v={v} n={numero} conFactura={conFactura} enlazar={enlazar} claseCelda={`${spanNumero} ${siguiente()}`} />
-        <TileDocumento v={v} d={soporte} conFactura={conFactura} alinear="derecha" enlazar={enlazar} claseCelda={siguiente()} />
       </div>
 
       {numero.error && <p className="mt-1.5 text-xs text-red-600">{numero.error}</p>}
