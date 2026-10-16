@@ -69,7 +69,7 @@ import { devolverPeriodoAContratista } from '@/app/actions/periodos'
 import MejorarRedaccion from '@/components/MejorarRedaccion'
 import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
-import FilaDocumento, { type EstadoFila } from '@/components/ui/FilaDocumento'
+import PanelDocumentos from '@/components/ui/PanelDocumentos'
 import { AYUDA_DOCUMENTO } from '@/lib/ayudas-documentos'
 import { Iconos } from '@/lib/iconos'
 import NotaSupervision from '@/components/ui/NotaSupervision'
@@ -2093,9 +2093,8 @@ export default function PeriodoDetallePage({
   // Quién puede revisar/gestionar la planilla dentro de la tarjeta centralizada
   const puedeRevisarPlanilla = (esAsesor || esSecretaria)
 
-  // El número de la planilla tiene la misma presencia que los documentos en el formulario de envío (FilaDocumento).
+  // El mensaje de error del número de la planilla en el formulario de envío (lo pinta PanelDocumentos).
   const errorNumeroPlanilla = errorFormatoPlanilla ?? (erroresCampos.numero ? 'Ingresa el número de planilla' : null)
-  const estadoNumeroPlanilla: EstadoFila = errorNumeroPlanilla ? 'error' : numPlanilla.trim() ? 'cargado' : 'vacio'
 
   // Franja de alerta de planilla (naranja / roja). Visible para revisores.
   // Mensaje completo siempre visible (sin depender de hover) — claro y directo.
@@ -3482,111 +3481,64 @@ export default function PeriodoDetallePage({
           </h3>
           <p className="text-sm text-gray-500 mb-4">
             {rechazado
-              ? 'Verifica que la planilla y el soporte del pago estén adjuntos y reenvía el informe a revisión.'
+              ? 'Revisa los documentos y reenvía el informe a revisión.'
               : exigeFacturaElectronica
-                ? 'Antes de enviar, adjunta la planilla de seguridad social con su número, el soporte del pago y tu factura electrónica.'
-                : 'Antes de enviar, adjunta la planilla de seguridad social con su número y el soporte del pago.'
+                ? 'Adjunta tus documentos de seguridad social y tu factura electrónica.'
+                : 'Adjunta tus documentos de seguridad social.'
             }
           </p>
 
-          {/* Los documentos y el número de la planilla, todos con la misma presencia (FilaDocumento): mismo fondo neutro,
-              misma altura, mismo orden de icono · título · estado · acciones. El estado se lee en la línea bajo el título;
-              solo cambia de aspecto la fila que falta cuando se intentó enviar sin ella. */}
-          <div className="mb-4 space-y-2">
-            {/* Factura electrónica — solo para quien está obligado a emitirla.
-                Va aquí, junto a la planilla, y no en la sección de documentos:
-                esa sección solo aparece DESPUÉS de enviar, y sin factura no se
-                puede enviar. Debe estar donde se prepara el envío. */}
-            {exigeFacturaElectronica && (
-              <FilaDocumento
-                icono={Iconos.documentos.cuentaCobro}
-                titulo="Factura electrónica"
-                ayuda={AYUDA_DOCUMENTO.factura}
-                estado={subiendoFactura ? 'subiendo' : periodo.factura_electronica_url ? 'cargado' : 'vacio'}
-                detalle={
-                  subiendoFactura
-                    ? 'Subiendo…'
-                    : periodo.factura_electronica_url
-                      ? 'Adjuntada'
-                      : 'Requerida — sustituye a la Cuenta de Cobro'
-                }
-                urlVer={periodo.factura_electronica_url ? resolverUrl(periodo.factura_electronica_url) : null}
-                onSubir={puedeAdjuntarFactura ? (archivo) => { void handleSubirFactura(archivo) } : undefined}
-                onQuitar={puedeAdjuntarFactura ? () => { void handleEliminarFactura() } : undefined}
-              />
-            )}
-
-            <FilaDocumento
-              icono={Iconos.documentos.planilla}
-              titulo="Planilla de seguridad social"
-              ayuda={AYUDA_DOCUMENTO.planilla}
-              estado={subiendoPlanilla ? 'subiendo' : periodo.planilla_ss_url ? 'cargado' : erroresCampos.planilla ? 'error' : 'vacio'}
-              detalle={
-                subiendoPlanilla
-                  ? 'Subiendo…'
-                  : periodo.planilla_ss_url
-                    ? 'Cargada'
-                    : erroresCampos.planilla
-                      ? 'Requerida — adjunta el archivo'
-                      : 'Pendiente — sube el PDF'
-              }
-              urlVer={periodo.planilla_ss_url ? resolverUrl(periodo.planilla_ss_url) : null}
-              onSubir={(archivo) => {
-                void handleSubirPlanilla(archivo)
-                setErroresCampos(prev => ({ ...prev, planilla: false }))
+          {/* Los documentos de seguridad social, en una sola fila (PanelDocumentos): planilla, soporte del pago y el número de
+              la planilla —del doble de ancho—, más la factura electrónica cuando el contratista está obligado a emitirla.
+              La factura va aquí, junto a lo demás, y no en la sección de documentos: esa sección solo aparece DESPUÉS de
+              enviar, y sin factura no se puede enviar. Debe estar donde se prepara el envío. */}
+          <div className="mb-4">
+            <PanelDocumentos
+              factura={exigeFacturaElectronica ? {
+                icono: Iconos.documentos.cuentaCobro,
+                etiqueta: 'Factura electrónica',
+                ayuda: AYUDA_DOCUMENTO.factura,
+                estado: subiendoFactura ? 'subiendo' : periodo.factura_electronica_url ? 'cargado' : 'vacio',
+                urlVer: periodo.factura_electronica_url ? resolverUrl(periodo.factura_electronica_url) : null,
+                onSubir: puedeAdjuntarFactura ? (archivo) => { void handleSubirFactura(archivo) } : undefined,
+                onQuitar: puedeAdjuntarFactura ? () => { void handleEliminarFactura() } : undefined,
+              } : null}
+              planilla={{
+                icono: Iconos.documentos.planilla,
+                etiqueta: 'Planilla',
+                ayuda: AYUDA_DOCUMENTO.planilla,
+                estado: subiendoPlanilla ? 'subiendo' : periodo.planilla_ss_url ? 'cargado' : erroresCampos.planilla ? 'error' : 'vacio',
+                urlVer: periodo.planilla_ss_url ? resolverUrl(periodo.planilla_ss_url) : null,
+                onSubir: (archivo) => {
+                  void handleSubirPlanilla(archivo)
+                  setErroresCampos(prev => ({ ...prev, planilla: false }))
+                },
+                onQuitar: () => { void handleEliminarPlanilla() },
               }}
-              onQuitar={() => { void handleEliminarPlanilla() }}
-            />
-
-            <FilaDocumento
-              icono={Iconos.dominio.numero}
-              titulo="N.° de planilla"
-              ayuda={AYUDA_DOCUMENTO.numeroPlanilla}
-              estado={estadoNumeroPlanilla}
-              detalle={errorNumeroPlanilla ?? (numPlanilla.trim() ? 'Ingresado' : 'Entre 6 y 20 dígitos, como aparece en la planilla')}
-            >
-              <input
-                value={numPlanilla}
-                onChange={(e) => {
-                  setNumPlanilla(e.target.value)
+              soporte={{
+                icono: Iconos.documentos.soportePago,
+                etiqueta: 'Soporte de pago',
+                ayuda: AYUDA_DOCUMENTO.soportePago,
+                estado: subiendoSoporte ? 'subiendo' : periodo.soporte_pago_url ? 'cargado' : erroresCampos.soporte ? 'error' : 'vacio',
+                urlVer: periodo.soporte_pago_url ? resolverUrl(periodo.soporte_pago_url) : null,
+                onSubir: (archivo) => {
+                  void handleSubirSoportePago(archivo)
+                  setErroresCampos(prev => ({ ...prev, soporte: false }))
+                },
+                onQuitar: () => { void handleEliminarSoportePago() },
+              }}
+              numero={{
+                etiqueta: 'N.° de planilla',
+                ayuda: AYUDA_DOCUMENTO.numeroPlanilla,
+                valor: numPlanilla,
+                onCambio: (valor) => {
+                  setNumPlanilla(valor)
                   setErrorFormatoPlanilla(null)
-                  if (e.target.value.trim()) setErroresCampos(prev => ({ ...prev, numero: false }))
-                }}
-                onBlur={handleGuardarNumeroPlanilla}
-                placeholder="Ej. 6016087440"
-                inputMode="text"
-                aria-label="Número de la planilla de seguridad social"
-                aria-invalid={estadoNumeroPlanilla === 'error'}
-                className={`ml-auto h-9 w-full rounded-lg border bg-white px-3 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:ring-2 sm:w-48 ${
-                  estadoNumeroPlanilla === 'error'
-                    ? 'border-red-400 focus:ring-red-300'
-                    : 'border-gray-300 focus:border-gray-400 focus:ring-gray-300'
-                }`}
-              />
-            </FilaDocumento>
-
-            {/* El soporte del pago — el segundo documento de seguridad social que pide Hacienda: el comprobante de que
-                se pagó la planilla. Obligatorio para enviar, igual que la planilla. */}
-            <FilaDocumento
-              icono={Iconos.documentos.soportePago}
-              titulo="Soporte del pago"
-              ayuda={AYUDA_DOCUMENTO.soportePago}
-              estado={subiendoSoporte ? 'subiendo' : periodo.soporte_pago_url ? 'cargado' : erroresCampos.soporte ? 'error' : 'vacio'}
-              detalle={
-                subiendoSoporte
-                  ? 'Subiendo…'
-                  : periodo.soporte_pago_url
-                    ? 'Cargado'
-                    : erroresCampos.soporte
-                      ? 'Requerido — adjunta el comprobante de pago'
-                      : 'Pendiente — sube el PDF'
-              }
-              urlVer={periodo.soporte_pago_url ? resolverUrl(periodo.soporte_pago_url) : null}
-              onSubir={(archivo) => {
-                void handleSubirSoportePago(archivo)
-                setErroresCampos(prev => ({ ...prev, soporte: false }))
+                  if (valor.trim()) setErroresCampos(prev => ({ ...prev, numero: false }))
+                },
+                onSalir: handleGuardarNumeroPlanilla,
+                error: errorNumeroPlanilla,
               }}
-              onQuitar={() => { void handleEliminarSoportePago() }}
             />
           </div>
 

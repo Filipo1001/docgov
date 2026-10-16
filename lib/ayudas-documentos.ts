@@ -1,7 +1,7 @@
 /**
  * Qué es cada documento del formulario de envío del informe, en palabras de quien lo sube.
  *
- * Es lo que aparece al pasar el cursor (o tocar) el icono de información de cada fila (`FilaDocumento`). Van aquí y no
+ * Es lo que aparece al pasar el cursor (o tocar) el icono de información de cada botón del panel de documentos (`PanelDocumentos`). Van aquí y no
  * dentro de la pantalla para que haya un solo lugar donde corregir una frase, y porque una prueba comprueba que ninguna
  * quede vacía ni se alargue tanto que deje de leerse de un vistazo.
  *
