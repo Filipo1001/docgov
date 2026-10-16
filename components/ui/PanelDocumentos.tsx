@@ -1,30 +1,37 @@
 'use client'
 
 /**
- * components/ui/PanelDocumentos.tsx — EXPERIMENTO de diseño: tres variantes del apartado de documentos de seguridad
- * social del formulario de envío. Cuando se elija una, las otras dos se borran.
+ * components/ui/PanelDocumentos.tsx — El apartado de documentos de seguridad social del formulario de envío del informe.
  *
- * Idea de partida (de Felipe): una sola fila de botones, uno al lado del otro; los tres puntitos DENTRO del botón, arriba
- * a la derecha, para reemplazar o eliminar el documento; y el campo del número de planilla, del doble de ancho que los
- * demás. Poco texto, y que el apartado no sea el protagonista de la página.
+ * Una sola fila de botones, uno al lado del otro: [factura, si aplica] · planilla · soporte del pago · N.° de planilla
+ * (del doble de ancho, siempre el último). Poco texto: cada botón dice solo qué es. Lo que hay que saber de cada
+ * documento sale en un letrero al pasar el cursor.
  *
- * Orden: [factura, si aplica] · planilla · soporte del pago · número de planilla (doble, siempre el último).
+ * ── Cómo se usa cada botón ───────────────────────────────────────────────
  *
- * Comportamiento común:
- *   · Botón vacío: un clic abre el selector de archivos (PDF).
- *   · Botón con documento: un clic lo abre; los tres puntitos ofrecen Ver, Reemplazar y Eliminar.
- *   · Los tres puntitos están en TODOS los botones de documento, para que ninguno se vea distinto de otro: con el botón
- *     vacío solo ofrecen «Subir PDF».
- *   · El letrero «qué es» sale al pasar el cursor o enfocar con el teclado (un solo letrero para todo el panel, bajo la
- *     fila: así cabe siempre, también en un teléfono). En pantallas táctiles no hay cursor: el botón lleva su etiqueta.
- *   · Responde al ancho de SU tarjeta (consultas de contenedor), no al de la ventana.
+ *   · Vacío (zona punteada): un clic abre el selector de archivos (PDF).
+ *   · Con documento (ficha sólida con su marca verde): un clic lo abre.
+ *   · Los tres puntitos, arriba a la derecha DENTRO del botón, están en todos los botones de documento para que ninguno
+ *     se vea distinto de otro. Con archivo ofrecen Ver, Reemplazar y Eliminar; vacíos, solo «Subir PDF».
+ *   · El número de planilla es un campo de texto: un clic lo enfoca.
+ *
+ * ── Que el letrero y el menú no choquen ──────────────────────────────────
+ *
+ * Los dos salen en la misma zona. El menú manda: con uno abierto no hay letrero, y tampoco mientras el cursor está sobre
+ * los tres puntitos (la regla vive en `lib/panel-documentos.ts`, con sus pruebas). Antes el letrero se pintaba encima del
+ * menú y tapaba «Eliminar». Un solo letrero para todo el panel, bajo la fila, para que quepa siempre, también en un
+ * teléfono; con retardo, para que no parpadee cuando el cursor solo cruza la fila. En pantallas táctiles no hay cursor,
+ * así que no hay letrero: el botón lleva su etiqueta.
+ *
+ * Responde al ancho de SU tarjeta (consultas de contenedor de Tailwind 4), no al de la ventana: con cinco piezas
+ * (con factura) y la tarjeta estrecha, el número baja a una segunda fila a todo el ancho.
  */
 
 import { useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
+import { RETARDO_LETRERO_MS, letreroVisible } from '@/lib/panel-documentos'
 
-export type Variante = 'fichas' | 'barra' | 'segmentada'
 export type EstadoDoc = 'vacio' | 'cargado' | 'error' | 'subiendo'
 
 export interface Documento {
@@ -33,6 +40,7 @@ export interface Documento {
   /** Qué es el documento: el letrero que sale al pasar el cursor. */
   ayuda: string
   estado: EstadoDoc
+  /** Dirección (ya firmada) para ver el archivo cargado. */
   urlVer?: string | null
   onSubir?: (archivo: File) => void
   onQuitar?: () => void
@@ -50,7 +58,6 @@ export interface CampoNumero {
 }
 
 interface Props {
-  variante: Variante
   planilla: Documento
   soporte: Documento
   /** Solo para quien está obligado a facturar electrónicamente. */
@@ -58,97 +65,132 @@ interface Props {
   numero: CampoNumero
 }
 
-// ─── El letrero ──────────────────────────────────────────────────────────────
+// ─── El letrero y su convivencia con el menú ─────────────────────────────────
 
 function useLetrero() {
   const [activo, setActivo] = useState<string | null>(null)
+  const [menuAbierto, setMenuAbierto] = useState<string | null>(null)
+  const [sobreAcciones, setSobreAcciones] = useState(false)
+  const espera = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const cancelar = () => {
+    if (espera.current) { clearTimeout(espera.current); espera.current = null }
+  }
+  useEffect(() => cancelar, [])
+
+  const mostrar = (texto: string) => {
+    cancelar()
+    espera.current = setTimeout(() => setActivo(texto), RETARDO_LETRERO_MS)
+  }
+  const ocultar = () => { cancelar(); setActivo(null) }
+
   const enlazar = (texto: string) => ({
     // Solo el ratón: en una pantalla táctil «pasar por encima» se queda pegado después de tocar.
-    onPointerEnter: (e: PointerEvent) => { if (e.pointerType === 'mouse') setActivo(texto) },
-    onPointerLeave: (e: PointerEvent) => { if (e.pointerType === 'mouse') setActivo(null) },
-    // El teclado sí; pero no mientras se escribe en un campo de texto: el letrero taparía lo que hay debajo.
+    onPointerEnter: (e: PointerEvent) => { if (e.pointerType === 'mouse') mostrar(texto) },
+    onPointerLeave: (e: PointerEvent) => { if (e.pointerType === 'mouse') ocultar() },
+    // El teclado sí; pero no sobre un campo de texto (taparía lo que hay debajo mientras se escribe) ni sobre los tres
+    // puntitos (ahí se va a pulsar, no a leer).
     onFocus: (e: FocusEvent) => {
       const el = e.target as HTMLElement
-      if (el.tagName !== 'INPUT' && el.matches(':focus-visible')) setActivo(texto)
+      if (el.tagName !== 'INPUT' && !el.closest('[data-acciones]') && el.matches(':focus-visible')) setActivo(texto)
     },
-    onBlur: () => setActivo(null),
+    onBlur: ocultar,
   })
-  return { activo, enlazar }
+
+  return {
+    letrero: letreroVisible({ activo, menuAbierto, sobreAcciones }),
+    enlazar,
+    menuAbierto,
+    setMenuAbierto,
+    setSobreAcciones,
+  }
 }
 
 // ─── Los tres puntitos ───────────────────────────────────────────────────────
+
+const ENFOQUE = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400'
 
 const ITEM_MENU =
   'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none'
 
 function MenuPuntitos({
-  etiqueta, urlVer, alinear, cargado, onReemplazar, onEliminar,
+  etiqueta, urlVer, alinear, cargado, abierto, onCambiar, onSobre, onReemplazar, onEliminar,
 }: {
   etiqueta: string
   urlVer?: string | null
   alinear: 'izquierda' | 'derecha'
   /** Con documento: Ver, Reemplazar, Eliminar. Sin él: solo Subir PDF. */
   cargado: boolean
+  abierto: boolean
+  onCambiar: (abierto: boolean) => void
+  /** El cursor entra o sale de los tres puntitos y de su menú. */
+  onSobre: (sobre: boolean) => void
   onReemplazar: () => void
   onEliminar: () => void
 }) {
-  const [abierto, setAbierto] = useState(false)
   const raiz = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!abierto) return
     const fuera = (e: globalThis.PointerEvent) => {
-      if (!raiz.current?.contains(e.target as Node)) setAbierto(false)
+      if (!raiz.current?.contains(e.target as Node)) onCambiar(false)
     }
-    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false) }
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') onCambiar(false) }
     document.addEventListener('pointerdown', fuera)
     document.addEventListener('keydown', tecla)
     return () => {
       document.removeEventListener('pointerdown', fuera)
       document.removeEventListener('keydown', tecla)
     }
-  }, [abierto])
+  }, [abierto, onCambiar])
 
   return (
-    <div ref={raiz} className="absolute right-0.5 top-0.5 z-10">
+    <div
+      ref={raiz}
+      data-acciones
+      // Con el menú abierto el contenedor sube de capa: el menú nunca queda por debajo de nada del panel.
+      className={`absolute right-0.5 top-0.5 ${abierto ? 'z-30' : 'z-10'}`}
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') onSobre(true) }}
+      onPointerLeave={(e) => { if (e.pointerType === 'mouse') onSobre(false) }}
+    >
       <button
         type="button"
         aria-label={`Opciones de ${etiqueta}`}
         aria-haspopup="menu"
         aria-expanded={abierto}
-        onClick={() => setAbierto((v) => !v)}
-        className="grid h-7 w-7 place-items-center rounded-md text-gray-400 transition-colors hover:bg-black/5 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+        onClick={() => onCambiar(!abierto)}
+        className={`grid h-7 w-7 place-items-center rounded-md text-gray-400 transition-colors hover:bg-black/5 hover:text-gray-800 ${ENFOQUE}`}
       >
         <Icono glifo={Iconos.accion.mas} tamano="sm" />
       </button>
       {abierto && (
         <div
           role="menu"
-          className={`absolute top-full z-30 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${
+          className={`absolute top-full mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${
             alinear === 'derecha' ? 'right-0' : 'left-0'
           }`}
         >
           {cargado ? (
             <>
               {urlVer && (
-                <a role="menuitem" href={urlVer} target="_blank" rel="noopener noreferrer" onClick={() => setAbierto(false)} className={ITEM_MENU}>
+                <a role="menuitem" href={urlVer} target="_blank" rel="noopener noreferrer" onClick={() => onCambiar(false)} className={ITEM_MENU}>
                   <Icono glifo={Iconos.accion.ver} tamano="sm" /> Ver
                 </a>
               )}
-              <button type="button" role="menuitem" onClick={() => { setAbierto(false); onReemplazar() }} className={ITEM_MENU}>
+              <button type="button" role="menuitem" onClick={() => { onCambiar(false); onReemplazar() }} className={ITEM_MENU}>
                 <Icono glifo={Iconos.accion.recargar} tamano="sm" /> Reemplazar
               </button>
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => { setAbierto(false); onEliminar() }}
+                onClick={() => { onCambiar(false); onEliminar() }}
                 className={`${ITEM_MENU} !text-red-600 hover:!bg-red-50`}
               >
                 <Icono glifo={Iconos.accion.eliminar} tamano="sm" /> Eliminar
               </button>
             </>
           ) : (
-            <button type="button" role="menuitem" onClick={() => { setAbierto(false); onReemplazar() }} className={ITEM_MENU}>
+            <button type="button" role="menuitem" onClick={() => { onCambiar(false); onReemplazar() }} className={ITEM_MENU}>
               <Icono glifo={Iconos.documentos.subir} tamano="sm" /> Subir PDF
             </button>
           )}
@@ -158,138 +200,59 @@ function MenuPuntitos({
   )
 }
 
-// ─── Estilos por variante ────────────────────────────────────────────────────
-
-const ENFOQUE = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400'
+// ─── Una ficha de documento ──────────────────────────────────────────────────
 
 /**
- * La variante barra es vertical en una tarjeta estrecha y horizontal cuando hay sitio. Con cinco piezas (con factura)
- * cada botón es más estrecho, así que el cambio llega más tarde. Son literales completos a propósito: Tailwind no genera
- * clases armadas con trozos de texto.
+ * El hueco de arriba (`pt-7`) es el de los tres puntitos: lo llevan TODAS las fichas, estén cargadas o no, para que el
+ * alto no cambie al subir un archivo y los iconos queden alineados entre fichas.
  */
-const BARRA_HORIZONTAL = {
-  cuatro: {
-    caja: '@md:min-h-[56px] @md:flex-row @md:gap-2.5 @md:px-3 @md:py-2 @md:text-left',
-    cargado: '@md:pr-10',
-    texto: '@md:text-sm',
-    lista: '@md:items-start',
-    alinear: '@md:text-left',
-  },
-  cinco: {
-    caja: '@2xl:min-h-[56px] @2xl:flex-row @2xl:gap-2.5 @2xl:px-3 @2xl:py-2 @2xl:text-left',
-    cargado: '@2xl:pr-10',
-    texto: '@2xl:text-sm',
-    lista: '@2xl:items-start',
-    alinear: '@2xl:text-left',
-  },
-} as const
-
-/** Clases del botón principal de un documento, según variante y estado. */
-function claseBoton(v: Variante, e: EstadoDoc, conFactura: boolean): string {
-  const base = `w-full h-full text-center transition-colors ${ENFOQUE}`
-  if (v === 'fichas') {
-    return `${base} flex min-h-[104px] flex-col items-center justify-center gap-1 rounded-xl border px-2 pb-3 pt-7 ${
-      e === 'cargado' ? 'border-gray-200 bg-gray-50 hover:bg-gray-100'
-        : e === 'error' ? 'border-dashed border-red-400 bg-red-50/50'
-          : e === 'subiendo' ? 'border-gray-200 bg-gray-50'
-            : 'border-dashed border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'
-    }`
-  }
-  if (v === 'barra') {
-    // Vertical en una tarjeta estrecha; horizontal y bajita cuando hay sitio.
-    const H = BARRA_HORIZONTAL[conFactura ? 'cinco' : 'cuatro']
-    return `${base} flex min-h-[96px] flex-col items-center justify-center gap-1.5 rounded-lg border px-2 pb-2 pt-7 ${H.caja} ${
-      e === 'cargado' ? `border-gray-200 bg-white pr-2 hover:bg-gray-50 ${H.cargado}`
-        : e === 'error' ? 'border-red-400 bg-red-50/40'
-          : 'border-gray-200 bg-white hover:bg-gray-50'
-    }`
-  }
-  // segmentada: la celda no lleva borde propio en una sola fila (la divide una línea fina); sí cuando se parte en dos.
-  return `${base} flex min-h-[84px] flex-col items-start justify-between gap-2 px-3 pb-3 pt-3 text-left ${
-    conFactura ? 'rounded-xl @md:rounded-none' : ''
-  } ${
-    e === 'cargado' ? 'hover:bg-gray-100/70'
-      : e === 'error' ? 'bg-red-50/60'
-        : 'hover:bg-gray-100/70'
+function claseFicha(e: EstadoDoc): string {
+  return `flex h-full min-h-[104px] w-full flex-col items-center justify-center gap-1 rounded-xl border px-2 pb-3 pt-7 text-center transition-colors ${ENFOQUE} ${
+    e === 'cargado' ? 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+      : e === 'error' ? 'border-dashed border-red-400 bg-red-50/50'
+        : e === 'subiendo' ? 'border-gray-200 bg-gray-50'
+          : 'border-dashed border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'
   }`
 }
 
-/** El color del icono y de la etiqueta: el color solo significa estado. */
+/** El color del icono: solo significa estado. */
 function colorIcono(e: EstadoDoc): string {
   return e === 'cargado' ? 'text-emerald-700' : e === 'error' ? 'text-red-600' : e === 'subiendo' ? 'text-gray-300' : 'text-gray-500'
 }
 
-function ContenidoDocumento({ v, d, conFactura }: { v: Variante; d: Documento; conFactura: boolean }) {
+function ContenidoFicha({ d }: { d: Documento }) {
   const cargado = d.estado === 'cargado'
-  const subiendo = d.estado === 'subiendo'
-  const color = colorIcono(d.estado)
-  const etiqueta = (
-    <span className={`text-xs font-medium leading-tight ${d.estado === 'error' ? 'text-red-600' : 'text-gray-800'} ${v === 'barra' ? BARRA_HORIZONTAL[conFactura ? 'cinco' : 'cuatro'].texto : ''}`}>
-      {d.etiqueta}
-    </span>
-  )
-
-  if (v === 'fichas') {
-    return (
-      <>
-        <Icono glifo={d.icono} tamano="md" className={color} />
-        {etiqueta}
-        <span className="flex h-4 items-center text-[11px] leading-none text-gray-400">
-          {cargado ? <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />
-            : subiendo ? 'Subiendo…' : 'Subir'}
-        </span>
-      </>
-    )
-  }
-  if (v === 'barra') {
-    return (
-      <>
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-          cargado ? 'bg-emerald-50' : d.estado === 'error' ? 'bg-red-50' : 'bg-gray-100'
-        } ${color}`}>
-          <Icono glifo={d.icono} tamano="md" />
-        </span>
-        {etiqueta}
-      </>
-    )
-  }
   return (
     <>
-      <Icono glifo={d.icono} tamano="md" className={color} />
-      <span className="flex flex-col gap-0.5">
-        {etiqueta}
-        <span className="text-[11px] leading-none text-gray-400">{cargado ? 'Cargado' : subiendo ? 'Subiendo…' : 'Subir PDF'}</span>
+      <Icono glifo={d.icono} tamano="md" className={colorIcono(d.estado)} />
+      <span className={`text-xs font-medium leading-tight ${d.estado === 'error' ? 'text-red-600' : 'text-gray-800'}`}>{d.etiqueta}</span>
+      <span className="flex h-4 items-center text-[11px] leading-none text-gray-400">
+        {cargado
+          ? <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />
+          : d.estado === 'subiendo' ? 'Subiendo…' : 'Subir'}
       </span>
     </>
   )
 }
 
-/** La barrita de estado de la variante segmentada. */
-function Barrita({ e }: { e: EstadoDoc }) {
-  const c = e === 'cargado' ? 'bg-emerald-500' : e === 'error' ? 'bg-red-400' : 'bg-transparent'
-  return <span aria-hidden className={`pointer-events-none absolute inset-x-0 bottom-0 h-[3px] ${c}`} />
-}
-
-// ─── Una celda de documento ──────────────────────────────────────────────────
-
-function TileDocumento({
-  v, d, conFactura, alinear, enlazar, claseCelda,
+function FichaDocumento({
+  d, alinear, enlazar, menuAbierto, setMenuAbierto, setSobreAcciones,
 }: {
-  v: Variante
   d: Documento
-  conFactura: boolean
   alinear: 'izquierda' | 'derecha'
   enlazar: (texto: string) => object
-  claseCelda: string
+  menuAbierto: string | null
+  setMenuAbierto: (etiqueta: string | null) => void
+  setSobreAcciones: (sobre: boolean) => void
 }) {
   const entrada = useRef<HTMLInputElement>(null)
   const cargado = d.estado === 'cargado'
   const subiendo = d.estado === 'subiendo'
   const elegir = () => entrada.current?.click()
-  const clase = claseBoton(v, d.estado, conFactura)
+  const clase = claseFicha(d.estado)
 
   return (
-    <div className={`relative ${claseCelda}`} {...enlazar(d.ayuda)}>
+    <div className="relative" {...enlazar(d.ayuda)}>
       <input
         ref={entrada}
         type="file"
@@ -304,8 +267,8 @@ function TileDocumento({
       />
 
       {cargado && d.urlVer ? (
-        <a href={d.urlVer} target="_blank" rel="noopener noreferrer" aria-label={`Ver ${d.etiqueta}`} className={`${clase} rounded-[inherit]`}>
-          <ContenidoDocumento v={v} d={d} conFactura={conFactura} />
+        <a href={d.urlVer} target="_blank" rel="noopener noreferrer" aria-label={`Ver ${d.etiqueta}`} className={clase}>
+          <ContenidoFicha d={d} />
         </a>
       ) : (
         <button
@@ -313,13 +276,11 @@ function TileDocumento({
           onClick={elegir}
           disabled={subiendo || !d.onSubir}
           aria-label={`Subir ${d.etiqueta}`}
-          className={`${clase} rounded-[inherit] disabled:cursor-not-allowed`}
+          className={`${clase} disabled:cursor-not-allowed`}
         >
-          <ContenidoDocumento v={v} d={d} conFactura={conFactura} />
+          <ContenidoFicha d={d} />
         </button>
       )}
-
-      {v === 'segmentada' && <Barrita e={d.estado} />}
 
       {!subiendo && (d.onSubir || d.onQuitar) && (
         <MenuPuntitos
@@ -327,6 +288,9 @@ function TileDocumento({
           urlVer={d.urlVer}
           alinear={alinear}
           cargado={cargado}
+          abierto={menuAbierto === d.etiqueta}
+          onCambiar={(abrir) => setMenuAbierto(abrir ? d.etiqueta : null)}
+          onSobre={setSobreAcciones}
           onReemplazar={elegir}
           onEliminar={() => d.onQuitar?.()}
         />
@@ -335,134 +299,74 @@ function TileDocumento({
   )
 }
 
-// ─── La celda del número (doble ancho) ───────────────────────────────────────
+// ─── La ficha del número (doble ancho) ───────────────────────────────────────
 
-function TileNumero({
-  v, n, conFactura, enlazar, claseCelda,
+function FichaNumero({
+  n, claseCelda, enlazar,
 }: {
-  v: Variante
   n: CampoNumero
-  conFactura: boolean
-  enlazar: (texto: string) => object
   claseCelda: string
+  enlazar: (texto: string) => object
 }) {
   const lleno = n.valor.trim().length > 0
   const error = !!n.error
   const ok = lleno && !error
-  const color = error ? 'text-red-600' : ok ? 'text-emerald-700' : 'text-gray-500'
 
-  const entrada = (alinear: string) => (
-    <input
-      value={n.valor}
-      onChange={(e) => n.onCambio(e.target.value)}
-      onBlur={n.onSalir}
-      placeholder={n.placeholder ?? 'Ej. 6016087440'}
-      inputMode="text"
-      aria-label={n.etiqueta}
-      aria-invalid={error}
-      className={`w-full min-w-0 bg-transparent text-sm font-semibold tracking-wide text-gray-900 outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-300 ${alinear}`}
-    />
-  )
-  const etiqueta = (
-    <span className={`flex items-center gap-1 text-xs font-medium leading-tight ${error ? 'text-red-600' : 'text-gray-800'}`}>
-      {n.etiqueta}
-      {ok && <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />}
-    </span>
-  )
-
-  if (v === 'fichas') {
-    return (
-      <label {...enlazar(n.ayuda)} className={`${claseCelda} flex min-h-[104px] cursor-text flex-col items-center justify-center gap-1 rounded-xl border bg-white px-3 pb-3 pt-7 text-center transition-colors focus-within:ring-2 focus-within:ring-gray-300 ${
-        error ? 'border-red-400 bg-red-50/50' : 'border-gray-300 focus-within:border-gray-400'
-      }`}>
-        <Icono glifo={Iconos.dominio.numero} tamano="md" className={color} />
-        {etiqueta}
-        {entrada('text-center')}
-      </label>
-    )
-  }
-  if (v === 'barra') {
-    const H = BARRA_HORIZONTAL[conFactura ? 'cinco' : 'cuatro']
-    return (
-      <label {...enlazar(n.ayuda)} className={`${claseCelda} flex min-h-[96px] cursor-text flex-col items-center justify-center gap-1.5 rounded-lg border bg-white px-3 pb-2 pt-7 text-center transition-colors focus-within:ring-2 focus-within:ring-gray-300 ${H.caja} ${
-        error ? 'border-red-400 bg-red-50/40' : 'border-gray-200 focus-within:border-gray-400'
-      }`}>
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${ok ? 'bg-emerald-50' : error ? 'bg-red-50' : 'bg-gray-100'} ${color}`}>
-          <Icono glifo={Iconos.dominio.numero} tamano="md" />
-        </span>
-        <span className={`flex min-w-0 flex-1 flex-col gap-0.5 ${H.lista}`}>
-          {etiqueta}
-          {entrada(`text-center ${H.alinear}`)}
-        </span>
-      </label>
-    )
-  }
   return (
-    <label {...enlazar(n.ayuda)} className={`${claseCelda} relative flex min-h-[84px] cursor-text flex-col items-start justify-between gap-2 px-3 pb-3 pt-3 text-left transition-colors focus-within:bg-gray-100/70 ${
-      conFactura ? 'rounded-xl @md:rounded-none' : ''
-    } ${error ? 'bg-red-50/60' : ''}`}>
-      <Icono glifo={Iconos.dominio.numero} tamano="md" className={color} />
-      <span className="flex w-full flex-col gap-0.5">
-        {etiqueta}
-        {entrada('text-left')}
+    <label
+      {...enlazar(n.ayuda)}
+      className={`${claseCelda} flex min-h-[104px] cursor-text flex-col items-center justify-center gap-1 rounded-xl border bg-white px-3 pb-3 pt-7 text-center transition-colors focus-within:ring-2 focus-within:ring-gray-300 ${
+        error ? 'border-red-400 bg-red-50/50' : 'border-gray-300 focus-within:border-gray-400'
+      }`}
+    >
+      <Icono glifo={Iconos.dominio.numero} tamano="md" className={error ? 'text-red-600' : ok ? 'text-emerald-700' : 'text-gray-500'} />
+      <span className={`flex items-center gap-1 text-xs font-medium leading-tight ${error ? 'text-red-600' : 'text-gray-800'}`}>
+        {n.etiqueta}
+        {ok && <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />}
       </span>
-      <Barrita e={error ? 'error' : ok ? 'cargado' : 'vacio'} />
+      <input
+        value={n.valor}
+        onChange={(e) => n.onCambio(e.target.value)}
+        onBlur={n.onSalir}
+        placeholder={n.placeholder ?? 'Ej. 6016087440'}
+        inputMode="text"
+        aria-label={n.etiqueta}
+        aria-invalid={error}
+        className="w-full min-w-0 bg-transparent text-center text-sm font-semibold tracking-wide text-gray-900 outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-300"
+      />
     </label>
   )
 }
 
 // ─── El panel ────────────────────────────────────────────────────────────────
 
-export default function PanelDocumentos({ variante: v, planilla, soporte, factura, numero }: Props) {
+export default function PanelDocumentos({ planilla, soporte, factura, numero }: Props) {
   const conFactura = !!factura
-  const { activo, enlazar } = useLetrero()
+  const { letrero, enlazar, menuAbierto, setMenuAbierto, setSobreAcciones } = useLetrero()
 
-  // Cuatro unidades: planilla 1 · soporte 1 · número 2. Con factura son cinco; en una tarjeta estrecha no caben en
-  // fila y el número baja a una segunda fila a todo el ancho.
+  // Cuatro unidades: planilla 1 · soporte 1 · número 2. Con factura son cinco; en una tarjeta estrecha no caben en fila
+  // y el número baja a una segunda fila a todo el ancho.
   const columnas = conFactura ? 'grid-cols-3 @md:grid-cols-5' : 'grid-cols-4'
   const spanNumero = conFactura ? 'col-span-3 @md:col-span-2' : 'col-span-2'
 
-  // La variante segmentada es UN solo campo dividido en celdas; las otras, botones sueltos con un hueco.
-  const contenedor = v === 'segmentada'
-    ? (conFactura
-      ? `grid gap-2 ${columnas} @md:gap-0 @md:rounded-xl @md:border @md:border-gray-200 @md:bg-gray-50`
-      : `grid ${columnas} rounded-xl border border-gray-200 bg-gray-50`)
-    : `grid gap-2 ${columnas}`
-
-  /** Línea divisoria y esquinas de cada celda en la variante segmentada. */
-  const celda = (primera: boolean, ultima: boolean): string => {
-    if (v !== 'segmentada') return ''
-    if (conFactura) {
-      return `rounded-xl border border-gray-200 bg-gray-50 @md:rounded-none @md:border-0 ${primera ? '@md:rounded-l-xl' : '@md:border-l'} ${ultima ? '@md:rounded-r-xl' : ''}`
-    }
-    return `${primera ? 'rounded-l-xl' : 'border-l border-gray-200'} ${ultima ? 'rounded-r-xl' : ''}`
-  }
-
-  const docs = [
-    ...(factura ? [{ d: factura, alinear: 'izquierda' as const }] : []),
-    { d: planilla, alinear: 'izquierda' as const },
-  ]
-  const total = docs.length + 2
-  // Posición de cada celda en el orden de pantalla: factura?, planilla, soporte, número.
-  let i = 0
-  const siguiente = () => { const p = i++; return celda(p === 0, p === total - 1) }
+  const comun = { enlazar, menuAbierto, setMenuAbierto, setSobreAcciones }
 
   return (
     <div className="@container relative">
-      <div className={contenedor}>
-        {factura && <TileDocumento v={v} d={factura} conFactura alinear="izquierda" enlazar={enlazar} claseCelda={siguiente()} />}
-        <TileDocumento v={v} d={planilla} conFactura={conFactura} alinear="izquierda" enlazar={enlazar} claseCelda={siguiente()} />
+      <div className={`grid gap-2 ${columnas}`}>
+        {factura && <FichaDocumento d={factura} alinear="izquierda" {...comun} />}
+        <FichaDocumento d={planilla} alinear="izquierda" {...comun} />
         {/* El menú del soporte se abre hacia la izquierda cuando hay factura: en una tarjeta estrecha queda en la tercera
             columna, pegado al borde derecho. */}
-        <TileDocumento v={v} d={soporte} conFactura={conFactura} alinear={conFactura ? 'derecha' : 'izquierda'} enlazar={enlazar} claseCelda={siguiente()} />
-        <TileNumero v={v} n={numero} conFactura={conFactura} enlazar={enlazar} claseCelda={`${spanNumero} ${siguiente()}`} />
+        <FichaDocumento d={soporte} alinear={conFactura ? 'derecha' : 'izquierda'} {...comun} />
+        <FichaNumero n={numero} claseCelda={spanNumero} enlazar={enlazar} />
       </div>
 
       {numero.error && <p className="mt-1.5 text-xs text-red-600">{numero.error}</p>}
 
-      {activo && (
+      {letrero && (
         <div role="tooltip" className="absolute inset-x-0 top-full z-20 mt-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-relaxed text-slate-100 shadow-lg">
-          {activo}
+          {letrero}
         </div>
       )}
     </div>

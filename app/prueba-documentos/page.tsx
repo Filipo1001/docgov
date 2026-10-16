@@ -1,7 +1,7 @@
 'use client'
-// TEMPORAL — comparación de tres diseños del apartado de documentos. NO se mezcla a main.
+// TEMPORAL — prueba del apartado de documentos (variante A elegida). NO se mezcla a main.
 import { useEffect, useState } from 'react'
-import PanelDocumentos, { type Documento, type Variante } from '@/components/ui/PanelDocumentos'
+import PanelDocumentos, { type Documento } from '@/components/ui/PanelDocumentos'
 import { AYUDA_DOCUMENTO } from '@/lib/ayudas-documentos'
 import { Iconos } from '@/lib/iconos'
 
@@ -13,13 +13,7 @@ const ESCENARIOS: { clave: Escenario; texto: string }[] = [
   { clave: 'error', texto: 'Intentó enviar sin todo' },
 ]
 
-const VARIANTES: { clave: Variante; titulo: string; nota: string }[] = [
-  { clave: 'fichas', titulo: 'A · Fichas', nota: 'Zonas punteadas que invitan a subir; al cargar se vuelven fichas sólidas con su marca verde.' },
-  { clave: 'barra', titulo: 'B · Barra', nota: 'La más baja y discreta: botones horizontales con el icono en un círculo; en teléfono pasan a vertical.' },
-  { clave: 'segmentada', titulo: 'C · Segmentada', nota: 'Un solo campo dividido en celdas, con una barrita de estado abajo: lo más compacto y cohesionado.' },
-]
-
-function Demo({ variante, escenario, conFactura }: { variante: Variante; escenario: Escenario; conFactura: boolean }) {
+function Demo({ escenario, conFactura }: { escenario: Escenario; conFactura: boolean }) {
   const inicial = {
     vacio: { f: false, p: false, s: false, n: '' },
     parcial: { f: true, p: true, s: false, n: '' },
@@ -47,7 +41,6 @@ function Demo({ variante, escenario, conFactura }: { variante: Variante; escenar
       <p className="mb-3 text-sm text-gray-500">Adjunta tus documentos de seguridad social.</p>
       <div className="mb-4">
         <PanelDocumentos
-          variante={variante}
           factura={conFactura ? doc(Iconos.documentos.cuentaCobro, 'Factura electrónica', AYUDA_DOCUMENTO.factura, f, setF) : null}
           planilla={doc(Iconos.documentos.planilla, 'Planilla', AYUDA_DOCUMENTO.planilla, p, setP)}
           soporte={doc(Iconos.documentos.soportePago, 'Soporte de pago', AYUDA_DOCUMENTO.soportePago, s, setS)}
@@ -65,13 +58,13 @@ function Demo({ variante, escenario, conFactura }: { variante: Variante; escenar
 }
 
 export default function Prueba() {
-  const [escenario, setEscenario] = useState<Escenario>('parcial')
+  const [escenario, setEscenario] = useState<Escenario>('completo')
   const [conFactura, setConFactura] = useState(false)
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
-      <h1 className="mb-1 text-lg font-semibold text-gray-900">Tres diseños para el apartado de documentos</h1>
-      <p className="mb-4 text-sm text-gray-500">Todo es interactivo: toca un botón vacío para «subir», usa los tres puntitos para ver, reemplazar o eliminar, y pasa el cursor para ver el letrero.</p>
-      <div className="sticky top-0 z-40 mb-6 flex flex-wrap items-center gap-2 rounded-xl border bg-white/95 p-3 shadow-sm backdrop-blur">
+      <h1 className="mb-1 text-lg font-semibold text-gray-900">Apartado de documentos — variante A</h1>
+      <p className="mb-4 text-sm text-gray-500">Para revisar que el letrero (al pasar el cursor) y el menú de los tres puntitos no choquen: abre un menú con el cursor sobre la ficha, pasa por encima de sus opciones y por las otras fichas.</p>
+      <div className="mb-6 flex flex-wrap items-center gap-2 rounded-xl border bg-white p-3 shadow-sm">
         {ESCENARIOS.map((e) => (
           <button key={e.clave} onClick={() => setEscenario(e.clave)}
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${escenario === e.clave ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-gray-700'}`}>{e.texto}</button>
@@ -80,23 +73,16 @@ export default function Prueba() {
           <input type="checkbox" checked={conFactura} onChange={(e) => setConFactura(e.target.checked)} /> Con factura electrónica
         </label>
       </div>
-
-      {VARIANTES.map((v) => (
-        <section key={v.clave} className="mb-12">
-          <h2 className="text-base font-semibold text-gray-900">{v.titulo}</h2>
-          <p className="mb-3 text-sm text-gray-500">{v.nota}</p>
-          <div className="flex flex-wrap items-start gap-6">
-            <div className="min-w-0 flex-1" style={{ minWidth: 340 }}>
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Escritorio</p>
-              <Demo variante={v.clave} escenario={escenario} conFactura={conFactura} />
-            </div>
-            <div style={{ width: 340 }}>
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Teléfono</p>
-              <Demo variante={v.clave} escenario={escenario} conFactura={conFactura} />
-            </div>
-          </div>
-        </section>
-      ))}
+      <div className="flex flex-wrap items-start gap-6">
+        <div className="min-w-0 flex-1" style={{ minWidth: 340 }}>
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Escritorio</p>
+          <Demo escenario={escenario} conFactura={conFactura} />
+        </div>
+        <div style={{ width: 340 }}>
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Teléfono</p>
+          <Demo escenario={escenario} conFactura={conFactura} />
+        </div>
+      </div>
     </div>
   )
 }
