@@ -22,7 +22,8 @@
  * selector abierto (`lib/panel-documentos.ts`). Cada fila tiene su propio letrero, justo debajo de ella.
  */
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useState } from 'react'
+import { DialogoBase, DialogoMes } from '@/components/ui/DialogosRevision'
 import Icono from '@/components/ui/Icono'
 import { ENFOQUE, useLetrero } from '@/components/ui/PanelDocumentos'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
@@ -39,6 +40,9 @@ export interface DocumentoRevision {
 
 export interface DatoMes {
   ayuda: string
+  /** El mes del informe y su año: lo que el modal pone de referencia. */
+  mesDelInforme: string
+  anio: number | null
   /** El mes de cotización vigente. */
   valor: string
   /** Lo confirmó un revisor (no es solo la sugerencia del sistema). */
@@ -55,6 +59,10 @@ export interface DatoBase {
   valor: number
   /** El valor que se aplica si nadie lo cambia (el que calcula el acta). */
   porDefecto: number
+  /** De dónde sale ese valor, en una frase (`explicarBasePorDefecto`). */
+  explicacion: string
+  /** El piso que usa el sistema: por debajo, el modal avisa. */
+  piso: number
   personalizada: boolean
   puedeCambiar: boolean
   /** Por qué no se puede cambiar, para el letrero del candado. */
@@ -100,23 +108,6 @@ const FICHA =
 const EN_ESPERA = 'border-gray-200 bg-gray-50'
 const ACTIVA = 'border-gray-200 bg-gray-50 hover:bg-gray-100'
 const FALTA = 'border-dashed border-amber-300 bg-amber-50/40'
-
-/** Cierra al hacer clic fuera o con Escape. */
-function useCierre(abierto: boolean, cerrar: () => void, raiz: RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    if (!abierto) return
-    const fuera = (e: globalThis.PointerEvent) => {
-      if (!raiz.current?.contains(e.target as Node)) cerrar()
-    }
-    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrar() }
-    document.addEventListener('pointerdown', fuera)
-    document.addEventListener('keydown', tecla)
-    return () => {
-      document.removeEventListener('pointerdown', fuera)
-      document.removeEventListener('keydown', tecla)
-    }
-  }, [abierto, cerrar, raiz])
-}
 
 /** La esquina de arriba a la derecha: lo que se puede hacer con la ficha. */
 function Esquina({ glifo, className = '' }: { glifo: LucideIcon; className?: string }) {
@@ -167,9 +158,9 @@ function FichaNumero({ n, enlazar }: { n: Props['numero']; enlazar: (texto: stri
   )
 }
 
-/** Una ficha de dato que se verifica y, si se puede, se cambia: abre su propio selector o editor. */
+/** Una ficha de dato que se verifica y, si se puede, se cambia: al pulsarla se abre su modal. */
 function FichaDato({
-  icono, etiqueta, valor, estado, puedeCambiar, abierto, onAbrir, children,
+  icono, etiqueta, valor, estado, puedeCambiar, abierto, onAbrir,
 }: {
   icono: LucideIcon
   etiqueta: string
@@ -179,51 +170,35 @@ function FichaDato({
   puedeCambiar: boolean
   abierto: boolean
   onAbrir: () => void
-  children: React.ReactNode
 }) {
   return (
-    <>
-      <button
-        type="button"
-        onClick={puedeCambiar ? onAbrir : undefined}
-        aria-haspopup={puedeCambiar ? 'dialog' : undefined}
-        aria-expanded={puedeCambiar ? abierto : undefined}
-        aria-disabled={!puedeCambiar}
-        aria-label={`${etiqueta}: ${valor}${puedeCambiar ? '. Cambiar' : ''}`}
-        className={`${FICHA} ${puedeCambiar ? ACTIVA : `${EN_ESPERA} cursor-default`}`}
-      >
-        <Icono glifo={icono} tamano="md" className="text-gray-500" />
-        <span className="text-xs font-medium leading-tight text-gray-800">{etiqueta}</span>
-        <span className="text-sm font-semibold leading-tight text-gray-900">{valor}</span>
-        <span className="flex h-4 items-center gap-1 text-[11px] leading-none text-gray-500">{estado}</span>
-        <Esquina glifo={puedeCambiar ? Iconos.accion.editar : Iconos.estado.bloqueado} />
-      </button>
-      {abierto && children}
-    </>
+    <button
+      type="button"
+      onClick={puedeCambiar ? onAbrir : undefined}
+      aria-haspopup={puedeCambiar ? 'dialog' : undefined}
+      aria-expanded={puedeCambiar ? abierto : undefined}
+      aria-disabled={!puedeCambiar}
+      aria-label={`${etiqueta}: ${valor}${puedeCambiar ? '. Cambiar' : ''}`}
+      className={`${FICHA} ${puedeCambiar ? ACTIVA : `${EN_ESPERA} cursor-default`}`}
+    >
+      <Icono glifo={icono} tamano="md" className="text-gray-500" />
+      <span className="text-xs font-medium leading-tight text-gray-800">{etiqueta}</span>
+      <span className="text-sm font-semibold leading-tight text-gray-900">{valor}</span>
+      <span className="flex h-4 items-center gap-1 text-[11px] leading-none text-gray-500">{estado}</span>
+      <Esquina glifo={puedeCambiar ? Iconos.accion.editar : Iconos.estado.bloqueado} />
+    </button>
   )
 }
-
-const POPOVER = 'absolute top-full z-30 mt-1 rounded-lg border border-gray-200 bg-white shadow-lg'
 
 // ─── El panel ────────────────────────────────────────────────────────────────
 
 export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, base, alerta, decision }: Props) {
-  // Cada fila, su letrero. Un selector abierto (fila de datos) calla también el letrero de la fila de documentos.
+  // Cada fila, su letrero. Un modal abierto (fila de datos) calla también el letrero de la fila de documentos.
   const docs = useLetrero()
   const datos = useLetrero()
   const hayAbierto = datos.menuAbierto !== null
   const letreroDocs = hayAbierto ? null : docs.letrero
-
-  const cerrar = useCallback(() => datos.setMenuAbierto(null), [datos.setMenuAbierto]) // eslint-disable-line react-hooks/exhaustive-deps
-  const raizMes = useRef<HTMLDivElement>(null)
-  const raizBase = useRef<HTMLDivElement>(null)
-  useCierre(datos.menuAbierto === 'mes', cerrar, raizMes)
-  useCierre(datos.menuAbierto === 'base', cerrar, raizBase)
-
-  // El editor de la base arranca con el valor vigente cada vez que se abre.
-  const [borrador, setBorrador] = useState('')
-  useEffect(() => { if (datos.menuAbierto === 'base') setBorrador(String(base.valor)) }, [datos.menuAbierto, base.valor])
-  const borradorValido = /^\d+$/.test(borrador) && Number(borrador) > 0
+  const cerrar = () => datos.setMenuAbierto(null)
 
   const [devolviendo, setDevolviendo] = useState(false)
   const [motivo, setMotivo] = useState('')
@@ -264,7 +239,7 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
       )}
 
       {/* 1 · Los documentos y el número */}
-      <div className="@container relative">
+      <div className="relative">
         <div className="grid grid-cols-4 gap-2">
           <FichaDocumento d={planilla} enlazar={docs.enlazar} />
           <FichaDocumento d={soporte} enlazar={docs.enlazar} />
@@ -277,10 +252,10 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
         )}
       </div>
 
-      {/* 2 · Lo que dice la planilla y se verifica: el mes y la base de cotización */}
+      {/* 2 · Lo que dice la planilla y se verifica: el mes y la base de cotización. Cada ficha abre su modal. */}
       <div className="relative">
         <div className="grid grid-cols-2 gap-2">
-          <div ref={raizMes} className="relative" {...datos.enlazar(texto.mes)}>
+          <div className="relative" {...datos.enlazar(texto.mes)}>
             <FichaDato
               icono={Iconos.dominio.periodo}
               etiqueta="Mes de cotización"
@@ -290,27 +265,11 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
                 : <><Icono glifo={Iconos.estado.pendiente} tamano="sm" /> Sin verificar</>}
               puedeCambiar={mes.puedeCambiar && !mes.guardando}
               abierto={datos.menuAbierto === 'mes'}
-              onAbrir={() => datos.setMenuAbierto(datos.menuAbierto === 'mes' ? null : 'mes')}
-            >
-              <div role="listbox" aria-label="Mes de cotización" className={`${POPOVER} left-0 max-h-56 w-48 overflow-y-auto py-1`}>
-                {mes.opciones.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    role="option"
-                    aria-selected={m === mes.valor}
-                    onClick={() => { datos.setMenuAbierto(null); if (m !== mes.valor) mes.onCambiar(m) }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
-                  >
-                    {m}
-                    {m === mes.valor && <Icono glifo={Iconos.estado.ok} tamano="sm" className="text-emerald-600" />}
-                  </button>
-                ))}
-              </div>
-            </FichaDato>
+              onAbrir={() => datos.setMenuAbierto('mes')}
+            />
           </div>
 
-          <div ref={raizBase} className="relative" {...datos.enlazar(texto.base)}>
+          <div className="relative" {...datos.enlazar(texto.base)}>
             <FichaDato
               icono={Iconos.dominio.valor}
               etiqueta="Base de cotización"
@@ -318,59 +277,8 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
               estado={base.guardando ? 'Guardando…' : base.personalizada ? 'Personalizada' : 'Por defecto'}
               puedeCambiar={base.puedeCambiar && !base.guardando}
               abierto={datos.menuAbierto === 'base'}
-              onAbrir={() => datos.setMenuAbierto(datos.menuAbierto === 'base' ? null : 'base')}
-            >
-              <div role="dialog" aria-label="Cambiar la base de cotización" className={`${POPOVER} right-0 w-60 space-y-2 p-3`}>
-                <label htmlFor="base-cotizacion-revision" className="text-xs font-medium text-gray-700">Base de cotización</label>
-                <div className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 focus-within:border-gray-400 focus-within:ring-2 focus-within:ring-gray-300">
-                  <span className="text-sm text-gray-400">$</span>
-                  <input
-                    id="base-cotizacion-revision"
-                    autoFocus
-                    type="text"
-                    inputMode="numeric"
-                    value={borrador}
-                    onChange={(e) => setBorrador(e.target.value.replace(/\D/g, ''))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && borradorValido) { datos.setMenuAbierto(null); base.onGuardar(Number(borrador)) }
-                    }}
-                    placeholder={base.porDefecto.toLocaleString('es-CO')}
-                    className="h-9 w-full min-w-0 bg-transparent text-sm font-semibold text-gray-900 outline-none placeholder:font-normal placeholder:text-gray-300"
-                  />
-                </div>
-                {/* El importe con sus puntos: con siete cifras seguidas es fácil equivocarse. */}
-                <p aria-live="polite" className="h-4 text-[11px] text-gray-500">
-                  {borradorValido ? `$ ${Number(borrador).toLocaleString('es-CO')}` : ''}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={!borradorValido}
-                    onClick={() => { datos.setMenuAbierto(null); base.onGuardar(Number(borrador)) }}
-                    className="h-8 rounded-lg px-3 text-xs font-medium text-white transition-colors disabled:opacity-40"
-                    style={{ backgroundColor: MARCA }}
-                  >
-                    Guardar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => datos.setMenuAbierto(null)}
-                    className="h-8 rounded-lg border border-gray-300 px-3 text-xs text-gray-600 transition-colors hover:bg-gray-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-                {base.personalizada && (
-                  <button
-                    type="button"
-                    onClick={() => { datos.setMenuAbierto(null); base.onRestablecer() }}
-                    className="text-xs text-gray-500 underline decoration-gray-300 underline-offset-2 hover:text-gray-800"
-                  >
-                    Volver al valor por defecto ($ {base.porDefecto.toLocaleString('es-CO')})
-                  </button>
-                )}
-              </div>
-            </FichaDato>
+              onAbrir={() => datos.setMenuAbierto('base')}
+            />
           </div>
         </div>
         {datos.letrero && (
@@ -379,6 +287,32 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
           </div>
         )}
       </div>
+
+      {datos.menuAbierto === 'mes' && (
+        <DialogoMes
+          valor={mes.valor}
+          confirmado={mes.confirmado}
+          opciones={mes.opciones}
+          mesDelInforme={mes.mesDelInforme}
+          anio={mes.anio}
+          guardando={mes.guardando}
+          onConfirmar={(m) => { cerrar(); mes.onCambiar(m) }}
+          onCerrar={cerrar}
+        />
+      )}
+      {datos.menuAbierto === 'base' && (
+        <DialogoBase
+          valor={base.valor}
+          porDefecto={base.porDefecto}
+          personalizada={base.personalizada}
+          explicacion={base.explicacion}
+          piso={base.piso}
+          guardando={base.guardando}
+          onGuardar={(v) => { cerrar(); base.onGuardar(v) }}
+          onRestablecer={() => { cerrar(); base.onRestablecer() }}
+          onCerrar={cerrar}
+        />
+      )}
 
       {/* 3 · La decisión */}
       {decision.puedeDecidir && (

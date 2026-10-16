@@ -5,6 +5,8 @@ import PanelRevisionPlanilla from '@/components/ui/PanelRevisionPlanilla'
 import Icono from '@/components/ui/Icono'
 import { AYUDA_DOCUMENTO } from '@/lib/ayudas-documentos'
 import { motivoBaseBloqueada, mostrarControlDeBaseEnPeriodo } from '@/lib/base-cotizacion'
+import { DEFAULT_BASE_COTIZACION_SS } from '@/lib/constants'
+import { explicarBasePorDefecto } from '@/lib/importe'
 import { Iconos } from '@/lib/iconos'
 
 type Rol = 'supervisor' | 'asesor' | 'admin'
@@ -14,7 +16,6 @@ type Alerta = 'ninguna' | 'naranja' | 'roja'
 type Docs = 'todos' | 'sin_soporte' | 'sin_planilla'
 
 const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO']
-const IBC_DEFECTO = 1_750_905
 
 function Grupo<T extends string>({ titulo, valor, opciones, onCambio }: { titulo: string; valor: T; opciones: { v: T; t: string }[]; onCambio: (v: T) => void }) {
   return (
@@ -31,7 +32,7 @@ function Grupo<T extends string>({ titulo, valor, opciones, onCambio }: { titulo
 }
 
 /** La tarjeta con el MISMO contenedor desplegable que la página real (overflow-hidden mientras anima). */
-function Tarjeta(p: { rol: Rol; informe: EstadoInforme; planilla: EstadoPlanilla; alerta: Alerta; docs: Docs; mesDistinto: boolean; ibcPersonalizado: boolean }) {
+function Tarjeta(p: { rol: Rol; informe: EstadoInforme; planilla: EstadoPlanilla; alerta: Alerta; docs: Docs; mesDistinto: boolean; ibcPersonalizado: boolean; mensualAlto: boolean }) {
   const [abierta, setAbierta] = useState(true)
   const [libre, setLibre] = useState(true)
   useEffect(() => {
@@ -42,6 +43,8 @@ function Tarjeta(p: { rol: Rol; informe: EstadoInforme; planilla: EstadoPlanilla
   }, [abierta])
 
   const MES_INFORME = 'ABRIL'
+  // El valor por defecto sale del valor mensual del periodo: con 4 millones el 40 % queda bajo el piso; con 6, lo supera.
+  const EXPL = explicarBasePorDefecto(p.mensualAlto ? 6_000_000 : 4_000_000)
   const [mes, setMes] = useState(p.mesDistinto ? 'MARZO' : MES_INFORME)
   const [confirmado, setConfirmado] = useState(false)
   const [base, setBase] = useState<number | null>(p.ibcPersonalizado ? 2_100_000 : null)
@@ -84,12 +87,12 @@ function Tarjeta(p: { rol: Rol; informe: EstadoInforme; planilla: EstadoPlanilla
             numero={{ ayuda: AYUDA_DOCUMENTO.numeroPlanilla, valor: hayPlanilla ? '6016087440' : null }}
             mes={{
               ayuda: 'El mes que cubre la planilla. El sistema sugiere el del informe; confírmalo o cámbialo si la planilla es de otro.',
-              valor: mes, confirmado, opciones: MESES, puedeCambiar: true, guardando: ocupado,
+              valor: mes, confirmado, opciones: MESES, mesDelInforme: MES_INFORME, anio: 2026, puedeCambiar: true, guardando: ocupado,
               onCambiar: (m) => simular(() => { setMes(m); setConfirmado(true) }),
             }}
             base={{
               ayuda: 'La base sobre la que se cotiza (IBC). La calcula el acta con el valor del contrato; si la planilla trae otra, se corrige aquí.',
-              valor: base ?? IBC_DEFECTO, porDefecto: IBC_DEFECTO, personalizada: base != null,
+              valor: base ?? EXPL.valor, porDefecto: EXPL.valor, explicacion: EXPL.texto, piso: DEFAULT_BASE_COTIZACION_SS, personalizada: base != null,
               puedeCambiar: puedeCambiarBase, motivoBloqueo: motivoBaseBloqueada(ctx), guardando: ocupado,
               onGuardar: (v) => simular(() => setBase(v)), onRestablecer: () => simular(() => setBase(null)),
             }}
@@ -114,6 +117,7 @@ export default function Prueba() {
   const [docs, setDocs] = useState<Docs>('todos')
   const [mesDistinto, setMesDistinto] = useState(true)
   const [ibc, setIbc] = useState(false)
+  const [mensualAlto, setMensualAlto] = useState(false)
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <h1 className="mb-1 text-lg font-semibold text-gray-900">Planilla de Seguridad Social — vista del revisor</h1>
@@ -127,16 +131,17 @@ export default function Prueba() {
         <div className="flex flex-col gap-1.5 text-xs font-medium text-gray-700">
           <label className="flex items-center gap-2"><input type="checkbox" checked={mesDistinto} onChange={(e) => setMesDistinto(e.target.checked)} /> El mes de la planilla ≠ mes del informe</label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={ibc} onChange={(e) => setIbc(e.target.checked)} /> Base ya personalizada</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={mensualAlto} onChange={(e) => setMensualAlto(e.target.checked)} /> Valor mensual alto (el 40 % supera el piso)</label>
         </div>
       </div>
       <div className="flex flex-wrap items-start gap-6">
         <div className="min-w-0 flex-1" style={{ minWidth: 340 }}>
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Escritorio</p>
-          <Tarjeta key={`d-${rol}-${informe}`} rol={rol} informe={informe} planilla={planilla} alerta={alerta} docs={docs} mesDistinto={mesDistinto} ibcPersonalizado={ibc} />
+          <Tarjeta key={`d-${rol}-${informe}`} rol={rol} informe={informe} planilla={planilla} alerta={alerta} docs={docs} mesDistinto={mesDistinto} ibcPersonalizado={ibc} mensualAlto={mensualAlto} />
         </div>
         <div style={{ width: 340 }}>
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Teléfono</p>
-          <Tarjeta key={`t-${rol}-${informe}`} rol={rol} informe={informe} planilla={planilla} alerta={alerta} docs={docs} mesDistinto={mesDistinto} ibcPersonalizado={ibc} />
+          <Tarjeta key={`t-${rol}-${informe}`} rol={rol} informe={informe} planilla={planilla} alerta={alerta} docs={docs} mesDistinto={mesDistinto} ibcPersonalizado={ibc} mensualAlto={mensualAlto} />
         </div>
       </div>
     </div>
