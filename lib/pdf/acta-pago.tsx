@@ -12,6 +12,7 @@ import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/render
 import type { PDFData, PDFPagoHistorial } from './types'
 import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
 import { formatCedula, numeroALetras } from '@/lib/format'
+import { conPesos } from '@/lib/numero-letras'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
 
@@ -34,26 +35,6 @@ function fechaTexto(iso: string): string {
 function mesAnio(iso: string): string {
   const [y, m] = iso.split('-')
   return `${MESES[parseInt(m) - 1].toLowerCase()} de ${y}`
-}
-
-// ── Número a letras (días, 0-999) ─────────────────────────────
-const _UNIT = [
-  '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
-  'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE',
-  'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE',
-  'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES', 'VEINTICUATRO',
-  'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE',
-]
-const _DEC  = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
-const _CENT = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
-
-function numerosALetras(n: number): string {
-  if (n === 0)   return 'CERO'
-  if (n < 30)    return _UNIT[n]
-  if (n < 100)   return n % 10 === 0 ? _DEC[Math.floor(n / 10)] : `${_DEC[Math.floor(n / 10)]} Y ${_UNIT[n % 10]}`
-  if (n === 100) return 'CIEN'
-  const c = Math.floor(n / 100); const r = n % 100
-  return r === 0 ? _CENT[c] : `${_CENT[c]} ${numerosALetras(r)}`
 }
 
 function calcDias(inicio: string, fin: string): number {
@@ -333,12 +314,12 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
 
   const ot = contrato.otrosi
   const fmtValorOt = (letras: string, monto: number) =>
-    `${sinSufijoMoneda(letras.toUpperCase())} DE PESOS M/L (${formatCOP(monto)})`
+    `${conPesos(sinSufijoMoneda(letras.toUpperCase()))} M/L (${formatCOP(monto)})`
   // Con otrosí, el "valor del contrato" es el total con adición.
   const valorContratoTexto = ot
     ? fmtValorOt(ot.valor_total_letras, ot.valor_total_con_adicion)
     : contrato.valor_letras_total
-      ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
+      ? `${conPesos(sinSufijoMoneda(contrato.valor_letras_total.toUpperCase()))} M/L (${formatCOP(contrato.valor_total)})`
       : formatCOP(contrato.valor_total)
 
   /**
@@ -366,12 +347,12 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
    * al crear el contrato ni que acordarse de actualizar tras un otrosí.
    */
   const valorMensualTexto =
-    `${numeroALetras(periodo.valor_cobro).toUpperCase()} DE PESOS M/L (${formatCOP(periodo.valor_cobro)})`
+    `${conPesos(numeroALetras(periodo.valor_cobro))} M/L (${formatCOP(periodo.valor_cobro)})`
 
   let plazoTexto = '—'
   if (contrato.fecha_inicio_contrato && contrato.fecha_fin_contrato) {
     const dias = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
-    plazoTexto = `${numerosALetras(dias)} DÍAS (${dias})`
+    plazoTexto = `${numeroALetras(dias)} DÍAS (${dias})`
   } else if (contrato.plazo_meses) {
     plazoTexto = `${contrato.duracion_letras || contrato.plazo_meses} MESES (${contrato.plazo_meses})`
   }

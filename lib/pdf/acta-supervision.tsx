@@ -13,6 +13,7 @@ import type { PDFData, PDFPagoHistorial } from './types'
 import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
 import { calcularBaseCotizacionSS } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
+import { corregirDePesos, numeroALetras, pesosEnLetras } from '@/lib/numero-letras'
 
 // Disable automatic hyphenation — prevents words being split mid-line
 Font.registerHyphenationCallback(word => [word])
@@ -61,48 +62,6 @@ function mesNombre(iso: string): string {
 /** 'ENERO' → 'Enero' */
 function capitalizeMes(mes: string): string {
   return mes.charAt(0).toUpperCase() + mes.slice(1).toLowerCase()
-}
-
-// ── Número a letras (días, 0-999) ──────────────────────────────
-const _UNIT = [
-  '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
-  'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE',
-  'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE',
-  'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES', 'VEINTICUATRO',
-  'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE',
-]
-const _DEC  = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
-const _CENT = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
-
-function numerosALetras(n: number): string {
-  if (n === 0)   return 'CERO'
-  if (n < 30)    return _UNIT[n]
-  if (n < 100)   return n % 10 === 0 ? _DEC[Math.floor(n / 10)] : `${_DEC[Math.floor(n / 10)]} Y ${_UNIT[n % 10]}`
-  if (n === 100) return 'CIEN'
-  const c = Math.floor(n / 100)
-  const r = n % 100
-  return r === 0 ? _CENT[c] : `${_CENT[c]} ${numerosALetras(r)}`
-}
-
-/**
- * Convierte un número entero (hasta 9.999.999) a texto en español en mayúsculas.
- * Usado para expresar la base de cotización a la seguridad social.
- * Ejemplos:
- *   1_800_000 → "UN MILLÓN OCHOCIENTOS MIL"
- *   1_750_905 → "UN MILLÓN SETECIENTOS CINCUENTA MIL NOVECIENTOS CINCO"
- */
-function numeroALetrasLargo(n: number): string {
-  if (n === 0) return 'CERO'
-  const millones = Math.floor(n / 1_000_000)
-  const resto    = n % 1_000_000
-  const miles    = Math.floor(resto / 1_000)
-  const centenas = resto % 1_000
-
-  const partes: string[] = []
-  if (millones > 0) partes.push(millones === 1 ? 'UN MILLÓN' : `${numerosALetras(millones)} MILLONES`)
-  if (miles    > 0) partes.push(miles    === 1 ? 'MIL'       : `${numerosALetras(miles)} MIL`)
-  if (centenas > 0) partes.push(numerosALetras(centenas))
-  return partes.join(' ')
 }
 
 function calcDias(inicio: string, fin: string): number {
@@ -479,7 +438,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
   let plazoTexto = '—'
   if (contrato.fecha_inicio_contrato && contrato.fecha_fin_contrato) {
     const dias = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
-    plazoTexto = `${numerosALetras(dias)} (${dias}) DIAS`
+    plazoTexto = `${numeroALetras(dias)} (${dias}) DÍAS`
   } else if (contrato.plazo_meses) {
     plazoTexto = `${contrato.duracion_letras || contrato.plazo_meses} (${contrato.plazo_meses}) MESES`
   }
@@ -490,7 +449,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
   const valorContratoTexto = ot
     ? fmtValorOt(ot.valor_total_letras, ot.valor_total_con_adicion)
     : contrato.valor_letras_total
-      ? `${contrato.valor_letras_total.toUpperCase()} (${formatCOP(contrato.valor_total)})`
+      ? `${corregirDePesos(contrato.valor_letras_total.toUpperCase())} (${formatCOP(contrato.valor_total)})`
       : formatCOP(contrato.valor_total)
 
   // Base de cotización (IBC) = 40% del valor mensual del periodo, con piso SMLMV.
@@ -501,7 +460,7 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
   //     que un mes proporcional baje el IBC por debajo del valor mensual real).
   const valorMensualEfectivo = Math.max(periodo.valor_cobro, contrato.valor_mensual)
   const baseValor = periodo.base_cotizacion_ss ?? calcularBaseCotizacionSS(valorMensualEfectivo)
-  const baseCotizacionTexto = `${numeroALetrasLargo(baseValor)} PESOS ($ ${baseValor.toLocaleString('es-CO')})`
+  const baseCotizacionTexto = `${pesosEnLetras(baseValor)} ($ ${baseValor.toLocaleString('es-CO')})`
 
   // Pagos anteriores al mes actual → filas de la tabla de pagos
   const pagosAnteriores = (pagosHistorial ?? []).filter(p => p.acta_numero < periodo.numero)

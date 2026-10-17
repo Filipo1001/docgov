@@ -34,6 +34,7 @@ import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/render
 import type { PDFVerificacion } from './types'
 import { FirmaSellada, CodigoPie } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
+import { corregirDePesos } from '@/lib/numero-letras'
 
 /** Membrete institucional del formato, igual que en las otras actas. */
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-terminacion.png')
@@ -265,7 +266,7 @@ export function ActaTerminacionPDF({ data }: { data: ActaTerminacionData }) {
   const objeto = sinPuntoFinal(contrato.objeto.toUpperCase())
   const numeroContrato = `${contrato.numero}-${contrato.anio}`
   const valorTexto = contrato.valor_letras_total
-    ? `${contrato.valor_letras_total.toUpperCase()} (${COP.format(contrato.valor_total)})`
+    ? `${corregirDePesos(contrato.valor_letras_total.toUpperCase())} (${COP.format(contrato.valor_total)})`
     : COP.format(contrato.valor_total)
   const nit = municipio.nit ? ` NIT ${municipio.nit}` : ''
   const depto = municipio.departamento ? ` - ${municipio.departamento}` : ''

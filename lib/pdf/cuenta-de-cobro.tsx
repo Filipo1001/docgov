@@ -17,6 +17,7 @@ import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/render
 import type { PDFData } from './types'
 import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
+import { conPesos } from '@/lib/numero-letras'
 
 // Mismas reglas que el Informe de Actividades
 const ESTADOS_FIRMA_CONTRATISTA = new Set(['enviado', 'revision', 'aprobado', 'radicado'])
@@ -302,10 +303,10 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
   const mostrarFirmaSupervisor =
     ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
-  // Period value — "TRES MILLONES DE PESOS M/L ($ 3.000.000)"
+  // Valor del periodo — "TRES MILLONES DE PESOS M/L ($ 3.000.000)", "TRES MILLONES QUINIENTOS MIL PESOS M/L (…)"
   const valorLetras = periodo.valor_letras ?? contrato.valor_letras_mensual
   const valorPeriodo = valorLetras
-    ? `${sinSufijoMoneda(valorLetras.toUpperCase())} DE PESOS M/L (${formatCOP(periodo.valor_cobro)})`
+    ? `${conPesos(sinSufijoMoneda(valorLetras.toUpperCase()))} M/L (${formatCOP(periodo.valor_cobro)})`
     : formatCOP(periodo.valor_cobro)
 
   // Total contract value — same standard.
@@ -313,11 +314,11 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
   // de "Valor inicial" y "Valor de la adición". Sin otrosí: comportamiento actual.
   const ot = contrato.otrosi
   const fmtValor = (letras: string, monto: number) =>
-    `${sinSufijoMoneda(letras.toUpperCase())} DE PESOS M/L (${formatCOP(monto)})`
+    `${conPesos(sinSufijoMoneda(letras.toUpperCase()))} M/L (${formatCOP(monto)})`
   const valorTotal = ot
     ? fmtValor(ot.valor_total_letras, ot.valor_total_con_adicion)
     : contrato.valor_letras_total
-      ? `${sinSufijoMoneda(contrato.valor_letras_total.toUpperCase())} DE PESOS M/L (${formatCOP(contrato.valor_total)})`
+      ? `${conPesos(sinSufijoMoneda(contrato.valor_letras_total.toUpperCase()))} M/L (${formatCOP(contrato.valor_total)})`
       : formatCOP(contrato.valor_total)
 
   // Plazo — calendar days between contract start and end
