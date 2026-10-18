@@ -63,7 +63,7 @@ correr() {   # nombre, VERCEL_ENV, PDM_PRODUCCION, esperado: cerrado|abierto
     if curl -s --max-time 30 "$B/verificar/$CODIGO_VERIFICACION" | grep -q "Documento aut"; then ok "la verificación dice «Documento auténtico»"; else falla "la verificación no dice «Documento auténtico»"; fi
   fi
 
-  local rutas="/dashboard/plan-desarrollo /dashboard/plan-desarrollo/indicadores /dashboard/plan-desarrollo/reportes /dashboard/plan-desarrollo/evidencias /dashboard/plan-desarrollo/responsables"
+  local rutas="/dashboard/plan-desarrollo /dashboard/plan-desarrollo/indicadores /dashboard/plan-desarrollo/reportes /dashboard/plan-desarrollo/evidencias /dashboard/plan-desarrollo/responsables /dashboard/plan-desarrollo/historial"
   for ruta in $rutas; do
     if [ "$esperado" = "cerrado" ]; then esperar_estado "GET $ruta" "404" "$(codigo "$B$ruta")"
     else esperar_no_404 "GET $ruta" "$(codigo "$B$ruta")"; fi

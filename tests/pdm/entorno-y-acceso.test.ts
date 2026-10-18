@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { entornoPermiteModulo, PDM_ENCENDIDO, produccionAbierta } from '@/lib/pdm/entorno'
 import {
   esRutaPdm, insertarDebajoDeInicio, ITEM_PLAN_DESARROLLO, seccionActiva, seccionesPara,
-  HREF_EVIDENCIAS, HREF_INDICADORES, HREF_REPORTES, HREF_RESPONSABLES,
+  HREF_EVIDENCIAS, HREF_HISTORIAL, HREF_INDICADORES, HREF_REPORTES, HREF_RESPONSABLES,
 } from '@/lib/pdm/menu'
 import { esNivelHabilitable, gestiona, veDirectorio } from '@/lib/pdm/niveles'
 import type { ItemMenu } from '@/lib/constants'
@@ -71,7 +71,8 @@ test('el botón va justo debajo de «Inicio», una sola vez, sin tocar la lista 
 
 test('las pestañas de cada nivel', () => {
   const de = (n: Parameters<typeof seccionesPara>[0]) => seccionesPara(n).map(s => s.rotulo)
-  assert.deepEqual(de('admin'), ['Resumen', 'Indicadores', 'Reportes', 'Evidencias', 'Responsables'])
+  // «Historial» (deshacer operaciones) es solo del administrador: ni la secretaría ni Control Interno lo ven.
+  assert.deepEqual(de('admin'), ['Resumen', 'Indicadores', 'Reportes', 'Evidencias', 'Responsables', 'Historial'])
   assert.deepEqual(de('coordinador'), ['Resumen', 'Indicadores', 'Reportes', 'Evidencias', 'Responsables'])
   assert.deepEqual(de('consulta'), ['Resumen', 'Indicadores', 'Reportes', 'Evidencias', 'Responsables'])
   assert.deepEqual(de('responsable'), ['Mi trabajo', 'Indicadores', 'Evidencias'])
@@ -86,6 +87,7 @@ test('la pestaña activa', () => {
   assert.equal(seccionActiva(`${HREF_REPORTES}/algo`), HREF_REPORTES)
   assert.equal(seccionActiva(HREF_EVIDENCIAS), HREF_EVIDENCIAS)
   assert.equal(seccionActiva(HREF_RESPONSABLES), HREF_RESPONSABLES)
+  assert.equal(seccionActiva(HREF_HISTORIAL), HREF_HISTORIAL)
   assert.equal(seccionActiva('/dashboard/contratos'), null)
   assert.equal(seccionActiva(null), null)
 })

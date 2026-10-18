@@ -31,6 +31,7 @@ import {
   type Resultado, type ResumenCambio,
 } from '@/lib/pdm/acciones'
 import { esNivelHabilitable } from '@/lib/pdm/niveles'
+import { errorEnMotivoDeshacer } from '@/lib/pdm/operaciones'
 
 export async function nivelPdm(): Promise<NivelPdm | null> {
   try {
@@ -294,6 +295,38 @@ export async function historialIndicador(indicador: string): Promise<Resultado<E
     return { ok: true, datos: entradas }
   } catch (err) {
     console.error('[pdm/acciones] historialIndicador:', err)
+    return { ok: false, error: traducirErrorPdm() }
+  }
+}
+
+// ─── Deshacer una operación ───────────────────────────────────────────────────
+
+/**
+ * Deshace una operación del administrador sobre repartos, grupos o accesos (migración 067).
+ *
+ * Solo el administrador, y el motivo es obligatorio (al menos 10 caracteres): se valida aquí antes de preguntarle nada a la
+ * base, que lo vuelve a exigir. NO borra el pasado: la función `pdm_deshacer` abre una operación NUEVA que compensa la
+ * original, con el motivo, y las dos quedan en la bitácora. Si lo que la operación tocó volvió a cambiar después, la base
+ * se niega y dice por qué (el mensaje llega tal cual a la pantalla). O se deshace entera o no se toca nada.
+ *
+ * No manda correos: deshacer es una corrección interna del administrador, y queda visible en el historial.
+ */
+export async function deshacerOperacion(lote: string, motivo: string): Promise<Resultado<{ filas: number }>> {
+  try {
+    const acceso = await accesoPdm()
+    if (!acceso || acceso.nivel !== 'admin') return { ok: false, error: 'Solo el administrador puede deshacer una operación.' }
+    if (!esUuid(lote)) return { ok: false, error: 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.' }
+    const mal = errorEnMotivoDeshacer(motivo)
+    if (mal) return { ok: false, error: mal }
+
+    const supabase = await createServerSupabaseClient()
+    const { data, error } = await supabase.rpc('pdm_deshacer', { p_lote: lote, p_motivo: motivo.trim() })
+    if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
+    refrescar()
+    const filas = (data as { filas?: unknown } | null)?.filas
+    return { ok: true, datos: { filas: typeof filas === 'number' ? filas : 0 } }
+  } catch (err) {
+    console.error('[pdm/acciones] deshacerOperacion:', err)
     return { ok: false, error: traducirErrorPdm() }
   }
 }

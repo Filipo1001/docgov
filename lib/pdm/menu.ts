@@ -90,12 +90,14 @@ export const HREF_INDICADORES = `${BASE}/indicadores`
 export const HREF_REPORTES = `${BASE}/reportes`
 export const HREF_EVIDENCIAS = `${BASE}/evidencias`
 export const HREF_RESPONSABLES = `${BASE}/responsables`
+export const HREF_HISTORIAL = `${BASE}/historial`
 export const SECCIONES_PDM: SeccionPdm[] = [
   { href: BASE, rotulo: 'Resumen', exacta: true },
   { href: HREF_INDICADORES, rotulo: 'Indicadores' },
   { href: HREF_REPORTES, rotulo: 'Reportes' },
   { href: HREF_EVIDENCIAS, rotulo: 'Evidencias' },
   { href: HREF_RESPONSABLES, rotulo: 'Responsables' },
+  { href: HREF_HISTORIAL, rotulo: 'Historial' },
 ]
 
 /**
@@ -104,6 +106,7 @@ export const SECCIONES_PDM: SeccionPdm[] = [
  *   · «Responsables» (el directorio de personas) y «Reportes» (cómo va cada secretaría en el año):
  *     quienes gestionan y Control Interno. Quien solo responde por indicadores ve el estado de los
  *     suyos en «Indicadores».
+ *   · «Historial» (las operaciones de reparto, grupos y accesos, y deshacerlas): solo el administrador.
  *   · «Evidencias» es para todos: cada quien recorre los archivos que la base le deja ver (un responsable
  *     los suyos, una secretaría los de su dependencia, Control Interno y el administrador todos).
  *   · La primera pestaña es «Resumen» (el tablero del plan) salvo para quien solo responde por indicadores:
@@ -113,6 +116,7 @@ export function seccionesPara(nivel: NivelPdm | null | undefined): SeccionPdm[] 
   return SECCIONES_PDM
     .filter(s => {
       if (s.href === HREF_RESPONSABLES || s.href === HREF_REPORTES) return veDirectorio(nivel)
+      if (s.href === HREF_HISTORIAL) return nivel === 'admin'
       return true
     })
     // Para quien solo responde por indicadores, la primera pestaña no es el tablero del plan sino «Mi trabajo».
