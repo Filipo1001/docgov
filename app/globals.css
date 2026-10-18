@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/*
+ * Un teléfono girado: ancho de sobra pero poca altura (812 × 375). Ahí las cosas que en vertical van una sobre otra
+ * —el documento y su cotejo en la revisión de la planilla— van lado a lado: apiladas, el documento se quedaba en
+ * 97 píxeles de alto. Una tableta (≥ 521 de alto) no entra aquí: usa el diseño de escritorio desde `md`.
+ */
+@custom-variant apaisado (@media (orientation: landscape) and (max-height: 520px));
+
 :root {
   color-scheme: light;          /* Force light mode — app has no dark theme */
   --background: #ffffff;

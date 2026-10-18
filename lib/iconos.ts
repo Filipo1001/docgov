@@ -45,7 +45,7 @@ import {
   Lock, Unlock, ShieldCheck, Ban,
   // Acciones
   Plus, Minus, Pencil, Trash2, Search, X, ChevronRight, ChevronDown, RefreshCw,
-  Eye, Send, MoreHorizontal, ExternalLink, Copy, Filter, Undo2, ChevronLeft,
+  Eye, Send, MoreHorizontal, ExternalLink, Copy, Filter, Undo2, ChevronLeft, ChevronUp, ZoomIn, ZoomOut,
   // Personas y avisos
   Bell, Mail, MessageSquare, UserPlus, Building,
   // Dominio
@@ -139,6 +139,11 @@ export const Iconos = {
     enviar: Send,
     mas: MoreHorizontal,
     abrirFuera: ExternalLink,
+    /** Acercar y alejar un documento (la revisión de la planilla, donde las cifras son pequeñas). */
+    acercar: ZoomIn,
+    alejar: ZoomOut,
+    /** Pareja de `desplegar`: plegar lo que estaba abierto. */
+    plegar: ChevronUp,
     copiar: Copy,
     filtrar: Filter,
     /**

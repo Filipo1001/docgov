@@ -19,6 +19,10 @@
  *   · La dirección firmada cambia de firma al recargar la página aunque el archivo sea el mismo: se reabre solo si
  *     cambia el ARCHIVO, no la firma (si no, el documento parpadearía a media revisión).
  *
+ * ZOOM: con `zoom` > 1 las páginas se ensanchan (y quien las contiene desplaza en horizontal) y el mapa de bits se vuelve
+ * a dibujar con más resolución —hasta un tope—, así que las cifras pequeñas de una planilla se leen nítidas, no
+ * pixeladas. Es lo que hace falta en un teléfono, donde una página apaisada cabe en 375 píxeles de ancho.
+ *
  * Las posiciones de los resaltes son fracción de la página (`lib/pdf-texto.ts`): valen a cualquier tamaño y con páginas
  * giradas.
  */
@@ -33,6 +37,8 @@ export type EstadoPdf = 'cargando' | 'listo' | 'error' | 'protegido'
 
 const ANCHO_MIN = 900
 const ANCHO_MAX = 1600
+/** Con zoom el mapa de bits puede crecer más, hasta aquí (un lienzo de 2600 de ancho ya pesa ~14 MB por página). */
+const ANCHO_MAX_CON_ZOOM = 2600
 /** El lienzo no pasa de este alto: los navegadores fallan con lienzos enormes. */
 const ALTO_MAX_LIENZO = 12_000
 /** Hasta esta página se lee el texto; una planilla tiene una o dos. */
@@ -99,6 +105,8 @@ const TONO: Record<Marca['tono'], string> = {
 
 function PaginaPdf({ page, ancho, cajas, activa }: { page: PDFPageProxy; ancho: number; cajas: Caja[]; activa: string | null }) {
   const lienzo = useRef<HTMLCanvasElement>(null)
+  // Si el navegador no logra dibujarla (poca memoria, lienzo demasiado grande), se dice: una hoja en blanco no explica nada.
+  const [fallo, setFallo] = useState(false)
   const envoltura = useRef<HTMLDivElement>(null)
   // Se dibuja cuando se acerca a la pantalla (con margen), y ya no se borra: un PDF largo no agota la memoria del teléfono
   // salvo que se recorra entero.
@@ -126,8 +134,12 @@ function PaginaPdf({ page, ancho, cajas, activa }: { page: PDFPageProxy; ancho: 
     if (!canvas || !ctx) return
     canvas.width = vista.width
     canvas.height = vista.height
+    setFallo(false)
     const tarea = page.render({ canvasContext: ctx, viewport: vista })
-    tarea.promise.catch(() => { /* cancelada al desmontar */ })
+    tarea.promise.catch((e: { name?: string }) => {
+      // Cancelar al desmontar o al cambiar el zoom no es un fallo.
+      if (e?.name !== 'RenderingCancelledException') setFallo(true)
+    })
     return () => tarea.cancel()
   }, [page, vista, cerca])
 
@@ -135,6 +147,11 @@ function PaginaPdf({ page, ancho, cajas, activa }: { page: PDFPageProxy; ancho: 
     // La proporción se reserva desde el principio: así las marcas y el desplazamiento valen aunque el lienzo aún no esté pintado.
     <div ref={envoltura} className="relative mx-auto mb-3 overflow-hidden rounded-lg bg-white shadow-sm" style={{ aspectRatio: `${base.width} / ${base.height}` }}>
       <canvas ref={lienzo} aria-label={`Página ${page.pageNumber}`} className="block h-full w-full" />
+      {fallo && (
+        <p role="alert" className="absolute inset-0 grid place-items-center px-4 text-center text-xs text-gray-500">
+          No se pudo dibujar esta página. Prueba con menos zoom o ábrela en una pestaña nueva.
+        </p>
+      )}
       {cajas.map((c, i) => (
         <span
           key={i}
@@ -149,11 +166,15 @@ function PaginaPdf({ page, ancho, cajas, activa }: { page: PDFPageProxy; ancho: 
 }
 
 export default function PaginasPdf({
-  url, claves = [], marcas = [], activa = null, onTexto, onEstado, onMarcas,
+  url, claves = [], marcas = [], activa = null, zoom = 1, onTexto, onEstado, onMarcas, onAspecto,
 }: {
   url: string
   claves?: string[]
   marcas?: Marca[]
+  /** 1 = ajustado al ancho; más = acercado (las páginas se ensanchan y se desplazan). */
+  zoom?: number
+  /** Ancho ÷ alto de la primera página, cuando se conoce: una página apaisada pide más zoom en un teléfono. */
+  onAspecto?: (aspecto: number) => void
   /** Qué marca llevar a la vista (su id). */
   activa?: string | null
   /** El texto de cada página, cuando ya se leyó. */
@@ -173,8 +194,8 @@ export default function PaginasPdf({
   const [borrador, setBorrador] = useState('')
 
   // Los avisos y la dirección vigente van por referencia: no deben reabrir el documento al cambiar la función ni la firma.
-  const avisos = useRef({ onTexto, onEstado, onMarcas })
-  avisos.current = { onTexto, onEstado, onMarcas }
+  const avisos = useRef({ onTexto, onEstado, onMarcas, onAspecto })
+  avisos.current = { onTexto, onEstado, onMarcas, onAspecto }
   const urlVigente = useRef(url)
   urlVigente.current = url
   const clavesVigentes = useRef<string[]>([])
@@ -193,8 +214,9 @@ export default function PaginasPdf({
         const { doc, pdfjs } = await abrirDocumento(urlVigente.current, clavesVigentes.current)
         if (cancelado) { doc.destroy(); return }
         abierto = doc
-        const px = (area.current?.clientWidth ?? 0) * (window.devicePixelRatio || 1)
-        setAncho(Math.round(Math.min(ANCHO_MAX, Math.max(ANCHO_MIN, px))))
+        const primera = await doc.getPage(1)
+        const base = primera.getViewport({ scale: 1 })
+        avisos.current.onAspecto?.(base.width / base.height)
 
         const leidas: { page: PDFPageProxy; items: ItemTexto[] }[] = []
         for (let n = 1; n <= doc.numPages; n++) {
@@ -220,6 +242,17 @@ export default function PaginasPdf({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archivo, claves.join('|'), clavePuesta, intento])
 
+  // La resolución del mapa de bits sigue al zoom (con un pequeño retardo: no se redibuja a cada toque del botón).
+  useEffect(() => {
+    const calcular = () => {
+      const px = (area.current?.clientWidth ?? 0) * zoom * (window.devicePixelRatio || 1)
+      setAncho(Math.round(Math.min(zoom > 1 ? ANCHO_MAX_CON_ZOOM : ANCHO_MAX, Math.max(ANCHO_MIN, px))))
+    }
+    if (zoom === 1) { calcular(); return }
+    const id = setTimeout(calcular, 250)
+    return () => clearTimeout(id)
+  }, [zoom, estado])
+
   const cajasPorPagina = useMemo(() => paginas.map(p => cajasDe(p.items, marcas)), [paginas, marcas])
 
   // Avisar de cuáles marcas tienen dónde señalarse.
@@ -230,12 +263,12 @@ export default function PaginasPdf({
   // Llevar a la vista la marca activa.
   useEffect(() => {
     if (!activa) return
-    area.current?.querySelector<HTMLElement>(`[data-marca="${activa}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    area.current?.querySelector<HTMLElement>(`[data-marca="${activa}"]`)?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
   }, [activa, paginas])
 
   return (
     <div ref={area} className="relative min-h-[240px]">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto" style={zoom > 1 ? { width: `${zoom * 100}%` } : { maxWidth: '64rem' }}>
         {paginas.map((p, i) => (
           <PaginaPdf key={p.page.pageNumber} page={p.page} ancho={ancho} cajas={cajasPorPagina[i] ?? []} activa={activa} />
         ))}
