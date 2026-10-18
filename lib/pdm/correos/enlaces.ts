@@ -48,3 +48,6 @@ export function enlaceDeIndicador(origen: string, fila: number, anio?: number): 
 
 /** «Mi trabajo»: el inicio de quien responde por indicadores. */
 export const enlaceDeMiTrabajo = (origen: string): string => `${origen}${RAIZ}`
+
+/** La lista de indicadores con lo reportado que espera validación, en un año (la secretaría ya ve solo los suyos). */
+export const enlaceDePorValidar = (origen: string, anio: number): string => `${origen}${RAIZ}/indicadores?filtro=por_validar&anio=${anio}`

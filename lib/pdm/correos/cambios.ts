@@ -27,6 +27,11 @@ export interface FilaDeAsignacion {
     principal_antes?: boolean | null
     principal_despues?: boolean | null
     motivo?: string
+    /** La operación que lo causó: `asignar_grupo` cuando un grupo recibe indicadores. */
+    operacion?: string
+    /** El grupo por el que la persona tiene el indicador, si lo tiene por un grupo (y no a título propio). */
+    grupo_despues?: string | null
+    grupo_nombre?: string | null
   } | null
 }
 
@@ -52,6 +57,8 @@ export interface CambioDeUsuario {
   usuarioId: string
   indicadorId: string
   tipo: TipoCambio
+  /** El nombre del grupo por el que le llegó, si le llegó por un grupo. */
+  grupo: string | null
 }
 
 /**
@@ -62,18 +69,20 @@ export interface CambioDeUsuario {
  */
 export function cambiosDeLote(filas: readonly FilaDeAsignacion[]): CambioDeUsuario[] {
   const ordenadas = [...filas].sort((a, b) => a.id - b.id)
-  const porClave = new Map<string, { usuarioId: string; indicadorId: string; antes: Papel; despues: Papel }>()
+  const porClave = new Map<string, { usuarioId: string; indicadorId: string; antes: Papel; despues: Papel; grupo: string | null }>()
   for (const f of ordenadas) {
     const usuarioId = f.detalle?.usuario_id
     if (!usuarioId || !f.entidad_id) continue
     const clave = `${usuarioId}|${f.entidad_id}`
     const previo = porClave.get(clave)
-    porClave.set(clave, { usuarioId, indicadorId: f.entidad_id, antes: previo?.antes ?? papelAntes(f), despues: papelDespues(f) })
+    // Por un grupo solo si la fila lo dice (una asignación quitada ya no tiene grupo).
+    const grupo = f.accion !== 'asignacion_quitada' && f.detalle?.grupo_despues ? (f.detalle.grupo_nombre?.trim() || null) : null
+    porClave.set(clave, { usuarioId, indicadorId: f.entidad_id, antes: previo?.antes ?? papelAntes(f), despues: papelDespues(f), grupo })
   }
   const cambios: CambioDeUsuario[] = []
   for (const c of porClave.values()) {
     const tipo = clasificar(c.antes, c.despues)
-    if (tipo) cambios.push({ usuarioId: c.usuarioId, indicadorId: c.indicadorId, tipo })
+    if (tipo) cambios.push({ usuarioId: c.usuarioId, indicadorId: c.indicadorId, tipo, grupo: c.grupo })
   }
   return cambios
 }

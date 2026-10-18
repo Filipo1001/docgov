@@ -42,7 +42,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { accesoPdm, type AccesoPdm } from '@/lib/pdm/acceso'
 import { avisarDespues } from '@/lib/pdm/correos/despues'
-import { avisarReporteEnviado, avisarValidacion } from '@/lib/pdm/correos/enviar'
+import { avisarAnulacion, avisarComentario, avisarReporteDeApoyo, avisarReporteEnviado, avisarValidacion } from '@/lib/pdm/correos/enviar'
 import { gestiona } from '@/lib/pdm/niveles'
 import { esUuid, traducirErrorPdm, type Resultado } from '@/lib/pdm/acciones'
 import { hoyBogota } from '@/lib/pdm/contrato'
@@ -255,6 +255,8 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     refrescar()
     // El aviso («Recibimos tu reporte») sale después de responder y no puede estorbar: ver `lib/pdm/correos`.
     await avisarDespues(origen => avisarReporteEnviado({ reporteId, origen }))
+    // Si quien reportó es de APOYO en este indicador, la persona responsable recibe una copia informativa.
+    await avisarDespues(origen => avisarReporteDeApoyo({ reporteId, origen }))
     return { ok: true, datos: { reporte: reporteId, correccion: d.correccion === true } }
   } catch (err) {
     console.error('[pdm/seguimiento] reportar:', err)
@@ -295,8 +297,8 @@ export async function validarReporte(e: EntradaValidar): Promise<Resultado<{ cam
 // ─── Anular y restaurar (migración 068) ───────────────────────────────────────
 
 /**
- * Anular un reporte equivocado o restaurarlo: SOLO el administrador. No avisa a nadie por correo (los avisos del módulo
- * son otra cosa) y no borra nada: la base agrega una fila a `pdm_anulaciones` por cada versión del reporte, con el motivo.
+ * Anular un reporte equivocado o restaurarlo: SOLO el administrador. Avisa por correo a quien lo reportó (con el motivo)
+ * y no borra nada: la base agrega una fila a `pdm_anulaciones` por cada versión del reporte, con el motivo.
  * La base decide todo lo demás —que sea lo más reciente del año, que la cadena de versiones no quede a medias, que el
  * reporte anterior siga aprobado al restaurar— y aquí solo se traduce lo que diga.
  */
@@ -318,6 +320,9 @@ async function anulacion(accion: AccionAnulacion, e: EntradaAnulacion): Promise<
     }
     const versiones = Number((data as { versiones?: unknown } | null)?.versiones)
     refrescar()
+    // A quien reportó se le dice que el administrador anuló su reporte (o lo restauró), con el motivo.
+    const lote = (data as { lote?: unknown } | null)?.lote
+    if (esUuid(lote)) await avisarDespues(origen => avisarAnulacion({ lote, origen }))
     return { ok: true, datos: { versiones: Number.isFinite(versiones) && versiones > 0 ? versiones : 1 } }
   } catch (err) {
     console.error(`[pdm/seguimiento] ${donde}:`, err)
@@ -341,10 +346,15 @@ export async function comentar(e: EntradaComentar): Promise<Resultado> {
     const mal = errorEnComentario(e.texto)
     if (mal) return falla(mal)
 
-    const { error } = await s.supabase.rpc('pdm_comentar', {
+    const { data, error } = await s.supabase.rpc('pdm_comentar', {
       p_indicador: e.indicador, p_texto: e.texto.trim(), p_reporte: e.reporte ?? null,
     })
     if (error) return falla(traducirErrorPdm(error.code, error.message))
+    // Solo el comentario de Control Interno genera aviso; para cualquier otro nivel la función no envía nada.
+    if (esUuid(data)) {
+      const comentarioId = data
+      await avisarDespues(origen => avisarComentario({ comentarioId, origen }))
+    }
     return { ok: true, datos: undefined }
   } catch (err) {
     console.error('[pdm/seguimiento] comentar:', err)

@@ -1,6 +1,7 @@
 import 'server-only'
 import { cache } from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { hoyBogota } from './contrato'
 import {
   armarIndicadores,
@@ -55,9 +56,13 @@ const FALLO: PlanPdm = { ok: false, indicadores: [], seguimiento: { anioActual: 
 const COLUMNAS_VIGENTE =
   'reporte_id, indicador_id, anio, valor, estado, autor_id, autor_nombre, created_at, corrige_a, n_evidencias, validacion_comentario, validador_nombre'
 
-export const cargarPlanPdm = cache(async (): Promise<PlanPdm> => {
+/**
+ * La lectura del plan con el cliente que se le dé. Con la SESIÓN de quien mira (`cargarPlanPdm`) cada quien recibe solo lo
+ * suyo; con el cliente de SERVICIO (los resúmenes por correo, que corren sin sesión) llega todo el plan. Es la MISMA
+ * lectura y la misma armada: lo que cuenta un correo es lo que cuenta el tablero.
+ */
+export async function leerPlanPdm(supabase: SupabaseClient): Promise<PlanPdm> {
   try {
-    const supabase = await createServerSupabaseClient()
     const [ind, asi, pla, metas, avances, vigentes] = await Promise.all([
       supabase
         .from('pdm_indicadores')
@@ -106,6 +111,16 @@ export const cargarPlanPdm = cache(async (): Promise<PlanPdm> => {
       ),
     }
   } catch (e) {
+    console.error('[pdm/datos] excepción:', e)
+    return FALLO
+  }
+}
+
+export const cargarPlanPdm = cache(async (): Promise<PlanPdm> => {
+  try {
+    return await leerPlanPdm(await createServerSupabaseClient())
+  } catch (e) {
+    // Si ni siquiera se pudo crear el cliente (sin sesión legible), se dice igual que cualquier otra falla de lectura.
     console.error('[pdm/datos] excepción:', e)
     return FALLO
   }

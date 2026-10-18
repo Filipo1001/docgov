@@ -2,9 +2,9 @@ import 'server-only'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { idsAnulados, type FilaAnulacion } from '../anulaciones'
 import { puedeRecibirCorreoPdm } from './politica'
-import { ACCIONES_DE_ASIGNACION, agruparPorUsuario, cambiosDeLote, type FilaDeAsignacion } from './cambios'
+import { ACCIONES_DE_ASIGNACION, agruparPorUsuario, cambiosDeLote, type CambioDeUsuario, type FilaDeAsignacion } from './cambios'
 import { INSIGNIA_BASE, elegirInsignia, type Insignia } from './insignias'
-import type { ArchivoDeCorreo, CambioEnIndicador, IndicadorDeCorreo } from './plantillas'
+import type { ArchivoDeCorreo, CambioEnIndicador, GrupoDeAviso, IndicadorDeCorreo } from './plantillas'
 
 /**
  * Lo que los correos necesitan saber, leído de la base.
@@ -26,7 +26,7 @@ import type { ArchivoDeCorreo, CambioEnIndicador, IndicadorDeCorreo } from './pl
  * armar —sin el indicador, sin la meta— es peor que ninguno.
  */
 
-type Admin = ReturnType<typeof createAdminSupabaseClient>
+export type Admin = ReturnType<typeof createAdminSupabaseClient>
 
 export interface Persona {
   id: string
@@ -34,11 +34,11 @@ export interface Persona {
   correo: string | null
 }
 
-const falla = (donde: string, e: { message: string }): never => {
+export const falla = (donde: string, e: { message: string }): never => {
   throw new Error(`${donde}: ${e.message}`)
 }
 
-async function leerPersonas(admin: Admin, ids: string[]): Promise<Map<string, Persona>> {
+export async function leerPersonas(admin: Admin, ids: string[]): Promise<Map<string, Persona>> {
   const unicos = [...new Set(ids)]
   const mapa = new Map<string, Persona>()
   if (unicos.length === 0) return mapa
@@ -55,7 +55,7 @@ type FilaIndicador = {
   dependencia: { nombre: string | null } | { nombre: string | null }[] | null
 }
 
-async function leerIndicadores(admin: Admin, ids: string[]): Promise<Map<string, IndicadorDeCorreo>> {
+export async function leerIndicadores(admin: Admin, ids: string[]): Promise<Map<string, IndicadorDeCorreo>> {
   const unicos = [...new Set(ids)]
   const mapa = new Map<string, IndicadorDeCorreo>()
   if (unicos.length === 0) return mapa
@@ -208,7 +208,19 @@ export async function insigniaDeAprobacion(ctx: ContextoDeReporte): Promise<Insi
 
 export interface AvisoDeAsignacion {
   persona: Persona
+  /** Vacío SOLO si entró a un grupo que todavía no tiene indicadores. */
   cambios: CambioEnIndicador[]
+  /** Si el cambio le llega por un grupo: entró a él, o el grupo recibió indicadores. */
+  grupo?: GrupoDeAviso | null
+}
+
+/** Lo que se sabe de un grupo cuando la operación fue entrar a él (ver `datos-avisos.ts`). */
+export interface EntradaAGrupo {
+  grupo: { id: string; nombre: string; descripcion: string | null; dependencia: string | null }
+  agregados: ReadonlyMap<string, { lider: boolean }>
+  actor: string
+  ocurridoEn: string
+  motivo: string | null
 }
 
 export interface ContextoDeLote {
@@ -226,7 +238,7 @@ export interface ContextoDeLote {
  * La política se aplica ANTES de leer nada más: mientras el módulo esté en pruebas, casi todo reparto afecta a gente
  * a la que no se le escribe, y no tiene sentido leer sus datos para después descartarlos.
  */
-export async function leerContextoDeLote(lote: string, abierto: boolean): Promise<ContextoDeLote | null> {
+export async function leerContextoDeLote(lote: string, abierto: boolean, entrada: EntradaAGrupo | null = null): Promise<ContextoDeLote | null> {
   const admin = createAdminSupabaseClient()
   const { data, error } = await admin
     .from('pdm_historial')
@@ -238,9 +250,12 @@ export async function leerContextoDeLote(lote: string, abierto: boolean): Promis
     .limit(2000)
   if (error) falla('pdm_historial', error)
   const filas = (data ?? []) as unknown as (FilaDeAsignacion & { actor_nombre: string | null; created_at: string })[]
-  if (filas.length === 0) return null
+  // Sin asignaciones y sin nadie que haya entrado a un grupo, no hay a quién avisar.
+  if (filas.length === 0 && (!entrada || entrada.agregados.size === 0)) return null
 
-  const porPersona = agruparPorUsuario(cambiosDeLote(filas))
+  const porPersona = new Map<string, CambioDeUsuario[]>(agruparPorUsuario(cambiosDeLote(filas)))
+  // Quien entró a un grupo recibe aviso aunque el grupo todavía no tenga indicadores (sin cambios que contar).
+  if (entrada) for (const id of entrada.agregados.keys()) if (!porPersona.has(id)) porPersona.set(id, [])
   const afectadas = [...porPersona.keys()]
   // Con flecha y no pasando la función suelta: `filter` le daría la POSICIÓN como segundo argumento («abierto»).
   const permitidas = afectadas.filter(id => puedeRecibirCorreoPdm(id, abierto))
@@ -248,9 +263,9 @@ export async function leerContextoDeLote(lote: string, abierto: boolean): Promis
 
   const primera = filas[0]
   const base: ContextoDeLote = {
-    actor: primera.actor_nombre ?? 'Alguien de la secretaría',
-    motivo: typeof primera.detalle?.motivo === 'string' && primera.detalle.motivo.trim() !== '' ? primera.detalle.motivo.trim() : null,
-    ocurridoEn: primera.created_at,
+    actor: primera?.actor_nombre ?? entrada?.actor ?? 'Alguien de la secretaría',
+    motivo: typeof primera?.detalle?.motivo === 'string' && primera.detalle.motivo.trim() !== '' ? primera.detalle.motivo.trim() : (entrada?.motivo ?? null),
+    ocurridoEn: primera?.created_at ?? entrada?.ocurridoEn ?? new Date().toISOString(),
     avisos: [],
     omitidas,
   }
@@ -275,12 +290,21 @@ export async function leerContextoDeLote(lote: string, abierto: boolean): Promis
     const persona = personas.get(usuarioId)
     if (!persona) continue
     const cambios: CambioEnIndicador[] = []
-    for (const c of porPersona.get(usuarioId)!) {
+    const delUsuario = porPersona.get(usuarioId)!
+    for (const c of delUsuario) {
       const ind = indicadores.get(c.indicadorId)
       if (!ind) continue
       cambios.push({ tipo: c.tipo, indicador: { fila: ind.fila, codigo: ind.codigo, nombre: ind.nombre, dependencia: ind.dependencia }, responsableActual: responsableDe.get(c.indicadorId) ?? null })
     }
-    if (cambios.length > 0) base.avisos.push({ persona, cambios })
+    // ¿Le llega por un grupo? Si entró a uno en esta operación; o si TODO lo que cambió le llegó por el mismo grupo.
+    const entro = entrada?.agregados.get(usuarioId)
+    const nombresDeGrupo = new Set(delUsuario.map(c => c.grupo))
+    const grupo: GrupoDeAviso | null = entro && entrada
+      ? { motivo: 'agregado', nombre: entrada.grupo.nombre, lider: entro.lider, descripcion: entrada.grupo.descripcion, dependencia: entrada.grupo.dependencia }
+      : delUsuario.length > 0 && nombresDeGrupo.size === 1 && [...nombresDeGrupo][0] !== null
+        ? { motivo: 'asignado', nombre: [...nombresDeGrupo][0]! }
+        : null
+    if (cambios.length > 0 || (entro && grupo)) base.avisos.push({ persona, cambios, grupo })
   }
   return base
 }

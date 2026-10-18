@@ -18,7 +18,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { accesoPdm } from '@/lib/pdm/acceso'
 import { avisarDespues } from '@/lib/pdm/correos/despues'
-import { avisarCambioDeGrupo, avisarCambioDeReparto } from '@/lib/pdm/correos/enviar'
+import { avisarAcceso, avisarCambioDeGrupo, avisarCambioDeReparto } from '@/lib/pdm/correos/enviar'
 import { marcaDeHistorial } from '@/lib/pdm/correos/datos'
 import { gestiona, type NivelPdm } from '@/lib/pdm/niveles'
 import { describirCambio, type EntradaHistorial, type FilaHistorial } from '@/lib/pdm/historial'
@@ -223,6 +223,13 @@ const cambioDe = (datos: unknown): CambioAcceso => {
   return CAMBIOS.find(x => x === c) ?? 'ninguno'
 }
 
+/** Tras dar, cambiar o quitar el acceso: si algo cambió de verdad, se le dice a la persona (sin esperar, sin poder estorbar). */
+async function avisarAccesoDe(usuario: string, datos: unknown) {
+  const cambio = cambioDe(datos)
+  if (cambio === 'ninguno') return
+  await avisarDespues(origen => avisarAcceso({ usuarioId: usuario, lote: loteDe(datos), cambio, origen }))
+}
+
 export async function habilitarPersona(e: EntradaHabilitar): Promise<Resultado<{ cambio: CambioAcceso }>> {
   try {
     const supabase = await sesionGestorPdm()
@@ -237,6 +244,7 @@ export async function habilitarPersona(e: EntradaHabilitar): Promise<Resultado<{
     })
     if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
     refrescar()
+    await avisarAccesoDe(e.usuario, data)
     return { ok: true, datos: { cambio: cambioDe(data) } }
   } catch (err) {
     console.error('[pdm/acciones] habilitarPersona:', err)
@@ -254,6 +262,7 @@ export async function deshabilitarPersona(e: EntradaDeshabilitar): Promise<Resul
     const { data, error } = await supabase.rpc('pdm_deshabilitar', { p_usuario: e.usuario, p_motivo: motivoDe(e.motivo) })
     if (error) return { ok: false, error: traducirErrorPdm(error.code, error.message) }
     refrescar()
+    await avisarAccesoDe(e.usuario, data)
     return { ok: true, datos: { cambio: cambioDe(data) } }
   } catch (err) {
     console.error('[pdm/acciones] deshabilitarPersona:', err)
