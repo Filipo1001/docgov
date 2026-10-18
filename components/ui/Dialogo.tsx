@@ -33,12 +33,14 @@ interface Props {
   onCerrar: () => void
   /** Guardando: no se cierra con Escape ni tocando fuera. */
   ocupado?: boolean
+  /** La capa (z-index) de Tailwind. Por defecto z-50; la revisión en pantalla completa lo abre por encima de ella. */
+  capa?: string
   children: ReactNode
   /** Los botones de abajo. */
   pie: ReactNode
 }
 
-export default function Dialogo({ titulo, descripcion, icono, onCerrar, ocupado = false, children, pie }: Props) {
+export default function Dialogo({ titulo, descripcion, icono, onCerrar, ocupado = false, capa = 'z-50', children, pie }: Props) {
   const panel = useRef<HTMLDivElement>(null)
   const idTitulo = useId()
   const idDescripcion = useId()
@@ -87,7 +89,7 @@ export default function Dialogo({ titulo, descripcion, icono, onCerrar, ocupado 
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-200 motion-reduce:transition-none sm:items-center sm:p-4 ${
+      className={`fixed inset-0 ${capa} flex items-end justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-200 motion-reduce:transition-none sm:items-center sm:p-4 ${
         entrado ? 'opacity-100' : 'opacity-0'
       }`}
       onPointerDown={(e) => { if (e.target === e.currentTarget && !ocupado) onCerrar() }}

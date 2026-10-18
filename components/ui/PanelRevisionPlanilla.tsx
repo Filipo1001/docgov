@@ -24,6 +24,7 @@
 
 import { useState } from 'react'
 import { DialogoBase, DialogoMes } from '@/components/ui/DialogosRevision'
+import RevisionPlanillaVisor from '@/components/ui/RevisionPlanillaVisor'
 import Icono from '@/components/ui/Icono'
 import { ENFOQUE, useLetrero } from '@/components/ui/PanelDocumentos'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
@@ -51,7 +52,7 @@ export interface DatoMes {
   opciones: string[]
   puedeCambiar: boolean
   guardando: boolean
-  onCambiar: (mes: string) => void
+  onCambiar: (mes: string) => void | Promise<void>
 }
 
 export interface DatoBase {
@@ -85,8 +86,17 @@ export interface DecisionRevision {
   /** Hay planilla y quien mira puede decidir. */
   puedeDecidir: boolean
   decidiendo: boolean
-  onAprobar: () => void
-  onDevolver: (motivo: string) => void
+  /** Devuelven false si no se pudo (el visor entonces no se cierra); cualquier otra cosa cuenta como hecho. */
+  onAprobar: () => void | boolean | Promise<void | boolean>
+  onDevolver: (motivo: string) => void | boolean | Promise<void | boolean>
+}
+
+/** Con esto, tocar un documento abre la revisión en pantalla (documento + cotejo) en vez de una pestaña nueva. */
+export interface LecturaRevision {
+  /** Contraseñas a probar si el PDF viene cifrado (la cédula del contratista). */
+  claves: string[]
+  titulo: string
+  subtitulo?: string
 }
 
 interface Props {
@@ -97,6 +107,7 @@ interface Props {
   base: DatoBase
   alerta: AlertaRevision | null
   decision: DecisionRevision
+  lectura?: LecturaRevision
 }
 
 // ─── Piezas ──────────────────────────────────────────────────────────────────
@@ -118,7 +129,7 @@ function Esquina({ glifo, className = '' }: { glifo: LucideIcon; className?: str
   )
 }
 
-function FichaDocumento({ d, enlazar }: { d: DocumentoRevision; enlazar: (texto: string) => object }) {
+function FichaDocumento({ d, enlazar, onAbrir }: { d: DocumentoRevision; enlazar: (texto: string) => object; onAbrir?: () => void }) {
   const hay = !!d.url
   const contenido = (
     <>
@@ -131,7 +142,12 @@ function FichaDocumento({ d, enlazar }: { d: DocumentoRevision; enlazar: (texto:
   )
   return (
     <div className="relative" {...enlazar(d.ayuda)}>
-      {hay ? (
+      {hay && onAbrir ? (
+        <button type="button" onClick={onAbrir} aria-haspopup="dialog" aria-label={`Revisar ${d.etiqueta.toLowerCase()}`} className={`${FICHA} ${ACTIVA}`}>
+          {contenido}
+          <Esquina glifo={Iconos.accion.ver} />
+        </button>
+      ) : hay ? (
         <a href={d.url!} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${d.etiqueta}`} className={`${FICHA} ${ACTIVA}`}>
           {contenido}
           <Esquina glifo={Iconos.accion.abrirFuera} />
@@ -192,11 +208,13 @@ function FichaDato({
 
 // ─── El panel ────────────────────────────────────────────────────────────────
 
-export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, base, alerta, decision }: Props) {
+export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, base, alerta, decision, lectura }: Props) {
   // Cada fila, su letrero. Un modal abierto (fila de datos) calla también el letrero de la fila de documentos.
   const docs = useLetrero()
   const datos = useLetrero()
-  const hayAbierto = datos.menuAbierto !== null
+  // La revisión en pantalla completa (si se ofrece) y los modales de mes y base callan los letreros.
+  const [visor, setVisor] = useState<'planilla' | 'soporte' | null>(null)
+  const hayAbierto = datos.menuAbierto !== null || visor !== null
   const letreroDocs = hayAbierto ? null : docs.letrero
   const cerrar = () => datos.setMenuAbierto(null)
 
@@ -241,8 +259,8 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
       {/* 1 · Los documentos y el número */}
       <div className="relative">
         <div className="grid grid-cols-4 gap-2">
-          <FichaDocumento d={planilla} enlazar={docs.enlazar} />
-          <FichaDocumento d={soporte} enlazar={docs.enlazar} />
+          <FichaDocumento d={planilla} enlazar={docs.enlazar} onAbrir={lectura ? () => setVisor('planilla') : undefined} />
+          <FichaDocumento d={soporte} enlazar={docs.enlazar} onAbrir={lectura ? () => setVisor('soporte') : undefined} />
           <FichaNumero n={numero} enlazar={docs.enlazar} />
         </div>
         {letreroDocs && (
@@ -287,6 +305,22 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
           </div>
         )}
       </div>
+
+      {visor && lectura && (
+        <RevisionPlanillaVisor
+          titulo={lectura.titulo}
+          subtitulo={lectura.subtitulo}
+          planilla={{ id: 'planilla', etiqueta: planilla.etiqueta, icono: planilla.icono, url: planilla.url }}
+          soporte={{ id: 'soporte', etiqueta: soporte.etiqueta, icono: soporte.icono, url: soporte.url }}
+          inicial={visor}
+          claves={lectura.claves}
+          numero={numero.valor}
+          mes={mes}
+          base={base}
+          decision={decision}
+          onCerrar={() => setVisor(null)}
+        />
+      )}
 
       {datos.menuAbierto === 'mes' && (
         <DialogoMes

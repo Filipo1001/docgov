@@ -40,8 +40,9 @@ export function nombreMes(mes: string): string {
 // ─── Mes de cotización ───────────────────────────────────────────────────────
 
 export function DialogoMes({
-  valor, confirmado, opciones, mesDelInforme, anio, guardando, onConfirmar, onCerrar,
+  valor, confirmado, opciones, mesDelInforme, anio, guardando, onConfirmar, onCerrar, capa,
 }: {
+  capa?: string
   valor: string
   confirmado: boolean
   opciones: string[]
@@ -73,6 +74,7 @@ export function DialogoMes({
   return (
     <Dialogo
       titulo="Mes de cotización"
+      capa={capa}
       icono={Iconos.dominio.periodo}
       descripcion={`El informe es de ${nombreMes(mesDelInforme)}${anio ? ` ${anio}` : ''}. Elige el mes que cubre la planilla.`}
       onCerrar={onCerrar}
@@ -143,8 +145,9 @@ export function DialogoMes({
 const pesos = (n: number) => `$ ${n.toLocaleString('es-CO')}`
 
 export function DialogoBase({
-  valor, porDefecto, personalizada, explicacion, piso, guardando, onGuardar, onRestablecer, onCerrar,
+  valor, porDefecto, personalizada, explicacion, piso, guardando, onGuardar, onRestablecer, onCerrar, capa,
 }: {
+  capa?: string
   valor: number
   porDefecto: number
   personalizada: boolean
@@ -191,6 +194,7 @@ export function DialogoBase({
   return (
     <Dialogo
       titulo="Base de cotización"
+      capa={capa}
       icono={Iconos.dominio.valor}
       descripcion="La que imprime el acta de supervisión. Si la planilla trae otra, corrígela aquí."
       onCerrar={onCerrar}

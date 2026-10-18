@@ -1989,7 +1989,8 @@ export default function PeriodoDetallePage({
     }
   }
 
-  async function handleRevisarPlanilla(estado: 'aprobada' | 'rechazada', comentario?: string) {
+  /** Devuelve si se pudo: la revisión en pantalla solo se cierra cuando sí. */
+  async function handleRevisarPlanilla(estado: 'aprobada' | 'rechazada', comentario?: string): Promise<boolean> {
     setDecidiendoPlanilla(true)
     const res = await revisarPlanilla(periodoId, estado, comentario)
     if (res.error) toast.error(res.error)
@@ -2000,6 +2001,7 @@ export default function PeriodoDetallePage({
       void cargarDatos(true)
     }
     setDecidiendoPlanilla(false)
+    return !res.error
   }
 
   async function handleGuardarNumeroPlanilla() {
@@ -2156,6 +2158,11 @@ export default function PeriodoDetallePage({
     (usuario?.rol !== 'supervisor' || contrato?.supervisor_id === usuario?.id)
   // Las opciones del modal y el mes vigente salen de la misma lista: se empareja sin importar mayúsculas.
   const mesCotizacionVigente = mesesContrato.find(m => m.toLowerCase() === mesCotizacionActual.toLowerCase()) ?? mesCotizacionActual
+
+  // Algunos operadores entregan la planilla cifrada con la cédula del contratista (26 de 348 el 17-oct-2026; las 26 se abren
+  // con ella). El visor de la revisión la prueba solo, para que quien revisa no tenga que saberla ni teclearla.
+  const cedulaContratista = (contrato?.contratista?.cedula ?? '').replace(/\D/g, '')
+  const clavesDelPdf = cedulaContratista ? [...new Set([cedulaContratista, cedulaContratista.replace(/^0+/, '')])] : []
 
   // El mensaje de error del número de la planilla en el formulario de envío (lo pinta PanelDocumentos).
   const errorNumeroPlanilla = errorFormatoPlanilla ?? (erroresCampos.numero ? 'Ingresa el número de planilla' : null)
@@ -4149,7 +4156,7 @@ export default function PeriodoDetallePage({
                           opciones: mesesContrato,
                           puedeCambiar: puedeCambiarMesCotizacion,
                           guardando: guardandoMesCotizacion,
-                          onCambiar: (mes) => { void handleGuardarMesCotizacion(mes) },
+                          onCambiar: (mes) => handleGuardarMesCotizacion(mes),
                         }}
                         base={{
                           ayuda: AYUDA_REVISION.baseCotizacion,
@@ -4174,8 +4181,13 @@ export default function PeriodoDetallePage({
                           motivoAnterior: periodo.planilla_comentario ?? null,
                           puedeDecidir: !!periodo.planilla_ss_url,
                           decidiendo: decidiendoPlanilla,
-                          onAprobar: () => { void handleRevisarPlanilla('aprobada') },
-                          onDevolver: (motivo) => { void handleRevisarPlanilla('rechazada', motivo) },
+                          onAprobar: () => handleRevisarPlanilla('aprobada'),
+                          onDevolver: (motivo) => handleRevisarPlanilla('rechazada', motivo),
+                        }}
+                        lectura={{
+                          claves: clavesDelPdf,
+                          titulo: `Planilla · ${periodo.mes} ${periodo.anio}`,
+                          subtitulo: [contrato?.contratista?.nombre_completo, contrato ? `Contrato ${contrato.numero}-${contrato.anio}` : null].filter(Boolean).join(' · '),
                         }}
                       />
                     </div>
