@@ -173,6 +173,8 @@ export interface FilaDeVista {
   reportado_en: string
   estado_reporte: string
   reemplazada: boolean
+  /** El reporte de este archivo está anulado (migración 068): no cuenta ni se lista. */
+  anulada: boolean
   observacion: string | null
 }
 
@@ -371,7 +373,7 @@ export function armarFilasIndicador(
 ): FilaIndicador[] {
   const porIndicador = new Map<string, FilaDeVista[]>()
   for (const a of archivos) {
-    if (a.anio !== anio || a.reemplazada) continue
+    if (a.anio !== anio || a.reemplazada || a.anulada) continue
     const l = porIndicador.get(a.indicador_id)
     if (l) l.push(a); else porIndicador.set(a.indicador_id, [a])
   }

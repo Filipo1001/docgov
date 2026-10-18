@@ -16,11 +16,14 @@
  *   · Reportar: quien tiene el indicador a su cargo, en un año que ya empezó (sin que nadie abra nada).
  *     Ni el administrador ni Control Interno reportan por otro.
  *   · Validar (aprobar o devolver): el administrador y la secretaría de la dependencia, nunca sobre
- *     un reporte propio. El servidor dice a cada reporte si quien mira puede validarlo.
+ *     un reporte propio. El servidor dice a cada reporte si quien mira puede validarlo. Devolver un reporte que ya
+ *     estaba APROBADO se llama «reabrirlo» (deja de contar hasta que se corrija y se apruebe de nuevo) y así se dice.
+ *   · Anular y restaurar: solo el administrador (migración 068). Un reporte equivocado que no tiene arreglo deja de contar
+ *     y de verse —solo el administrador y Control Interno lo siguen viendo, tachado, con quién lo anuló y por qué—.
  *   · Comentar: cualquiera con acceso al módulo.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
@@ -28,6 +31,7 @@ import { anioIniciado } from '@/lib/pdm/seguimiento'
 import { serieDelAnio } from '@/lib/pdm/graficos'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import type { NivelPdm } from '@/lib/pdm/niveles'
+import { MAX_MOTIVO_ANULACION, MIN_MOTIVO_ANULACION, errorEnAnulacion, type AccionAnulacion } from '@/lib/pdm/anulaciones'
 import {
   MAX_COMENTARIO_VALIDACION, MAX_OBSERVACION, describirTamano, errorEnValidacion,
   type AccionesSeguimiento, type DetalleIndicador, type EvidenciaVista, type ReporteDetalle,
@@ -106,6 +110,8 @@ function Validar({ reporte, acciones, onHecho }: {
   const [cual, setCual] = useState<'aprobado' | 'devuelto' | null>(null)
   const enviando = ocupado ? cual : null
   const [error, setError] = useState<string | null>(null)
+  // Sobre un reporte ya aprobado, devolver es REABRIRLO: lo aprobado deja de contar hasta que se corrija y se apruebe otra vez.
+  const reabriendo = reporte.estado === 'aprobado'
 
   const observaciones = Object.entries(marcados).map(([evidencia, motivo]) => ({ evidencia, motivo }))
   const notasListas = observaciones.every(o => o.motivo.trim() !== '')
@@ -129,7 +135,11 @@ function Validar({ reporte, acciones, onHecho }: {
       {
         alTerminar: () => {
           setDevolviendo(false); setComentario(''); setMarcados({})
-          onHecho(estado === 'aprobado' ? 'Reporte aprobado. Ya cuenta en el cumplimiento.' : 'Reporte devuelto. Quien lo reportó verá el motivo.')
+          onHecho(
+            estado === 'aprobado' ? 'Reporte aprobado. Ya cuenta en el cumplimiento.'
+              : reabriendo ? 'Reporte reabierto. Dejó de contar hasta que se corrija y se apruebe de nuevo.'
+              : 'Reporte devuelto. Quien lo reportó verá el motivo.',
+          )
         },
         alFallar: setError,
         // Al recargar, este bloque desaparece (el reporte ya no se puede validar): hasta entonces no vuelve a decir «Aprobar».
@@ -160,13 +170,19 @@ function Validar({ reporte, acciones, onHecho }: {
             disabled={ocupado}
             className={T.accionSecundariaChica}
           >
-            Devolver…
+            {reabriendo ? 'Reabrir…' : 'Devolver…'}
           </button>
         </div>
       ) : (
         <div className="pdm-entra space-y-2">
+          {reabriendo && (
+            <p className="text-xs leading-relaxed text-[#667085]">
+              El reporte vuelve a quedar devuelto: deja de contar en el cumplimiento hasta que quien lo reportó lo corrija y se apruebe de nuevo.
+              Queda anotado aquí.
+            </p>
+          )}
           <label className="block">
-            <span className={T.rotulo}>¿Qué falta o qué está mal?</span>
+            <span className={T.rotulo}>{reabriendo ? '¿Por qué lo reabres?' : '¿Qué falta o qué está mal?'}</span>
             <textarea
               id="pdm-devolver-comentario"
               value={comentario}
@@ -242,7 +258,104 @@ function Validar({ reporte, acciones, onHecho }: {
               inhabilitado={comentario.trim().length < 10 || !notasListas}
               onClick={() => enviar('devuelto')}
               className="!bg-[#B42318] hover:!bg-[#912018]"
-              etiquetas={{ reposo: 'Devolver el reporte', trabajando: 'Devolviendo', hecho: 'Devuelto' }}
+              etiquetas={reabriendo
+                ? { reposo: 'Reabrir el reporte', trabajando: 'Reabriendo', hecho: 'Reabierto' }
+                : { reposo: 'Devolver el reporte', trabajando: 'Devolviendo', hecho: 'Devuelto' }}
+            />
+          </div>
+        </div>
+      )}
+      <Despliegue abierto={!!error} separacion="">
+        {error ? <p role="alert" className="mt-1.5 text-xs font-medium text-[#B42318]">{error}</p> : null}
+      </Despliegue>
+    </div>
+  )
+}
+
+/**
+ * Anular un reporte equivocado o restaurar uno anulado. Solo lo ve el administrador (el servidor decide `puedeAnular` y
+ * `puedeRestaurar`; la base lo vuelve a decidir). No actúa al primer toque: abre un formulario que dice QUÉ pasa, pide el
+ * motivo (obligatorio) y cuenta lo que sucede en el botón.
+ */
+function Anulacion({ reporte, modo, acciones, onHecho }: {
+  reporte: ReporteDetalle
+  modo: AccionAnulacion
+  acciones: AccionesSeguimiento
+  /** Se llama con lo que pasó, dicho a una persona, para que quien monta recargue y lo avise. */
+  onHecho: (mensaje: string) => void
+}) {
+  const anular = modo === 'anular'
+  const id = useId()
+  const [abierto, setAbierto] = useState(false)
+  const [motivo, setMotivo] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const { fase, correr, ocupado } = useConfirmar()
+  const campo = useRef<HTMLTextAreaElement>(null)
+
+  async function enviar() {
+    if (ocupado) return
+    const mal = errorEnAnulacion(motivo, modo)
+    if (mal) { setError(mal); campo.current?.focus(); return }
+    setError(null)
+    await correr(
+      () => (anular ? acciones.anularReporte : acciones.restaurarReporte)({ reporte: reporte.id, motivo }),
+      {
+        alTerminar: ({ versiones }) => {
+          setAbierto(false); setMotivo('')
+          const juntas = versiones > 1 ? ` Se ${anular ? 'anularon' : 'restauraron'} también sus versiones anteriores.` : ''
+          onHecho(anular ? `Reporte anulado. Ya no cuenta.${juntas} Quedó anotado aquí.` : `Reporte restaurado. Vuelve a contar.${juntas} Quedó anotado aquí.`)
+        },
+        alFallar: setError,
+        // Al recargar, este bloque cambia de lugar o desaparece: hasta entonces no vuelve a decir «Anular».
+        quedarseHecho: true,
+      },
+    )
+  }
+
+  return (
+    // Una regla fina lo separa de aprobar / devolver / reabrir: son cosas distintas y no deben leerse como una sola.
+    <div className="mt-4 border-t border-[#DCE0E8] pt-3">
+      {!abierto ? (
+        <button type="button" onClick={() => { setAbierto(true); setError(null) }} className={T.accionSecundariaChica}>
+          {anular ? 'Anular este reporte…' : 'Restaurar este reporte…'}
+        </button>
+      ) : (
+        <div className="pdm-entra space-y-2">
+          <p className="text-xs leading-relaxed text-[#667085]">
+            {anular
+              ? 'El reporte deja de contar y de verse para quien lo reportó y para la secretaría; solo tú y Control Interno lo siguen viendo, tachado. Si es una corrección, se anulan también sus versiones anteriores. El reporte anterior del año vuelve a ser el vigente. Queda anotado aquí y se puede restaurar.'
+              : 'El reporte vuelve a contar y a verse como estaba, con sus versiones si las tiene. Queda anotado aquí.'}
+          </p>
+          <label htmlFor={`${id}-motivo`} className={`${T.rotulo} block`}>{anular ? '¿Por qué lo anulas?' : '¿Por qué lo restauras?'}</label>
+          <textarea
+            id={`${id}-motivo`}
+            ref={campo}
+            rows={2}
+            value={motivo}
+            maxLength={MAX_MOTIVO_ANULACION}
+            disabled={ocupado}
+            onChange={e => { setMotivo(e.target.value); if (error) setError(null) }}
+            placeholder={anular ? 'Por ejemplo: se reportó sobre el indicador equivocado.' : 'Por ejemplo: se anuló por error; el valor era correcto.'}
+            aria-describedby={`${id}-ayuda`}
+            className={`${T.campo} resize-none`}
+          />
+          <p id={`${id}-ayuda`} className={`flex justify-between gap-3 text-xs ${T.tenue}`}>
+            <span>Obligatorio, al menos {MIN_MOTIVO_ANULACION} caracteres.</span>
+            <span aria-hidden className="tabular-nums">{MAX_MOTIVO_ANULACION - motivo.length}</span>
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setAbierto(false); setMotivo(''); setError(null) }} disabled={ocupado} className={T.accionSecundariaChica}>
+              Cancelar
+            </button>
+            <BotonAccion
+              chico
+              fase={fase}
+              inhabilitado={motivo.trim().length < MIN_MOTIVO_ANULACION}
+              onClick={enviar}
+              className={anular ? '!bg-[#B42318] hover:!bg-[#912018]' : undefined}
+              etiquetas={anular
+                ? { reposo: 'Anular el reporte', trabajando: 'Anulando', hecho: 'Anulado' }
+                : { reposo: 'Restaurar el reporte', trabajando: 'Restaurando', hecho: 'Restaurado' }}
             />
           </div>
         </div>
@@ -255,32 +368,42 @@ function Validar({ reporte, acciones, onHecho }: {
 }
 
 function Version({ r, acciones, onHecho, nueva }: { r: ReporteDetalle; acciones: AccionesSeguimiento; onHecho: (mensaje: string) => void; nueva: boolean }) {
+  // Lo anulado se ve TACHADO (solo lo ven el administrador y Control Interno), sin atenuarlo todo: la nota de quién lo anuló
+  // y por qué tiene que leerse con el mismo contraste que el resto.
+  const tachado = r.anulado ? 'text-[#667085] line-through decoration-[#98A2B3]' : ''
   return (
-    <li className={`relative border-l-2 border-[#DCE0E8] pb-6 pl-5 last:pb-1 ${r.vigente ? '' : 'opacity-70'} ${nueva ? 'pdm-nuevo' : ''}`}>
+    <li className={`relative border-l-2 border-[#DCE0E8] pb-6 pl-5 last:pb-1 ${r.vigente || r.anulado ? '' : 'opacity-70'} ${nueva ? 'pdm-nuevo' : ''}`}>
       <span className={`absolute -left-[6px] top-1 h-2.5 w-2.5 rounded-[2px] ${r.vigente ? 'bg-[#192031]' : 'bg-[#B8BFCC]'}`} />
       <p className="text-xs text-[#667085]">
         <span className="font-semibold text-[#192031]">{fechaHoraBogota(r.creado)}</span> · {nombrePropio(r.autorNombre)}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p className="text-sm font-semibold tabular-nums text-[#192031]">
+        <p className={`text-sm font-semibold tabular-nums ${tachado || 'text-[#192031]'}`}>
           {fmt(r.valorAnterior)} <span className="font-normal text-[#98A2B3]">→</span> {fmt(r.valor)}
         </p>
-        {r.vigente ? <SituacionTexto situacion={r.estado} /> : <Sello>Versión anterior</Sello>}
+        {r.anulado ? <Sello>Anulado</Sello> : r.vigente ? <SituacionTexto situacion={r.estado} /> : <Sello>Versión anterior</Sello>}
         {r.corrigeA && <Sello>Corrección</Sello>}
       </div>
       {r.motivoCorreccion && <p className="mt-1 text-xs italic text-[#667085]">«{r.motivoCorreccion}»</p>}
-      <p className="mt-1.5 whitespace-pre-line text-sm leading-snug text-[#2D3648]">{r.texto}</p>
+      <p className={`mt-1.5 whitespace-pre-line text-sm leading-snug ${tachado || 'text-[#2D3648]'}`}>{r.texto}</p>
       <Evidencias lista={r.evidencias} acciones={acciones} />
       {r.validaciones.map((v, k) => (
         <p
           key={k}
           className={`mt-2 text-xs leading-snug ${v.estado === 'aprobado' ? 'text-[#1F5D43]' : 'text-[#912018]'} ${k < r.validaciones.length - 1 ? 'opacity-70' : ''}`}
         >
-          <b>{v.estado === 'aprobado' ? 'Aprobado' : 'Devuelto'}</b> por {nombrePropio(v.validadorNombre)} · {fechaHoraBogota(v.creado)}
+          <b>{v.estado === 'aprobado' ? 'Aprobado' : v.reabre ? 'Reabierto' : 'Devuelto'}</b> por {nombrePropio(v.validadorNombre)} · {fechaHoraBogota(v.creado)}
           {v.comentario ? `: «${v.comentario}»` : ''}
         </p>
       ))}
+      {r.anulaciones.map((a, k) => (
+        <p key={`anulacion-${k}`} className={`mt-2 text-xs leading-snug ${a.accion === 'anular' ? 'text-[#912018]' : 'text-[#1F5D43]'}`}>
+          <b>{a.accion === 'anular' ? 'Anulado' : 'Restaurado'}</b> por {nombrePropio(a.por)} · {fechaHoraBogota(a.cuando)}: «{a.motivo}»
+        </p>
+      ))}
       {r.puedeValidar && <Validar reporte={r} acciones={acciones} onHecho={onHecho} />}
+      {r.puedeAnular && <Anulacion reporte={r} modo="anular" acciones={acciones} onHecho={onHecho} />}
+      {r.puedeRestaurar && <Anulacion reporte={r} modo="restaurar" acciones={acciones} onHecho={onHecho} />}
     </li>
   )
 }
@@ -314,9 +437,9 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
 
   const esDeQuienMira = indicador.asignados.some(a => a.usuarioId === yoId)
   // El detalle trae los reportes de todos los años; aquí se muestra el año que se mira. Vienen del más reciente
-  // al más antiguo, así que el primero es lo último que se reportó en él.
+  // al más antiguo, así que el primero que no está anulado es lo último que se reportó en él.
   const delAnio = detalle ? detalle.reportes.filter(r => r.anio === indicador.anio) : []
-  const ultimoDelAnio = delAnio[0] ?? null
+  const ultimoDelAnio = delAnio.find(r => !r.anulado) ?? null
   const reportaria = esDeQuienMira && reportaPorSuCuenta(nivel)
   const puedeReportar = reportaria && anioIniciado(indicador.anio, anioActual)
   // La evolución del año (solo el administrador, por ahora): con dos reportes vigentes o más; con uno no hay evolución que dibujar.

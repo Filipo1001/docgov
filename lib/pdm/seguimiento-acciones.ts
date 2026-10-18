@@ -12,6 +12,7 @@
 import type { EstadoReporte } from './seguimiento'
 import type { NivelPdm } from './niveles'
 import type { Resultado } from './acciones'
+import type { AnulacionVista } from './anulaciones'
 
 // ─── Reglas ───────────────────────────────────────────────────────────────────
 
@@ -160,6 +161,13 @@ export interface EntradaComentar {
   reporte?: string
 }
 
+/** Anular o restaurar un reporte (solo el administrador). Se pasa la versión MÁS RECIENTE; la base lleva el resto de la cadena. */
+export interface EntradaAnulacion {
+  reporte: string
+  /** Obligatorio, de 10 a 500 caracteres. */
+  motivo: string
+}
+
 /** `null` si lo escrito en el reporte sirve; si no, qué falla. `correccion`: el último reporte del año está sin cerrar. */
 export function errorEnReporte(e: { valor: unknown; texto: unknown; motivo?: unknown }, correccion: boolean): string | null {
   const valor = e.valor
@@ -233,6 +241,8 @@ export interface ValidacionVista {
   comentario: string | null
   validadorNombre: string
   creado: string
+  /** Es una devolución de un reporte que estaba APROBADO: se reabrió. Se dice distinto a una devolución normal. */
+  reabre: boolean
 }
 
 /** Una versión de un reporte, con todo lo que se sabe de ella. */
@@ -247,7 +257,7 @@ export interface ReporteDetalle {
   creado: string
   corrigeA: string | null
   motivoCorreccion: string | null
-  /** No ha sido reemplazado por una corrección: las versiones corregidas son historia. */
+  /** Cuenta: no fue reemplazado por una corrección ni está anulado. Lo demás es historia. */
   vigente: boolean
   /** Lo que dice su última validación; «pendiente» si nadie la ha tocado. */
   estado: EstadoReporte
@@ -256,6 +266,17 @@ export interface ReporteDetalle {
   validaciones: ValidacionVista[]
   /** Quien pregunta puede aprobarlo o devolverlo (lo decide el servidor; la base lo vuelve a decidir). */
   puedeValidar: boolean
+  /**
+   * Está anulado (migración 068). Solo llega a quien puede verlo —el administrador y Control Interno—; para el resto de las
+   * personas un reporte anulado no existe.
+   */
+  anulado: boolean
+  /** Anulaciones y restauraciones de este reporte, de la más antigua a la más reciente (vacío para quien no las ve). */
+  anulaciones: AnulacionVista[]
+  /** El administrador puede anularlo: es lo último que se reportó en el año y no está anulado. */
+  puedeAnular: boolean
+  /** El administrador puede restaurarlo: está anulado, es la versión más reciente de su cadena y nada vigente vino después. */
+  puedeRestaurar: boolean
 }
 
 export interface ComentarioVista {
@@ -281,6 +302,10 @@ export interface AccionesSeguimiento {
   reportar: (e: EntradaReportar) => Promise<Resultado<{ reporte: string; correccion: boolean }>>
   validarReporte: (e: EntradaValidar) => Promise<Resultado<{ cambio: 'aprobado' | 'devuelto' | 'ninguno' }>>
   comentar: (e: EntradaComentar) => Promise<Resultado>
+  /** Solo el administrador. `versiones`: cuántas versiones del reporte se anularon con él. */
+  anularReporte: (e: EntradaAnulacion) => Promise<Resultado<{ versiones: number }>>
+  /** Solo el administrador. `versiones`: cuántas versiones se restauraron. */
+  restaurarReporte: (e: EntradaAnulacion) => Promise<Resultado<{ versiones: number }>>
   detalleIndicador: (indicador: string) => Promise<Resultado<DetalleIndicador>>
   /** Una dirección temporal para ver una evidencia. */
   urlEvidencia: (evidencia: string) => Promise<Resultado<{ url: string }>>

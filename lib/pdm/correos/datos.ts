@@ -1,5 +1,6 @@
 import 'server-only'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { idsAnulados, type FilaAnulacion } from '../anulaciones'
 import { puedeRecibirCorreoPdm } from './politica'
 import { ACCIONES_DE_ASIGNACION, agruparPorUsuario, cambiosDeLote, type FilaDeAsignacion } from './cambios'
 import { INSIGNIA_BASE, elegirInsignia, type Insignia } from './insignias'
@@ -180,17 +181,22 @@ export async function insigniaDeAprobacion(ctx: ContextoDeReporte): Promise<Insi
     const cadena: string[] = []
     for (let id: string | null = ctx.base.id; id && !cadena.includes(id) && previo.has(id); id = previo.get(id) ?? null) cadena.push(id)
 
-    const [devueltas, aprobadasDeLaPersona] = await Promise.all([
+    // Las aprobaciones de la persona NO cuentan si su reporte fue anulado (migración 068): este cliente de servicio ve todo,
+    // así que lo anulado se descuenta aquí.
+    const [devueltas, aprobadasDeLaPersona, anuladasDeLaPersona] = await Promise.all([
       admin.from('pdm_validaciones').select('id', { count: 'exact', head: true }).in('reporte_id', cadena.length ? cadena : [ctx.base.id]).eq('estado', 'devuelto'),
-      admin.from('pdm_validaciones').select('id, pdm_reportes!inner(autor_id)', { count: 'exact', head: true }).eq('estado', 'aprobado').eq('pdm_reportes.autor_id', ctx.base.autorId),
+      admin.from('pdm_validaciones').select('id, reporte_id, pdm_reportes!inner(autor_id)').eq('estado', 'aprobado').eq('pdm_reportes.autor_id', ctx.base.autorId),
+      admin.from('pdm_anulaciones').select('reporte_id, accion, motivo, actor_nombre, created_at, pdm_reportes!inner(autor_id)').eq('pdm_reportes.autor_id', ctx.base.autorId),
     ])
-    if (devueltas.error || aprobadasDeLaPersona.error || devueltas.count === null || aprobadasDeLaPersona.count === null) return INSIGNIA_BASE
+    if (devueltas.error || aprobadasDeLaPersona.error || anuladasDeLaPersona.error || devueltas.count === null) return INSIGNIA_BASE
+    const anulados = idsAnulados((anuladasDeLaPersona.data ?? []) as unknown as FilaAnulacion[])
+    const aprobadas = ((aprobadasDeLaPersona.data ?? []) as unknown as { reporte_id: string }[]).filter(v => !anulados.has(v.reporte_id)).length
 
     return elegirInsignia({
       anio: ctx.base.anio,
       valor: ctx.base.valor,
       meta: ctx.meta,
-      primerAprobadoDeLaPersona: aprobadasDeLaPersona.count <= 1,
+      primerAprobadoDeLaPersona: aprobadas <= 1,
       devolucionesPrevias: devueltas.count,
     })
   } catch {

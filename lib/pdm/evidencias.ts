@@ -34,7 +34,7 @@ export interface Evidencias {
 }
 
 const COLUMNAS =
-  'id, reporte_id, nombre, tipo, bytes, conservada, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, valor, autor_nombre, reportado_en, estado_reporte, reemplazada, observacion'
+  'id, reporte_id, nombre, tipo, bytes, conservada, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, valor, autor_nombre, reportado_en, estado_reporte, reemplazada, anulada, observacion'
 
 const COLUMNAS_RELACIONADAS =
   'id, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, estado_reporte, nombre, bytes, tipo'
@@ -54,7 +54,7 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
       ids = new Set<string>()
       for (let t = 0; t < MAX_TANDAS; t++) {
         const r = await aplicarBusqueda(
-          supabase.from('pdm_evidencias_vista').select('id, indicador_id').eq('anio', f.anio).eq('reemplazada', false),
+          supabase.from('pdm_evidencias_vista').select('id, indicador_id').eq('anio', f.anio).eq('reemplazada', false).eq('anulada', false),
           f.q,
         ).order('id').range(t * 1000, t * 1000 + 999)
         if (r.error || !r.data) {
@@ -80,6 +80,7 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
       .in('indicador_id', deLaPagina.map(i => i.uuid))
       .eq('anio', f.anio)
       .eq('reemplazada', false)
+      .eq('anulada', false)
       .order('reportado_en', { ascending: false })
       .order('id')
       .limit(1000)
@@ -100,6 +101,7 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
         .in('nombre', nombres)
         .eq('anio', f.anio)
         .eq('reemplazada', false)
+        .eq('anulada', false)
         .limit(1000)
       if (otras.error) console.error('[pdm/evidencias] relaciones no leídas:', otras.error.message)
       else relaciones = relacionar(archivos, (otras.data ?? []) as unknown as FilaRelacionable[])

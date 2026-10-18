@@ -60,7 +60,7 @@ es('una página que no existe se lleva a la última', ev.rangoDePagina(9, 54).pa
 // ── Un mismo archivo en varios indicadores (siempre del mismo año) ──
 const F = (id: string, ind: string, extra: Partial<ev.FilaDeVista> = {}): ev.FilaDeVista => ({
   id, reporte_id: 'r-' + id, nombre: 'Acta de comité.pdf', tipo: 'application/pdf', bytes: 1000, conservada: false, indicador_id: ind, indicador_fila: 10, codigo: '1.1.1', indicador: 'Ind ' + ind,
-  sector: 'Educación', dependencia: 'Secretaría X', anio: 2026, valor: 1, autor_nombre: 'ANA PROPIA', reportado_en: '2026-09-01T12:00:00Z', estado_reporte: 'pendiente', reemplazada: false, observacion: null, ...extra,
+  sector: 'Educación', dependencia: 'Secretaría X', anio: 2026, valor: 1, autor_nombre: 'ANA PROPIA', reportado_en: '2026-09-01T12:00:00Z', estado_reporte: 'pendiente', reemplazada: false, anulada: false, observacion: null, ...extra,
 })
 const R = (id: string, ind: string, extra: Partial<ev.FilaRelacionable> = {}): ev.FilaRelacionable => ({
   id, indicador_id: ind, indicador_fila: 20, codigo: '2.2.2', indicador: 'Ind ' + ind, sector: 'Salud', dependencia: 'Secretaría Y', anio: 2026, estado_reporte: 'aprobado', nombre: 'Acta de comité.pdf', bytes: 1000, tipo: 'application/pdf', ...extra,

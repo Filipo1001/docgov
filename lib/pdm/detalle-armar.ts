@@ -1,10 +1,15 @@
 import { esNivelHabilitable, type NivelPdm } from './niveles'
+import { anulacionesPorReporte, idsAnulados, type FilaAnulacion } from './anulaciones'
 import type { ComentarioVista, DetalleIndicador, EvidenciaVista, ObservacionVista, ReporteDetalle, ValidacionVista } from './seguimiento-acciones'
 import type { EstadoReporte } from './seguimiento'
 
 /**
  * De las filas de la base al detalle de un indicador: todas las versiones de sus reportes (de todos los
  * años) con sus evidencias y validaciones, y sus comentarios.
+ *
+ * Lo ANULADO (migración 068) es historia: no cuenta como «lo último del año», no corrige ni es corregido por nada que
+ * cuente, y solo llega aquí para quien la base deja verlo (administrador y Control Interno); para el resto, la base ni
+ * entrega los reportes anulados.
  *
  * Pura: no lee nada. La lectura vive en `app/actions/pdm-seguimiento.ts`.
  */
@@ -72,11 +77,23 @@ export function armarDetalle(entrada: {
   yoId: string
   /** Quien pregunta puede validar los reportes de ESTE indicador (administrador, o la secretaría de su dependencia). */
   puedeValidarElIndicador: boolean
+  /** Las anulaciones y restauraciones de estos reportes. Solo se piden para quien puede verlas; sin ellas, nada está anulado. */
+  anulaciones?: FilaAnulacion[]
+  /** Quien pregunta es el administrador: puede anular y restaurar. */
+  esAdmin?: boolean
 }): DetalleIndicador {
-  const corregidos = new Set(entrada.reportes.map(r => r.corrige_a).filter((x): x is string => x !== null))
-  // Lo último que se reportó en cada año: es lo único que se valida (la base lo exige igual).
+  const esAdmin = entrada.esAdmin === true
+  const anulados = idsAnulados(entrada.anulaciones ?? [])
+  const historiaAnulaciones = anulacionesPorReporte(entrada.anulaciones ?? [])
+  const activos = entrada.reportes.filter(r => !anulados.has(r.id))
+  // Una versión corregida es historia, pero solo si la corrección CUENTA (la base anula una cadena entera, nunca a medias).
+  const corregidos = new Set(activos.map(r => r.corrige_a).filter((x): x is string => x !== null))
+  // Con corrección o sin ella, cuente o no: la versión más reciente de su cadena es la que no tiene ninguna.
+  const conCorreccion = new Set(entrada.reportes.map(r => r.corrige_a).filter((x): x is string => x !== null))
+  // Lo último que se reportó en cada año (sin contar lo anulado): es lo único que se valida y se anula (la base lo exige igual).
   const ultimoDelAnio = new Map<number, string>()
-  for (const r of [...entrada.reportes].sort(masReciente).reverse()) ultimoDelAnio.set(r.anio, r.id)
+  for (const r of [...activos].sort(masReciente).reverse()) ultimoDelAnio.set(r.anio, r.id)
+  const porId = new Map(entrada.reportes.map(r => [r.id, r]))
 
   // La nota más reciente de cada archivo devuelto, con quién y cuándo (las validaciones se leen de la más antigua a la más reciente).
   const observadas = new Map<string, ObservacionVista>()
@@ -104,16 +121,38 @@ export function armarDetalle(entrada: {
   for (const v of [...entrada.validaciones].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0))) {
     if (v.estado !== 'aprobado' && v.estado !== 'devuelto') continue
     const lista = validacionesDe.get(v.reporte_id) ?? []
-    lista.push({ estado: v.estado, comentario: v.comentario, validadorNombre: v.validador_nombre, creado: v.created_at })
+    // Devolver un reporte que estaba APROBADO es reabrirlo: la secretaría o el administrador lo deshacen, y se dice así.
+    const reabre = v.estado === 'devuelto' && lista.length > 0 && lista[lista.length - 1].estado === 'aprobado'
+    lista.push({ estado: v.estado, comentario: v.comentario, validadorNombre: v.validador_nombre, creado: v.created_at, reabre })
     validacionesDe.set(v.reporte_id, lista)
+  }
+  const estadoDe = (id: string): EstadoReporte => {
+    const l = validacionesDe.get(id) ?? []
+    return l.length ? l[l.length - 1].estado : 'pendiente'
+  }
+
+  /** ¿Se puede restaurar este reporte anulado? Es la versión más reciente de su cadena, nada vigente vino después y el avance anterior sigue aprobado. */
+  const sePuedeRestaurar = (r: FilaReporteDetalle): boolean => {
+    if (conCorreccion.has(r.id)) return false
+    if (activos.some(a => a.anio === r.anio && masReciente(a, r) < 0)) return false
+    // La primera versión de la cadena: un avance nuevo solo puede existir después de uno aprobado.
+    let raiz = r
+    const vistos = new Set<string>()
+    while (raiz.corrige_a !== null && porId.has(raiz.corrige_a) && !vistos.has(raiz.id)) {
+      vistos.add(raiz.id)
+      raiz = porId.get(raiz.corrige_a)!
+    }
+    const anterior = activos.filter(a => a.anio === raiz.anio && masReciente(a, raiz) > 0).sort(masReciente)[0]
+    return !anterior || estadoDe(anterior.id) === 'aprobado'
   }
 
   const reportes: ReporteDetalle[] = [...entrada.reportes].sort(masReciente).flatMap(r => {
     const valor = numero(r.valor)
     if (valor === null) return []
     const validaciones = validacionesDe.get(r.id) ?? []
-    const estado: EstadoReporte = validaciones.length ? validaciones[validaciones.length - 1].estado : 'pendiente'
-    const vigente = !corregidos.has(r.id)
+    const estado: EstadoReporte = estadoDe(r.id)
+    const anulado = anulados.has(r.id)
+    const vigente = !anulado && !corregidos.has(r.id)
     return [{
       id: r.id,
       anio: r.anio,
@@ -129,8 +168,12 @@ export function armarDetalle(entrada: {
       estado,
       evidencias: evidenciasDe.get(r.id) ?? [],
       validaciones,
-      // Nadie valida lo suyo, ni lo que ya fue superado por una corrección o por un reporte más reciente del año.
+      // Nadie valida lo suyo, ni lo que ya fue superado por una corrección o por un reporte más reciente del año, ni lo anulado.
       puedeValidar: entrada.puedeValidarElIndicador && vigente && ultimoDelAnio.get(r.anio) === r.id && r.autor_id !== entrada.yoId,
+      anulado,
+      anulaciones: historiaAnulaciones.get(r.id) ?? [],
+      puedeAnular: esAdmin && !anulado && ultimoDelAnio.get(r.anio) === r.id,
+      puedeRestaurar: esAdmin && anulado && sePuedeRestaurar(r),
     } satisfies ReporteDetalle]
   })
 

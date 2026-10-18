@@ -48,10 +48,11 @@ import { esUuid, traducirErrorPdm, type Resultado } from '@/lib/pdm/acciones'
 import { hoyBogota } from '@/lib/pdm/contrato'
 import { anioDeFecha, anioIniciado, esAnioPlan } from '@/lib/pdm/seguimiento'
 import { armarDetalle, type FilaComentario, type FilaEvidencia, type FilaReporteDetalle, type FilaValidacion } from '@/lib/pdm/detalle-armar'
+import { errorEnAnulacion, type AccionAnulacion, type FilaAnulacion } from '@/lib/pdm/anulaciones'
 import {
   MAX_BYTES_EVIDENCIA, MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO,
   TIPOS_EVIDENCIA, errorEnArchivos, errorEnComentario, errorEnReporte, errorEnValidacion, tipoDeArchivo,
-  type DetalleIndicador, type EntradaComentar, type EntradaPrepararEvidencias, type EntradaReportar,
+  type DetalleIndicador, type EntradaAnulacion, type EntradaComentar, type EntradaPrepararEvidencias, type EntradaReportar,
   type EntradaValidar, type EvidenciaPreparada, type EvidenciaSubida,
 } from '@/lib/pdm/seguimiento-acciones'
 
@@ -291,6 +292,47 @@ export async function validarReporte(e: EntradaValidar): Promise<Resultado<{ cam
   }
 }
 
+// ─── Anular y restaurar (migración 068) ───────────────────────────────────────
+
+/**
+ * Anular un reporte equivocado o restaurarlo: SOLO el administrador. No avisa a nadie por correo (los avisos del módulo
+ * son otra cosa) y no borra nada: la base agrega una fila a `pdm_anulaciones` por cada versión del reporte, con el motivo.
+ * La base decide todo lo demás —que sea lo más reciente del año, que la cadena de versiones no quede a medias, que el
+ * reporte anterior siga aprobado al restaurar— y aquí solo se traduce lo que diga.
+ */
+async function anulacion(accion: AccionAnulacion, e: EntradaAnulacion): Promise<Resultado<{ versiones: number }>> {
+  const donde = accion === 'anular' ? 'anularReporte' : 'restaurarReporte'
+  try {
+    const s = await sesionPdm(a => a.nivel === 'admin')
+    if (!s) return rechazo(donde, SIN_PERMISO)
+    if (!esUuid(e?.reporte)) return rechazo(donde, 'Algo de lo elegido no es válido.')
+    const mal = errorEnAnulacion(e.motivo, accion)
+    if (mal) return rechazo(donde, mal)
+
+    const { data, error } = await s.supabase.rpc(accion === 'anular' ? 'pdm_anular_reporte' : 'pdm_restaurar_reporte', {
+      p_reporte: e.reporte, p_motivo: e.motivo.trim(),
+    })
+    if (error) {
+      console.warn(`[pdm/seguimiento] ${donde} falló con el código`, error.code)
+      return rechazo(donde, traducirErrorPdm(error.code, error.message))
+    }
+    const versiones = Number((data as { versiones?: unknown } | null)?.versiones)
+    refrescar()
+    return { ok: true, datos: { versiones: Number.isFinite(versiones) && versiones > 0 ? versiones : 1 } }
+  } catch (err) {
+    console.error(`[pdm/seguimiento] ${donde}:`, err)
+    return falla(GENERICO)
+  }
+}
+
+export async function anularReporte(e: EntradaAnulacion): Promise<Resultado<{ versiones: number }>> {
+  return anulacion('anular', e)
+}
+
+export async function restaurarReporte(e: EntradaAnulacion): Promise<Resultado<{ versiones: number }>> {
+  return anulacion('restaurar', e)
+}
+
 export async function comentar(e: EntradaComentar): Promise<Resultado> {
   try {
     const s = await sesionPdm()
@@ -340,20 +382,29 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
     ])
     if (rep.error || com.error || !rep.data || !com.data) return falla(GENERICO)
 
+    const nivel = s.acceso.nivel
+    // Lo anulado solo lo ve el administrador y Control Interno: la base ni entrega los reportes anulados a nadie más, y
+    // las filas de `pdm_anulaciones` solo se piden (y solo se entregan) a ellos.
+    const veAnulados = nivel === 'admin' || nivel === 'consulta'
+
     const ids = rep.data.map(r => r.id as string)
     let evidencias: FilaEvidencia[] = []
     let validaciones: FilaValidacion[] = []
+    let anulaciones: FilaAnulacion[] = []
     if (ids.length) {
-      const [evi, val] = await Promise.all([
+      const [evi, val, anu] = await Promise.all([
         s.supabase.from('pdm_evidencias').select('id, reporte_id, nombre, tipo, bytes, copia_de').in('reporte_id', ids),
         s.supabase.from('pdm_validaciones').select('reporte_id, estado, comentario, validador_nombre, created_at, observaciones').in('reporte_id', ids),
+        veAnulados
+          ? s.supabase.from('pdm_anulaciones').select('reporte_id, accion, motivo, actor_nombre, created_at').in('reporte_id', ids)
+          : Promise.resolve({ data: [] as FilaAnulacion[], error: null }),
       ])
-      if (evi.error || val.error || !evi.data || !val.data) return falla(GENERICO)
+      if (evi.error || val.error || anu.error || !evi.data || !val.data || !anu.data) return falla(GENERICO)
       evidencias = evi.data as FilaEvidencia[]
       validaciones = val.data as FilaValidacion[]
+      anulaciones = anu.data as FilaAnulacion[]
     }
 
-    const nivel = s.acceso.nivel
     const puedeValidarElIndicador = nivel === 'admin'
       || (nivel === 'coordinador' && s.acceso.dependenciaId !== null && s.acceso.dependenciaId === ind.data.dependencia_id)
 
@@ -366,6 +417,8 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
         comentarios: com.data as FilaComentario[],
         yoId: s.acceso.userId,
         puedeValidarElIndicador,
+        anulaciones,
+        esAdmin: nivel === 'admin',
       }),
     }
   } catch (err) {
