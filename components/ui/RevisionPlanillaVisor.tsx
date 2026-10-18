@@ -4,7 +4,7 @@
  * components/ui/RevisionPlanillaVisor.tsx — Revisar la planilla SIN salir de la pantalla.
  *
  * Antes: abrir la planilla en una pestaña nueva, leer el número, el mes y el IBC, volver, y confirmar cada dato en su
- * propio modal. Ahora el documento y los tres datos están lado a lado (en el teléfono, uno sobre otro):
+ * propio modal. Ahora el documento y los datos están lado a lado (en el teléfono, uno sobre otro):
  *
  *   · A un lado, el PDF (con la contraseña probada sola, si la trae) y, resaltados encima, los datos que el sistema
  *     reconoce en él.
@@ -13,19 +13,21 @@
  *   · Abajo, la decisión: «Todo coincide · Aprobar» o Devolver, con el motivo a un toque.
  *
  * La lectura (`lib/lectura-planilla.ts`) COMPARA, no decide: cuando no encuentra el dato, o el documento es una imagen,
- * lo dice y deja la comparación a quien revisa. Cambiar el mes o el IBC, aprobar y devolver son los mismos manejadores
- * del panel de revisión: aquí solo cambia la forma de llegar a ellos.
+ * está dañado o ni siquiera parece una planilla, lo dice —con un aviso arriba y «compáralo tú» en cada fila— y deja la
+ * comparación a quien revisa. Cambiar el mes o el IBC, aprobar y devolver son los mismos manejadores del panel de
+ * revisión: aquí solo cambia la forma de llegar a ellos.
  *
- * Se monta en un portal para no heredar el recorte (`overflow-hidden`) del desplegable donde vive el panel.
+ * Se monta en un portal para no heredar el recorte (`overflow-hidden`) del desplegable donde vive el panel. Y va dentro
+ * de un límite de error: si algo fallara al dibujarlo, no se lleva la pantalla del periodo; ofrece abrir el documento aparte.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { DialogoBase, DialogoMes, nombreMes } from '@/components/ui/DialogosRevision'
 import Icono from '@/components/ui/Icono'
-import PaginasPdf, { type EstadoPdf, type Marca } from '@/components/ui/PaginasPdf'
+import PaginasPdf, { identidadDelArchivo, type EstadoPdf, type Marca } from '@/components/ui/PaginasPdf'
 import type { DatoBase, DatoMes, DecisionRevision } from '@/components/ui/PanelRevisionPlanilla'
-import { leerPlanilla, type Hallazgo, type Lectura } from '@/lib/lectura-planilla'
+import { leerPlanilla, type Esperado, type Hallazgo, type Lectura } from '@/lib/lectura-planilla'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
 import { MARCA, MARCA_CLARA } from '@/lib/marca'
 
@@ -45,6 +47,8 @@ interface Props {
   inicial: DocumentoVisor['id']
   /** Contraseñas a probar si el PDF viene cifrado (la cédula del contratista). */
   claves: string[]
+  /** Cédula del contratista: si aparece en la planilla, es de él. */
+  cedula?: string | null
   numero: string | null
   mes: DatoMes
   base: DatoBase
@@ -63,9 +67,13 @@ const BOTON_SECUNDARIO = `${BOTON} border border-gray-300 bg-white text-gray-700
 const MOTIVOS = [
   'El número de planilla no coincide con el del documento.',
   'La planilla es de un mes distinto al que corresponde.',
+  'La planilla es de otro año.',
   'El IBC de la planilla no coincide con el declarado.',
-  'El documento no se ve bien o no es una planilla.',
+  'El documento no es una planilla de seguridad social.',
+  'La planilla no es de este contratista.',
+  'El documento no se ve bien: súbelo de nuevo.',
 ]
+const MOTIVO_NO_ES_PLANILLA = 'El documento no es una planilla de seguridad social.'
 
 type Tono = 'bien' | 'aviso' | 'neutro'
 
@@ -110,14 +118,42 @@ function FilaCotejo({
   )
 }
 
-export default function RevisionPlanillaVisor({
-  titulo, subtitulo, planilla, soporte, inicial, claves, numero, mes, base, decision, onCerrar,
+/** Por qué no hay lectura, en una frase corta para cada fila. */
+function sinLeer(lectura: Lectura | null, noAbrio: EstadoPdf | null, haySubida: boolean): string {
+  if (!haySubida) return 'La planilla no se ha subido.'
+  if (noAbrio) return 'No se pudo abrir la planilla: compáralo tú.'
+  switch (lectura?.calidad) {
+    case 'sin_texto': return 'El documento es una imagen: compáralo tú.'
+    case 'ilegible': return 'El texto no se lee: compáralo tú.'
+    case 'no_parece_planilla': return 'No parece una planilla: compáralo tú.'
+    default: return 'No lo encuentro en el documento: compáralo tú.'
+  }
+}
+
+/** El aviso de arriba cuando la lectura no puede ayudar, con su tono. */
+function avisoDeCalidad(lectura: Lectura | null, noAbrio: EstadoPdf | null, haySubida: boolean): { tono: 'aviso' | 'alerta'; texto: string } | null {
+  if (!haySubida) return { tono: 'aviso', texto: 'La planilla no se ha subido todavía.' }
+  if (noAbrio) return { tono: 'aviso', texto: 'No se pudo abrir la planilla, así que no hay lectura automática. Compara los datos a ojo.' }
+  switch (lectura?.calidad) {
+    case 'sin_texto': return { tono: 'aviso', texto: 'Este documento es una imagen (un escaneo o una foto): no puedo leerlo. Compara los datos a ojo.' }
+    case 'ilegible': return { tono: 'aviso', texto: 'El texto de este documento no se puede leer (¿la fuente está dañada?). Compara los datos a ojo.' }
+    case 'no_parece_planilla': return { tono: 'alerta', texto: 'Este documento no parece una planilla de seguridad social. Revisa que sea el archivo correcto.' }
+    default: return null
+  }
+}
+
+function RevisionPlanillaVisor({
+  titulo, subtitulo, planilla, soporte, inicial, claves, cedula, numero, mes, base, decision, onCerrar,
 }: Props) {
   const [pestana, setPestana] = useState<DocumentoVisor['id']>(inicial)
+  // El soporte no se descarga hasta que se mira por primera vez (puede pesar y el teléfono puede ir con datos).
+  const [soporteVisto, setSoporteVisto] = useState(inicial === 'soporte')
   const [textoPlanilla, setTextoPlanilla] = useState<string[] | null>(null)
-  // Si la planilla no se pudo ni abrir (protegida con una clave que no es la cédula, o dañada), el cotejo lo dice así y no «es una imagen».
+  // Si la planilla no se pudo ni abrir (cifrada con una clave desconocida, o dañada), el cotejo lo dice así.
   const [noAbrio, setNoAbrio] = useState<EstadoPdf | null>(null)
   const [activa, setActiva] = useState<string | null>(null)
+  // Los datos que se pudieron señalar sobre el documento: «ver en el documento» solo se ofrece para esos.
+  const [senalables, setSenalables] = useState<Set<string>>(new Set())
   const [dialogo, setDialogo] = useState<'mes' | 'base' | null>(null)
   const [devolviendo, setDevolviendo] = useState(false)
   const [motivo, setMotivo] = useState('')
@@ -125,18 +161,30 @@ export default function RevisionPlanillaVisor({
   const panel = useRef<HTMLDivElement>(null)
 
   const documento = pestana === 'planilla' ? planilla : soporte
+  const haySubida = !!planilla.url
+
+  // Si el contratista reemplaza la planilla mientras se revisa (el ARCHIVO cambia, no solo la firma), se empieza de nuevo.
+  const archivoPlanilla = planilla.url ? identidadDelArchivo(planilla.url) : null
+  useEffect(() => { setTextoPlanilla(null); setNoAbrio(null) }, [archivoPlanilla])
+
+  // Lo declarado, con lo que hace falta para juzgar el año y la persona.
+  const esperado: Esperado = useMemo(
+    () => ({ numero, mes: mes.valor, anio: mes.anio, mesInforme: mes.mesDelInforme, base: base.valor, piso: base.piso, cedula }),
+    [numero, mes.valor, mes.anio, mes.mesDelInforme, base.valor, base.piso, cedula],
+  )
 
   // La lectura se rehace sola cuando cambia lo declarado (p. ej. al cambiar la base): el cotejo siempre es con lo vigente.
   const lectura: Lectura | null = useMemo(() => {
-    if (!planilla.url) return leerPlanilla([], { numero, mes: mes.valor, base: base.valor, piso: base.piso })
-    return textoPlanilla ? leerPlanilla(textoPlanilla, { numero, mes: mes.valor, base: base.valor, piso: base.piso }) : null
-  }, [planilla.url, textoPlanilla, numero, mes.valor, base.valor, base.piso])
+    if (!haySubida) return leerPlanilla([], esperado)
+    if (!textoPlanilla) return null
+    try { return leerPlanilla(textoPlanilla, esperado) } catch { return leerPlanilla([], esperado) }
+  }, [haySubida, textoPlanilla, esperado])
 
-  // Lo que se resalta sobre el documento: los tres datos reconocidos, en verde si coinciden y en ámbar si difieren.
+  // Lo que se resalta sobre el documento: los datos reconocidos, en verde si coinciden y en ámbar si difieren.
   const marcas: Marca[] = useMemo(() => {
     if (!lectura?.hayTexto || pestana !== 'planilla') return []
     const lista: Marca[] = []
-    for (const [id, h] of [['numero', lectura.numero], ['mes', lectura.mes], ['ibc', lectura.ibc]] as const) {
+    for (const [id, h] of [['numero', lectura.numero], ['mes', lectura.mes], ['ibc', lectura.ibc], ['persona', lectura.persona]] as const) {
       if (h.fragmento && h.veredicto !== 'sin_comprobar') lista.push({ id, fragmento: h.fragmento, tono: h.veredicto === 'coincide' ? 'ok' : 'aviso' })
     }
     return lista
@@ -170,6 +218,12 @@ export default function RevisionPlanillaVisor({
     else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus() }
   }
 
+  const elegirPestana = (id: DocumentoVisor['id']) => {
+    setPestana(id)
+    if (id === 'soporte') setSoporteVisto(true)
+    setActiva(null)
+  }
+
   const ver = (id: string) => {
     setPestana('planilla')
     // Un clic repetido sobre la misma fila debe volver a llevar la vista: se limpia y se vuelve a poner.
@@ -177,39 +231,53 @@ export default function RevisionPlanillaVisor({
     requestAnimationFrame(() => setActiva(id))
   }
 
-  // ── Los tres datos ──
-  const leyendo = !!planilla.url && lectura === null
-  const sinTexto = lectura !== null && !lectura.hayTexto
+  // ── Los datos ──
+  const leyendo = haySubida && lectura === null
   const estado = (h: Hallazgo | undefined): Hallazgo['veredicto'] | 'leyendo' => (leyendo || !h ? 'leyendo' : h.veredicto)
-  const ayudaSinLeer = noAbrio ? 'No se pudo abrir la planilla para leerla: compáralo tú.' : sinTexto ? 'El documento es una imagen o no tiene texto: compáralo tú.' : 'No lo encuentro en el documento: compáralo tú.'
+  const ayudaSinLeer = sinLeer(lectura, noAbrio, haySubida)
+  const aviso = leyendo ? null : avisoDeCalidad(lectura, noAbrio, haySubida)
 
   const hNumero = lectura?.numero
   const hMes = lectura?.mes
   const hIbc = lectura?.ibc
+  const hPersona = lectura?.persona
 
   const mesPlanilla = hMes?.mes ? nombreMes(hMes.mes) : null
+  const otroAnio = !!hMes?.otroAnio
   const puedeCambiarMes = mes.puedeCambiar && !mes.guardando
   const puedeCambiarBase = base.puedeCambiar && !base.guardando
 
   const todoCoincide = !!lectura?.hayTexto && hNumero?.veredicto === 'coincide' && hMes?.veredicto === 'coincide' && hIbc?.veredicto === 'coincide'
-  const hayDiferencias = hMes?.veredicto === 'distinto' || hIbc?.veredicto === 'distinto'
+  // La cédula del contratista aparecía en TODAS las planillas legibles (291 de 291): si falta, es una señal (planilla de otra
+  // persona o un operador que la oculta), no un detalle.
+  const personaFalta = !!cedula && lectura?.calidad === 'ok' && hPersona?.veredicto !== 'coincide'
+  const hayDiferencias = hMes?.veredicto === 'distinto' || hIbc?.veredicto === 'distinto' || personaFalta
+  const sinLectura = !!lectura && !lectura.hayTexto
 
   async function aprobar() {
     setTrabajando(true)
-    // Si el mes que muestra el documento es el del sistema y aún no está confirmado, aprobar lo confirma: es lo que el
-    // revisor acaba de comprobar con sus ojos. Si difiere, no se decide por él.
-    if (hMes?.veredicto === 'coincide' && !mes.confirmado && puedeCambiarMes) await mes.onCambiar(mes.valor)
-    const ok = await decision.onAprobar()
-    setTrabajando(false)
-    if (ok !== false) onCerrar()
+    try {
+      // Si el mes que muestra el documento es el del sistema y aún no está confirmado, aprobar lo confirma: es lo que el
+      // revisor acaba de comprobar con sus ojos. Si difiere, no se decide por él. Y si confirmarlo falla, no se aprueba.
+      if (hMes?.veredicto === 'coincide' && !mes.confirmado && puedeCambiarMes) {
+        if ((await mes.onCambiar(mes.valor)) === false) return
+      }
+      const ok = await decision.onAprobar()
+      if (ok !== false) onCerrar()
+    } finally {
+      setTrabajando(false)
+    }
   }
 
   async function devolver() {
     if (!motivo.trim()) return
     setTrabajando(true)
-    const ok = await decision.onDevolver(motivo.trim())
-    setTrabajando(false)
-    if (ok !== false) onCerrar()
+    try {
+      const ok = await decision.onDevolver(motivo.trim())
+      if (ok !== false) onCerrar()
+    } finally {
+      setTrabajando(false)
+    }
   }
 
   const ocupado = trabajando || decision.decidiendo
@@ -238,7 +306,7 @@ export default function RevisionPlanillaVisor({
               role="tab"
               aria-selected={pestana === d.id}
               disabled={!d.url}
-              onClick={() => { setPestana(d.id); setActiva(null) }}
+              onClick={() => elegirPestana(d.id)}
               className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 disabled:opacity-40 ${
                 pestana === d.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
               }`}
@@ -285,11 +353,16 @@ export default function RevisionPlanillaVisor({
                 marcas={marcas}
                 activa={pestana === 'planilla' ? activa : null}
                 onTexto={setTextoPlanilla}
-                onEstado={e => { setNoAbrio(e === 'error' || e === 'protegido' ? e : null); if (e === 'error' || e === 'protegido') setTextoPlanilla([]) }}
+                onMarcas={setSenalables}
+                onEstado={e => {
+                  setNoAbrio(e === 'error' || e === 'protegido' ? e : null)
+                  // Sin poder abrirla no habrá texto: la lectura deja de «leer» y lo dice.
+                  if (e === 'error' || e === 'protegido') setTextoPlanilla([])
+                }}
               />
             </div>
           )}
-          {soporte.url && (
+          {soporte.url && soporteVisto && (
             <div hidden={pestana !== 'soporte'}>
               <PaginasPdf url={soporte.url} claves={claves} />
             </div>
@@ -307,13 +380,37 @@ export default function RevisionPlanillaVisor({
               {pestana === 'soporte' ? 'Estás viendo el soporte del pago. Los datos de abajo se comparan con la planilla.' : 'Esto es lo que dice el sistema, comparado con lo que dice la planilla.'}
             </p>
 
+            {aviso && (
+              <div
+                role="alert"
+                className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs leading-snug ${
+                  aviso.tono === 'alerta' ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-300 bg-amber-50 text-amber-900'
+                }`}
+              >
+                <span className="mt-px shrink-0"><Icono glifo={Iconos.estado.advertencia} tamano="sm" /></span>
+                <div className="min-w-0 flex-1">
+                  <p>{aviso.texto}</p>
+                  {lectura?.calidad === 'no_parece_planilla' && decision.puedeDecidir && !devolviendo && (
+                    <button
+                      type="button"
+                      disabled={ocupado}
+                      onClick={() => { setMotivo(MOTIVO_NO_ES_PLANILLA); setDevolviendo(true) }}
+                      className="mt-1.5 font-semibold underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                    >
+                      Devolver por esto
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             <FilaCotejo
               etiqueta="N.° de planilla"
               sistema={numero?.trim() || 'Sin número'}
               estado={estado(hNumero)}
               tono={hNumero?.veredicto === 'coincide' ? 'bien' : 'neutro'}
               mensaje={leyendo ? 'Leyendo el documento…' : hNumero?.veredicto === 'coincide' ? 'Aparece en la planilla.' : numero?.trim() ? ayudaSinLeer : 'El contratista no ha escrito el número.'}
-              onVer={hNumero?.veredicto === 'coincide' ? () => ver('numero') : undefined}
+              onVer={senalables.has('numero') ? () => ver('numero') : undefined}
             />
 
             <FilaCotejo
@@ -323,13 +420,14 @@ export default function RevisionPlanillaVisor({
               tono={hMes?.veredicto === 'coincide' ? 'bien' : hMes?.veredicto === 'distinto' ? 'aviso' : 'neutro'}
               mensaje={
                 leyendo ? 'Leyendo el documento…'
-                  : hMes?.veredicto === 'coincide' ? `La planilla dice ${mesPlanilla}.`
-                    : hMes?.veredicto === 'distinto' ? `La planilla dice ${mesPlanilla}, no ${nombreMes(mes.valor)}. Es un pago por mes vencido: válido si es el correcto.`
-                      : ayudaSinLeer
+                  : hMes?.veredicto === 'coincide' ? `La planilla dice ${mesPlanilla}${hMes.anio ? ` de ${hMes.anio}` : ''}.`
+                    : otroAnio ? `La planilla dice ${mesPlanilla} de ${hMes?.anio}, pero el informe es de ${mes.anio}: es de otro año.`
+                      : hMes?.veredicto === 'distinto' ? `La planilla dice ${mesPlanilla}, no ${nombreMes(mes.valor)}. Es un pago por mes vencido: válido si es el correcto.`
+                        : ayudaSinLeer
               }
-              onVer={hMes?.veredicto && hMes.veredicto !== 'sin_comprobar' ? () => ver('mes') : undefined}
+              onVer={senalables.has('mes') ? () => ver('mes') : undefined}
             >
-              {hMes?.veredicto === 'distinto' && hMes.mes && puedeCambiarMes && (
+              {hMes?.veredicto === 'distinto' && !otroAnio && hMes.mes && puedeCambiarMes && (
                 <button type="button" disabled={ocupado} onClick={() => mes.onCambiar(hMes.mes!)} className={`${BOTON} text-white`} style={{ backgroundColor: MARCA }}>
                   Confirmar {mesPlanilla}
                 </button>
@@ -339,7 +437,7 @@ export default function RevisionPlanillaVisor({
                   Confirmar {nombreMes(mes.valor)}
                 </button>
               )}
-              {puedeCambiarMes && (
+              {puedeCambiarMes && !otroAnio && (
                 <button type="button" disabled={ocupado} onClick={() => setDialogo('mes')} className={BOTON_SECUNDARIO}>
                   <Icono glifo={Iconos.accion.editar} tamano="sm" /> {hMes?.veredicto === 'distinto' || hMes?.veredicto === 'coincide' ? 'Otro mes' : 'Elegir mes'}
                 </button>
@@ -358,7 +456,7 @@ export default function RevisionPlanillaVisor({
                     : hIbc?.veredicto === 'distinto' && hIbc.valor != null ? `La planilla muestra ${pesos(hIbc.valor)}.`
                       : ayudaSinLeer
               }
-              onVer={hIbc?.veredicto && hIbc.veredicto !== 'sin_comprobar' ? () => ver('ibc') : undefined}
+              onVer={senalables.has('ibc') ? () => ver('ibc') : undefined}
             >
               {hIbc?.veredicto === 'distinto' && hIbc.valor != null && puedeCambiarBase && (
                 <button type="button" disabled={ocupado} onClick={() => base.onGuardar(hIbc.valor!)} className={`${BOTON} text-white`} style={{ backgroundColor: MARCA }}>
@@ -377,6 +475,18 @@ export default function RevisionPlanillaVisor({
               )}
             </FilaCotejo>
 
+            {/* La persona: solo informa. «No aparece» no prueba nada (algunos operadores ocultan la cédula). */}
+            {cedula && lectura?.calidad === 'ok' && (
+              <FilaCotejo
+                etiqueta="Cédula del contratista"
+                sistema={hPersona?.veredicto === 'coincide' ? 'Aparece en la planilla' : 'No aparece en la planilla'}
+                estado={personaFalta ? 'distinto' : estado(hPersona)}
+                tono={hPersona?.veredicto === 'coincide' ? 'bien' : 'aviso'}
+                mensaje={hPersona?.veredicto === 'coincide' ? 'La planilla es de esta persona.' : 'Verifica que la planilla sea de este contratista (algunos operadores ocultan la cédula).'}
+                onVer={senalables.has('persona') ? () => ver('persona') : undefined}
+              />
+            )}
+
             <p className="hidden pt-1 text-[11px] leading-snug text-gray-400 lg:block">
               La lectura es una ayuda: la hace tu navegador y el documento no sale del sistema. La decisión es tuya.
             </p>
@@ -385,12 +495,17 @@ export default function RevisionPlanillaVisor({
           {/* La decisión, siempre a la vista */}
           {decision.puedeDecidir && (
             <div className="shrink-0 space-y-2 border-t border-gray-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
+              {decision.estado === 'aprobada' && (
+                <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-700"><Icono glifo={Iconos.estado.aprobado} tamano="sm" /> Esta planilla ya está aprobada.</p>
+              )}
               {decision.estado === 'rechazada' && decision.motivoAnterior && (
                 <p className="text-xs text-red-600">Devuelta antes: {decision.motivoAnterior}</p>
               )}
-              {hayDiferencias && !devolviendo && (
-                <p className="text-xs leading-snug text-amber-800">Hay datos distintos al documento. Corrígelos o aprueba si es lo correcto.</p>
-              )}
+              {!devolviendo && (hayDiferencias
+                ? <p className="text-xs leading-snug text-amber-800">Hay algo que no coincide con el documento. Corrígelo o aprueba si es lo correcto.</p>
+                : sinLectura && haySubida
+                  ? <p className="text-xs leading-snug text-amber-800">Sin lectura automática: compara los datos a ojo antes de aprobar.</p>
+                  : null)}
               {devolviendo ? (
                 <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/60 p-3">
                   <label htmlFor="motivo-devolucion-visor" className="text-xs font-semibold text-red-700">Motivo de la devolución</label>
@@ -482,5 +597,48 @@ export default function RevisionPlanillaVisor({
       )}
     </div>,
     document.body,
+  )
+}
+
+/**
+ * Si algo fallara al dibujar la revisión, no se lleva la pantalla del periodo con él: se avisa y se ofrece lo de siempre,
+ * abrir el documento en una pestaña nueva.
+ */
+class LimiteDeError extends Component<{ children: ReactNode; onCerrar: () => void; url: string | null }, { fallo: boolean }> {
+  state = { fallo: false }
+
+  static getDerivedStateFromError() { return { fallo: true } }
+
+  componentDidCatch(error: unknown) { console.error('Revisión de la planilla en pantalla:', error) }
+
+  render() {
+    if (!this.state.fallo) return this.props.children
+    return createPortal(
+      <div role="alertdialog" aria-modal="true" aria-label="No se pudo abrir la revisión" className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-2xl">
+          <p className="text-sm font-semibold text-gray-900">No se pudo abrir la revisión en pantalla</p>
+          <p className="mt-1 text-xs text-gray-500">Puedes revisar la planilla abriéndola en una pestaña nueva.</p>
+          <div className="mt-4 flex justify-center gap-2">
+            {this.props.url && (
+              <a href={this.props.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center rounded-lg bg-gray-900 px-4 text-sm font-medium text-white hover:bg-gray-800">
+                Abrir el documento
+              </a>
+            )}
+            <button type="button" onClick={this.props.onCerrar} className="h-9 rounded-lg border border-gray-300 px-4 text-sm text-gray-700 hover:bg-gray-50">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )
+  }
+}
+
+export default function RevisionPlanillaVisorSeguro(props: Props) {
+  return (
+    <LimiteDeError onCerrar={props.onCerrar} url={props.planilla.url ?? props.soporte.url}>
+      <RevisionPlanillaVisor {...props} />
+    </LimiteDeError>
   )
 }

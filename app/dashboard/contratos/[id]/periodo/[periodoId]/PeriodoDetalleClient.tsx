@@ -2052,7 +2052,8 @@ export default function PeriodoDetallePage({
     setGuardandoPlanilla(false)
   }
 
-  async function handleGuardarMesCotizacion(mes: string) {
+  /** Devuelve si se pudo: aprobar desde la revisión en pantalla no sigue si confirmar el mes falló. */
+  async function handleGuardarMesCotizacion(mes: string): Promise<boolean> {
     setGuardandoMesCotizacion(true)
     const result = await guardarMesCotizacion(periodoId, mes)
     if (result.error) toast.error(result.error)
@@ -2062,6 +2063,7 @@ export default function PeriodoDetallePage({
       router.refresh()
     }
     setGuardandoMesCotizacion(false)
+    return !result.error
   }
 
   // Descarga de un ZIP con señal de que está pasando algo.
@@ -4186,6 +4188,7 @@ export default function PeriodoDetallePage({
                         }}
                         lectura={{
                           claves: clavesDelPdf,
+                          cedula: cedulaContratista,
                           titulo: `Planilla · ${periodo.mes} ${periodo.anio}`,
                           subtitulo: [contrato?.contratista?.nombre_completo, contrato ? `Contrato ${contrato.numero}-${contrato.anio}` : null].filter(Boolean).join(' · '),
                         }}

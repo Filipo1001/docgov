@@ -52,7 +52,8 @@ export interface DatoMes {
   opciones: string[]
   puedeCambiar: boolean
   guardando: boolean
-  onCambiar: (mes: string) => void | Promise<void>
+  /** Devuelve false si no se pudo guardar (aprobar no sigue en ese caso). */
+  onCambiar: (mes: string) => void | boolean | Promise<void | boolean>
 }
 
 export interface DatoBase {
@@ -95,6 +96,8 @@ export interface DecisionRevision {
 export interface LecturaRevision {
   /** Contraseñas a probar si el PDF viene cifrado (la cédula del contratista). */
   claves: string[]
+  /** Cédula del contratista: si aparece en la planilla, es de él. */
+  cedula?: string | null
   titulo: string
   subtitulo?: string
 }
@@ -314,6 +317,7 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
           soporte={{ id: 'soporte', etiqueta: soporte.etiqueta, icono: soporte.icono, url: soporte.url }}
           inicial={visor}
           claves={lectura.claves}
+          cedula={lectura.cedula}
           numero={numero.valor}
           mes={mes}
           base={base}
