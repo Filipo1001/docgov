@@ -12,6 +12,10 @@
  *
  * Los años no se mezclan: se mira un año a la vez, y cada archivo está en el año de su reporte. Los filtros viajan en
  * la dirección (se pueden compartir) y la lista se muestra de a 25 indicadores.
+ *
+ * Los archivos de un reporte ANULADO no cuentan, pero quien puede verlos (el administrador, Control Interno y quien reportó)
+ * los ve aparte, TACHADOS, con quién anuló el reporte y por qué. Los indicadores cuyo único reporte del año se anuló salen
+ * al final, sin estado.
  */
 
 import { useEffect, useId, useRef, useState, useTransition } from 'react'
@@ -67,6 +71,7 @@ function ArchivoLinea({ a, abrir, abriendo, conEstado }: {
   conEstado: boolean
 }) {
   const etiqueta = a.categoria ? ETIQUETA_CATEGORIA[a.categoria] : 'Archivo'
+  const anulado = a.anulacion !== null
   return (
     <div className="min-w-0">
       <button
@@ -79,15 +84,27 @@ function ArchivoLinea({ a, abrir, abriendo, conEstado }: {
           <Icono glifo={a.categoria ? GLIFO[a.categoria] : Iconos.documentos.adjunto} tamano="md" />
         </span>
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-[#192031] group-hover:underline" title={a.nombre}>{a.nombre}</span>
+          <span
+            className={`block truncate text-sm font-medium group-hover:underline ${anulado ? 'text-[#667085] line-through decoration-[#98A2B3]' : 'text-[#192031]'}`}
+            title={a.nombre}
+          >
+            {a.nombre}
+          </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#667085]">
             <span className="tabular-nums">{etiqueta} · {describirTamano(a.bytes)}</span>
+            {anulado && <Sello>Anulado</Sello>}
             {a.conservada && <Sello>Conservada</Sello>}
-            {conEstado && a.estado && <SituacionTexto situacion={a.estado} />}
+            {!anulado && conEstado && a.estado && <SituacionTexto situacion={a.estado} />}
           </span>
         </span>
       </button>
-      {a.observacion && (
+      {a.anulacion && (a.anulacion.por !== '' || a.anulacion.motivo !== '') && (
+        <p className="mt-1.5 pl-12 text-xs leading-snug text-[#912018] [overflow-wrap:anywhere]">
+          <b>Anulado</b>{a.anulacion.por !== '' && <> por {a.anulacion.por}</>}{a.anulacion.cuando !== '' && <> · {fechaHoraBogota(a.anulacion.cuando)}</>}
+          {a.anulacion.motivo !== '' && <>: «{a.anulacion.motivo}»</>}
+        </p>
+      )}
+      {!anulado && a.observacion && (
         <p className="mt-1.5 flex items-start gap-1.5 pl-12 text-xs leading-snug text-[#912018]">
           <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="mt-px shrink-0" />
           <span className="min-w-0 [overflow-wrap:anywhere]"><b>Devuelto:</b> «{a.observacion}»</span>
@@ -179,11 +196,23 @@ function FilaDeIndicador({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir
 
       <div className="min-w-0">
         {fila.archivos.length === 0 ? (
-          <p className="text-xs text-[#667085]">Sin archivos este año.</p>
+          <p className="text-xs text-[#667085]">{fila.anulados.length > 0 ? 'Sin archivos vigentes este año.' : 'Sin archivos este año.'}</p>
         ) : fila.archivos.length === 1 ? (
           <ArchivoLinea a={fila.archivos[0]} abrir={abrir} abriendo={abriendo} conEstado={false} />
         ) : (
           <Carpeta fila={fila} abrir={abrir} abriendo={abriendo} />
+        )}
+        {fila.anulados.length > 0 && (
+          <div className={fila.archivos.length > 0 ? 'mt-3 border-t border-dashed border-[#DCE0E8] pt-3' : 'mt-3'}>
+            <p className={T.rotulo}>Anulados</p>
+            <ul className="mt-2 space-y-3">
+              {fila.anulados.map(a => (
+                <li key={a.id}>
+                  <ArchivoLinea a={a} abrir={abrir} abriendo={abriendo} conEstado={false} />
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -195,12 +224,14 @@ function FilaDeIndicador({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir
         </div>
 
         <div className="min-w-0">
-          {fila.estado && (
+          {fila.estado ? (
             <SemaforoReporte
               estado={fila.estado}
               linea={lineaDeSemaforo(fila.estado, { autor: fila.autor, dependencia: fila.dependencia, validador: fila.validador })}
             />
-          )}
+          ) : fila.anulados.length > 0 ? (
+            <p className="text-xs text-[#667085]">Sin reporte vigente</p>
+          ) : null}
         </div>
       </div>
     </li>
@@ -289,7 +320,7 @@ export default function EvidenciasPdm({ filtro, datos, dependencias, anioActual,
             aria-pressed={filtro.estado === null}
             className={claseChip(filtro.estado === null)}
           >
-            Todos <span className="ml-1 tabular-nums opacity-70">{datos.conteo.devuelto + datos.conteo.pendiente + datos.conteo.aprobado}</span>
+            Todos <span className="ml-1 tabular-nums opacity-70">{datos.conteo.devuelto + datos.conteo.pendiente + datos.conteo.aprobado + datos.soloAnulados}</span>
           </button>
           {ESTADOS_POR_URGENCIA.map(e => (
             <button

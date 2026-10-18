@@ -174,6 +174,45 @@ es('«sin conteo» está en ceros y no se comparte', (() => { const a = { ...ev.
 es('el validador viaja a la fila, con nombre propio', ev.armarFilasIndicador([A], 2026, [AR('f1', 'u1')])[0].validador, 'Sara Sánchez Vélez')
 es('sin validador: null', ev.armarFilasIndicador([B], 2026, [AR('f2', 'u2')])[0].validador, null)
 
+// ── Lo anulado (migraciones 068 y 069) ──
+const AN = (id: string, ind: string, extra: Partial<ev.FilaDeVista> = {}) => AR(id, ind, { anulada: true, reporte_id: 'rep-' + id, ...extra })
+const fila1 = ev.armarFilasIndicador([A, B], 2026, [
+  AR('v1', 'u1', { nombre: 'bueno.pdf' }),
+  AN('x1', 'u1', { nombre: 'equivocado.pdf', reportado_en: '2026-09-20T12:00:00Z' }),
+  AN('x2', 'u1', { nombre: 'version-vieja.pdf', reemplazada: true }),     // versión anterior de una cadena anulada: no se lista
+  AN('x3', 'u2', { nombre: 'solo-anulado.pdf' }),
+], ev.relacionar([AN('x1', 'u1')], [R('z', 'u9', { nombre: 'Acta de comité.pdf' })]), new Map([
+  ['rep-x1', { por: 'Felipe Restrepo', cuando: '2026-09-21T12:00:00Z', motivo: 'Se reportó sobre el indicador equivocado.' }],
+]))
+es('un archivo de un reporte anulado va aparte, no entre los vigentes', [fila1[0].archivos.map(a => a.nombre), fila1[0].anulados.map(a => a.nombre)], [['bueno.pdf'], ['equivocado.pdf']])
+es('la versión anterior de una cadena anulada no se lista', fila1[0].anulados.some(a => a.nombre === 'version-vieja.pdf'), false)
+es('los vigentes no llevan anulación; los anulados sí, con quién, cuándo y por qué', [fila1[0].archivos[0].anulacion, fila1[0].anulados[0].anulacion], [null, { por: 'Felipe Restrepo', cuando: '2026-09-21T12:00:00Z', motivo: 'Se reportó sobre el indicador equivocado.' }])
+es('un archivo anulado no «también respalda» a otros indicadores', fila1[0].anulados[0].tambien.length, 0)
+es('si no se pudo leer cómo se anuló, el archivo igual sale marcado como anulado', [fila1[1].archivos.length, fila1[1].anulados[0].anulacion], [0, { por: '', cuando: '', motivo: '' }])
+es('un indicador sin anulados: lista vacía', ev.armarFilasIndicador([A], 2026, [AR('v1', 'u1')])[0].anulados, [])
+es('lo anulado de otro año no se mezcla', ev.armarFilasIndicador([A], 2026, [AN('x9', 'u1', { anio: 2025 })])[0].anulados.length, 0)
+
+const FA = (reporte: string, accion: string, cuando: string, motivo = 'Motivo de prueba', por = 'FELIPE RESTREPO') => ({ reporte_id: reporte, accion, motivo, actor_nombre: por, created_at: cuando })
+const anul = ev.anulacionDeArchivos([
+  FA('a', 'anular', '2026-10-01T10:00:00Z', 'Primero', 'FELIPE RESTREPO'),
+  FA('a', 'restaurar', '2026-10-02T10:00:00Z'),
+  FA('a', 'anular', '2026-10-03T10:00:00Z', 'Otra vez', 'ana maría pérez'),
+  FA('b', 'anular', '2026-10-01T10:00:00Z'),
+  FA('b', 'restaurar', '2026-10-02T10:00:00Z'),
+])
+es('de cada reporte anulado, la ÚLTIMA anulación, con nombre propio', anul.get('a'), { por: 'Ana María Pérez', cuando: '2026-10-03T10:00:00Z', motivo: 'Otra vez' })
+es('un reporte restaurado después no figura como anulado', anul.has('b'), false)
+es('sin filas: nada', ev.anulacionDeArchivos([]).size, 0)
+
+const solo = (f: Partial<Pick<FiltroDeEvidencias, 'anio' | 'dependencia'>> = {}, con: string[] = ['u4', 'u5', 'u1'], ids: Set<string> | null = null) =>
+  ev.indicadoresSoloAnulados(TODOS, { anio: 2026, dependencia: null, ...f }, new Set(con), ids).map(i => i.id)
+es('los que solo tienen archivos anulados, por código; el que tiene vigente no se repite', solo(), [4, 5])
+es('sin archivos anulados que ver: ninguno', solo({}, []), [])
+es('con la secretaría puesta', solo({ dependencia: DEPS[1] }), [5])
+es('con la búsqueda puesta', solo({}, ['u4', 'u5'], new Set(['u4'])), [4])
+es('un año donde el indicador sí tiene vigente: no es «solo anulado»', solo({ anio: 2025 }, ['u2', 'u4']), [4])
+es('un reporte sin archivos (corrección del administrador) cuenta como sin vigente', solo({}, ['u5']), [5])
+
 // Esta batería no toca ninguna base: lo que se comprobaba contra los archivos reales (búsqueda, años) se corre aparte, a mano.
 console.log(`\n${total - mal} de ${total} casos bien${mal ? ` · ${mal} FALLAN` : ''}`)
 if (mal) process.exit(1)

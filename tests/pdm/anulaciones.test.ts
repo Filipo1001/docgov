@@ -206,3 +206,32 @@ test('devolver un reporte que estaba APROBADO se dice «reabrir»; una devoluci�
   assert.deepEqual(de(d, 'r1').validaciones.map(v => v.reabre), [false, true])
   assert.deepEqual(de(d, 'r2').validaciones.map(v => v.reabre), [false])
 })
+
+test('un reporte APROBADO solo lo reabre el administrador: la secretaría aprueba y devuelve lo pendiente', () => {
+  n = 0
+  const r1 = reporte('r1'); const r2 = reporte('r2', { anio: 2025 })
+  const val = [validacion('r1', 'aprobado', 1)]
+  // La secretaría (puede validar el indicador, no es admin): lo aprobado no se toca, lo pendiente sí.
+  const sec = armar([r1, r2], val, [], { esAdmin: false, puedeValidarElIndicador: true, yoId: 'secretaria' })
+  assert.equal(de(sec, 'r1').puedeValidar, false, 'aprobado: la secretaría no lo reabre')
+  assert.equal(de(sec, 'r2').puedeValidar, true, 'pendiente: la secretaría lo valida')
+  // El administrador sí reabre el aprobado.
+  const adm = armar([r1, r2], val, [], { esAdmin: true, puedeValidarElIndicador: true })
+  assert.equal(de(adm, 'r1').puedeValidar, true)
+  // Y un reporte devuelto no se valida desde aquí (se corrige).
+  const dev = armar([reporte('d1')], [validacion('d1', 'devuelto', 1, 'Falta la firma del acta')], [], { esAdmin: true })
+  assert.equal(de(dev, 'd1').estado, 'devuelto')
+})
+
+test('quien reportó ve su reporte anulado como suyo y no puede validar, anular ni restaurar nada', () => {
+  n = 0
+  const r1 = reporte('r1'); const r2 = reporte('r2', { valor: 25 })
+  const d = armar([r1, r2], [validacion('r1', 'aprobado', 1)], [fila('r2', 'anular', '2026-10-03T10:00:00Z', 'Indicador equivocado', 'Felipe')], {
+    yoId: 'responsable', esAdmin: false, puedeValidarElIndicador: false,
+  })
+  assert.equal(de(d, 'r2').anulado, true)
+  assert.equal(de(d, 'r2').autorId, 'responsable')
+  assert.equal(de(d, 'r2').anulaciones[0].motivo, 'Indicador equivocado')
+  assert.equal(de(d, 'r2').puedeRestaurar || de(d, 'r2').puedeAnular || de(d, 'r2').puedeValidar, false)
+  assert.equal(de(d, 'r1').vigente, true)
+})
