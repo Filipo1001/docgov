@@ -12,6 +12,14 @@
  *     —confirmar, cambiar a lo que dice el documento, o elegir otro—.
  *   · Abajo, la decisión: «Todo coincide · Aprobar» o Devolver, con el motivo a un toque.
  *
+ * EN EL TELÉFONO Y LA TABLETA (donde trabaja buena parte de quien revisa; lado a lado solo desde 1024 de ancho):
+ *   · Una planilla es una página apaisada con letra pequeña: en 375 píxeles de ancho no se lee. Hay ZOOM (− / + y un
+ *     botón para volver al ajuste) y, en un teléfono, el documento arranca ya acercado si es apaisado. Tocar la lupa de
+ *     un dato acerca el documento justo a ese dato.
+ *   · Girado (apaisado), el documento y el cotejo van LADO A LADO; apilados dejaban 97 píxeles de documento.
+ *   · En vertical, el cotejo se PLIEGA a una barra con el estado de cada dato (✓ N.° · ⚠ Mes · ⚠ IBC) y las dos
+ *     decisiones, para que el documento tenga la pantalla; se despliega con un toque, y se pliega solo al mirar un dato.
+ *
  * La lectura (`lib/lectura-planilla.ts`) COMPARA, no decide: cuando no encuentra el dato, o el documento es una imagen,
  * está dañado o ni siquiera parece una planilla, lo dice —con un aviso arriba y «compáralo tú» en cada fila— y deja la
  * comparación a quien revisa. Cambiar el mes o el IBC, aprobar y devolver son los mismos manejadores del panel de
@@ -76,6 +84,19 @@ const MOTIVOS = [
 const MOTIVO_NO_ES_PLANILLA = 'El documento no es una planilla de seguridad social.'
 
 type Tono = 'bien' | 'aviso' | 'neutro'
+
+const NIVELES_ZOOM = [1, 1.5, 2, 3, 4]
+
+/** Un dato en la barra plegada: su estado de un vistazo. */
+function Chip({ etiqueta, estado }: { etiqueta: string; estado: Hallazgo['veredicto'] | 'leyendo' }) {
+  const glifo = estado === 'coincide' ? Iconos.estado.aprobado : estado === 'distinto' ? Iconos.estado.advertencia : Iconos.estado.pendiente
+  const color = estado === 'coincide' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : estado === 'distinto' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-200 bg-gray-50 text-gray-500'
+  return (
+    <span className={`inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-medium ${color}`}>
+      <Icono glifo={glifo} tamano="sm" /> {etiqueta}
+    </span>
+  )
+}
 
 function FilaCotejo({
   etiqueta, sistema, estado, mensaje, tono, onVer, children,
@@ -155,10 +176,16 @@ function RevisionPlanillaVisor({
   // Los datos que se pudieron señalar sobre el documento: «ver en el documento» solo se ofrece para esos.
   const [senalables, setSenalables] = useState<Set<string>>(new Set())
   const [dialogo, setDialogo] = useState<'mes' | 'base' | null>(null)
+  // Zoom del documento y si el cotejo está desplegado (en vertical se pliega para dejarle la pantalla al documento).
+  const [zoom, setZoom] = useState(1)
+  const zoomElegido = useRef(false)
+  // En una pantalla corta (un iPhone SE tiene 568 de alto) el cotejo desplegado dejaría ~170 píxeles al documento: arranca plegado.
+  const [cotejoAbierto, setCotejoAbierto] = useState(() => typeof window === 'undefined' || window.innerHeight >= 700)
   const [devolviendo, setDevolviendo] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [trabajando, setTrabajando] = useState(false)
   const panel = useRef<HTMLDivElement>(null)
+  const seccion = useRef<HTMLElement>(null)
 
   const documento = pestana === 'planilla' ? planilla : soporte
   const haySubida = !!planilla.url
@@ -224,11 +251,24 @@ function RevisionPlanillaVisor({
     setActiva(null)
   }
 
+  const cambiarZoom = (nuevo: number) => { zoomElegido.current = true; setZoom(nuevo) }
+  const acercar = () => cambiarZoom(NIVELES_ZOOM.find(n => n > zoom + 0.01) ?? NIVELES_ZOOM[NIVELES_ZOOM.length - 1])
+  const alejar = () => cambiarZoom([...NIVELES_ZOOM].reverse().find(n => n < zoom - 0.01) ?? NIVELES_ZOOM[0])
+
+  // Apilado = teléfono en vertical; lado a lado = pantalla ancha o teléfono girado.
+  const ladoALado = () => window.matchMedia('(min-width: 1024px), (orientation: landscape) and (max-height: 520px)').matches
+
   const ver = (id: string) => {
     setPestana('planilla')
-    // Un clic repetido sobre la misma fila debe volver a llevar la vista: se limpia y se vuelve a poner.
+    // Apilado, el documento necesita la pantalla y letra grande: se pliega el cotejo y se acerca el documento.
+    if (!ladoALado()) {
+      setCotejoAbierto(false)
+      zoomElegido.current = true
+      setZoom(z => Math.max(z, 2.5))
+    }
+    // Un clic repetido sobre la misma fila debe volver a llevar la vista: se limpia y se vuelve a poner (tras el reflujo).
     setActiva(null)
-    requestAnimationFrame(() => setActiva(id))
+    requestAnimationFrame(() => requestAnimationFrame(() => setActiva(id)))
   }
 
   // ── Los datos ──
@@ -290,10 +330,10 @@ function RevisionPlanillaVisor({
       aria-modal="true"
       aria-label={`Revisar planilla: ${titulo}`}
       onKeyDown={atraparTab}
-      className="fixed inset-0 z-[70] flex flex-col bg-gray-100 outline-none"
+      className="fixed inset-0 z-[70] flex h-dvh flex-col bg-gray-100 outline-none"
     >
       {/* Barra superior: qué se revisa, qué documento se ve y cómo salir */}
-      <header className="flex shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 sm:gap-3 sm:px-4">
+      <header className="flex shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 apaisado:py-1 sm:gap-3 sm:px-4">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-gray-900">{titulo}</p>
           {subtitulo && <p className="truncate text-xs text-gray-500">{subtitulo}</p>}
@@ -340,9 +380,10 @@ function RevisionPlanillaVisor({
         </button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        {/* El documento */}
-        <section aria-label="Documento" className="min-h-[22dvh] flex-1 overflow-y-auto overscroll-contain bg-gray-200 p-2 sm:p-4">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row apaisado:flex-row">
+        {/* El documento, con su zoom flotando abajo a la derecha */}
+        <div className="relative flex min-h-[22dvh] min-w-0 flex-1 flex-col">
+        <section ref={seccion} aria-label="Documento" className="min-h-0 flex-1 overflow-auto overscroll-contain bg-gray-200 p-2 sm:p-4">
           {/* Los dos documentos quedan montados y solo se oculta el que no se ve: así el texto de la planilla se lee
               aunque se abra primero el soporte, y cambiar de pestaña no vuelve a descargar nada. */}
           {planilla.url && (
@@ -352,6 +393,13 @@ function RevisionPlanillaVisor({
                 claves={claves}
                 marcas={marcas}
                 activa={pestana === 'planilla' ? activa : null}
+                zoom={zoom}
+                // Una página apaisada en un espacio estrecho (un teléfono) no se lee ajustada al ancho: arranca acercada.
+                onAspecto={aspecto => {
+                  if (zoomElegido.current || aspecto < 1.2) return
+                  const ancho = seccion.current?.clientWidth ?? 1000
+                  if (ancho < 700) setZoom(ancho < 500 ? 2 : 1.5)
+                }}
                 onTexto={setTextoPlanilla}
                 onMarcas={setSenalables}
                 onEstado={e => {
@@ -364,18 +412,52 @@ function RevisionPlanillaVisor({
           )}
           {soporte.url && soporteVisto && (
             <div hidden={pestana !== 'soporte'}>
-              <PaginasPdf url={soporte.url} claves={claves} />
+              <PaginasPdf url={soporte.url} claves={claves} zoom={zoom} />
             </div>
           )}
           {!documento.url && <p className="grid h-full place-items-center text-sm text-gray-500">Este documento no se ha subido.</p>}
         </section>
 
+        {/* Zoom: las cifras de una planilla son pequeñas, y en un teléfono más. */}
+        {documento.url && (
+          <div role="group" aria-label="Zoom del documento" className="absolute bottom-3 right-3 z-10 flex items-center overflow-hidden rounded-xl border border-gray-300 bg-white/95 shadow-lg backdrop-blur">
+            <button type="button" onClick={alejar} disabled={zoom <= NIVELES_ZOOM[0]} aria-label="Alejar" className="grid h-10 w-10 place-items-center text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 disabled:opacity-35">
+              <Icono glifo={Iconos.accion.alejar} tamano="md" />
+            </button>
+            <button type="button" onClick={() => cambiarZoom(1)} aria-label="Ajustar al ancho" title="Ajustar al ancho" className="h-10 min-w-[3.25rem] border-x border-gray-200 px-2 text-xs font-semibold tabular-nums text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400">
+              {Math.round(zoom * 100)} %
+            </button>
+            <button type="button" onClick={acercar} disabled={zoom >= NIVELES_ZOOM[NIVELES_ZOOM.length - 1]} aria-label="Acercar" className="grid h-10 w-10 place-items-center text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 disabled:opacity-35">
+              <Icono glifo={Iconos.accion.acercar} tamano="md" />
+            </button>
+          </div>
+        )}
+        </div>
+
         {/* El cotejo y la decisión */}
         <aside
           aria-label="Cotejo de la planilla"
-          className="flex max-h-[60dvh] shrink-0 flex-col border-t border-gray-200 bg-white lg:max-h-none lg:w-[400px] lg:border-l lg:border-t-0"
+          className="flex max-h-[60dvh] shrink-0 flex-col border-t border-gray-200 bg-white lg:max-h-none lg:w-[400px] lg:border-l lg:border-t-0 apaisado:max-h-none apaisado:w-[330px] apaisado:border-l apaisado:border-t-0"
         >
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5 sm:space-y-2.5 sm:p-4">
+          {/* Solo en el teléfono en vertical: el estado de cada dato de un vistazo, y el botón que pliega o despliega el cotejo. */}
+          <button
+            type="button"
+            onClick={() => setCotejoAbierto(v => !v)}
+            aria-expanded={cotejoAbierto}
+            className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-400 lg:hidden apaisado:hidden"
+          >
+            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              <Chip etiqueta="N.°" estado={estado(hNumero)} />
+              <Chip etiqueta="Mes" estado={estado(hMes)} />
+              <Chip etiqueta="IBC" estado={estado(hIbc)} />
+              {cedula && lectura?.calidad === 'ok' && <Chip etiqueta="Cédula" estado={personaFalta ? 'distinto' : estado(hPersona)} />}
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-gray-600">
+              {cotejoAbierto ? 'Plegar' : 'Cotejo'}
+              <Icono glifo={cotejoAbierto ? Iconos.accion.plegar : Iconos.accion.desplegar} tamano="sm" />
+            </span>
+          </button>
+          <div className={`min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5 sm:space-y-2.5 sm:p-4 ${cotejoAbierto ? '' : 'hidden lg:block apaisado:block'}`}>
             <p className="hidden text-xs leading-snug text-gray-500 lg:block">
               {pestana === 'soporte' ? 'Estás viendo el soporte del pago. Los datos de abajo se comparan con la planilla.' : 'Esto es lo que dice el sistema, comparado con lo que dice la planilla.'}
             </p>
@@ -502,9 +584,9 @@ function RevisionPlanillaVisor({
                 <p className="text-xs text-red-600">Devuelta antes: {decision.motivoAnterior}</p>
               )}
               {!devolviendo && (hayDiferencias
-                ? <p className="text-xs leading-snug text-amber-800">Hay algo que no coincide con el documento. Corrígelo o aprueba si es lo correcto.</p>
+                ? <p className="text-xs leading-snug text-amber-800 apaisado:hidden">Hay algo que no coincide con el documento. Corrígelo o aprueba si es lo correcto.</p>
                 : sinLectura && haySubida
-                  ? <p className="text-xs leading-snug text-amber-800">Sin lectura automática: compara los datos a ojo antes de aprobar.</p>
+                  ? <p className="text-xs leading-snug text-amber-800 apaisado:hidden">Sin lectura automática: compara los datos a ojo antes de aprobar.</p>
                   : null)}
               {devolviendo ? (
                 <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/60 p-3">
