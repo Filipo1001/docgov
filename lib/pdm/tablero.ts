@@ -335,8 +335,8 @@ export interface ItemDeAtencion {
  * Lo que la secretaría puede hacer ahora, en un orden fijo (el que importa a quien decide: lo que espera su validación, lo que
  * no tiene dueño, quien no puede reportar, y lo demás). El orden NO cambia con las cifras para que nada salte de lugar.
  */
-export function atencionDe(c: CifrasDeAnio, antiguedadDias: number | null, sinAcceso: number): ItemDeAtencion[] {
-  return [
+export function atencionDe(c: CifrasDeAnio, antiguedadDias: number | null, sinAcceso: number | null): ItemDeAtencion[] {
+  const items: ItemDeAtencion[] = [
     {
       clave: 'porValidar', cantidad: c.porValidar, titulo: 'Reportes por validar', accion: 'Validar ahora',
       ayuda: c.porValidar === 0 ? 'Nada espera tu validación.' : antiguedadDias && antiguedadDias > 0 ? `El más antiguo lleva ${plural(antiguedadDias, 'día', 'días')} esperando.` : 'Esperan tu aprobación o tu devolución.',
@@ -344,10 +344,6 @@ export function atencionDe(c: CifrasDeAnio, antiguedadDias: number | null, sinAc
     {
       clave: 'sinResponsable', cantidad: c.sinResponsable, titulo: 'Indicadores sin responsable', accion: 'Repartir',
       ayuda: c.sinResponsable === 0 ? 'Todos tienen quien los lleve.' : 'Nadie los reporta todavía. Repártelos entre tu equipo.',
-    },
-    {
-      clave: 'sinAcceso', cantidad: sinAcceso, titulo: 'Personas sin acceso al módulo', accion: 'Habilitar',
-      ayuda: sinAcceso === 0 ? 'Todo tu equipo ya puede entrar.' : 'Tienen indicadores asignados y no pueden reportarlos.',
     },
     {
       clave: 'devueltos', cantidad: c.devueltos, titulo: 'Reportes devueltos', accion: 'Ver cuáles',
@@ -358,6 +354,14 @@ export function atencionDe(c: CifrasDeAnio, antiguedadDias: number | null, sinAc
       ayuda: c.faltan === 0 ? 'No falta ninguno.' : 'Tienen responsable y aún no reportan.',
     },
   ]
+  // Si no se pudo leer quién tiene acceso, no se dice «todo tu equipo ya puede entrar»: el ítem no se muestra (en vez de un 0 falso).
+  if (sinAcceso !== null) {
+    items.splice(2, 0, {
+      clave: 'sinAcceso', cantidad: sinAcceso, titulo: 'Personas sin acceso al módulo', accion: 'Habilitar',
+      ayuda: sinAcceso === 0 ? 'Todo tu equipo ya puede entrar.' : 'Tienen indicadores asignados y no pueden reportarlos.',
+    })
+  }
+  return items
 }
 
 // ─── El ritmo, semana a semana ────────────────────────────────────────────────

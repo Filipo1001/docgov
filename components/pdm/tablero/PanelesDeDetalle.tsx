@@ -159,7 +159,7 @@ const FILTROS_DE_EQUIPO: { clave: FiltroDeEquipo; rotulo: string }[] = [
 ]
 const VISIBLES = 6
 
-export function PanelEquipo({ equipo }: { equipo: PersonaDeEquipo[] }) {
+export function PanelEquipo({ equipo, leido = true }: { equipo: PersonaDeEquipo[]; /** Falso si la lista de personas no se pudo leer: entonces no se dice «no hay nadie». */ leido?: boolean }) {
   const [filtro, setFiltro] = useState<FiltroDeEquipo>('todos')
   const [todos, setTodos] = useState(false)
   const lista = filtrarEquipo(equipo, filtro)
@@ -179,7 +179,9 @@ export function PanelEquipo({ equipo }: { equipo: PersonaDeEquipo[] }) {
         </div>
       )}
     >
-      {equipo.length === 0
+      {!leido
+        ? <NoDisponible>No se pudo leer la lista de personas en este momento. Vuelve a intentarlo en unos minutos.</NoDisponible>
+        : equipo.length === 0
         ? <NoDisponible>Todavía no hay personas con indicadores a su cargo en tu secretaría.</NoDisponible>
         : (
           <>

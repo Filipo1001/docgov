@@ -37,11 +37,13 @@ const MEDIDAS: { clave: MedidaDelTablero; rotulo: string }[] = [
   { clave: 'cumplimiento', rotulo: 'Cumplimiento' }, { clave: 'reportes', rotulo: 'Estado de los reportes' },
 ]
 
-export default function TableroSecretaria({ indicadores, personas, datos, yoId, anioInicial }: {
+export default function TableroSecretaria({ indicadores, personas, personasLeidas, datos, yoId, anioInicial }: {
   /** Los indicadores de la secretaría de quien mira, con sus cuatro años (la base ya los recortó). */
   indicadores: Indicador[]
   /** Las personas con indicadores a su cargo en esta secretaría. */
   personas: PersonaDirectorio[]
+  /** Falso si el directorio no se pudo leer: el equipo y «sin acceso» dicen que no están disponibles, no que no hay nadie. */
+  personasLeidas: boolean
   datos: DatosDelTablero
   yoId: string
   anioInicial: number
@@ -61,7 +63,7 @@ export default function TableroSecretaria({ indicadores, personas, datos, yoId, 
   const equipo = useMemo(() => equipoDe(indicadores, personas, anio, anioActual), [indicadores, personas, anio, anioActual])
   const antiguedad = datos.antiguedadPorAnio[anio] ?? null
   const lectura = useMemo(() => lecturaDelTablero(cifras, anioActual, antiguedad), [cifras, anioActual, antiguedad])
-  const atencion = useMemo(() => atencionDe(cifras, antiguedad, equipo.filter(p => p.sinAcceso).length), [cifras, antiguedad, equipo])
+  const atencion = useMemo(() => atencionDe(cifras, antiguedad, personasLeidas ? equipo.filter(p => p.sinAcceso).length : null), [cifras, antiguedad, equipo, personasLeidas])
   // Una secretaría también reporta los indicadores que lleva ella misma: se le avisa de los suyos, con un enlace que los lista.
   const propiosPorReportar = useMemo(() => pendientesDeReportar(proyectarLista(indicadores, anio), yoId), [indicadores, anio, yoId])
   const anios = aniosIniciados(anioActual)
@@ -123,7 +125,7 @@ export default function TableroSecretaria({ indicadores, personas, datos, yoId, 
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="h-full min-w-0"><PanelRitmo ritmo={datos.ritmo} esAnioActual={anio === anioActual} anio={anio} /></div>
-        <div className="h-full min-w-0"><PanelEquipo equipo={equipo} /></div>
+        <div className="h-full min-w-0"><PanelEquipo equipo={equipo} leido={personasLeidas} /></div>
       </div>
 
       <MetodoDeCalculo />

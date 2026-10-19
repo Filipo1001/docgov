@@ -90,6 +90,7 @@ export default async function ResumenPage({ searchParams }: { searchParams: Prom
       <TableroSecretaria
         indicadores={plan.indicadores}
         personas={dir.personas.filter(p => conIndicadores.has(p.id))}
+        personasLeidas={dir.ok}
         datos={datos}
         yoId={acceso.userId}
         anioInicial={anioInicial}

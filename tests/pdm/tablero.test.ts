@@ -224,6 +224,8 @@ test('la atención va SIEMPRE en el mismo orden y dice «al día» cuando no hay
   assert.ok(nada.every(x => x.cantidad === 0))
   assert.equal(nada[0].ayuda, 'Nada espera tu validación.')
   assert.match(atencionDe(cifras({ porValidar: 1 }), 1, 0)[0].ayuda, /1 día esperando/)
+  const sinLeer = atencionDe(cifras({ porValidar: 3 }), 2, null)
+  assert.deepEqual(sinLeer.map(x => x.clave), ['porValidar', 'sinResponsable', 'devueltos', 'faltan'], 'si no se pudo leer quién tiene acceso, ese ítem no se muestra (nunca un «todo tu equipo ya puede entrar» falso)')
 })
 
 // ─── Las semanas ──────────────────────────────────────────────────────────────
