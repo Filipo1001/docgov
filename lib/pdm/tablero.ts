@@ -1,3 +1,4 @@
+import { pendientesDeValidar } from './correos/resumenes-armar'
 import { cuentaDeAnio, cuentasPorPersona, POCOS_INDICADORES, type CuentaDeAnio } from './graficos'
 import { agrupar, type Indicador } from './plan'
 import type { PersonaDirectorio } from './personas'
@@ -159,6 +160,15 @@ export function secretariasDeFilas(filas: FilaDeCifras[]): SecretariaDeCifras[] 
   })
 }
 
+/**
+ * El nombre de una secretaría para una fila: «Secretaría General de Gobierno» → «Gobierno», «Secretaría de Bienestar Social» →
+ * «Bienestar Social». El nombre completo sigue disponible (se muestra al pasar el cursor). Si no se puede acortar, se deja entero.
+ */
+export function nombreCorto(nombre: string): string {
+  const corto = nombre.replace(/^(secretar[ií]a|comisar[ií]a)\s+(general\s+)?de(\s+(la|los|las))?\s+/i, '').trim()
+  return corto === '' ? nombre : corto
+}
+
 /** Lo que pesa una secretaría en el plan: sus indicadores con meta sumados en todos los años. Es el criterio de orden. */
 export const tamanoDe = (s: SecretariaDeCifras): number => ANIOS_PLAN.reduce((t, a) => t + (s.porAnio[a]?.conMeta ?? 0), 0)
 
@@ -170,17 +180,27 @@ export function ordenarPorTamano(lista: SecretariaDeCifras[]): SecretariaDeCifra
   return [...lista].sort((a, b) => tamanoDe(b) - tamanoDe(a) || a.nombre.localeCompare(b.nombre, 'es'))
 }
 
+/** Las cifras de la propia secretaría en cada año del plan, calculadas con los indicadores que la sesión ya ve. */
+export function propiaPorAnio(nombre: string, lista: Indicador[], anioActual: number): SecretariaDeCifras {
+  const porAnio: Record<number, CifrasDeAnio> = {}
+  for (const a of ANIOS_PLAN) porAnio[a] = cifrasDeCuenta(cuentaDeAnio(lista, a, anioActual))
+  return { nombre, porAnio }
+}
+
+export interface FilaDeComparacion {
+  nombre: string
+  propia: boolean
+  cifras: CifrasDeAnio
+}
+
 /**
- * Las cifras de todas las secretarías en un año. La propia se toma de la lista que la sesión ya ve (calculada aquí, la misma
+ * Todas las secretarías en un año, por TAMAÑO. La propia viene de la lista que la sesión ya ve (calculada aquí, con la misma
  * regla), no de la base: así el anillo de «Tu secretaría» y su fila en la comparación son SIEMPRE la misma cifra.
  */
-export function comparacionDelAnio(
-  otras: SecretariaDeCifras[], propia: { nombre: string; cifras: CifrasDeAnio }, anio: number,
-): { nombre: string; propia: boolean; cifras: CifrasDeAnio }[] {
-  const filas = otras
-    .filter(s => s.nombre !== propia.nombre)
-    .map(s => ({ nombre: s.nombre, propia: false, cifras: s.porAnio[anio] ?? sinCifras(anio) }))
-  return [...filas, { nombre: propia.nombre, propia: true, cifras: propia.cifras }]
+export function comparacionDelAnio(otras: SecretariaDeCifras[], propia: SecretariaDeCifras, anio: number): FilaDeComparacion[] {
+  return ordenarPorTamano([...otras.filter(s => s.nombre !== propia.nombre), propia]).map(s => ({
+    nombre: s.nombre, propia: s.nombre === propia.nombre, cifras: s.porAnio[anio] ?? sinCifras(anio),
+  }))
 }
 
 // ─── Los sectores de la propia secretaría ─────────────────────────────────────
@@ -333,6 +353,25 @@ export function semanasDeRitmo(filas: { semana: string; enviados: number; aproba
   return salida
 }
 
+/**
+ * Desde cuándo se dibuja el ritmo. El módulo abrió el 15 de octubre de 2026: lo anterior no es ritmo de trabajo (lo histórico de
+ * 2024 y 2025 se cargó de una vez y las fechas de 2026 anteriores no existen). Cada año nuevo se dibuja desde el 1 de enero.
+ */
+export const INICIO_DEL_MODULO = '2026-10-15'
+export const desdeDelRitmo = (anioActual: number): string => (anioActual === 2026 ? INICIO_DEL_MODULO : `${anioActual}-01-01`)
+
+/**
+ * Cuántos días lleva esperando el reporte más antiguo por validar, en cada año del plan (`null` si no hay ninguno). Se calcula en
+ * el servidor, con la hora de Colombia, y se entrega ya hecho: el navegador no calcula con un reloj que puede estar mal.
+ */
+export function antiguedadesPorAnio(lista: Indicador[], ahora: Date): Record<number, number | null> {
+  const pendientes = pendientesDeValidar(lista, ahora)
+  return Object.fromEntries(ANIOS_PLAN.map(a => {
+    const dias = pendientes.filter(p => p.anio === a).map(p => p.dias)
+    return [a, dias.length ? Math.max(...dias) : null]
+  }))
+}
+
 const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
 /** «19 oct». */
@@ -389,4 +428,52 @@ export function filtrarEquipo(equipo: PersonaDeEquipo[], filtro: FiltroDeEquipo)
   if (filtro === 'sin_acceso') return equipo.filter(p => p.sinAcceso)
   if (filtro === 'pendientes') return equipo.filter(p => p.porReportar + p.devueltos > 0)
   return equipo
+}
+
+// ─── Lo que el servidor entrega a la pantalla ─────────────────────────────────
+
+/**
+ * Todo lo que el tablero necesita además de los indicadores y las personas que la pantalla ya trae. Va ya calculado y es
+ * serializable: el navegador no vuelve a preguntar nada ni calcula con su reloj.
+ */
+export interface DatosDelTablero {
+  /** El nombre de la secretaría de quien mira. */
+  secretaria: string
+  anioActual: number
+  /** Las demás secretarías, solo cifras. `null` si la base no las entregó: la comparación dice que no está disponible. */
+  otras: SecretariaDeCifras[] | null
+  /** Semana a semana desde `desdeDelRitmo` hasta hoy, sin huecos. `null` si no se pudo leer. */
+  ritmo: SemanaDeRitmo[] | null
+  desdeDelRitmo: string
+  /** Días del reporte más antiguo por validar, en cada año. */
+  antiguedadPorAnio: Record<number, number | null>
+  /** La fecha de las cifras, dicha: «lunes 19 de octubre de 2026». */
+  corte: string
+}
+
+/**
+ * Arma lo que entrega el servidor. Lo que no se pudo leer (las otras secretarías, el ritmo) llega como `null` y la pantalla lo dice:
+ * un tablero con una parte que falla sigue siendo útil, no se cae entero.
+ */
+export function datosDelTablero(a: {
+  secretaria: string
+  indicadores: Indicador[]
+  filasDeCifras: FilaDeCifras[] | null
+  filasDeRitmo: { semana: string; enviados: number; aprobados: number }[] | null
+  anioActual: number
+  ahora: Date
+  /** Hoy en Colombia, `YYYY-MM-DD`. */
+  hoy: string
+  corte: string
+}): DatosDelTablero {
+  const desde = desdeDelRitmo(a.anioActual)
+  return {
+    secretaria: a.secretaria,
+    anioActual: a.anioActual,
+    otras: a.filasDeCifras === null ? null : secretariasDeFilas(a.filasDeCifras),
+    ritmo: a.filasDeRitmo === null ? null : semanasDeRitmo(a.filasDeRitmo, desde, a.hoy),
+    desdeDelRitmo: desde,
+    antiguedadPorAnio: antiguedadesPorAnio(a.indicadores, a.ahora),
+    corte: a.corte,
+  }
 }

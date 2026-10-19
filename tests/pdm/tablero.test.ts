@@ -7,9 +7,9 @@ import type { AnioDeIndicador, Indicador } from '@/lib/pdm/plan'
 import type { PersonaDirectorio } from '@/lib/pdm/personas'
 import { ANIOS_PLAN, type SituacionAnio } from '@/lib/pdm/seguimiento'
 import {
-  atencionDe, centroDeAnillo, cifrasDeCuenta, cifrasDeFila, comparacionDelAnio, equipoDe, etiquetaDeSemana, filtrarEquipo, lecturaDelTablero,
-  lunesDe, ordenarPorTamano, pctEntero, sectoresDe, secretariasDeFilas, semanasDeRitmo, sinAvanceDe, sinCifras, sumarCifras, techoDelEje,
-  textoDeFila, tamanoDe, type CifrasDeAnio, type FilaDeCifras, type Trozo,
+  antiguedadesPorAnio, atencionDe, datosDelTablero, centroDeAnillo, cifrasDeCuenta, cifrasDeFila, comparacionDelAnio, desdeDelRitmo, equipoDe, etiquetaDeSemana,
+  filtrarEquipo, lecturaDelTablero, lunesDe, nombreCorto, ordenarPorTamano, pctEntero, propiaPorAnio, sectoresDe, secretariasDeFilas, semanasDeRitmo,
+  sinAvanceDe, sinCifras, sumarCifras, tamanoDe, techoDelEje, textoDeFila, type CifrasDeAnio, type FilaDeCifras, type Trozo,
 } from '@/lib/pdm/tablero'
 
 const cifras = (o: Partial<CifrasDeAnio> = {}): CifrasDeAnio => ({ ...sinCifras(2026), conMeta: 10, ...o })
@@ -111,18 +111,44 @@ test('a igual tamaño se ordena por nombre; un año sin fila queda en ceros y no
   assert.equal(tamanoDe(hacienda), 4)
 })
 
-test('la comparación pone la cifra PROPIA de la lista de la sesión y no repite a la propia secretaría', () => {
-  const secs = secretariasDeFilas(FILAS)
-  const propia = cifras({ anio: 2026, conMeta: 62, alcanzaron: 11, conAvance: 22 })
-  const c = comparacionDelAnio(secs, { nombre: 'Gobierno', cifras: propia }, 2026)
+test('la comparación incluye a la propia secretaría con SU cifra (la de la sesión), por tamaño, sin repetirla', () => {
+  const otras = secretariasDeFilas(FILAS)
+  const propia = propiaPorAnio('Gobierno', [ind(1, 'S', { 2026: { meta: 5, s: 'falta' }, 2025: { meta: 5, s: 'falta' } })], 2026)
+  const c = comparacionDelAnio(otras, propia, 2026)
   assert.equal(c.length, 4)
   assert.equal(c.filter(x => x.propia).length, 1)
-  assert.equal(c.find(x => x.propia)!.nombre, 'Gobierno')
-  assert.equal(c.find(x => x.propia)!.cifras, propia, 'es la misma cifra que muestra «Tu secretaría»')
-  assert.equal(c.filter(x => x.nombre === 'Gobierno').length, 1)
+  assert.equal(c.filter(x => x.nombre === 'Gobierno').length, 1, 'la base también trae a Gobierno: no se repite')
+  assert.equal(c.find(x => x.propia)!.cifras, propia.porAnio[2026], 'es la misma cifra que muestra «Tu secretaría»')
+  assert.equal(c.find(x => x.propia)!.cifras.conMeta, 1, 'y no la de la base')
   assert.equal(c.find(x => x.nombre === 'Bienestar')!.cifras.conMeta, 92)
-  const sinFila = comparacionDelAnio(secs, { nombre: 'Gobierno', cifras: { ...propia, anio: 2027 } }, 2027)
-  assert.ok(sinFila.every(x => x.cifras.anio === 2027), 'las otras secretarías, sin fila en 2027, salen en ceros de ese año')
+  // Tamaño sumado en los años del plan: Bienestar 269, Territorial 197, Hacienda 4, y la propia (una meta en 2025 y otra en 2026) 2.
+  assert.deepEqual(c.map(x => x.nombre), ['Bienestar', 'Territorial', 'Hacienda', 'Gobierno'], 'por tamaño, con la propia dentro de la lista')
+  const sin2027 = comparacionDelAnio(otras, propia, 2027)
+  assert.ok(sin2027.every(x => x.cifras.anio === 2027), 'las secretarías sin fila ese año salen en ceros de ese año')
+})
+
+test('la propia secretaría tiene cifras en cada año del plan, con la regla del módulo', () => {
+  const p = propiaPorAnio('X', [ind(1, 'S', { 2026: { meta: 5, avance: 5, s: 'aprobado' } })], 2026)
+  assert.deepEqual(Object.keys(p.porAnio).map(Number), [...ANIOS_PLAN])
+  assert.equal(p.porAnio[2026].alcanzaron, 1)
+  assert.equal(p.porAnio[2027].conMeta, 0, 'un año sin meta cuenta cero')
+})
+
+test('el ritmo se dibuja desde que abrió el módulo, y cada año nuevo desde el 1 de enero', () => {
+  assert.equal(desdeDelRitmo(2026), '2026-10-15')
+  assert.equal(desdeDelRitmo(2027), '2027-01-01')
+})
+
+test('la antigüedad es la del reporte más viejo por validar de cada año (nada si no hay)', () => {
+  const ahora = new Date('2026-11-01T12:00:00Z')
+  const conReporte = (id: number, anio: number, dias: number): Indicador => {
+    const i = ind(id, 'S', { [anio]: { meta: 5, s: 'pendiente' } })
+    const a = i.anios.find(x => x.anio === anio)!
+    a.enAnio = { situacion: 'pendiente', reporte: { reporteId: `r${id}`, valor: 1, estado: 'pendiente', autorId: 'a', autorNombre: 'ANA', creado: new Date(ahora.getTime() - dias * 86_400_000).toISOString(), nEvidencias: 1, esCorreccion: false, validacionComentario: null, validadorNombre: null } }
+    return i
+  }
+  const a = antiguedadesPorAnio([conReporte(1, 2026, 5), conReporte(2, 2026, 41), conReporte(3, 2025, 200)], ahora)
+  assert.deepEqual([a[2024], a[2025], a[2026], a[2027]], [null, 200, 41, null])
 })
 
 // ─── Los sectores ─────────────────────────────────────────────────────────────
@@ -251,4 +277,27 @@ test('el equipo va por nombre, mide gestión y marca a quien no puede entrar (me
   assert.deepEqual(filtrarEquipo(eq, 'sin_acceso').map(p => p.id), ['beto'])
   assert.deepEqual(filtrarEquipo(eq, 'pendientes').map(p => p.id), ['ana', 'beto'], 'con algo por reportar o devuelto')
   assert.equal(filtrarEquipo(eq, 'todos').length, 3)
+})
+
+// ─── Lo que entrega el servidor ───────────────────────────────────────────────
+
+test('lo que no se pudo leer llega como null y el resto del tablero sigue armándose', () => {
+  const base = { secretaria: 'Gobierno', indicadores: [ind(1, 'S', { 2026: { meta: 5, s: 'falta' } })], anioActual: 2026, ahora: new Date('2026-10-19T12:00:00Z'), hoy: '2026-10-19', corte: 'lunes 19 de octubre de 2026' }
+  const sin = datosDelTablero({ ...base, filasDeCifras: null, filasDeRitmo: null })
+  assert.equal(sin.otras, null); assert.equal(sin.ritmo, null)
+  assert.equal(sin.secretaria, 'Gobierno'); assert.equal(sin.desdeDelRitmo, '2026-10-15'); assert.equal(sin.corte, 'lunes 19 de octubre de 2026')
+  assert.deepEqual(sin.antiguedadPorAnio, { 2024: null, 2025: null, 2026: null, 2027: null })
+  const con = datosDelTablero({ ...base, filasDeCifras: FILAS, filasDeRitmo: [{ semana: '2026-10-12', enviados: 3, aprobados: 1 }] })
+  assert.equal(con.otras!.length, 4)
+  assert.deepEqual(con.ritmo!.map(x => [x.semana, x.enviados, x.aprobados]), [['2026-10-12', 3, 1], ['2026-10-19', 0, 0]], 'desde la semana en que abrió el módulo hasta hoy, sin huecos')
+})
+
+test('el nombre corto de una secretaría quita «Secretaría de» y deja el resto; si no se puede, queda entero', () => {
+  assert.equal(nombreCorto('Secretaría General de Gobierno'), 'Gobierno')
+  assert.equal(nombreCorto('Secretaría de Bienestar Social'), 'Bienestar Social')
+  assert.equal(nombreCorto('Secretaría de Desarrollo Territorial'), 'Desarrollo Territorial')
+  assert.equal(nombreCorto('Secretaría de Hacienda'), 'Hacienda')
+  assert.equal(nombreCorto('Secretaria de la Mujer'), 'Mujer')
+  assert.equal(nombreCorto('Oficina Asesora'), 'Oficina Asesora')
+  assert.equal(nombreCorto('Secretaría de '), 'Secretaría de ')
 })

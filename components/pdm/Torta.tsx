@@ -26,7 +26,7 @@ const LARGO = 2 * Math.PI * R
 /** Una rendija blanca entre tramos, en vueltas (0,8 %): separa sin comerse un tramo chico. */
 const RENDIJA = 0.008
 
-export default function Torta({ tramos, centro, nota, descripcion, resaltado = null, onResaltar }: {
+export default function Torta({ tramos, centro, nota, descripcion, resaltado = null, onResaltar, tamano = 'h-[168px] w-[168px]' }: {
   tramos: TramoTorta[]
   /** Lo principal, grande, en el centro (un porcentaje, o «—»). */
   centro: string
@@ -37,13 +37,15 @@ export default function Torta({ tramos, centro, nota, descripcion, resaltado = n
   /** El tramo que se resalta (los demás se atenúan), por ejemplo al pasar sobre su fila de la leyenda. */
   resaltado?: string | null
   onResaltar?: (clave: string | null) => void
+  /** Clases de tamaño del dibujo (por defecto 168 px); el dibujo escala, sus proporciones no cambian. */
+  tamano?: string
 }) {
   const total = tramos.reduce((t, x) => t + x.valor, 0)
   const conVarios = tramos.filter(t => t.valor > 0).length > 1
   // Dónde empieza cada tramo: lo que suman los anteriores (sin variables que cambien al pintar).
   const empieza = tramos.map((_, k) => (total > 0 ? tramos.slice(0, k).reduce((t, x) => t + x.valor, 0) / total : 0))
   return (
-    <svg viewBox={`0 0 ${TAM} ${TAM}`} role="img" aria-label={descripcion} className="h-[168px] w-[168px] shrink-0">
+    <svg viewBox={`0 0 ${TAM} ${TAM}`} role="img" aria-label={descripcion} className={`${tamano} shrink-0`}>
       <circle cx={C0} cy={C0} r={R} fill="none" stroke="#E6E9EF" strokeWidth={GROSOR} />
       {tramos.map((t, k) => {
         const parte = total > 0 ? t.valor / total : 0
