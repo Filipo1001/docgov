@@ -27,6 +27,9 @@ import { firmarUrl } from '@/lib/storage-firmado'
 import { ESTADOS_EDITABLES, MESES } from '@/lib/constants'
 import { invalidarCachePDF } from '@/lib/pdf/cache'
 import { puedeEditarBaseCotizacion } from '@/lib/base-cotizacion'
+import {
+  esUrlDePlanilla, hayPlanillaDevuelta, puedeCambiarDocumentosSS, puedeReenviarPlanilla, revisionTrasCambio, type RevisionPlanilla,
+} from '@/lib/planilla-contratista'
 import { precalentarPDFs } from '@/lib/pdf/precalentar'
 import { certificacionPendiente } from '@/lib/certificaciones'
 import { actaTerminacionPendiente, emitirActaTerminacion } from '@/lib/actas-terminacion'
@@ -101,7 +104,7 @@ async function getAuthContext() {
  * `PostgrestError` con código PGRST116 es «cero filas» con `.single()`: eso sí
  * es «no existe». Cualquier otro error es una falla, y se dice como tal.
  */
-type PeriodoCargado = { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number; es_historico: boolean; habilitado_tardio: boolean }
+type PeriodoCargado = { id: string; estado: EstadoPeriodo; contrato_id: string; mes: string; anio: number; es_historico: boolean; habilitado_tardio: boolean; planilla_estado: RevisionPlanilla }
 
 async function getPeriodo(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
@@ -109,7 +112,7 @@ async function getPeriodo(
 ): Promise<{ ok: true; periodo: PeriodoCargado } | { ok: false; error: string }> {
   const { data, error } = await supabase
     .from('periodos')
-    .select('id, estado, contrato_id, mes, anio, es_historico, habilitado_tardio')
+    .select('id, estado, contrato_id, mes, anio, es_historico, habilitado_tardio, planilla_estado')
     .eq('id', periodoId)
     .single()
 
@@ -1062,11 +1065,13 @@ export async function revisarPlanilla(
       return { error: 'La planilla solo puede revisarse cuando el periodo ha sido enviado' }
     }
     // Rechazar exige que el contratista PUEDA reemplazarla. Con el periodo ya
-    // aprobado, subir planilla está bloqueado (ESTADOS_PLANILLA_EDITABLE), así
+    // aprobado, subir planilla está bloqueado (puedeCambiarDocumentosSS), así
     // que el rechazo dejaba un callejón sin salida: se le pedía una planilla
     // nueva y el sistema se la impedía. Para corregir una planilla de un
     // periodo aprobado hay que devolver el periodo primero.
-    if (estado === 'rechazada' && !ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
+    // Con el informe enviado o en revisión, devolver la planilla abre la ventana de corrección de la contratista
+    // (`lib/planilla-contratista.ts`). Con el periodo ya aprobado no hay ventana.
+    if (estado === 'rechazada' && !hayPlanillaDevuelta(periodo.estado, 'rechazada')) {
       return {
         error: 'Este periodo ya está aprobado: el contratista no podría reemplazar la planilla. ' +
                'Devuelve primero el informe para que pueda corregirla.',
@@ -1117,9 +1122,11 @@ export async function revisarPlanilla(
             tipo: 'planilla_rechazada',
             destinatarioId: contrato.contratista_id,
             titulo: 'Tu planilla de seguridad social fue devuelta',
+            // Cambiar los documentos no avisa a quien revisa: lo hace «Enviar corrección a revisión», y la contratista
+            // tiene que saberlo desde el primer aviso.
             mensaje: motivo
-              ? `La planilla de ${periodo.mes} ${periodo.anio} fue devuelta. Motivo: ${motivo}`
-              : `La planilla de ${periodo.mes} ${periodo.anio} requiere corrección. Sube una nueva planilla.`,
+              ? `La planilla de ${periodo.mes} ${periodo.anio} fue devuelta. Motivo: ${motivo}. Corrígela en el informe y pulsa «Enviar corrección a revisión».`
+              : `La planilla de ${periodo.mes} ${periodo.anio} requiere corrección. Corrígela en el informe y pulsa «Enviar corrección a revisión».`,
             motivo,
             periodoId,
             mes: periodo.mes,
@@ -1130,6 +1137,70 @@ export async function revisarPlanilla(
         }
       } catch { /* notification failure must not block a successful planilla review */ }
     }
+
+    revalidar(periodo.contrato_id, periodoId)
+    return {}
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Error inesperado' }
+  }
+}
+
+/**
+ * La contratista envía de nuevo a revisión la planilla que el revisor le devolvió.
+ *
+ * Cierra la ventana de corrección (`lib/planilla-contratista.ts`): vuelve la revisión a «pendiente», se borra el motivo
+ * anterior y la planilla, el soporte y el número quedan bloqueados otra vez hasta la próxima decisión del revisor. Exige el
+ * conjunto completo y bien formado, y deja rastro en el historial del periodo.
+ */
+export async function reenviarPlanillaARevision(periodoId: string): Promise<ActionResult> {
+  try {
+    const { supabase, usuario } = await getAuthContext()
+
+    if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
+      return { error: 'Solo el contratista puede enviar la corrección de la planilla' }
+    }
+
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
+    if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
+
+    if (usuario.rol === 'contratista') {
+      const contrato = await getContratoIds(supabase, periodo.contrato_id)
+      if (contrato?.contratista_id !== usuario.id) return { error: 'No tienes permiso para modificar este periodo' }
+    }
+
+    const { data: docs } = await supabase
+      .from('periodos')
+      .select('planilla_ss_url, numero_planilla, soporte_pago_url')
+      .eq('id', periodoId)
+      .single()
+
+    const decision = puedeReenviarPlanilla({
+      rol: usuario.rol,
+      estado: periodo.estado,
+      planillaEstado: periodo.planilla_estado,
+      tienePlanilla: !!docs?.planilla_ss_url,
+      tieneSoporte: !!docs?.soporte_pago_url,
+      numeroPlanilla: docs?.numero_planilla,
+    })
+    if (!decision.ok) return { error: decision.error }
+
+    const adminClient = createAdminSupabaseClient()
+    const { data: updated, error } = await adminClient
+      .from('periodos')
+      .update({ planilla_estado: 'pendiente', planilla_comentario: null })
+      .eq('id', periodoId)
+      .eq('planilla_estado', 'rechazada')
+      .select('id')
+
+    if (error) return { error: `Error al enviar la corrección: ${error.message}` }
+    if (!updated?.length) return { error: 'La planilla ya no está devuelta. Recarga la página para ver su estado.' }
+
+    await insertHistorial(
+      supabase, periodoId, periodo.estado, periodo.estado, usuario.id,
+      'Planilla de seguridad social corregida y enviada de nuevo a revisión',
+    )
 
     revalidar(periodo.contrato_id, periodoId)
     return {}
@@ -1167,10 +1238,8 @@ export async function prepararUploadPlanilla(
     const periodo = cargado.periodo
 
     if (usuario.rol !== 'admin') {
-      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
-      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-        return { error: 'No se puede reemplazar la planilla de un periodo ya aprobado o radicado' }
-      }
+      const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado, esHistorico: periodo.es_historico })
+      if (!decision.ok) return { error: decision.error }
     }
 
     const path = `planillas/${periodoId}/${Date.now()}.pdf`
@@ -1202,16 +1271,29 @@ export async function confirmarUploadPlanilla(
   publicUrl: string,
 ): Promise<ActionResult<{ urlFirmada?: string }>> {
   try {
-    const { usuario } = await getAuthContext()
+    const { supabase, usuario } = await getAuthContext()
 
     if (usuario.rol !== 'contratista' && usuario.rol !== 'admin') {
       return { error: 'Solo el contratista puede subir la planilla' }
     }
 
+    // El periodo se lee con la sesión de quien llama: la contratista solo ve los suyos, y eso es lo que impide registrar
+    // una planilla en un periodo ajeno. Antes esta acción no leía el periodo: no comprobaba ni el dueño ni el estado.
+    const cargado = await getPeriodo(supabase, periodoId)
+    if (!cargado.ok) return { error: cargado.error }
+    const periodo = cargado.periodo
+    if (usuario.rol !== 'admin') {
+      const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado, esHistorico: periodo.es_historico })
+      if (!decision.ok) return { error: decision.error }
+    }
+    // La dirección tiene que ser la de un archivo de ESTE periodo (la que entregó `prepararUploadPlanilla`).
+    if (!esUrlDePlanilla(periodoId, publicUrl)) return { error: 'Dirección de archivo inválida.' }
+
+    const revision = revisionTrasCambio(periodo.estado, periodo.planilla_estado)
     const adminClient = createAdminSupabaseClient()
     const { data: updated, error: updateError } = await adminClient
       .from('periodos')
-      .update({ planilla_ss_url: publicUrl, planilla_estado: 'pendiente', planilla_comentario: null })
+      .update({ planilla_ss_url: publicUrl, planilla_estado: revision.planilla_estado, ...(revision.borraMotivo ? { planilla_comentario: null } : {}) })
       .eq('id', periodoId)
       .select('id')
 
@@ -1246,12 +1328,10 @@ export async function subirPlanilla(
     if (!cargado.ok) return { error: cargado.error }
     const periodo = cargado.periodo
     // Admin bypass: can upload planilla to any period regardless of state or historico flag.
-    // Non-admin (contratista) is still restricted to editable states.
+    // Non-admin (contratista) is still restricted: borrador, devuelto, o planilla devuelta por el revisor.
     if (usuario.rol !== 'admin') {
-      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
-      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-        return { error: 'No se puede reemplazar la planilla de un periodo ya aprobado o radicado' }
-      }
+      const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado, esHistorico: periodo.es_historico })
+      if (!decision.ok) return { error: decision.error }
     }
 
     const file = formData.get('file') as File
@@ -1280,13 +1360,14 @@ export async function subirPlanilla(
       .from('documentos')
       .getPublicUrl(path)
 
+    const revisionSubida = revisionTrasCambio(periodo.estado, periodo.planilla_estado)
     const { data: updatedPlanilla, error: updateError } = await adminClient
       .from('periodos')
       .update({
         planilla_ss_url: publicUrl,
-        // Reset review status so asesor must re-review the new file
-        planilla_estado: 'pendiente',
-        planilla_comentario: null,
+        // Reset review status so asesor must re-review the new file (salvo en la ventana de corrección: ver revisionTrasCambio)
+        planilla_estado: revisionSubida.planilla_estado,
+        ...(revisionSubida.borraMotivo ? { planilla_comentario: null } : {}),
       })
       .eq('id', periodoId)
       .select('id')
@@ -1301,12 +1382,9 @@ export async function subirPlanilla(
   }
 }
 
-/** States where contratista can still manage their planilla (anything before final approval). */
-const ESTADOS_PLANILLA_EDITABLE: EstadoPeriodo[] = ['borrador', 'enviado', 'revision', 'rechazado']
-
 /**
  * Delete the planilla de seguridad social for a period (set URL to null).
- * Allowed until the period is fully approved or radicado.
+ * La contratista solo puede en borrador, devuelto o con la planilla devuelta por el revisor (lib/planilla-contratista.ts).
  */
 export async function eliminarPlanilla(periodoId: string): Promise<ActionResult> {
   try {
@@ -1321,14 +1399,13 @@ export async function eliminarPlanilla(periodoId: string): Promise<ActionResult>
     const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
-    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-      return { error: 'No se puede eliminar la planilla de un periodo ya aprobado o radicado' }
-    }
+    const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado })
+    if (!decision.ok) return { error: decision.error }
 
     const adminClient = createAdminSupabaseClient()
     const { data: updated, error } = await adminClient
       .from('periodos')
-      .update({ planilla_ss_url: null, numero_planilla: null, planilla_estado: 'pendiente' })
+      .update({ planilla_ss_url: null, numero_planilla: null, planilla_estado: revisionTrasCambio(periodo.estado, periodo.planilla_estado).planilla_estado })
       .eq('id', periodoId)
       .select('id')
 
@@ -1375,10 +1452,8 @@ export async function prepararUploadSoportePago(
     const periodo = cargado.periodo
 
     if (usuario.rol !== 'admin') {
-      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
-      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-        return { error: 'No se puede reemplazar el soporte de un periodo ya aprobado o radicado' }
-      }
+      const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado, esHistorico: periodo.es_historico })
+      if (!decision.ok) return { error: decision.error }
     }
 
     const path = rutaNuevaSoportePago(periodoId)
@@ -1409,10 +1484,8 @@ export async function confirmarUploadSoportePago(
     const periodo = cargado.periodo
 
     if (usuario.rol !== 'admin') {
-      if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
-      if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-        return { error: 'No se puede reemplazar el soporte de un periodo ya aprobado o radicado' }
-      }
+      const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado, esHistorico: periodo.es_historico })
+      if (!decision.ok) return { error: decision.error }
     }
 
     // La ruta se deriva del periodo: una que apunte a otro periodo, a otra carpeta o que se escape con `..` se rechaza.
@@ -1444,10 +1517,12 @@ export async function confirmarUploadSoportePago(
       .from('periodos').select('soporte_pago_url').eq('id', periodoId).single()
 
     const { data: { publicUrl } } = adminClient.storage.from(SOPORTE_PAGO_BUCKET).getPublicUrl(storagePath)
+    const revision = revisionTrasCambio(periodo.estado, periodo.planilla_estado)
     const { error } = await adminClient
       .from('periodos')
-      // El conjunto cambió: quien revisa la planilla tiene que volver a mirarlo.
-      .update({ soporte_pago_url: publicUrl, planilla_estado: 'pendiente', planilla_comentario: null })
+      // El conjunto cambió: quien revisa la planilla tiene que volver a mirarlo (salvo en la ventana de corrección: la
+      // contratista aún puede completar lo demás y lo envía ella).
+      .update({ soporte_pago_url: publicUrl, planilla_estado: revision.planilla_estado, ...(revision.borraMotivo ? { planilla_comentario: null } : {}) })
       .eq('id', periodoId)
     if (error) return { error: `Error al registrar el soporte: ${error.message}` }
 
@@ -1477,9 +1552,8 @@ export async function eliminarSoportePago(periodoId: string): Promise<ActionResu
     if (!cargado.ok) return { error: cargado.error }
     const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
-    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-      return { error: 'No se puede eliminar el soporte de un periodo ya aprobado o radicado' }
-    }
+    const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado })
+    if (!decision.ok) return { error: decision.error }
 
     const adminClient = createAdminSupabaseClient()
     const { data: actual } = await adminClient
@@ -1488,7 +1562,7 @@ export async function eliminarSoportePago(periodoId: string): Promise<ActionResu
 
     const { data: updated, error } = await adminClient
       .from('periodos')
-      .update({ soporte_pago_url: null, planilla_estado: 'pendiente' })
+      .update({ soporte_pago_url: null, planilla_estado: revisionTrasCambio(periodo.estado, periodo.planilla_estado).planilla_estado })
       .eq('id', periodoId)
       .select('id')
     if (error) return { error: `Error al eliminar: ${error.message}` }
@@ -1529,9 +1603,8 @@ export async function guardarNumeroPlanilla(
     const periodo = cargado.periodo
     if (periodo.es_historico) return { error: 'No se puede modificar un periodo histórico' }
 
-    if (!ESTADOS_PLANILLA_EDITABLE.includes(periodo.estado)) {
-      return { error: 'No se puede modificar la planilla de un periodo ya aprobado o radicado' }
-    }
+    const decision = puedeCambiarDocumentosSS({ rol: usuario.rol, estado: periodo.estado, planillaEstado: periodo.planilla_estado })
+    if (!decision.ok) return { error: decision.error }
 
     const adminClient = createAdminSupabaseClient()
     const { data: updated, error } = await adminClient
