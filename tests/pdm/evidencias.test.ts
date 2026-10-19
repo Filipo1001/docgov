@@ -137,6 +137,16 @@ es('la fila lleva lo del último reporte del año', [filas[0].estado, filas[0].a
 es('categoría y tamaño', filas[0].archivos.map(a => [a.categoria, a.bytes]), [['imagen', 5000], ['excel', 1000], ['pdf', 1000]])
 es('la nota de devolución y lo conservado viajan con SU archivo', [filas[2].archivos[0].observacion, filas[2].archivos[0].conservada, filas[2].archivos[0].estado], ['No abre', true, 'devuelto'])
 es('cada archivo dice el reporte al que pertenece', filas[0].archivos.map(a => a.reporteId), ['r-f2', 'r-f4', 'otro'])
+// ── La huella (SHA-256) pasa de la vista a la fila tal cual, o como null ──
+{
+  const H = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+  const [con, sin] = ev.armarFilasIndicador([A], 2026, [
+    AR('h1', 'u1', { nombre: 'con.pdf', sha256: H, huella_calculada_en: '2026-09-03T12:00:05Z', reportado_en: '2026-09-04T12:00:00Z' }),
+    AR('h2', 'u1', { nombre: 'sin.pdf', reportado_en: '2026-09-03T12:00:00Z' }),
+  ])[0].archivos
+  es('un archivo con huella la trae completa', [con.sha256, con.huellaCalculadaEn], [H, '2026-09-03T12:00:05Z'])
+  es('uno sin huella sale con null', [sin.sha256, sin.huellaCalculadaEn], [null, null])
+}
 es('un indicador sin archivos en la lista pedida: fila vacía, no se pierde', ev.armarFilasIndicador([A], 2026, []).map(f => f.archivos.length), [0])
 es('archivos de OTRO indicador no se cuelan', ev.armarFilasIndicador([A], 2026, [AR('z', 'u9')])[0].archivos.length, 0)
 es('«también» llega por archivo', ev.armarFilasIndicador([A], 2026, [AR('f1', 'u1')], ev.relacionar([AR('f1', 'u1')], [R('x', 'u8')]))[0].archivos[0].tambien.length, 1)

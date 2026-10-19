@@ -176,6 +176,9 @@ export interface FilaDeVista {
   /** El reporte de este archivo está anulado (migración 068): no cuenta ni se lista. */
   anulada: boolean
   observacion: string | null
+  /** La huella (SHA-256) del contenido y cuándo la calculó el servidor; `null` si no se pudo calcular (migración 070). */
+  sha256?: string | null
+  huella_calculada_en?: string | null
 }
 
 /** Lo que hace falta de un archivo para saber si es el mismo que otro y a qué indicador sirve. */
@@ -274,6 +277,10 @@ export interface ArchivoDeIndicador {
   categoria: CategoriaTipo | null
   bytes: number
   conservada: boolean
+  /** La huella (SHA-256) del contenido, calculada por el servidor; `null` si no se pudo calcular. */
+  sha256: string | null
+  /** Cuándo la calculó el servidor (ISO); `null` si no hay huella. */
+  huellaCalculadaEn: string | null
   /** Cómo va el reporte al que pertenece ESTE archivo (puede diferir del último si el año tiene varios). */
   estado: EstadoReporte | null
   /** La nota con que la secretaría devolvió este archivo, si lo hizo. */
@@ -401,6 +408,8 @@ export function armarFilasIndicador(
         categoria: categoriaDeMime(a.tipo),
         bytes: numero(a.bytes) ?? 0,
         conservada: a.conservada === true,
+        sha256: a.sha256 ?? null,
+        huellaCalculadaEn: a.huella_calculada_en ?? null,
         estado: ESTADOS.find(e => e === a.estado_reporte) ?? null,
         observacion: a.observacion && a.observacion.trim() !== '' ? a.observacion : null,
         reportadoEn: a.reportado_en,

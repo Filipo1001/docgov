@@ -56,6 +56,8 @@ import {
   Drama, Droplets, Store, Map, Zap, Route, House, TreePine, Handshake,
   // Tipos de archivo de las evidencias
   FileImage,
+  // La huella (SHA-256) de una evidencia
+  Fingerprint,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -98,6 +100,8 @@ export const Iconos = {
     soportePago: Banknote,
     paquete: Files,
     adjunto: Paperclip,
+    /** La huella (SHA-256) de un archivo: lo que lo identifica por su contenido. */
+    huella: Fingerprint,
     expediente: FolderOpen,
     descargar: Download,
     subir: Upload,

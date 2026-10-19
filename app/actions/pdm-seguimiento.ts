@@ -24,6 +24,9 @@
  *     elige dónde se guarda nada.
  *   · Al registrar el reporte NO se cree lo que el navegador dice del archivo: se lee del
  *     almacenamiento su tamaño y su tipo reales.
+ *   · La HUELLA (SHA-256) de cada archivo nuevo la calcula el servidor leyendo lo que ya está guardado, y la anota en
+ *     un libro al que solo escribe la clave de servicio; al registrar, la base la copia a la evidencia solo si la ruta,
+ *     el tamaño y la persona coinciden (migración 070). Nada de lo que diga el navegador cuenta para la huella.
  *   · Si registrar falla, los archivos recién subidos se borran (no quedan huérfanos), pero solo
  *     los que no pertenecen a otro reporte. Lo que se CONSERVA de la versión anterior nunca se borra:
  *     es de un reporte que ya existe.
@@ -44,6 +47,7 @@ import { accesoPdm, type AccesoPdm } from '@/lib/pdm/acceso'
 import { avisarDespues } from '@/lib/pdm/correos/despues'
 import { avisarAnulacion, avisarComentario, avisarReporteDeApoyo, avisarReporteEnviado, avisarValidacion } from '@/lib/pdm/correos/enviar'
 import { gestiona } from '@/lib/pdm/niveles'
+import { anotarHuellas, huellaDeObjeto, type HuellaCalculada } from '@/lib/pdm/huella-servidor'
 import { esUuid, traducirErrorPdm, type Resultado } from '@/lib/pdm/acciones'
 import { hoyBogota } from '@/lib/pdm/contrato'
 import { anioDeFecha, anioIniciado, esAnioPlan } from '@/lib/pdm/seguimiento'
@@ -239,6 +243,25 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       if (yaUsadas.data?.length) return rechazo('reportar', 'Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
     }
 
+    // La huella de cada archivo nuevo, leyéndolo del almacenamiento (en paralelo: son a lo sumo cinco). Si no se puede
+    // calcular, o el archivo no pesa lo que el almacenamiento dice, no se registra nada: un reporte sin la huella que
+    // debería tener no se puede arreglar después.
+    const calculadas = await Promise.all(evidencias.map(ev => huellaDeObjeto(admin, BUCKET, ev.ruta)))
+    const huellas: HuellaCalculada[] = []
+    for (let k = 0; k < evidencias.length; k++) {
+      const c = calculadas[k]
+      if (!c.ok || c.bytes !== evidencias[k].bytes) {
+        console.error('[pdm/seguimiento] reportar (huella):', c.ok ? `pesa ${c.bytes} y el almacenamiento dice ${evidencias[k].bytes}` : c.error)
+        await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
+        return rechazo('reportar', 'No pudimos comprobar un archivo. Vuelve a adjuntarlo e intenta de nuevo.')
+      }
+      huellas.push({ ruta: evidencias[k].ruta, sha256: c.sha256, bytes: c.bytes })
+    }
+    if (!(await anotarHuellas(admin, s.acceso.userId, huellas))) {
+      await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
+      return rechazo('reportar', 'No pudimos registrar los archivos. Vuelve a adjuntarlos e intenta de nuevo.')
+    }
+
     const { data, error } = await s.supabase.rpc('pdm_reportar', {
       p_indicador: e.indicador, p_anio: ctx.anio, p_valor: e.valor, p_texto: e.texto.trim(), p_evidencias: evidencias, p_motivo: motivo || null,
       p_conservar: conservar,
@@ -403,7 +426,7 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
     let anulaciones: FilaAnulacion[] = []
     if (ids.length) {
       const [evi, val, anu] = await Promise.all([
-        s.supabase.from('pdm_evidencias').select('id, reporte_id, nombre, tipo, bytes, copia_de').in('reporte_id', ids),
+        s.supabase.from('pdm_evidencias').select('id, reporte_id, nombre, tipo, bytes, copia_de, sha256, huella_calculada_en').in('reporte_id', ids),
         s.supabase.from('pdm_validaciones').select('reporte_id, estado, comentario, validador_nombre, created_at, observaciones').in('reporte_id', ids),
         veAnulados
           ? s.supabase.from('pdm_anulaciones').select('reporte_id, accion, motivo, actor_nombre, created_at').in('reporte_id', ids)
