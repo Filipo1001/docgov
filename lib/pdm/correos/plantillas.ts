@@ -40,7 +40,7 @@ export interface ArchivoDeCorreo {
   bytes: number
 }
 
-interface Comun {
+export interface Comun {
   /** Nombre completo del destinatario, como está en la base. */
   destinatario: string
   /** La dirección de la pantalla a la que lleva el botón. */
@@ -49,34 +49,34 @@ interface Comun {
   vistaPrevia: boolean
 }
 
-const MAX_ASUNTO_INDICADOR = 58
+export const MAX_ASUNTO_INDICADOR = 58
 
-const asuntoDe = (prefijo: string, i: IndicadorDeCorreo, anio: number) =>
+export const asuntoDe = (prefijo: string, i: IndicadorDeCorreo, anio: number) =>
   `${prefijo}: ${recortar(i.nombre, MAX_ASUNTO_INDICADOR)} (${anio})`
 
 /** «45 de 60»; «62 (meta: 60)» si se superó (decir «62 de 60» parece un error); «45» si el plan no trae meta para ese año. */
-const avanceTexto = (valor: number, meta: number | null) =>
+export const avanceTexto = (valor: number, meta: number | null) =>
   meta === null || meta <= 0 ? fmt(valor) : valor > meta ? `${fmt(valor)} (meta: ${fmt(meta)})` : `${fmt(valor)} de ${fmt(meta)}`
 
 /** La nota de debajo del avance: la unidad y, si hay meta, cuánto de ella se cubrió. */
-function notaDeAvance(valor: number, meta: number | null, unidad: string): string {
+export function notaDeAvance(valor: number, meta: number | null, unidad: string): string {
   const pct = meta !== null && meta > 0 ? `${Math.round((valor / meta) * 100)} % de la meta` : 'sin meta definida para el año'
   return `${unidad} · ${pct}`
 }
 
-const filasDelIndicador = (i: IndicadorDeCorreo, anio: number) => [
+export const filasDelIndicador = (i: IndicadorDeCorreo, anio: number) => [
   { rotulo: 'Indicador', valor: i.nombre, nota: i.codigo },
   { rotulo: 'Dependencia', valor: i.dependencia },
   { rotulo: 'Año', valor: String(anio) },
 ]
 
-const listaDeArchivos = (archivos: readonly ArchivoDeCorreo[], rotulo: string): Bloque => ({
+export const listaDeArchivos = (archivos: readonly ArchivoDeCorreo[], rotulo: string): Bloque => ({
   t: 'lista',
   rotulo,
   items: archivos.map(a => ({ titulo: a.nombre, detalle: `${rotuloDeTipo(a.tipo, a.nombre)} · ${pesoLegible(a.bytes)}` })),
 })
 
-const pie = (referencia: string, fecha: string) => `Ref. ${referenciaDe(referencia)} · ${fechaDeColombia(fecha)}`
+export const pie = (referencia: string, fecha: string) => `Ref. ${referenciaDe(referencia)} · ${fechaDeColombia(fecha)}`
 
 // ─── 1 · Reporte enviado ─────────────────────────────────────────────────────
 
@@ -259,6 +259,18 @@ export interface CambioEnIndicador {
   responsableActual: string | null
 }
 
+/** Cuando el cambio le llega a la persona POR UN GRUPO (no a título propio). */
+export interface GrupoDeAviso {
+  nombre: string
+  /** `asignado`: al grupo le asignaron indicadores y la persona es del grupo. `agregado`: la persona entró al grupo. */
+  motivo: 'asignado' | 'agregado'
+  /** La persona es la líder o el líder del grupo (solo con `agregado`). */
+  lider?: boolean
+  descripcion?: string | null
+  /** La secretaría del grupo. */
+  dependencia?: string | null
+}
+
 export interface DatosAsignacion extends Comun {
   /** El lote del cambio: de ahí sale la referencia. */
   lote: string
@@ -266,7 +278,10 @@ export interface DatosAsignacion extends Comun {
   /** Quién hizo el cambio (nombre completo). */
   actor: string
   motivo: string | null
+  /** Puede estar vacío SOLO si la persona entró a un grupo que todavía no tiene indicadores. */
   cambios: CambioEnIndicador[]
+  /** Si el cambio llega por un grupo: se dice en el título, en el texto y en el pie. */
+  grupo?: GrupoDeAviso | null
 }
 
 /** Cuántos indicadores se listan antes de «y N más»: un reparto grande no puede ser un correo de tres pantallas. */
@@ -316,25 +331,49 @@ function titularDe(cambios: CambioEnIndicador[]): { titulo: string; asunto: stri
   }
 }
 
+function titularDeGrupo(g: GrupoDeAviso, cambios: CambioEnIndicador[]): { titulo: string; asunto: string } {
+  const n = cambios.length
+  const total = cuantos(n, 'indicador', 'indicadores')
+  if (g.motivo === 'agregado') {
+    return { titulo: `Te agregaron al grupo «${g.nombre}»`, asunto: `Ahora haces parte del grupo «${recortar(g.nombre, 60)}»` }
+  }
+  return n === 1
+    ? { titulo: `A tu grupo «${g.nombre}» le asignaron un indicador`, asunto: `Tu grupo «${recortar(g.nombre, 40)}» recibió: ${recortar(cambios[0].indicador.nombre, 50)}` }
+    : { titulo: `A tu grupo «${g.nombre}» le asignaron ${total}`, asunto: `Tu grupo «${recortar(g.nombre, 40)}» recibió ${total}` }
+}
+
 /**
  * Cómo se nombra a quien repartió, en medio de una frase («Felipe, el administrador hizo…»). La cuenta del administrador
  * se llama «ADMINISTRADOR» en la base: «Administrador hizo un cambio» no se lee como una persona. Una persona se nombra
  * completa.
  */
-const quienReparte = (actor: string): string => (/^administrador(a)?$/i.test(actor.trim()) ? 'el administrador' : nombreLegible(actor))
+export const quienReparte = (actor: string): string => (/^administrador(a)?$/i.test(actor.trim()) ? 'el administrador' : nombreLegible(actor))
 
 export function correoAsignacion(d: DatosAsignacion): CorreoListo {
   const cambios = [...d.cambios].sort((a, b) => ORDEN.indexOf(a.tipo) - ORDEN.indexOf(b.tipo) || a.indicador.fila - b.indicador.fila)
-  const { titulo, asunto } = titularDe(cambios)
+  const g = d.grupo ?? null
+  const { titulo, asunto } = g ? titularDeGrupo(g, cambios) : titularDe(cambios)
   const actor = quienReparte(d.actor)
   const unico = cambios.length === 1 ? cambios[0] : null
 
-  const bloques: Bloque[] = [
-    {
-      t: 'parrafo',
-      texto: `${primerNombre(d.destinatario)}, ${actor} hizo ${unico ? 'un cambio' : 'cambios'} en el reparto de indicadores del plan y te afecta${unico ? '' : 'n'}.`,
-    },
-  ]
+  const parrafo = !g
+    ? `${primerNombre(d.destinatario)}, ${actor} hizo ${unico ? 'un cambio' : 'cambios'} en el reparto de indicadores del plan y te afecta${unico ? '' : 'n'}.`
+    : g.motivo === 'agregado'
+      ? `${primerNombre(d.destinatario)}, ${actor} te agregó al grupo «${g.nombre}»${g.lider ? ' como líder' : ''}. Un grupo reúne a las personas que llevan juntas un conjunto de indicadores del plan.`
+      : `${primerNombre(d.destinatario)}, ${actor} asignó ${unico ? 'un indicador' : 'indicadores'} al grupo «${g.nombre}», del que haces parte. ${unico ? 'Te llega' : 'Te llegan'} a ti también.`
+  const bloques: Bloque[] = [{ t: 'parrafo', texto: parrafo }]
+
+  if (g?.motivo === 'agregado') {
+    bloques.push({
+      t: 'datos',
+      filas: [
+        { rotulo: 'Grupo', valor: g.nombre },
+        ...(g.dependencia ? [{ rotulo: 'Secretaría', valor: g.dependencia }] : []),
+        { rotulo: 'Tu papel', valor: g.lider ? 'Líder del grupo' : 'Integrante' },
+      ],
+    })
+    if (g.descripcion && g.descripcion.trim() !== '') bloques.push({ t: 'cita', rotulo: 'Para qué es el grupo', texto: recortar(g.descripcion, 300) })
+  }
 
   if (unico) {
     bloques.push({
@@ -348,11 +387,11 @@ export function correoAsignacion(d: DatosAsignacion): CorreoListo {
           : []),
       ],
     })
-  } else {
+  } else if (cambios.length > 1) {
     const visibles = cambios.slice(0, MAX_INDICADORES_EN_CORREO)
     bloques.push({
       t: 'lista',
-      rotulo: `Tus indicadores afectados (${cambios.length})`,
+      rotulo: g ? `Indicadores del grupo (${cambios.length})` : `Tus indicadores afectados (${cambios.length})`,
       items: visibles.map(c => ({ titulo: recortar(c.indicador.nombre, 90), detalle: detalleDeCambio(c) })),
       mas: cambios.length - visibles.length || undefined,
     })
@@ -370,16 +409,37 @@ export function correoAsignacion(d: DatosAsignacion): CorreoListo {
   if (cambios.some(c => c.tipo === 'quitado' || c.tipo === 'paso_a_apoyo')) {
     significado.push('Lo que reportaste antes queda en el historial del indicador: nadie lo borra.')
   }
-  bloques.push({ t: 'pasos', rotulo: 'Qué significa', items: significado })
+  if (significado.length > 0) {
+    bloques.push({ t: 'pasos', rotulo: 'Qué significa', items: significado })
+  } else {
+    // Entró a un grupo que todavía no tiene indicadores: no hay nada que hacer, y se le dice.
+    bloques.push({
+      t: 'pasos',
+      rotulo: 'Qué sigue',
+      items: [
+        'Por ahora el grupo no tiene indicadores a su cargo.',
+        'Cuando se los asignen, te escribimos por este mismo medio y los ves en «Mis indicadores».',
+      ],
+    })
+  }
 
   return armarCorreo({
     asunto,
-    resumen: unico ? `${unico.indicador.codigo} · ${FRASE_DE_CAMBIO[unico.tipo]}` : `${cuantos(cambios.length, 'indicador', 'indicadores')} · cambió tu responsabilidad`,
-    estado: 'asignacion',
+    resumen: g
+      ? g.motivo === 'agregado'
+        ? `Grupo «${g.nombre}»${g.lider ? ' · eres líder' : ''}${g.dependencia ? ` · ${g.dependencia}` : ''}`
+        : `${cuantos(cambios.length, 'indicador', 'indicadores')} · por el grupo «${g.nombre}»`
+      : unico ? `${unico.indicador.codigo} · ${FRASE_DE_CAMBIO[unico.tipo]}` : `${cuantos(cambios.length, 'indicador', 'indicadores')} · cambió tu responsabilidad`,
+    estado: g ? 'grupo' : 'asignacion',
     titulo,
     bloques,
     boton: { href: d.enlace, texto: unico ? 'Ver el indicador' : 'Ver mis indicadores' },
-    pie: { referencia: pie(d.lote, d.ocurridoEn), motivo: 'porque cambió tu asignación en el Plan de Desarrollo.' },
+    pie: {
+      referencia: pie(d.lote, d.ocurridoEn),
+      motivo: !g ? 'porque cambió tu asignación en el Plan de Desarrollo.'
+        : g.motivo === 'agregado' ? 'porque te agregaron a un grupo del Plan de Desarrollo.'
+        : 'porque tu grupo recibió indicadores en el Plan de Desarrollo.',
+    },
     vistaPrevia: d.vistaPrevia,
   })
 }

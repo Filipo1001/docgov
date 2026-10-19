@@ -35,6 +35,7 @@ import {
 } from '@/lib/pdm/evidencias-armar'
 import type { Evidencias } from '@/lib/pdm/evidencias'
 import EncabezadoSeccion from './EncabezadoSeccion'
+import Huella from './Huella'
 import IconoSector from './IconoSector'
 import Pagina from './Pagina'
 import SelectorAnio from './SelectorAnio'
@@ -98,6 +99,10 @@ function ArchivoLinea({ a, abrir, abriendo, conEstado }: {
           </span>
         </span>
       </button>
+      {/* La huella es verdad también de un archivo anulado: el archivo sigue siendo el que se subió. */}
+      <div className="mt-1 pl-12">
+        <Huella sha256={a.sha256} calculadaEn={a.huellaCalculadaEn} />
+      </div>
       {a.anulacion && (a.anulacion.por !== '' || a.anulacion.motivo !== '') && (
         <p className="mt-1.5 pl-12 text-xs leading-snug text-[#912018] [overflow-wrap:anywhere]">
           <b>Anulado</b>{a.anulacion.por !== '' && <> por {a.anulacion.por}</>}{a.anulacion.cuando !== '' && <> · {fechaHoraBogota(a.anulacion.cuando)}</>}

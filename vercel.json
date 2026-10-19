@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/reporte-mensual",
       "schedule": "0 12 6 * *"
+    },
+    {
+      "path": "/api/cron/pdm-resumen-mensual",
+      "schedule": "0 12 1 * *"
+    },
+    {
+      "path": "/api/cron/pdm-resumen-semanal",
+      "schedule": "0 12 * * 1"
     }
   ]
 }

@@ -35,6 +35,9 @@ export interface FilaEvidencia {
   bytes: number | string
   /** La evidencia de la versión anterior de la que se conservó este archivo; `null` si se subió con este reporte. */
   copia_de?: string | null
+  /** La huella (SHA-256) del contenido y cuándo la calculó el servidor; `null` si no se pudo calcular (migración 070). */
+  sha256?: string | null
+  huella_calculada_en?: string | null
 }
 
 export interface FilaValidacion {
@@ -112,6 +115,8 @@ export function armarDetalle(entrada: {
     lista.push({
       id: e.id, nombre: e.nombre, tipo: e.tipo, bytes: numero(e.bytes) ?? 0,
       conservada: (e.copia_de ?? null) !== null,
+      sha256: e.sha256 ?? null,
+      huellaCalculadaEn: e.huella_calculada_en ?? null,
       observacion: observadas.get(e.id) ?? null,
     })
     evidenciasDe.set(e.reporte_id, lista)

@@ -55,6 +55,8 @@ export interface CampoNumero {
   /** Mensaje de error, o null. */
   error: string | null
   placeholder?: string
+  /** Solo se ve: el informe ya se envió y el número no se puede cambiar. */
+  soloLectura?: boolean
 }
 
 interface Props {
@@ -229,7 +231,7 @@ function ContenidoFicha({ d }: { d: Documento }) {
       <span className="flex h-4 items-center text-[11px] leading-none text-gray-400">
         {cargado
           ? <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />
-          : d.estado === 'subiendo' ? 'Subiendo…' : 'Subir'}
+          : d.estado === 'subiendo' ? 'Subiendo…' : d.onSubir ? 'Subir' : 'Sin cargar'}
       </span>
     </>
   )
@@ -311,6 +313,25 @@ function FichaNumero({
   const lleno = n.valor.trim().length > 0
   const error = !!n.error
   const ok = lleno && !error
+
+  // Solo lectura: la misma ficha, sin campo de texto. Lo que se ve es lo que hay guardado.
+  if (n.soloLectura) {
+    return (
+      <div
+        {...enlazar(n.ayuda)}
+        className={`${claseCelda} flex min-h-[104px] flex-col items-center justify-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-3 pb-3 pt-7 text-center`}
+      >
+        <Icono glifo={Iconos.dominio.numero} tamano="md" className={lleno ? 'text-emerald-700' : 'text-gray-500'} />
+        <span className="flex items-center gap-1 text-xs font-medium leading-tight text-gray-800">
+          {n.etiqueta}
+          {lleno && <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />}
+        </span>
+        <span className={`w-full min-w-0 break-all text-sm tracking-wide ${lleno ? 'font-semibold text-gray-900' : 'text-gray-400'}`}>
+          {lleno ? n.valor : 'Sin número'}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <label

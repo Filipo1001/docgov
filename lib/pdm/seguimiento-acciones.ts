@@ -232,6 +232,10 @@ export interface EvidenciaVista {
   bytes: number
   /** Pasó tal cual de la versión anterior de este reporte (no se subió con esta versión). */
   conservada: boolean
+  /** La huella (SHA-256) del contenido, calculada por el servidor; `null` si no se pudo calcular. */
+  sha256: string | null
+  /** Cuándo la calculó el servidor (ISO); `null` si no hay huella. */
+  huellaCalculadaEn: string | null
   /** Si la secretaría lo devolvió: la nota más reciente. Un archivo devuelto no se conserva en la corrección. */
   observacion: ObservacionVista | null
 }

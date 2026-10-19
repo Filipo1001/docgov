@@ -47,7 +47,7 @@ export interface Evidencias {
 }
 
 const COLUMNAS =
-  'id, reporte_id, nombre, tipo, bytes, conservada, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, valor, autor_nombre, reportado_en, estado_reporte, reemplazada, anulada, observacion'
+  'id, reporte_id, nombre, tipo, bytes, conservada, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, valor, autor_nombre, reportado_en, estado_reporte, reemplazada, anulada, observacion, sha256, huella_calculada_en'
 
 const COLUMNAS_RELACIONADAS =
   'id, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, estado_reporte, nombre, bytes, tipo'

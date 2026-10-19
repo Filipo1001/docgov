@@ -55,6 +55,7 @@ import {
   eliminarSoportePago,
   guardarNumeroPlanilla,
   guardarMesCotizacion,
+  reenviarPlanillaARevision,
   revisarPlanilla,
   actualizarObservacionSupervisor,
   actualizarBaseCotizacion,
@@ -72,6 +73,8 @@ import MejorarRedaccion from '@/components/MejorarRedaccion'
 import Badge from '@/components/ui/Badge'
 import Icono from '@/components/ui/Icono'
 import PanelDocumentos from '@/components/ui/PanelDocumentos'
+import SeguridadSocialContratista from '@/components/ui/SeguridadSocialContratista'
+import { hayPlanillaDevuelta, puedeCambiarDocumentosSS, puedeReenviarPlanilla, revisionTrasCambio } from '@/lib/planilla-contratista'
 import PanelRevisionPlanilla from '@/components/ui/PanelRevisionPlanilla'
 import { AYUDA_DOCUMENTO, AYUDA_REVISION } from '@/lib/ayudas-documentos'
 import { lecturaVigente } from '@/lib/cambio-local'
@@ -376,6 +379,7 @@ export default function PeriodoDetallePage({
 
   // Planilla state
   const [numPlanilla, setNumPlanilla] = useState(initialPeriodo.numero_planilla ?? '')
+  const [reenviandoPlanilla, setReenviandoPlanilla] = useState(false)
   const [guardandoPlanilla, setGuardandoPlanilla] = useState(false)
 
   // Mes de cotización (validado por asesor/supervisor/admin durante la revisión). El valor vigente sale de `periodo`
@@ -1098,10 +1102,26 @@ export default function PeriodoDetallePage({
       ? 'La planilla fue devuelta por incorrecta y el contratista todavía no ha subido una nueva.'
       : 'La planilla está adjunta pero nadie la ha revisado todavía.'
 
-  // Planilla: contratista puede gestionar hasta que esté aprobado o radicado
-  const esPlanillaGestionable = !esHistorico && !periodoVencido && esContratista && periodo
-    ? !['aprobado', 'radicado'].includes(periodo.estado)
-    : false
+  // Planilla, soporte del pago y número: la contratista los cambia SOLO con el informe en borrador o devuelto, o mientras el
+  // revisor tenga la planilla devuelta (lib/planilla-contratista.ts: la misma regla que aplica el servidor). Con el informe
+  // enviado o en revisión se ven, pero no se cambian. El plazo del mes no cuenta en la ventana de corrección: devolver la
+  // planilla de un informe ya enviado no puede dejar a la contratista sin cómo corregirla.
+  const planillaDevuelta = !!periodo && hayPlanillaDevuelta(periodo.estado, periodo.planilla_estado)
+  const esPlanillaGestionable = !esHistorico && esContratista && !!periodo
+    && (planillaDevuelta || (!periodoVencido && puedeCambiarDocumentosSS({ rol: 'contratista', estado: periodo.estado, planillaEstado: periodo.planilla_estado }).ok))
+  // La contratista ve sus documentos como fichas (PanelDocumentos), no como la lista desplegable: en solo lectura con el
+  // informe enviado, y editables en la ventana de corrección.
+  const usaFichasDeDocumentos = esContratista && !esHistorico
+  const mostrarFichasTrasEnvio = usaFichasDeDocumentos && !esEditable && !!periodo
+    && (!!periodo.planilla_ss_url || !!periodo.soporte_pago_url || !!periodo.numero_planilla || periodo.estado === 'enviado' || periodo.estado === 'revision')
+  const decisionReenvio = puedeReenviarPlanilla({
+    rol: usuario?.rol,
+    estado: periodo?.estado ?? '',
+    planillaEstado: periodo?.planilla_estado,
+    tienePlanilla: !!periodo?.planilla_ss_url,
+    tieneSoporte: !!periodo?.soporte_pago_url,
+    numeroPlanilla: numPlanilla,
+  })
 
   // El historial se lee como `eventos`, más arriba: lo consumen la tira de
   // puntos de la cabecera y el detalle del periodo. Aquí había una segunda
@@ -1841,6 +1861,12 @@ export default function PeriodoDetallePage({
     }
   }
 
+  /** Cómo queda la revisión en pantalla tras subir un documento: igual que en el servidor (`revisionTrasCambio`). */
+  function cambioDeRevisionLocal(): Partial<Periodo> {
+    const r = revisionTrasCambio(periodo?.estado ?? '', periodo?.planilla_estado)
+    return { planilla_estado: r.planilla_estado, ...(r.borraMotivo ? { planilla_comentario: null } : {}) }
+  }
+
   async function handleSubirPlanilla(file: File) {
     setSubiendoPlanilla(true)
     try {
@@ -1874,8 +1900,9 @@ export default function PeriodoDetallePage({
         setUrlsFirmadas(prev => ({ ...prev, [publicUrl]: confirm.data!.urlFirmada! }))
       }
 
-      // Al instante: el botón pasa a «cargado» y el informe se puede enviar sin esperar la recarga.
-      aplicarCambioLocal({ planilla_ss_url: publicUrl, planilla_estado: 'pendiente', planilla_comentario: null })
+      // Al instante: el botón pasa a «cargado» y el informe se puede enviar sin esperar la recarga. En la ventana de
+      // corrección la revisión sigue «devuelta» hasta que se envíe la corrección (lib/planilla-contratista.ts).
+      aplicarCambioLocal({ planilla_ss_url: publicUrl, ...cambioDeRevisionLocal() })
 
       toast.success('Planilla subida exitosamente')
       setPlanillaMenuAbierto(false)
@@ -1935,7 +1962,7 @@ export default function PeriodoDetallePage({
     const result = await eliminarPlanilla(periodoId)
     if (result.error) toast.error(result.error)
     else {
-      aplicarCambioLocal({ planilla_ss_url: null, numero_planilla: null, planilla_estado: 'pendiente' })
+      aplicarCambioLocal({ planilla_ss_url: null, numero_planilla: null, planilla_estado: revisionTrasCambio(periodo?.estado ?? '', periodo?.planilla_estado).planilla_estado })
       toast.success('Planilla eliminada'); setPlanillaMenuAbierto(false); setNumPlanilla(''); void cargarDatos(true)
     }
   }
@@ -1969,7 +1996,7 @@ export default function PeriodoDetallePage({
       if (confirm.data.urlFirmada) {
         setUrlsFirmadas(prev => ({ ...prev, [confirm.data!.url]: confirm.data!.urlFirmada! }))
       }
-      aplicarCambioLocal({ soporte_pago_url: confirm.data.url, planilla_estado: 'pendiente', planilla_comentario: null })
+      aplicarCambioLocal({ soporte_pago_url: confirm.data.url, ...cambioDeRevisionLocal() })
       toast.success('Soporte del pago subido')
       setPlanillaMenuAbierto(false)
       void cargarDatos(true)
@@ -1984,7 +2011,7 @@ export default function PeriodoDetallePage({
     const result = await eliminarSoportePago(periodoId)
     if (result.error) toast.error(result.error)
     else {
-      aplicarCambioLocal({ soporte_pago_url: null, planilla_estado: 'pendiente' })
+      aplicarCambioLocal({ soporte_pago_url: null, planilla_estado: revisionTrasCambio(periodo?.estado ?? '', periodo?.planilla_estado).planilla_estado })
       toast.success('Soporte del pago eliminado'); setPlanillaMenuAbierto(false); void cargarDatos(true)
     }
   }
@@ -2004,6 +2031,28 @@ export default function PeriodoDetallePage({
     return !res.error
   }
 
+  /**
+   * Envía a revisión la planilla que el revisor devolvió. Primero guarda el número si quedó escrito sin salir del campo:
+   * el servidor lee el guardado, no lo que hay en el cuadro de texto.
+   */
+  async function handleReenviarPlanilla() {
+    setReenviandoPlanilla(true)
+    try {
+      if (numPlanilla.trim() !== (periodo?.numero_planilla ?? '').trim()) {
+        const guardado = await guardarNumeroPlanilla(periodoId, numPlanilla)
+        if (guardado.error) { toast.error(guardado.error); return }
+        aplicarCambioLocal({ numero_planilla: numPlanilla.trim() })
+      }
+      const res = await reenviarPlanillaARevision(periodoId)
+      if (res.error) { toast.error(res.error); return }
+      aplicarCambioLocal({ planilla_estado: 'pendiente', planilla_comentario: null })
+      toast.success('Corrección enviada a revisión')
+      void cargarDatos(true)
+    } finally {
+      setReenviandoPlanilla(false)
+    }
+  }
+
   async function handleGuardarNumeroPlanilla() {
     const errorFormato = validarNumeroPlanilla(numPlanilla)
     if (errorFormato) { setErrorFormatoPlanilla(errorFormato); return }
@@ -2012,6 +2061,7 @@ export default function PeriodoDetallePage({
     const result = await guardarNumeroPlanilla(periodoId, numPlanilla)
     if (result.error) toast.error(result.error)
     else {
+      aplicarCambioLocal({ numero_planilla: numPlanilla.trim() })
       toast.success('Número de planilla guardado')
 
       // Aviso de mes vencido / posible cotización faltante — al CONTRATISTA,
@@ -2686,8 +2736,17 @@ export default function PeriodoDetallePage({
                     </p>
                   )}
                   <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                    Puedes reemplazarla desde el campo <strong className="font-medium text-gray-500">Planilla Seguridad Social</strong>,
-                    en la tarjeta de envío al final de la página.
+                    {rechazado ? (
+                      <>
+                        Puedes reemplazarla desde el campo <strong className="font-medium text-gray-500">Planilla Seguridad Social</strong>,
+                        en la tarjeta de envío al final de la página.
+                      </>
+                    ) : (
+                      <>
+                        Corrígela en <strong className="font-medium text-gray-500">Documentos del periodo</strong>, más abajo: puedes cambiar
+                        la planilla, el soporte del pago y el número, y al terminar pulsa «Enviar corrección a revisión».
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -4071,9 +4130,51 @@ export default function PeriodoDetallePage({
               </a>
             </div>
 
+            {/* ── Planilla de Seguridad Social, vista de la contratista: las mismas fichas del envío ── */}
+            {mostrarFichasTrasEnvio && (
+              <div className="col-span-1 sm:col-span-2">
+                <SeguridadSocialContratista
+                  revision={periodo.planilla_estado}
+                  motivo={periodo.planilla_comentario ?? null}
+                  enCorreccion={planillaDevuelta && esPlanillaGestionable}
+                  informeEnRevision={periodo.estado === 'enviado' || periodo.estado === 'revision'}
+                  planilla={{
+                    icono: Iconos.documentos.planilla,
+                    etiqueta: 'Planilla',
+                    ayuda: AYUDA_DOCUMENTO.planilla,
+                    estado: subiendoPlanilla ? 'subiendo' : periodo.planilla_ss_url ? 'cargado' : 'vacio',
+                    urlVer: periodo.planilla_ss_url ? resolverUrl(periodo.planilla_ss_url) : null,
+                    onSubir: esPlanillaGestionable ? (archivo) => { void handleSubirPlanilla(archivo) } : undefined,
+                    onQuitar: esPlanillaGestionable ? () => { void handleEliminarPlanilla() } : undefined,
+                  }}
+                  soporte={{
+                    icono: Iconos.documentos.soportePago,
+                    etiqueta: 'Soporte de pago',
+                    ayuda: AYUDA_DOCUMENTO.soportePago,
+                    estado: subiendoSoporte ? 'subiendo' : periodo.soporte_pago_url ? 'cargado' : 'vacio',
+                    urlVer: periodo.soporte_pago_url ? resolverUrl(periodo.soporte_pago_url) : null,
+                    onSubir: esPlanillaGestionable ? (archivo) => { void handleSubirSoportePago(archivo) } : undefined,
+                    onQuitar: esPlanillaGestionable ? () => { void handleEliminarSoportePago() } : undefined,
+                  }}
+                  numero={{
+                    etiqueta: 'N.° de planilla',
+                    ayuda: AYUDA_DOCUMENTO.numeroPlanilla,
+                    valor: esPlanillaGestionable ? numPlanilla : (periodo.numero_planilla ?? ''),
+                    onCambio: (valor) => { setNumPlanilla(valor); setErrorFormatoPlanilla(null) },
+                    onSalir: handleGuardarNumeroPlanilla,
+                    error: errorFormatoPlanilla,
+                  }}
+                  bloqueoEnvio={decisionReenvio.ok ? null : decisionReenvio.error}
+                  enviando={reenviandoPlanilla}
+                  onEnviarCorreccion={() => { void handleReenviarPlanilla() }}
+                />
+              </div>
+            )}
+
             {/* ── Planilla de Seguridad Social — dropdown ── */}
-            {/* Hidden in editable mode: contratista uses the inline fields in the submit card above */}
-            {(esPlanillaGestionable || periodo.planilla_ss_url || periodo.soporte_pago_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && (
+            {/* Hidden in editable mode: contratista uses the inline fields in the submit card above.
+                La contratista usa las fichas de arriba (salvo en un periodo histórico, que conserva la lista de siempre). */}
+            {(esPlanillaGestionable || periodo.planilla_ss_url || periodo.soporte_pago_url || esAsesor) && (!esEditable || esAsesor || esSecretaria) && !usaFichasDeDocumentos && (
               <div className="relative col-span-1 sm:col-span-2">
                 {/* Trigger button — el borde refleja la alerta más grave aunque esté cerrado */}
                 <button

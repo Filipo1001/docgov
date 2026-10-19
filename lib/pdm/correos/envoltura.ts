@@ -49,6 +49,13 @@ export const ESTADOS_CORREO = {
   devuelto:    { palabra: 'Devuelto',    color: '#B42318', tinte: '#FCEDEB' },
   aprobado:    { palabra: 'Aprobado',    color: '#2E7D5B', tinte: '#EAF4EF' },
   asignacion:  { palabra: 'Asignación',  color: MARCA,     tinte: '#EEF0F4' },
+  acceso:      { palabra: 'Acceso',      color: MARCA,     tinte: '#EEF0F4' },
+  grupo:       { palabra: 'Grupo',       color: MARCA,     tinte: '#EEF0F4' },
+  reabierto:   { palabra: 'Reabierto',   color: '#B42318', tinte: '#FCEDEB' },
+  anulado:     { palabra: 'Anulado',     color: '#475467', tinte: '#F2F4F7' },
+  restaurado:  { palabra: 'Restaurado',  color: '#2E7D5B', tinte: '#EAF4EF' },
+  comentario:  { palabra: 'Comentario',  color: MARCA,     tinte: '#EEF0F4' },
+  resumen:     { palabra: 'Resumen',     color: MARCA,     tinte: '#EEF0F4' },
 } as const
 
 export type EstadoCorreo = keyof typeof ESTADOS_CORREO

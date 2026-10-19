@@ -40,6 +40,7 @@ import {
 } from '@/lib/pdm/seguimiento-acciones'
 import FormularioReporte from './FormularioReporte'
 import { useAbrirEvidencia } from './abrir-evidencia'
+import Huella from './Huella'
 import ComentariosIndicador from './ComentariosIndicador'
 import EvolucionDelAnio from './EvolucionDelAnio'
 import { Sello, Seccion, SituacionTexto } from './ui'
@@ -63,6 +64,8 @@ const reportaPorSuCuenta = (nivel: NivelPdm) => nivel === 'responsable' || nivel
 
 function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: AccionesSeguimiento }) {
   const { abrir, abriendo, error } = useAbrirEvidencia(acciones)
+  const [huellas, setHuellas] = useState(false)
+  const idHuellas = useId()
 
   if (lista.length === 0) return null
   return (
@@ -92,6 +95,32 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
       </ul>
       <Despliegue abierto={!!error} separacion="">
         {error ? <p role="alert" className="mt-1 text-xs font-medium text-[#B42318]">{error}</p> : null}
+      </Despliegue>
+      <button
+        type="button"
+        onClick={() => setHuellas(v => !v)}
+        aria-expanded={huellas}
+        aria-controls={idHuellas}
+        className="mt-1.5 inline-flex items-center gap-1.5 rounded text-xs font-medium text-[#2D3648] underline decoration-[#C5CBD6] underline-offset-2 transition-colors hover:text-[#192031] hover:decoration-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031]"
+      >
+        <Icono glifo={Iconos.documentos.huella} tamano="sm" className="shrink-0 text-[#667085]" />
+        {huellas ? 'Ocultar las huellas' : lista.length === 1 ? 'Ver la huella del archivo' : 'Ver las huellas de los archivos'}
+      </button>
+      <Despliegue abierto={huellas} separacion="pt-1.5">
+        <div id={idHuellas}>
+          <p className="max-w-prose text-xs leading-snug text-[#667085]">
+            La huella identifica el contenido exacto de cada archivo: si cambia un solo bit, cambia la huella. La calculó el servidor
+            al subirlo, así que sirve para comprobar, más adelante, que un archivo es el mismo que se reportó.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {lista.map(e => (
+              <li key={e.id} className="min-w-0">
+                <span className="block truncate text-xs font-medium text-[#192031]" title={e.nombre}>{e.nombre}</span>
+                <Huella sha256={e.sha256} calculadaEn={e.huellaCalculadaEn} />
+              </li>
+            ))}
+          </ul>
+        </div>
       </Despliegue>
     </div>
   )

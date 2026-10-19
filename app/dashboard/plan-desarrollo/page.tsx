@@ -1,11 +1,15 @@
 import MiTrabajoPdm from '@/components/pdm/MiTrabajoPdm'
 import PlanNoDisponible from '@/components/pdm/PlanNoDisponible'
 import ResumenPdm from '@/components/pdm/ResumenPdm'
+import TableroSecretaria from '@/components/pdm/tablero/TableroSecretaria'
 import { exigirAccesoPdm, metadataPdm } from '@/lib/pdm/acceso'
 import { cargarPlanPdm } from '@/lib/pdm/datos'
+import { hoyBogota } from '@/lib/pdm/contrato'
 import { cargarDirectorio } from '@/lib/pdm/directorio'
 import { armarMisGrupos } from '@/lib/pdm/mi-trabajo'
 import { anioDeParametro } from '@/lib/pdm/seguimiento'
+import { datosDelTablero, desdeDelRitmo } from '@/lib/pdm/tablero'
+import { cargarCifrasPorSecretaria, cargarRitmoSemanal } from '@/lib/pdm/tablero-datos'
 
 /**
  * Plan de Desarrollo — Resumen (vista previa).
@@ -64,5 +68,35 @@ export default async function ResumenPage({ searchParams }: { searchParams: Prom
   }
 
   if (!plan.ok || plan.indicadores.length === 0) return <PlanNoDisponible seLeyo={plan.ok} nivel={acceso.nivel} />
+
+  // La secretaría (el secretario de despacho) abre en SU tablero: cómo va ella, cómo va la Alcaldía y cómo va frente a las otras.
+  // Lo que cruza secretarías son números que entrega la base (migración 071); si falla, el tablero lo dice y sigue con lo propio.
+  if (acceso.nivel === 'coordinador') {
+    const ahora = new Date()
+    const [filasDeCifras, filasDeRitmo] = await Promise.all([cargarCifrasPorSecretaria(), cargarRitmoSemanal(desdeDelRitmo(anioActual))])
+    const datos = datosDelTablero({
+      secretaria: plan.indicadores[0].dependencia,
+      indicadores: plan.indicadores,
+      filasDeCifras,
+      filasDeRitmo,
+      anioActual,
+      ahora,
+      hoy: hoyBogota(ahora),
+      corte: ahora.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Bogota' }),
+    })
+    // Solo las personas que llevan indicadores de esta secretaría: el resto del directorio no hace falta para el equipo.
+    const conIndicadores = new Set(plan.indicadores.flatMap(i => i.asignados.map(a => a.usuarioId)))
+    return (
+      <TableroSecretaria
+        indicadores={plan.indicadores}
+        personas={dir.personas.filter(p => conIndicadores.has(p.id))}
+        personasLeidas={dir.ok}
+        datos={datos}
+        yoId={acceso.userId}
+        anioInicial={anioInicial}
+      />
+    )
+  }
+
   return <ResumenPdm indicadores={plan.indicadores} fichas={dir.fichas} nivel={acceso.nivel} yoId={acceso.userId} anioActual={anioActual} anioInicial={anioInicial} />
 }

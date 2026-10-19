@@ -1,0 +1,175 @@
+{
+ "metas": [
+  {
+   "anio": 2024,
+   "meta": 43,
+   "indicador_id": "00000000-0000-4000-8000-00000000000a"
+  },
+  {
+   "anio": 2025,
+   "meta": 46,
+   "indicador_id": "00000000-0000-4000-8000-00000000000a"
+  },
+  {
+   "anio": 2026,
+   "meta": 49,
+   "indicador_id": "00000000-0000-4000-8000-00000000000a"
+  },
+  {
+   "anio": 2027,
+   "meta": 50,
+   "indicador_id": "00000000-0000-4000-8000-00000000000a"
+  },
+  {
+   "anio": 2025,
+   "meta": 50,
+   "indicador_id": "00000000-0000-4000-8000-00000000000b"
+  },
+  {
+   "anio": 2026,
+   "meta": 55,
+   "indicador_id": "00000000-0000-4000-8000-00000000000b"
+  },
+  {
+   "anio": 2027,
+   "meta": 60,
+   "indicador_id": "00000000-0000-4000-8000-00000000000b"
+  }
+ ],
+ "cifras": [
+  {
+   "anio": 2024,
+   "faltan": 1,
+   "con_meta": 1,
+   "aprobados": 0,
+   "devueltos": 0,
+   "parciales": 0,
+   "alcanzaron": 0,
+   "dependencia": "Secretaría de Ejemplo",
+   "por_validar": 0,
+   "sin_responsable": 0,
+   "con_avance": 0
+  },
+  {
+   "anio": 2025,
+   "faltan": 1,
+   "con_meta": 2,
+   "aprobados": 0,
+   "devueltos": 0,
+   "parciales": 0,
+   "alcanzaron": 0,
+   "dependencia": "Secretaría de Ejemplo",
+   "por_validar": 0,
+   "sin_responsable": 1,
+   "con_avance": 0
+  },
+  {
+   "anio": 2026,
+   "faltan": 0,
+   "con_meta": 2,
+   "aprobados": 0,
+   "devueltos": 1,
+   "parciales": 0,
+   "alcanzaron": 1,
+   "dependencia": "Secretaría de Ejemplo",
+   "por_validar": 0,
+   "sin_responsable": 1,
+   "con_avance": 1
+  },
+  {
+   "anio": 2027,
+   "faltan": 0,
+   "con_meta": 2,
+   "aprobados": 0,
+   "devueltos": 0,
+   "parciales": 0,
+   "alcanzaron": 0,
+   "dependencia": "Secretaría de Ejemplo",
+   "por_validar": 0,
+   "sin_responsable": 0,
+   "con_avance": 0
+  }
+ ],
+ "avances": [
+  {
+   "anio": 2026,
+   "valor": 49,
+   "validado_en": "2026-10-19T14:12:45.059416+00:00",
+   "indicador_id": "00000000-0000-4000-8000-00000000000a",
+   "reportado_en": "2026-10-19T14:12:45.026503+00:00"
+  }
+ ],
+ "vigentes": [
+  {
+   "anio": 2026,
+   "texto": "Se hizo una actividad de prueba para este indicador.",
+   "valor": 50,
+   "estado": "devuelto",
+   "autor_id": "00000000-0000-4000-8000-0000000000c1",
+   "corrige_a": null,
+   "created_at": "2026-10-19T14:12:45.09075+00:00",
+   "reporte_id": "00000000-0000-4000-8000-0000000000d1",
+   "validado_en": "2026-10-19T14:12:45.119001+00:00",
+   "autor_nombre": "AUTORA DE EJEMPLO",
+   "indicador_id": "00000000-0000-4000-8000-00000000000a",
+   "n_evidencias": 1,
+   "valor_anterior": 49,
+   "validador_nombre": "ADMINISTRADOR",
+   "motivo_correccion": null,
+   "validacion_comentario": "Falta la lista de asistencia del taller"
+  }
+ ],
+ "anioActual": 2026,
+ "dependencia": "Secretaría de Ejemplo",
+ "indicadores": [
+  {
+   "id": "00000000-0000-4000-8000-00000000000a",
+   "linea": "Línea de ejemplo",
+   "codigo": "4.4.1",
+   "sector": "Planeación estratégica y hacienda",
+   "unidad": "Porcentaje",
+   "producto": "Producto de ejemplo",
+   "programa": "Programa de ejemplo",
+   "indicador": "Indicador de ejemplo 4.4.1 A",
+   "linea_base": 40,
+   "dependencia": {
+    "nombre": "Secretaría de Ejemplo"
+   },
+   "fila_origen": 262,
+   "meta_cuatrienio": 50,
+   "responsable_origen": "Persona de ejemplo"
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000000b",
+   "linea": "Línea de ejemplo",
+   "codigo": "4.4.1",
+   "sector": "Planeación estratégica y hacienda",
+   "unidad": "Porcentaje",
+   "producto": "Producto de ejemplo",
+   "programa": "Programa de ejemplo",
+   "indicador": "Indicador de ejemplo 4.4.1 B",
+   "linea_base": 40,
+   "dependencia": {
+    "nombre": "Secretaría de Ejemplo"
+   },
+   "fila_origen": 263,
+   "meta_cuatrienio": 60,
+   "responsable_origen": "Persona de ejemplo"
+  }
+ ],
+ "asignaciones": [
+  {
+   "grupo_id": null,
+   "principal": false,
+   "usuario_id": "00000000-0000-4000-8000-0000000000c2",
+   "indicador_id": "00000000-0000-4000-8000-00000000000a"
+  },
+  {
+   "grupo_id": null,
+   "principal": true,
+   "usuario_id": "00000000-0000-4000-8000-0000000000c1",
+   "indicador_id": "00000000-0000-4000-8000-00000000000a"
+  }
+ ],
+ "_origen": "Salida PARIDAD de supabase/tests/pdm_cifras.sql (ensayo del 19-oct-2026, con la migración 071 definitiva), anonimizada: una secretaría con un indicador alcanzado y luego devuelto, otro sin responsable, y un año que no ha empezado."
+}
