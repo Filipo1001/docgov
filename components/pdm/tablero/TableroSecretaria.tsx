@@ -12,7 +12,7 @@
  * mostrando todo lo de la propia secretaría.
  */
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { aniosIniciados } from '@/lib/pdm/graficos'
 import { HREF_INDICADORES } from '@/lib/pdm/menu'
@@ -27,6 +27,7 @@ import Pagina from '../Pagina'
 import { T } from '../tema'
 import { PanelAlcaldia, PanelComparacion, PanelTuSecretaria } from './PanelesPrincipales'
 import { MetodoDeCalculo, PanelAtencion, PanelEquipo, PanelRitmo, PanelSectores } from './PanelesDeDetalle'
+import Presentacion from './Presentacion'
 
 const BOTON = 'rounded-md border px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-1'
 const PUESTO = 'border-[#192031] bg-[#192031] text-white'
@@ -48,6 +49,10 @@ export default function TableroSecretaria({ indicadores, personas, datos, yoId, 
   const { anioActual } = datos
   const [anio, setAnio] = useState(anioInicial)
   const [medida, setMedida] = useState<MedidaDelTablero>('cumplimiento')
+  const [presentando, setPresentando] = useState(false)
+  const botonPresentar = useRef<HTMLButtonElement>(null)
+  // Al salir, el foco vuelve al botón que la abrió. Estable: la presentación se engancha a la pantalla completa con él.
+  const cerrarPresentacion = useCallback(() => { setPresentando(false); botonPresentar.current?.focus() }, [])
 
   const propia = useMemo(() => propiaPorAnio(datos.secretaria, indicadores, anioActual), [datos.secretaria, indicadores, anioActual])
   const cifras = propia.porAnio[anio]
@@ -68,14 +73,18 @@ export default function TableroSecretaria({ indicadores, personas, datos, yoId, 
           <p className={T.rotulo}>Resumen · {datos.secretaria}</p>
           <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-[#192031]">Así va tu secretaría</h1>
         </div>
-        {anios.length > 1 && (
-          <div role="group" aria-label="Año" className="flex flex-wrap items-center gap-2">
-            <span className={`${T.rotulo} mr-1`}>Año</span>
-            {anios.map(a => (
-              <button key={a} type="button" aria-pressed={a === anio} onClick={() => setAnio(a)} className={`${BOTON} ${a === anio ? PUESTO : LIBRE}`}>{a}</button>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {anios.length > 1 && (
+            <div role="group" aria-label="Año" className="flex flex-wrap items-center gap-2">
+              <span className={`${T.rotulo} mr-1`}>Año</span>
+              {anios.map(a => (
+                <button key={a} type="button" aria-pressed={a === anio} onClick={() => setAnio(a)} className={`${BOTON} ${a === anio ? PUESTO : LIBRE}`}>{a}</button>
+              ))}
+            </div>
+          )}
+          {/* Proyectar es cosa de computador: en un teléfono en vertical la lámina sería un sello. */}
+          <button ref={botonPresentar} type="button" onClick={() => setPresentando(true)} className={`${BOTON} ${PUESTO} hidden md:inline-flex`}>Presentar</button>
+        </div>
       </header>
 
       {propiosPorReportar > 0 && (
@@ -118,6 +127,13 @@ export default function TableroSecretaria({ indicadores, personas, datos, yoId, 
       </div>
 
       <MetodoDeCalculo />
+
+      {presentando && (
+        <Presentacion
+          onCerrar={cerrarPresentacion}
+          datos={{ secretaria: datos.secretaria, anio, anioActual, cifras, comparacion, sectores, medida, lectura, corte: datos.corte }}
+        />
+      )}
     </Pagina>
   )
 }

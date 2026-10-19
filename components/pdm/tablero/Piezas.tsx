@@ -42,9 +42,15 @@ export function Contador({ valor, className = '' }: { valor: number; className?:
 }
 
 /** El cuadradito de un tramo del cumplimiento. Nunca va solo: lo acompaña la palabra. */
-export function MarcaTramo({ tramo }: { tramo: TramoDeCumplimiento }) {
+export function MarcaTramo({ tramo, grande = false }: { tramo: TramoDeCumplimiento; grande?: boolean }) {
   const color = TRAMOS.find(t => t.clave === tramo)!.color
-  return <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} />
+  return <span aria-hidden className={`inline-block shrink-0 rounded-[2px] ${grande ? 'h-4 w-4' : 'h-2 w-2'}`} style={{ backgroundColor: color }} />
+}
+
+/** El marcador de un estado de reporte, más grande para las láminas de la presentación (el del módulo mide 8 px). */
+function MarcaDeEstado({ parte, grande }: { parte: EstadoDeReporte; grande: boolean }) {
+  if (!grande) return <MarcadorDeParte parte={parte} />
+  return <span aria-hidden className="mx-[3px] inline-flex origin-center scale-[1.75]"><MarcadorDeParte parte={parte} /></span>
 }
 
 // ─── La pista apilada ─────────────────────────────────────────────────────────
@@ -69,9 +75,11 @@ export interface SegmentoDePista {
  * Segmentos a lo ancho de una pista, cada uno del largo de su cifra. `flex-grow` y no `width`: al cambiar los valores los segmentos
  * se acomodan en vez de saltar. Un segmento con algo mide al menos 2 px: un indicador entre cien no puede desaparecer de la barra.
  */
-export function PistaApilada({ segmentos, alta = false, descripcion, escalon = 0 }: {
+export function PistaApilada({ segmentos, alta = false, altura, descripcion, escalon = 0 }: {
   segmentos: SegmentoDePista[]
   alta?: boolean
+  /** Clase de alto que reemplaza a las dos medidas de siempre (las láminas de la presentación la piden más gruesa). */
+  altura?: string
   descripcion: string
   /** Retraso, en pasos, con que entra esta pista (para que una lista de filas se dibuje en cascada). */
   escalon?: number
@@ -79,7 +87,7 @@ export function PistaApilada({ segmentos, alta = false, descripcion, escalon = 0
   const listo = useListo()
   const entrando = useEntrando()
   return (
-    <span role="img" aria-label={descripcion} className={`flex w-full gap-px overflow-hidden rounded-[3px] bg-[#E6E9EF] ${alta ? 'h-3.5' : 'h-2.5'}`}>
+    <span role="img" aria-label={descripcion} className={`flex w-full gap-px overflow-hidden rounded-[3px] bg-[#E6E9EF] ${altura ?? (alta ? 'h-3.5' : 'h-2.5')}`}>
       {segmentos.map((s, k) => (
         <span
           key={s.clave}
@@ -116,12 +124,12 @@ export function descripcionDeReportes(c: CifrasDeAnio): string {
 // ─── Leyendas ─────────────────────────────────────────────────────────────────
 
 /** Los estados de reporte en una línea que se acomoda, cada uno con su marcador, su palabra y su cifra. */
-export function LeyendaDeEstados({ c }: { c: CifrasDeAnio }) {
+export function LeyendaDeEstados({ c, grande = false }: { c: CifrasDeAnio; grande?: boolean }) {
   return (
-    <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#556072]">
+    <ul className={`flex flex-wrap text-[#556072] ${grande ? 'mt-5 gap-x-8 gap-y-2 text-[19px]' : 'mt-3 gap-x-4 gap-y-1 text-xs'}`}>
       {ESTADOS_DE_REPORTE.map(e => (
-        <li key={e} className="inline-flex items-center gap-1.5">
-          <MarcadorDeParte parte={e} />
+        <li key={e} className={`inline-flex items-center ${grande ? 'gap-2.5' : 'gap-1.5'}`}>
+          <MarcaDeEstado parte={e} grande={grande} />
           {ROTULO_DE_PARTE[e]}
           <Contador valor={c[e]} className="font-semibold text-[#192031]" />
         </li>
@@ -131,12 +139,13 @@ export function LeyendaDeEstados({ c }: { c: CifrasDeAnio }) {
 }
 
 /** La leyenda de la medida elegida (sin cifras: las filas ya las dicen). */
-export function LeyendaDeMedida({ medida }: { medida: 'cumplimiento' | 'reportes' }) {
+export function LeyendaDeMedida({ medida, grande = false }: { medida: 'cumplimiento' | 'reportes'; grande?: boolean }) {
+  const item = `inline-flex items-center ${grande ? 'gap-2.5' : 'gap-1.5'}`
   return (
-    <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#556072]">
+    <ul className={`flex flex-wrap text-[#556072] ${grande ? 'mt-5 gap-x-8 gap-y-2 text-[19px]' : 'mt-3 gap-x-4 gap-y-1 text-xs'}`}>
       {medida === 'cumplimiento'
-        ? TRAMOS.map(t => <li key={t.clave} className="inline-flex items-center gap-1.5"><MarcaTramo tramo={t.clave} />{t.etiqueta}</li>)
-        : ESTADOS_DE_REPORTE.map(e => <li key={e} className="inline-flex items-center gap-1.5"><MarcadorDeParte parte={e} />{ROTULO_DE_PARTE[e]}</li>)}
+        ? TRAMOS.map(t => <li key={t.clave} className={item}><MarcaTramo tramo={t.clave} grande={grande} />{t.etiqueta}</li>)
+        : ESTADOS_DE_REPORTE.map(e => <li key={e} className={item}><MarcaDeEstado parte={e} grande={grande} />{ROTULO_DE_PARTE[e]}</li>)}
     </ul>
   )
 }

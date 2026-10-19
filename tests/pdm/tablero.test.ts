@@ -9,7 +9,8 @@ import { ANIOS_PLAN, type SituacionAnio } from '@/lib/pdm/seguimiento'
 import {
   antiguedadesPorAnio, atencionDe, datosDelTablero, centroDeAnillo, cifrasDeCuenta, cifrasDeFila, comparacionDelAnio, desdeDelRitmo, equipoDe, etiquetaDeSemana,
   filtrarEquipo, lecturaDelTablero, lunesDe, nombreCorto, ordenarPorTamano, pctEntero, propiaPorAnio, sectoresDe, secretariasDeFilas, semanasDeRitmo,
-  sinAvanceDe, sinCifras, sumarCifras, tamanoDe, techoDelEje, textoDeFila, type CifrasDeAnio, type FilaDeCifras, type Trozo,
+  sinAvanceDe, sinCifras, sumarCifras, tamanoDe, techoDelEje, textoDeFila, laminasDeLaPresentacion, tituloDeComparacion, tituloDeCumplimiento, tituloDelPlan, tituloDeSectores,
+  type CifrasDeAnio, type FilaDeCifras, type FilaDeComparacion, type SectorDeCifras, type Trozo,
 } from '@/lib/pdm/tablero'
 
 const cifras = (o: Partial<CifrasDeAnio> = {}): CifrasDeAnio => ({ ...sinCifras(2026), conMeta: 10, ...o })
@@ -300,4 +301,32 @@ test('el nombre corto de una secretaría quita «Secretaría de» y deja el rest
   assert.equal(nombreCorto('Secretaria de la Mujer'), 'Mujer')
   assert.equal(nombreCorto('Oficina Asesora'), 'Oficina Asesora')
   assert.equal(nombreCorto('Secretaría de '), 'Secretaría de ')
+})
+
+// ─── La presentación ──────────────────────────────────────────────────────────
+
+test('la presentación omite las láminas que no tienen de dónde salir, y nunca una con «no disponible»', () => {
+  const fila = (nombre: string, propia = false): FilaDeComparacion => ({ nombre, propia, cifras: cifras() })
+  const sector: SectorDeCifras = { nombre: 'Educación', cifras: cifras() }
+  assert.deepEqual(laminasDeLaPresentacion({ comparacion: [fila('A', true), fila('B')], sectores: [sector] }), ['portada', 'secretaria', 'alcaldia', 'comparacion', 'sectores'])
+  assert.deepEqual(laminasDeLaPresentacion({ comparacion: null, sectores: [sector] }), ['portada', 'secretaria', 'sectores'], 'sin las otras secretarías no hay Alcaldía ni comparación')
+  assert.deepEqual(laminasDeLaPresentacion({ comparacion: [fila('A', true)], sectores: [] }), ['portada', 'secretaria'], 'con una sola secretaría no hay con quién compararse')
+})
+
+test('el título de «Tu secretaría» dice cuántos llegaron, o por qué todavía no hay cifra (nunca «0 de N»)', () => {
+  assert.equal(tituloDeCumplimiento(cifras({ conMeta: 62, alcanzaron: 17, conAvance: 21 }), 2026), '17 de 62 indicadores con meta de 2026 ya la alcanzaron')
+  assert.equal(tituloDeCumplimiento(cifras({ conMeta: 62, alcanzaron: 1, conAvance: 1 }), 2026), '1 de 62 indicadores con meta de 2026 ya la alcanzó')
+  assert.equal(tituloDeCumplimiento(cifras({ conMeta: 62, conAvance: 0 }), 2026), 'En 2026 todavía no hay avances validados')
+  assert.equal(tituloDeCumplimiento({ ...cifras({ conMeta: 62 }), anio: 2027 }, 2026), 'El 2027 aún no empieza')
+  assert.equal(tituloDeCumplimiento(cifras({ conMeta: 0 }), 2026), 'En 2026 ningún indicador tiene meta')
+})
+
+test('los demás títulos de la presentación dicen lo que hay y respetan el singular', () => {
+  assert.equal(tituloDelPlan(cifras({ conMeta: 220 }), 4), 'El plan tiene 220 indicadores con meta en 2026, repartidos en 4 secretarías')
+  assert.equal(tituloDelPlan(cifras({ conMeta: 3 }), 1), 'El plan tiene 3 indicadores con meta en 2026, repartidos en 1 secretaría')
+  assert.equal(tituloDelPlan(cifras({ conMeta: 0 }), 4), 'En 2026 ningún indicador del plan tiene meta')
+  assert.match(tituloDeComparacion('cumplimiento'), /alcanzaron/)
+  assert.match(tituloDeComparacion('reportes'), /estado/)
+  assert.equal(tituloDeSectores(9), 'Los 5 sectores con más indicadores')
+  assert.equal(tituloDeSectores(3), 'Cada sector de tu secretaría')
 })

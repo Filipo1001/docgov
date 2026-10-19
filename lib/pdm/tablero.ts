@@ -277,6 +277,47 @@ export function lecturaDelTablero(
   return { titular, detalle }
 }
 
+// ─── La presentación ──────────────────────────────────────────────────────────
+
+/** Las láminas que se proyectan, en orden. Ninguna lleva nombres de personas ni tareas: es lo que ve una sala. */
+export type ClaveDeLamina = 'portada' | 'secretaria' | 'alcaldia' | 'comparacion' | 'sectores'
+
+/** Cuántos sectores caben en la lámina (los de más indicadores; el resto se ve en el tablero). */
+export const SECTORES_EN_LAMINA = 5
+
+/**
+ * Qué láminas hay. Las que dependen de lo que entrega la base (las otras secretarías) o de que haya algo que mostrar (sectores) se
+ * omiten cuando no hay de dónde sacarlas: una lámina con «no disponible» no se proyecta.
+ */
+export function laminasDeLaPresentacion(a: { comparacion: FilaDeComparacion[] | null; sectores: SectorDeCifras[] }): ClaveDeLamina[] {
+  const laminas: ClaveDeLamina[] = ['portada', 'secretaria']
+  if (a.comparacion && a.comparacion.length > 1) laminas.push('alcaldia', 'comparacion')
+  if (a.sectores.length > 0) laminas.push('sectores')
+  return laminas
+}
+
+/** El título de la lámina «Tu secretaría»: cuántos llegaron a su meta, o por qué todavía no hay cifra. */
+export function tituloDeCumplimiento(c: CifrasDeAnio, anioActual: number): string {
+  if (!anioIniciado(c.anio, anioActual)) return `El ${c.anio} aún no empieza`
+  if (c.conMeta === 0) return `En ${c.anio} ningún indicador tiene meta`
+  if (c.conAvance === 0) return `En ${c.anio} todavía no hay avances validados`
+  return `${c.alcanzaron} de ${c.conMeta} indicadores con meta de ${c.anio} ya ${c.alcanzaron === 1 ? 'la alcanzó' : 'la alcanzaron'}`
+}
+
+/** El título de la lámina «La Alcaldía». */
+export function tituloDelPlan(plan: CifrasDeAnio, secretarias: number): string {
+  if (plan.conMeta === 0) return `En ${plan.anio} ningún indicador del plan tiene meta`
+  return `El plan tiene ${plan.conMeta} indicadores con meta en ${plan.anio}, repartidos en ${secretarias} ${secretarias === 1 ? 'secretaría' : 'secretarías'}`
+}
+
+/** El título de una lámina de comparación según la medida elegida. */
+export const tituloDeComparacion = (medida: MedidaDelTablero): string =>
+  medida === 'cumplimiento' ? 'Cuántos indicadores con meta ya la alcanzaron, por secretaría' : 'En qué estado están los reportes de cada secretaría'
+
+/** El título de la lámina de sectores. */
+export const tituloDeSectores = (cuantos: number): string =>
+  cuantos > SECTORES_EN_LAMINA ? `Los ${SECTORES_EN_LAMINA} sectores con más indicadores` : 'Cada sector de tu secretaría'
+
 // ─── Lo que necesita atención ─────────────────────────────────────────────────
 
 export type ClaveDeAtencion = 'porValidar' | 'sinResponsable' | 'sinAcceso' | 'devueltos' | 'faltan'
