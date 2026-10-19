@@ -344,7 +344,10 @@ begin
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('public', 'pdm_privado') and p.prokind = 'f'
     and p.prosrc ilike '%pdm_reportes%' and p.prosrc not ilike '%anulado%'
-    and p.proname not in ('preparar_evidencia');   -- solo comprueba que el reporte sea de quien sube el archivo
+    and p.proname not in ('preparar_evidencia')   -- solo comprueba que el reporte sea de quien sube el archivo
+    -- Las cifras por secretaría (071) leen las VISTAS pdm_reportes_vigentes y pdm_avance_validado, que ya saltan lo anulado:
+    -- su texto nombra la vista, no la tabla, y por eso no dice «anulado».
+    and p.proname not in ('cifras_por_secretaria');
   perform pg_temp.chequear('ninguna función que lee reportes se olvidó de lo anulado' || coalesce(' (' || v_msg || ')', ''), v_msg is null);
   select string_agg(v.viewname, ', ') into v_msg
   from pg_views v where v.schemaname = 'public' and v.definition ilike '%pdm_reportes%' and v.definition not ilike '%anulado%';
