@@ -70,6 +70,9 @@ correr() {   # nombre, VERCEL_ENV, PDM_PRODUCCION, esperado: cerrado|abierto
   done
   local api; api="$(codigo -X POST -H 'content-type: application/json' -d '{"paso":"x"}' "$B/api/pdm-diagnostico")"
   if [ "$esperado" = "cerrado" ]; then esperar_estado "POST /api/pdm-diagnostico" "404" "$api"; else esperar_no_404 "POST /api/pdm-diagnostico" "$api"; fi
+  # El informe en PDF del tablero: sin el módulo no existe; con él, sin sesión responde 401 (no 404).
+  local pdf; pdf="$(codigo "$B/api/pdm-tablero/pdf")"
+  if [ "$esperado" = "cerrado" ]; then esperar_estado "GET /api/pdm-tablero/pdf" "404" "$pdf"; else esperar_no_404 "GET /api/pdm-tablero/pdf" "$pdf"; fi
 
   if [ "$esperado" = "cerrado" ]; then
     # Nada del módulo en el cuerpo de la respuesta: ni su maqueta de carga ni sus pestañas.

@@ -27,6 +27,7 @@ import Pagina from '../Pagina'
 import { T } from '../tema'
 import { PanelAlcaldia, PanelComparacion, PanelTuSecretaria } from './PanelesPrincipales'
 import { MetodoDeCalculo, PanelAtencion, PanelEquipo, PanelRitmo, PanelSectores } from './PanelesDeDetalle'
+import BotonDeInforme from './BotonDeInforme'
 import Presentacion from './Presentacion'
 
 const BOTON = 'rounded-md border px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] focus-visible:ring-offset-1'
@@ -86,6 +87,7 @@ export default function TableroSecretaria({ indicadores, personas, personasLeida
           )}
           {/* Proyectar es cosa de computador: en un teléfono en vertical la lámina sería un sello. */}
           <button ref={botonPresentar} type="button" onClick={() => setPresentando(true)} className={`${BOTON} ${PUESTO} hidden md:inline-flex`}>Presentar</button>
+          <BotonDeInforme anio={anio} medida={medida} />
         </div>
       </header>
 
