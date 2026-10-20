@@ -14,6 +14,7 @@ import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-comp
 import { calcularBaseCotizacionSS } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
 import { corregirDePesos, numeroALetras, pesosEnLetras } from '@/lib/numero-letras'
+import { cuentaUltimoDia, diasDelPlazo } from '@/lib/plazo-contrato'
 
 // Disable automatic hyphenation — prevents words being split mid-line
 Font.registerHyphenationCallback(word => [word])
@@ -62,12 +63,6 @@ function mesNombre(iso: string): string {
 /** 'ENERO' → 'Enero' */
 function capitalizeMes(mes: string): string {
   return mes.charAt(0).toUpperCase() + mes.slice(1).toLowerCase()
-}
-
-function calcDias(inicio: string, fin: string): number {
-  const d1 = new Date(inicio + 'T00:00:00')
-  const d2 = new Date(fin   + 'T00:00:00')
-  return Math.round((d2.getTime() - d1.getTime()) / 86_400_000)
 }
 
 function pad5(val: string | number | null | undefined): string {
@@ -435,9 +430,10 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
   const mostrarFirmaSupervisor = ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
   // Plazo en días
+  // El plazo sale de las fechas con la cuenta de todo el sistema (lib/plazo-contrato.ts).
   let plazoTexto = '—'
-  if (contrato.fecha_inicio_contrato && contrato.fecha_fin_contrato) {
-    const dias = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
+  const dias = diasDelPlazo(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato, { contarUltimoDia: cuentaUltimoDia(periodo) })
+  if (dias !== null) {
     plazoTexto = `${numeroALetras(dias)} (${dias}) DÍAS`
   } else if (contrato.plazo_meses) {
     plazoTexto = `${contrato.duracion_letras || contrato.plazo_meses} (${contrato.plazo_meses}) MESES`

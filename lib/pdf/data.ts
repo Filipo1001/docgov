@@ -66,6 +66,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_fin,
       valor_cobro,
       estado,
+      fecha_aprobacion,
       planilla_ss_url,
       numero_planilla,
       observacion_supervisor,
@@ -339,6 +340,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_fin: periodo.fecha_fin,
       valor_cobro: periodo.valor_cobro,
       estado: (periodo as any).estado ?? 'borrador',
+      fecha_aprobacion: (periodo as any).fecha_aprobacion ?? null,
       // Letras calculadas por periodo: si el valor es proporcional (primer/último mes),
       // las letras del contrato no aplican — se deriva directo de valor_cobro.
       valor_letras: numeroALetras(periodo.valor_cobro),

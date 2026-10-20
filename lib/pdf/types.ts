@@ -26,6 +26,8 @@ export interface PDFPeriodo {
   fecha_fin: string
   valor_cobro: number
   estado: string          // e.g. 'borrador' | 'enviado' | 'aprobado' | 'radicado' …
+  /** Cuándo se aprobó (ISO), o null. Decide si el plazo se cuenta con el último día: ver `cuentaUltimoDia`. */
+  fecha_aprobacion?: string | null
   valor_letras?: string
   numero_planilla?: string
   observacion_supervisor?: string | null

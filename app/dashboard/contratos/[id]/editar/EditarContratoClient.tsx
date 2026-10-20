@@ -12,7 +12,7 @@
  * correcta es un otrosí, no quedarse mirando un campo gris.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
@@ -20,6 +20,8 @@ import SelectorSupervisor from '@/components/SelectorSupervisor'
 import EstadoContratoPanel from './EstadoContratoPanel'
 import type { EstadoContrato } from '@/lib/estado-contrato'
 import { numerosALetras } from '@/lib/numero-letras'
+import { diasDelPlazo } from '@/lib/plazo-contrato'
+import PlazoCalculado from '@/components/PlazoCalculado'
 import {
   actualizarContrato,
   type CampoContrato, type CamposBloqueados, type CambioContrato,
@@ -61,7 +63,6 @@ export default function EditarContratoClient({
     dependencia_id: contrato.dependencia_id ?? '',
     valor_total: String(contrato.valor_total ?? ''),
     valor_mensual: String(contrato.valor_mensual ?? ''),
-    plazo_dias: String(contrato.plazo_dias ?? ''),
     fecha_inicio: contrato.fecha_inicio ?? '',
     fecha_fin: contrato.fecha_fin ?? '',
     cdp: contrato.cdp ?? '',
@@ -69,11 +70,16 @@ export default function EditarContratoClient({
     secop_url: contrato.secop_url ?? '',
   })
 
+  // El plazo sigue a las fechas: no se escribe (lib/plazo-contrato.ts). El servidor lo recalcula si una fecha cambia.
+  const plazoDias = useMemo(() => diasDelPlazo(f.fecha_inicio, f.fecha_fin), [f.fecha_inicio, f.fecha_fin])
+  const fechasAlReves = !!f.fecha_inicio && !!f.fecha_fin && plazoDias === null
+
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF(prev => ({ ...prev, [k]: e.target.value }))
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
+    if (!bloqueo.economicos && fechasAlReves) { toast.error('La fecha de terminación es anterior a la de inicio'); return }
     setGuardando(true)
 
     const cambios: Partial<Record<CampoContrato, string | number | null>> = {
@@ -93,7 +99,6 @@ export default function EditarContratoClient({
     if (!bloqueo.economicos) {
       cambios.valor_total = Number(f.valor_total)
       cambios.valor_mensual = Number(f.valor_mensual)
-      cambios.plazo_dias = Number(f.plazo_dias)
       cambios.fecha_inicio = f.fecha_inicio
       cambios.fecha_fin = f.fecha_fin
       // Las letras se derivan del número: dejarlas desactualizadas produciría
@@ -182,19 +187,16 @@ export default function EditarContratoClient({
               <input type="number" value={f.valor_mensual} onChange={set('valor_mensual')} disabled={bloqueo.economicos}
                 className={bloqueo.economicos ? inputBloqueado : input} />
             </Campo>
-            <Campo etiqueta="Plazo (días)">
-              <input type="number" value={f.plazo_dias} onChange={set('plazo_dias')} disabled={bloqueo.economicos}
-                className={bloqueo.economicos ? inputBloqueado : input} />
-            </Campo>
-            <div />
             <Campo etiqueta="Fecha de inicio">
               <input type="date" value={f.fecha_inicio} onChange={set('fecha_inicio')} disabled={bloqueo.economicos}
                 className={bloqueo.economicos ? inputBloqueado : input} />
             </Campo>
             <Campo etiqueta="Fecha de terminación">
               <input type="date" value={f.fecha_fin} onChange={set('fecha_fin')} disabled={bloqueo.economicos}
-                className={bloqueo.economicos ? inputBloqueado : input} />
+                min={f.fecha_inicio || undefined} aria-describedby="plazo-calculado"
+                className={bloqueo.economicos ? inputBloqueado : fechasAlReves ? `${input} border-red-300 bg-red-50` : input} />
             </Campo>
+            <PlazoCalculado dias={plazoDias} fechasAlReves={fechasAlReves} />
           </div>
         </Seccion>
 

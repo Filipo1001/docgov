@@ -13,6 +13,7 @@ import type { PDFData, PDFPagoHistorial } from './types'
 import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
 import { formatCedula, numeroALetras } from '@/lib/format'
 import { conPesos } from '@/lib/numero-letras'
+import { cuentaUltimoDia, diasDelPlazo } from '@/lib/plazo-contrato'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
 
@@ -35,10 +36,6 @@ function fechaTexto(iso: string): string {
 function mesAnio(iso: string): string {
   const [y, m] = iso.split('-')
   return `${MESES[parseInt(m) - 1].toLowerCase()} de ${y}`
-}
-
-function calcDias(inicio: string, fin: string): number {
-  return Math.round((new Date(fin + 'T00:00:00').getTime() - new Date(inicio + 'T00:00:00').getTime()) / 86_400_000)
 }
 
 /** Elimina sufijos de moneda ya incluidos (e.g. "M/L", "PESOS M/CTE", "DE PESOS M/L") antes de aplicar el estándar. */
@@ -349,9 +346,10 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
   const valorMensualTexto =
     `${conPesos(numeroALetras(periodo.valor_cobro))} M/L (${formatCOP(periodo.valor_cobro)})`
 
+  // El plazo sale de las fechas con la cuenta de todo el sistema (lib/plazo-contrato.ts).
   let plazoTexto = '—'
-  if (contrato.fecha_inicio_contrato && contrato.fecha_fin_contrato) {
-    const dias = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
+  const dias = diasDelPlazo(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato, { contarUltimoDia: cuentaUltimoDia(periodo) })
+  if (dias !== null) {
     plazoTexto = `${numeroALetras(dias)} DÍAS (${dias})`
   } else if (contrato.plazo_meses) {
     plazoTexto = `${contrato.duracion_letras || contrato.plazo_meses} MESES (${contrato.plazo_meses})`
