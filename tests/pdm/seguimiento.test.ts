@@ -7,7 +7,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import {
   ANIOS_PLAN, anioDeParametro, anioIniciado, anioPorDefecto, estadoDelAnio, requiereReporte, resumirAnio, situacionEn,
 } from '@/lib/pdm/seguimiento'
@@ -79,11 +79,11 @@ test('qué archivos se admiten', () => {
   assert.equal(tipoDeArchivo('truco.pdf', 'text/html'), null)
 })
 
-test('los archivos de un reporte: de 1 a 5, de hasta 25 MB cada uno (200 MB los videos)', () => {
+test('los archivos de un reporte: de 1 a 5, de hasta 25 MB cada uno (100 MB los videos)', () => {
   const pdf = (n = 1, bytes = 1000) => Array.from({ length: n }, (_, k) => ({ nombre: `a${k}.pdf`, tipo: 'application/pdf', bytes }))
   assert.equal(MAX_EVIDENCIAS, 5)
   assert.equal(MAX_BYTES_EVIDENCIA, 25 * 1024 * 1024)
-  assert.equal(MAX_BYTES_VIDEO, 200 * 1024 * 1024)
+  assert.equal(MAX_BYTES_VIDEO, 100 * 1024 * 1024)
   assert.match(errorEnArchivos([])!, /al menos una/)
   assert.equal(errorEnArchivos([], 1), null)
   assert.equal(errorEnArchivos(pdf(5)), null)
@@ -96,7 +96,7 @@ test('los archivos de un reporte: de 1 a 5, de hasta 25 MB cada uno (200 MB los 
   // Un video pesa más y su tope es otro; una presentación se mide como un documento.
   const video = (bytes: number) => [{ nombre: 'evento.mp4', tipo: 'video/mp4', bytes }]
   assert.equal(errorEnArchivos(video(MAX_BYTES_VIDEO)), null)
-  assert.match(errorEnArchivos(video(MAX_BYTES_VIDEO + 1))!, /para un video es 200 MB/)
+  assert.match(errorEnArchivos(video(MAX_BYTES_VIDEO + 1))!, /para un video es 100 MB/)
   assert.equal(errorEnArchivos(video(MAX_BYTES_EVIDENCIA + 1)), null)
   const pptx = (bytes: number) => [{ nombre: 'charla.pptx', tipo: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', bytes }]
   assert.equal(errorEnArchivos(pptx(MAX_BYTES_EVIDENCIA)), null)
@@ -120,11 +120,19 @@ test('la lista de tipos: sin repetidos, extensiones que el servidor acepta y un 
   assert.equal(esVideo('application/pdf'), false)
 })
 
-test('la lista de tipos de la aplicación dice lo mismo que la función de la base (migración 073)', () => {
-  // Lee la función `pdm_privado.limite_de_evidencia` TAL COMO está escrita en la migración y la compara con TIPOS_EVIDENCIA: si alguien
-  // añade un tipo en un lado y no en el otro, la aplicación aceptaría archivos que la base rechaza (o al revés) y se vería en el último paso.
-  const sql = readFileSync(new URL('../../supabase/migrations/073_pdm_evidencias_presentaciones_y_video.sql', import.meta.url), 'utf8')
-  const funcion = /create or replace function pdm_privado\.limite_de_evidencia[\s\S]*?\$f\$;/.exec(sql)?.[0]
+test('la lista de tipos de la aplicación dice lo mismo que la base (migraciones 073 y 074)', () => {
+  // Lee las migraciones TAL COMO están escritas y compara con TIPOS_EVIDENCIA: si alguien añade un tipo o cambia un tope en un lado y
+  // no en el otro, la aplicación aceptaría archivos que la base rechaza (o al revés) y se vería en el último paso. Cada dato sale de la
+  // ÚLTIMA migración que lo define (una migración posterior cambia el tope sin repetir la lista de tipos del espacio de archivos).
+  const dir = new URL('../../supabase/migrations/', import.meta.url)
+  const migraciones = readdirSync(dir).filter(n => n.endsWith('.sql')).sort().map(n => ({ n, sql: readFileSync(new URL(n, dir), 'utf8') }))
+  const ultima = (patron: RegExp) => {
+    const m = migraciones.filter(x => patron.test(x.sql)).at(-1)
+    assert.ok(m, `ninguna migración define ${patron}`)
+    return m
+  }
+
+  const funcion = /create or replace function pdm_privado\.limite_de_evidencia[\s\S]*?\$f\$;/.exec(ultima(/create or replace function pdm_privado\.limite_de_evidencia/).sql)?.[0]
   assert.ok(funcion, 'la función existe en la migración')
   const delSql = new Map<string, number>()
   for (const m of funcion.matchAll(/when p_tipo in \(([^)]*)\)\s*then\s*(\d+)::bigint/g)) {
@@ -133,11 +141,14 @@ test('la lista de tipos de la aplicación dice lo mismo que la función de la ba
   const deLaApp = new Map(TIPOS_EVIDENCIA.map(t => [t.mime, t.maxBytes]))
   assert.deepEqual([...delSql.keys()].sort(), [...deLaApp.keys()].sort(), 'los mismos tipos, ni uno más ni uno menos')
   for (const [mime, tope] of deLaApp) assert.equal(delSql.get(mime), tope, `el tope de ${mime}`)
-  // Y el espacio de archivos y la restricción de la tabla, con el máximo de todos.
+
+  // El espacio de archivos y la restricción de la tabla, con el máximo de todos.
   const maximo = Math.max(...deLaApp.values())
-  assert.match(sql, new RegExp(`file_size_limit = ${maximo}\\b`), 'el espacio de archivos admite el máximo')
-  assert.match(sql, new RegExp(`bytes <= ${maximo}\\)`), 'la restricción de la tabla admite el máximo')
-  const bucket = /update storage\.buckets[\s\S]*?allowed_mime_types = array\[([\s\S]*?)\]/.exec(sql)?.[1] ?? ''
+  assert.match(ultima(/update storage\.buckets[\s\S]*?file_size_limit = \d+/).sql.match(/update storage\.buckets[\s\S]*?file_size_limit = \d+/)![0], new RegExp(`file_size_limit = ${maximo}$`), 'el espacio de archivos admite el máximo')
+  assert.match(ultima(/pdm_evidencias_bytes_check check \(bytes > 0 and bytes <= \d+\)/).sql, new RegExp(`pdm_evidencias_bytes_check check \\(bytes > 0 and bytes <= ${maximo}\\)`), 'la restricción de la tabla admite el máximo')
+
+  // Los tipos que acepta el espacio: los de la última migración que los fija.
+  const bucket = /update storage\.buckets[\s\S]*?allowed_mime_types = array\[([\s\S]*?)\]/.exec(ultima(/allowed_mime_types = array\[[\s\S]*?'video\/mp4'/).sql)?.[1] ?? ''
   assert.deepEqual([...bucket.matchAll(/'([^']+)'/g)].map(m => m[1]).sort(), [...deLaApp.keys()].sort(), 'el espacio acepta los mismos tipos')
 })
 

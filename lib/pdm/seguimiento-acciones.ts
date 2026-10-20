@@ -19,8 +19,12 @@ import type { AnulacionVista } from './anulaciones'
 export const MAX_EVIDENCIAS = 5
 /** Lo que puede pesar un archivo que no es video: PDF, foto, Word, Excel o presentación. */
 export const MAX_BYTES_EVIDENCIA = 25 * 1024 * 1024
-/** Lo que puede pesar un video. Se sube por partes (ver `subir-reanudable.ts`): una conexión que se cae no lo empieza de cero. */
-export const MAX_BYTES_VIDEO = 200 * 1024 * 1024
+/**
+ * Lo que puede pesar un video. Se sube por partes (ver `subir-reanudable.ts`): una conexión que se cae no lo empieza de cero.
+ * 100 MB desde la migración 074 (era 200 en la 073): es el límite GLOBAL del almacenamiento de Supabase que decidió Felipe el
+ * 20-oct-2026, y un tope de video mayor que el global no sirve: el almacenamiento rechazaría lo que el formulario ofreciera.
+ */
+export const MAX_BYTES_VIDEO = 100 * 1024 * 1024
 export const MIN_TEXTO = 10
 export const MAX_TEXTO_REPORTE = 1000
 export const MAX_MOTIVO_CORRECCION = 500

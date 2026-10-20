@@ -3,13 +3,13 @@
 --
 -- Qué comprueba, con la MISMA función que usa la pantalla (`pdm_reportar`) y con la sesión de quien reporta:
 --
---   · Que cada tipo admitido se acepta justo en su tope (25 MB lo que no es video; 200 MB los videos MP4 y MOV) y se rechaza con
+--   · Que cada tipo admitido se acepta justo en su tope (25 MB lo que no es video; 100 MB los videos MP4 y MOV, desde la 074) y se rechaza con
 --     un byte más, con el mensaje y el código que la pantalla traduce.
 --   · Que lo que NO se admite sigue sin admitirse: otros formatos de video (webm, avi), comprimidos, páginas web, un tipo vacío
 --     o ausente, un tamaño que no es número, cero, o con más de 12 cifras.
 --   · Que la evidencia queda guardada con el tipo que se reportó.
 --   · Que la función de límites y el espacio de archivos `pdm-evidencias` dicen exactamente lo mismo (los mismos tipos, ni uno más
---     ni uno menos) y que el espacio quedó privado y de 200 MB.
+--     ni uno menos) y que el espacio quedó privado y de 100 MB.
 --   · Que la tabla de evidencias dejó de limitar a 10 MB (tiene su propia restricción), que `anon` no alcanza la función de límites
 --     y que `pdm_reportar` conserva sus permisos.
 --
@@ -158,7 +158,7 @@ begin
       'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/vnd.ms-powerpoint', v_pptx]) m));
-  perform pg_temp.chequear('video MP4 y MOV: 200 MB', pdm_privado.limite_de_evidencia('video/mp4') = 200 * v_mb and pdm_privado.limite_de_evidencia('video/quicktime') = 200 * v_mb);
+  perform pg_temp.chequear('video MP4 y MOV: 100 MB', pdm_privado.limite_de_evidencia('video/mp4') = 100 * v_mb and pdm_privado.limite_de_evidencia('video/quicktime') = 100 * v_mb);
   perform pg_temp.chequear('lo desconocido no tiene tope (no se admite)',
     (select bool_and(pdm_privado.limite_de_evidencia(m) is null) from unnest(array['video/webm', 'video/x-msvideo', 'video/mpeg', 'audio/mpeg', 'application/zip', 'text/html', 'application/octet-stream', 'image/gif', 'image/svg+xml', 'application/x-msdownload', '', 'PDF', 'application/PDF', ' application/pdf']) m));
   perform pg_temp.chequear('un tipo nulo tampoco', pdm_privado.limite_de_evidencia(null) is null);
@@ -166,15 +166,15 @@ begin
   perform pg_temp.chequear('quien tiene sesión y el servidor sí', has_function_privilege('authenticated', 'pdm_privado.limite_de_evidencia(text)', 'EXECUTE') and has_function_privilege('service_role', 'pdm_privado.limite_de_evidencia(text)', 'EXECUTE'));
 
   -- ══ El espacio de archivos ════════════════════════════════════════════════
-  perform pg_temp.chequear('el espacio es privado y de 200 MB', exists (select 1 from storage.buckets where id = 'pdm-evidencias' and not public and file_size_limit = 200 * v_mb));
+  perform pg_temp.chequear('el espacio es privado y de 100 MB', exists (select 1 from storage.buckets where id = 'pdm-evidencias' and not public and file_size_limit = 100 * v_mb));
   perform pg_temp.chequear('el espacio admite exactamente los tipos de la función (ni uno más)',
     not exists (select 1 from storage.buckets b, unnest(b.allowed_mime_types) mt where b.id = 'pdm-evidencias' and pdm_privado.limite_de_evidencia(mt) is null));
   perform pg_temp.chequear('…ni uno menos',
     (select count(*) from storage.buckets b, unnest(b.allowed_mime_types) mt where b.id = 'pdm-evidencias' and pdm_privado.limite_de_evidencia(mt) is not null) = 14);
 
-  perform pg_temp.chequear('la tabla de evidencias ya no tiene el tope de 10 MB: admite hasta 200 MB',
+  perform pg_temp.chequear('la tabla de evidencias admite hasta 100 MB (el máximo de cualquier tipo), no los 10 MB de antes ni los 200 de la 073',
     exists (select 1 from pg_constraint c where c.conrelid = 'public.pdm_evidencias'::regclass and c.conname = 'pdm_evidencias_bytes_check'
-              and pg_get_constraintdef(c.oid) like '%209715200%' and pg_get_constraintdef(c.oid) not like '%10485760%'));
+              and pg_get_constraintdef(c.oid) ~ 'bytes <= 104857600\)'));
 
   -- ══ pdm_reportar: justo en el tope pasa, un byte más no ═══════════════════
   -- (cada reporte que pasa se aprueba, para que el siguiente sea un avance nuevo y no una corrección)
@@ -182,8 +182,8 @@ begin
     select * from (values
       ('PowerPoint .pptx', v_pptx, 'pptx', 25 * v_mb),
       ('PowerPoint .ppt', 'application/vnd.ms-powerpoint', 'ppt', 25 * v_mb),
-      ('video MP4', 'video/mp4', 'mp4', 200 * v_mb),
-      ('video MOV', 'video/quicktime', 'mov', 200 * v_mb),
+      ('video MP4', 'video/mp4', 'mp4', 100 * v_mb),
+      ('video MOV', 'video/quicktime', 'mov', 100 * v_mb),
       ('PDF', 'application/pdf', 'pdf', 25 * v_mb),
       ('foto HEIC', 'image/heic', 'heic', 25 * v_mb)) x(nombre, tipo, ext, tope)
   loop
@@ -198,7 +198,7 @@ begin
       v_i, v_valor + 1, 'Se hizo una actividad de prueba para este indicador.',
       jsonb_build_array(jsonb_build_object('ruta', v_plan::text || '/' || v_i::text || '/2026/' || gen_random_uuid()::text || '.' || t.ext,
         'nombre', 'soporte.' || t.ext, 'tipo', t.tipo, 'bytes', (t.tope + 1)::text))::text));
-    perform pg_temp.chequear(t.nombre || ': un byte más NO pasa, con el mensaje de peso', v_msg like '22022 PDM: este archivo pesa más de lo que admite su tipo (hasta 25 MB; los videos, hasta 200 MB)');
+    perform pg_temp.chequear(t.nombre || ': un byte más NO pasa, con el mensaje de peso', v_msg like '22022 PDM: este archivo pesa más de lo que admite su tipo (hasta 25 MB; los videos, hasta 100 MB)');
   end loop;
 
   -- ══ Lo que sigue sin admitirse ═══════════════════════════════════════════

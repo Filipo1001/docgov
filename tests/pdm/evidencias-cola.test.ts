@@ -18,7 +18,7 @@ async function main() {
     assert.equal(r.aceptados.length, 3)
   })
   await ok('presentaciones y videos MP4 o MOV pasan', () => {
-    const r = clasificarSeleccion([], 0, [f('charla.pptx', 5 * MB, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'), f('vieja.ppt', 5 * MB, 'application/vnd.ms-powerpoint'), f('evento.mp4', 150 * MB, 'video/mp4'), f('IMG_1.MOV', 90 * MB, 'video/quicktime')])
+    const r = clasificarSeleccion([], 0, [f('charla.pptx', 5 * MB, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'), f('vieja.ppt', 5 * MB, 'application/vnd.ms-powerpoint'), f('evento.mp4', 100 * MB, 'video/mp4'), f('IMG_1.MOV', 90 * MB, 'video/quicktime')])
     assert.equal(r.aceptados.length, 4); assert.equal(r.rechazados.length, 0)
   })
   await ok('uno malo NO tumba a los buenos, y cada rechazo trae su motivo propio', () => {
@@ -30,10 +30,10 @@ async function main() {
     assert.equal(m['vacio.pdf'], 'Está vacío.'); assert.match(m['enorme.pdf'], /30 MB y el máximo para un PDF es 25 MB/)
     for (const x of r.rechazados) assert.ok(!x.motivo.includes(x.nombre), 'el motivo no repite el nombre')
   })
-  await ok('cada tipo con su tope: un video de 150 MB sirve, un PDF de 150 MB no, y uno de 201 MB tampoco', () => {
-    assert.equal(motivoDeRechazo(f('v.mp4', 150 * MB, 'video/mp4')), null)
-    assert.match(motivoDeRechazo(f('v.pdf', 150 * MB, 'application/pdf'))!, /máximo para un PDF es 25 MB/)
-    assert.match(motivoDeRechazo(f('v.mp4', 201 * MB, 'video/mp4'))!, /máximo para un video es 200 MB.*Recórtalo/)
+  await ok('cada tipo con su tope: un video de 100 MB sirve, un PDF de 100 MB no, y un video de 101 MB tampoco', () => {
+    assert.equal(motivoDeRechazo(f('v.mp4', 100 * MB, 'video/mp4')), null)
+    assert.match(motivoDeRechazo(f('v.pdf', 100 * MB, 'application/pdf'))!, /máximo para un PDF es 25 MB/)
+    assert.match(motivoDeRechazo(f('v.mp4', 101 * MB, 'video/mp4'))!, /máximo para un video es 100 MB.*Recórtalo/)
   })
   await ok('formato desconocido: se dice cuáles sí se admiten', () => {
     assert.equal(consejoDeFormato('cosa.xyz'), FORMATOS_ADMITIDOS); assert.equal(consejoDeFormato('sinextension'), FORMATOS_ADMITIDOS)

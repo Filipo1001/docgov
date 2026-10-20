@@ -5,7 +5,7 @@
  * huella se compara con las que el servidor anotó al subir cada archivo del reporte (`lib/pdm/huella-servidor.ts`), así que los
  * dos lados tienen que dar EXACTAMENTE lo mismo: una prueba lo comprueba contra `node:crypto`.
  *
- * Por qué no `crypto.subtle.digest`: pide el archivo entero en memoria. Un video de 200 MB en un teléfono es mucho; esta
+ * Por qué no `crypto.subtle.digest`: pide el archivo entero en memoria. Un video de 100 MB en un teléfono es mucho; esta
  * versión lo va leyendo por trozos de 4 MiB, con progreso, y nunca tiene más de un trozo a la vez.
  *
  * Sin dependencias y sin nada del servidor: este archivo viaja al navegador.
