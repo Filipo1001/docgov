@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
@@ -8,6 +8,9 @@ import SelectorContratista from '@/components/SelectorContratista'
 import SelectorSupervisor from '@/components/SelectorSupervisor'
 import type { UsuarioSelect } from '@/services/admin'
 import { numerosALetras } from '@/lib/numero-letras'
+import { diasDelPlazo } from '@/lib/plazo-contrato'
+import CampoPlazo from '@/components/CampoPlazo'
+import { usePlazo } from '@/lib/use-plazo'
 import { crearContratoConContratista } from '@/app/actions/contratos'
 
 interface ExcelData {
@@ -74,7 +77,6 @@ export default function NuevoContratoPage({
     valor_mensual: '',
     valor_letras_total: '',
     valor_letras_mensual: '',
-    plazo_dias: '',
     fecha_inicio: '',
     fecha_fin: '',
     cdp: '',
@@ -100,17 +102,12 @@ export default function NuevoContratoPage({
     }
   }, [form.valor_mensual])
 
-  // ── Auto-calc fecha_fin from plazo_dias + fecha_inicio ──────
-  useEffect(() => {
-    if (form.fecha_inicio && form.plazo_dias) {
-      const dias = parseInt(form.plazo_dias)
-      if (dias > 0) {
-        const d = new Date(form.fecha_inicio + 'T00:00:00')
-        d.setDate(d.getDate() + dias - 1)
-        setForm(f => ({ ...f, fecha_fin: d.toISOString().slice(0, 10) }))
-      }
-    }
-  }, [form.fecha_inicio, form.plazo_dias])
+  // ── El plazo se escribe; las fechas lo sugieren ─────────────
+  // Lo que dicen las fechas (primer y último día contados) llena el campo mientras nadie lo toque; si el contrato dice otra
+  // cosa se escribe y manda, y la pantalla avisa la diferencia sin impedir guardar (lib/plazo-contrato.ts).
+  const plazoDias = useMemo(() => diasDelPlazo(form.fecha_inicio, form.fecha_fin), [form.fecha_inicio, form.fecha_fin])
+  const fechasAlReves = !!form.fecha_inicio && !!form.fecha_fin && plazoDias === null
+  const plazo = usePlazo(plazoDias)
 
   // ── Lookup contract data from Excel staging when numero changes ─
   const lookupExcel = useCallback(async (numero: string) => {
@@ -156,17 +153,18 @@ export default function NuevoContratoPage({
         valor_mensual: excel.valor_mensual ? String(excel.valor_mensual) : f.valor_mensual,
         fecha_inicio: excel.fecha_inicio ? excel.fecha_inicio.slice(0, 10) : f.fecha_inicio,
         fecha_fin: excel.fecha_fin ? excel.fecha_fin.slice(0, 10) : f.fecha_fin,
-        plazo_dias: excel.plazo_dias ? String(excel.plazo_dias) : f.plazo_dias,
         cdp: excel.cdp || f.cdp,
         crp: excel.crp || f.crp,
         secop_url: (excel as any).secop_url || f.secop_url,
       }))
+      // El plazo del Excel es lo que dice el contrato: se escribe, y si no cuadra con las fechas la pantalla lo avisa.
+      if (excel.plazo_dias) plazo.fijar(excel.plazo_dias)
       setExcelEncontrado(true)
     } catch {
       setExcelEncontrado(false)
     }
     setBuscandoExcel(false)
-  }, [dependencias, usuarios])
+  }, [dependencias, usuarios, plazo.fijar])
 
   // Debounced lookup when numero changes (only after dropdowns are loaded)
   useEffect(() => {
@@ -206,6 +204,14 @@ export default function NuevoContratoPage({
       toast.error('El supervisor elegido no tiene secretaría asignada. Indícala con "cambiar".')
       return
     }
+    if (plazoDias === null) {
+      toast.error(fechasAlReves ? 'La fecha de terminación es anterior a la de inicio' : 'Escribe la fecha de inicio y la de terminación')
+      return
+    }
+    if (plazo.invalido || plazo.efectivo === null) {
+      toast.error('El plazo debe ser un número entero de días, entre 1 y 3.650')
+      return
+    }
 
     setGuardando(true)
 
@@ -237,7 +243,7 @@ export default function NuevoContratoPage({
         valor_mensual: parseFloat(form.valor_mensual) || 0,
         valor_letras_total: form.valor_letras_total,
         valor_letras_mensual: form.valor_letras_mensual,
-        plazo_dias: parseInt(form.plazo_dias) || 0,
+        plazo_dias: plazo.efectivo,
         fecha_inicio: form.fecha_inicio,
         fecha_fin: form.fecha_fin,
         cdp: form.cdp || null,
@@ -532,27 +538,21 @@ export default function NuevoContratoPage({
                 placeholder="Se genera al ingresar el valor mensual" className={form.valor_letras_mensual ? autoClass : inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Plazo (días)
-                <span className="text-xs text-gray-400 font-normal ml-1">del Excel</span>
-              </label>
-              <input name="plazo_dias" type="number" value={form.plazo_dias} onChange={handleChange} required
-                placeholder="228" className={excelEncontrado && form.plazo_dias ? autoClass : inputClass} />
-            </div>
-            <div />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha inicio</label>
-              <input name="fecha_inicio" type="date" value={form.fecha_inicio} onChange={handleChange} required
+              <label htmlFor="fecha_inicio" className="block text-sm font-medium text-gray-700 mb-1">Fecha de inicio</label>
+              <input id="fecha_inicio" name="fecha_inicio" type="date" value={form.fecha_inicio} onChange={handleChange} required
                 className={excelEncontrado && form.fecha_inicio ? autoClass : inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha fin
-                <span className="text-xs text-emerald-600 font-normal ml-1">del Excel o auto-calculada</span>
+              <label htmlFor="fecha_fin" className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha de terminación
+                {excelEncontrado && form.fecha_fin && <span className="text-xs text-emerald-600 font-normal ml-1">del Excel</span>}
               </label>
-              <input name="fecha_fin" type="date" value={form.fecha_fin} onChange={handleChange} required
-                className={excelEncontrado && form.fecha_fin ? autoClass : inputClass} />
+              <input id="fecha_fin" name="fecha_fin" type="date" value={form.fecha_fin} onChange={handleChange} required
+                min={form.fecha_inicio || undefined} aria-invalid={fechasAlReves || undefined}
+                aria-describedby="plazo-ayuda"
+                className={fechasAlReves ? `${inputClass} border-red-300 bg-red-50` : excelEncontrado && form.fecha_fin ? autoClass : inputClass} />
             </div>
+            <CampoPlazo plazo={plazo} porFechas={plazoDias} fechasAlReves={fechasAlReves} clase={inputClass} />
           </div>
         </div>
 

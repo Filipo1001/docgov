@@ -66,6 +66,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_fin,
       valor_cobro,
       estado,
+      fecha_aprobacion,
       planilla_ss_url,
       numero_planilla,
       observacion_supervisor,
@@ -81,6 +82,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
         valor_letras_total,
         valor_letras_mensual,
         plazo_meses,
+        plazo_dias,
         banco,
         tipo_cuenta,
         numero_cuenta,
@@ -134,7 +136,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
     // Otrosíes del contrato (para reflejar valor adicionado, plazo, CDP/CRP, etc.)
     supabase
       .from('otrosies')
-      .select('id, numero, tipo, fecha_inicio, valor_adicion, plazo_dias_adicion, cdp, crp, nota')
+      .select('id, numero, tipo, fecha_inicio, valor_adicion, plazo_dias_adicion, cdp, crp, nota, aplicado_en')
       .eq('contrato_id', contrato.id)
       .order('numero'),
 
@@ -256,7 +258,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   // los contratos sin otrosí salen exactamente igual que hoy.
   const otrosiesList = (otrosiesRaw ?? []) as Array<{
     id: string; numero: number; tipo: string; fecha_inicio: string; valor_adicion: number
-    plazo_dias_adicion: number; cdp: string | null; crp: string | null; nota: string | null
+    plazo_dias_adicion: number; cdp: string | null; crp: string | null; nota: string | null; aplicado_en: string | null
   }>
 
   // Map otrosi id → fecha_inicio para filtrar obligaciones por vigencia
@@ -264,6 +266,8 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
   const valorInicial = contrato.valor_total
   const totalAdiciones = otrosiesList.reduce((acc, o) => acc + (o.valor_adicion ?? 0), 0)
   const diasAdicion = otrosiesList.reduce((acc, o) => acc + (o.plazo_dias_adicion ?? 0), 0)
+  // Solo los aplicados: son los que ya movieron la fecha de terminación del contrato (lib/plazo-contrato.ts).
+  const diasOtrosiAplicados = otrosiesList.reduce((acc, o) => acc + (o.aplicado_en ? (o.plazo_dias_adicion ?? 0) : 0), 0)
   const otrosiInfo = otrosiesList.length > 0
     ? {
         valor_inicial: valorInicial,
@@ -301,6 +305,8 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       valor_letras_mensual: normalizaMoneda(contrato.valor_letras_mensual ?? ''),
       valor_letras_total: contrato.valor_letras_total ? normalizaMoneda(contrato.valor_letras_total) : undefined,
       plazo_meses: contrato.plazo_meses ?? undefined,
+      plazo_dias: contrato.plazo_dias ?? undefined,
+      dias_otrosi_aplicados: diasOtrosiAplicados,
       duracion_letras: contrato.duracion_letras ?? undefined,
       // Prefer contratista's bank data (single source of truth).
       // Fall back to contract-level data for backwards compatibility.
@@ -339,6 +345,7 @@ export async function buildPDFData(periodoId: string): Promise<PDFData | null> {
       fecha_fin: periodo.fecha_fin,
       valor_cobro: periodo.valor_cobro,
       estado: (periodo as any).estado ?? 'borrador',
+      fecha_aprobacion: (periodo as any).fecha_aprobacion ?? null,
       // Letras calculadas por periodo: si el valor es proporcional (primer/último mes),
       // las letras del contrato no aplican — se deriva directo de valor_cobro.
       valor_letras: numeroALetras(periodo.valor_cobro),

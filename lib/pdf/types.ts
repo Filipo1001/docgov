@@ -26,6 +26,8 @@ export interface PDFPeriodo {
   fecha_fin: string
   valor_cobro: number
   estado: string          // e.g. 'borrador' | 'enviado' | 'aprobado' | 'radicado' …
+  /** Cuándo se aprobó (ISO), o null. Decide si el plazo se cuenta con el último día: ver `cuentaUltimoDia`. */
+  fecha_aprobacion?: string | null
   valor_letras?: string
   numero_planilla?: string
   observacion_supervisor?: string | null
@@ -58,6 +60,10 @@ export interface PDFContrato {
   valor_mensual: number
   valor_letras_mensual: string
   plazo_meses?: number
+  /** El plazo escrito del contrato, en días (lo que dice el contrato firmado). Ver lib/plazo-contrato.ts. */
+  plazo_dias?: number
+  /** Días de plazo de los otrosíes YA APLICADOS: aplicar uno mueve la fecha de terminación pero no el plazo escrito. */
+  dias_otrosi_aplicados?: number
   duracion_letras?: string
   banco: string
   tipo_cuenta: string

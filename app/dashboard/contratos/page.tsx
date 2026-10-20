@@ -25,6 +25,8 @@ import { porPeriodoCorto, valorDeReferencia } from '@/lib/valor-contrato'
 import { esGestorContratos, esRolSupervision, esMesPasado } from '@/lib/constants'
 import { type ContratoListItem } from '@/services/contratos'
 import { getTodosContratosConBanco } from '@/app/actions/contratos-lista'
+import { hoyEnColombia, vigenciaDe } from '@/lib/vigencia-contrato'
+import { metaEstado } from '@/lib/estado-contrato'
 import Icono from '@/components/ui/Icono'
 import { Iconos, type LucideIcon } from '@/lib/iconos'
 
@@ -220,6 +222,66 @@ function useDebounced<T>(value: T, ms = 300): T {
   return debounced
 }
 
+// ─── Vigencia, para el contratista ────────────────────────────────────────────
+
+type FiltroVigencia = 'todos' | 'vigentes' | 'vencidos'
+
+/**
+ * Los colores pastel que distinguen un contrato vigente de uno finalizado en «Mis contratos» (decisión de Felipe,
+ * 20-oct-2026: verde y durazno). El punto del filtro es el mismo color: el filtro hace de leyenda. El verde es el mismo del
+ * estado «Vigente» de la ficha del contrato (lib/estado-contrato.ts).
+ */
+const TONO = {
+  vigente: {
+    tarjeta: 'bg-[#ECFDF5] border-[#A7F3D0] hover:border-[#6EE7B7]',
+    insignia: 'bg-[#D1FAE5] text-[#065F46]',
+    punto: 'bg-[#10B981]',
+  },
+  vencido: {
+    tarjeta: 'bg-[#FFF3EB] border-[#F6D3BE] hover:border-[#EBB38F]',
+    insignia: 'bg-[#FBDCC9] text-[#7C3410]',
+    punto: 'bg-[#EFA57A]',
+  },
+} as const
+
+/** El orden y las palabras son los que pidió Felipe. */
+const OPCIONES_CONTRATISTA: { id: FiltroVigencia; label: string; punto: string | null }[] = [
+  { id: 'vencidos', label: 'Contratos finalizados', punto: TONO.vencido.punto },
+  { id: 'todos', label: 'Todos los contratos', punto: null },
+  { id: 'vigentes', label: 'Contratos vigentes', punto: TONO.vigente.punto },
+]
+
+function FiltroVigenciaContratista({ valor, onCambio, cuentas }: {
+  valor: FiltroVigencia
+  onCambio: (v: FiltroVigencia) => void
+  cuentas: Record<FiltroVigencia, number>
+}) {
+  return (
+    <div role="group" aria-label="Mostrar contratos" className="grid grid-cols-3 gap-1 rounded-2xl border border-gray-200 bg-white p-1 mb-4">
+      {OPCIONES_CONTRATISTA.map(o => {
+        const activo = valor === o.id
+        return (
+          <button
+            key={o.id}
+            type="button"
+            aria-pressed={activo}
+            onClick={() => onCambio(o.id)}
+            className={`rounded-xl px-2 py-2 text-center text-sm leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-1 ${
+              activo ? 'bg-gray-900 text-white font-medium' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <span className="inline-flex items-center justify-center gap-1.5 [text-wrap:balance]">
+              {o.punto && <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${o.punto}`} />}
+              {o.label}
+            </span>
+            <span className={`block text-xs tabular-nums mt-0.5 ${activo ? 'text-white/70' : 'text-gray-400'}`}>{cuentas[o.id]}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ContratosPage() {
@@ -232,7 +294,9 @@ export default function ContratosPage() {
   const esGestor = esGestorContratos(usuario?.rol)
   const esSupervision = esRolSupervision(usuario?.rol)
   const puedeBuscar = esGestor || esSupervision
-  const hoy = new Date().toISOString().split('T')[0]
+  // El contratista ve solo los suyos: lista corta, sin buscador, con su propio filtro de vigencia y los colores.
+  const vistaContratista = !!usuario && !puedeBuscar
+  const hoy = hoyEnColombia()
 
   // ── Modal state ────────────────────────────────────────────────
   const [viendoUsuario, setViendoUsuario] = useState<ContratistaInfo | null>(null)
@@ -244,7 +308,7 @@ export default function ContratosPage() {
   const [filtroRango, setFiltroRango] = useState(0)
   const [soloIncompletos, setSoloInc] = useState(false)
   const [soloAtencion, setSoloAtencion] = useState(false)
-  const [filtroVigencia, setFiltroVig] = useState<'todos' | 'vigentes' | 'vencidos'>('todos')
+  const [filtroVigencia, setFiltroVig] = useState<FiltroVigencia>('todos')
 
   const busquedaDebounced = useDebounced(busqueda, 200)
 
@@ -256,13 +320,16 @@ export default function ContratosPage() {
   // contratos y solo 8 vigentes, así que abrir en "Todos" es abrir sobre 40
   // contratos terminados. Las otras pestañas quedan a un clic y con su cuenta
   // a la vista, así que no se esconde nada, se ordena.
+  //
+  // El contratista también (pedido de Felipe, 20-oct-2026): abre en sus contratos vigentes. Gestión sigue en "Todos".
   const [filtrosIniciados, setFiltrosIniciados] = useState(false)
   useEffect(() => {
     if (!usuario || filtrosIniciados) return
     const q = new URLSearchParams(window.location.search)
     if (q.get('incompletos') === '1') setSoloInc(true)
-    if (q.get('vigencia') === 'vigentes') setFiltroVig('vigentes')
-    else if (esRolSupervision(usuario.rol)) setFiltroVig('vigentes')
+    const v = q.get('vigencia')
+    if (v === 'vigentes' || v === 'vencidos' || v === 'todos') setFiltroVig(v)
+    else if (!esGestorContratos(usuario.rol)) setFiltroVig('vigentes')
     setFiltrosIniciados(true)
   }, [usuario, filtrosIniciados])
 
@@ -342,8 +409,7 @@ export default function ContratosPage() {
       if (r.min > 0 && vm < r.min) return false
       if (Number.isFinite(r.max) && vm > r.max) return false
       // Vigencia
-      if (filtroVigencia === 'vigentes' && c.fecha_fin < hoy) return false
-      if (filtroVigencia === 'vencidos' && c.fecha_fin >= hoy) return false
+      if (filtroVigencia !== 'todos' && vigenciaDe(c, hoy) !== (filtroVigencia === 'vigentes' ? 'vigente' : 'vencido')) return false
       // Solo incompletos
       if (soloIncompletos && datosFaltantes(c).length === 0) return false
       // Solo los que esperan algo de mí
@@ -360,9 +426,10 @@ export default function ContratosPage() {
     [todosCargados],
   )
   const totalVigentes = useMemo(
-    () => todosCargados.filter(c => c.fecha_fin >= hoy).length,
+    () => todosCargados.filter(c => vigenciaDe(c, hoy) === 'vigente').length,
     [todosCargados, hoy],
   )
+  const totalVencidos = total - totalVigentes
 
   // ── Opciones de filtro derivadas de TODO el dataset ───────────
   const dependencias = useMemo(() => {
@@ -405,7 +472,9 @@ export default function ContratosPage() {
   }
 
   // ── Render ────────────────────────────────────────────────────
-  if (cargandoUser || isLoading) {
+  // Hasta saber con qué filtro se abre, no se pinta la lista: si no, el contratista vería un instante todos sus
+  // contratos y luego solo los vigentes.
+  if (cargandoUser || isLoading || (!!usuario && !filtrosIniciados)) {
     return (
       <div className="space-y-3 animate-pulse">
         <div className="h-8 bg-gray-200 rounded-xl w-48 mb-6" />
@@ -461,6 +530,14 @@ export default function ContratosPage() {
           </div>
         )}
       </div>
+
+      {vistaContratista && total > 0 && (
+        <FiltroVigenciaContratista
+          valor={filtroVigencia}
+          onCambio={setFiltroVig}
+          cuentas={{ vencidos: totalVencidos, todos: total, vigentes: totalVigentes }}
+        />
+      )}
 
       {/* ── Buscador + filtros (gestión y supervisión) ──────────── */}
       {puedeBuscar && (
@@ -533,7 +610,7 @@ export default function ContratosPage() {
                   onClick={() => setFiltroVig(v)}
                   className={`px-3 py-2 transition-colors ${filtroVigencia === v ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
-                  {v === 'todos' ? 'Todos' : v === 'vigentes' ? 'Vigentes' : 'Vencidos'}
+                  {v === 'todos' ? 'Todos' : v === 'vigentes' ? 'Vigentes' : 'Finalizados'}
                 </button>
               ))}
             </div>
@@ -618,6 +695,30 @@ export default function ContratosPage() {
             </Link>
           )}
         </div>
+      ) : visibles.length === 0 && vistaContratista ? (
+        // 31 de 121 contratistas no tenían ningún contrato vigente el 20-oct-2026: para ellos, abrir en «vigentes» no
+        // puede ser una página vacía sin explicación.
+        <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-50 text-gray-300 mb-3">
+            <Icono glifo={Iconos.navegacion.contratos} tamano="lg" />
+          </div>
+          <p className="text-sm font-medium text-gray-700">
+            {filtroVigencia === 'vigentes' ? 'No tienes contratos vigentes' : 'No tienes contratos finalizados'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {filtroVigencia === 'vigentes'
+              ? totalVencidos === 1 ? 'Tu contrato anterior está en «Contratos finalizados».' : `Tus ${totalVencidos} contratos anteriores están en «Contratos finalizados».`
+              : 'Todos tus contratos están vigentes.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => setFiltroVig(filtroVigencia === 'vigentes' ? 'vencidos' : 'vigentes')}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${filtroVigencia === 'vigentes' ? TONO.vencido.punto : TONO.vigente.punto}`} />
+            {filtroVigencia === 'vigentes' ? 'Ver contratos finalizados' : 'Ver contratos vigentes'}
+          </button>
+        </div>
       ) : visibles.length === 0 ? (
         <div className="bg-white rounded-2xl border p-10 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-50 text-gray-300 mb-3">
@@ -643,7 +744,11 @@ export default function ContratosPage() {
                 const contrato = visibles[virtualRow.index]
                 const faltantes = datosFaltantes(contrato)
                 const incompleto = faltantes.length > 0
-                const vencido = contrato.fecha_fin < hoy
+                const vigencia = vigenciaDe(contrato, hoy)
+                const vencido = vigencia === 'vencido'
+                // Un contrato cerrado antes de tiempo dice cómo se cerró (Terminado, Liquidado, Cedido), no «Finalizado».
+                const cerrado = !!contrato.estado && ['terminado', 'liquidado', 'cedido'].includes(contrato.estado)
+                const rotuloVigencia = cerrado ? metaEstado(contrato.estado).label : vencido ? 'Finalizado' : 'Vigente'
                 const atencion = esSupervision
                   ? calcularAtencion(contrato)
                   : { porRevisar: 0, atrasados: 0, total: 0 }
@@ -664,11 +769,13 @@ export default function ContratosPage() {
                   >
                     <div
                       className={`rounded-2xl border transition-colors ${
-                        incompleto
-                          ? 'bg-red-50 border-red-200 hover:border-red-300'
-                          : atencion.total > 0
-                            ? 'bg-white border-amber-200 hover:border-amber-300'
-                            : 'bg-white hover:border-gray-300'
+                        vistaContratista
+                          ? TONO[vigencia].tarjeta
+                          : incompleto
+                            ? 'bg-red-50 border-red-200 hover:border-red-300'
+                            : atencion.total > 0
+                              ? 'bg-white border-amber-200 hover:border-amber-300'
+                              : 'bg-white hover:border-gray-300'
                       }`}
                     >
                       <Link
@@ -682,13 +789,21 @@ export default function ContratosPage() {
                                 {contrato.numero}-{contrato.anio}
                               </span>
                               {contrato.dependencia?.abreviatura && (
-                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                <span className={`text-xs text-gray-600 px-2 py-0.5 rounded-full ${vistaContratista ? 'bg-white/70' : 'bg-gray-100'}`}>
                                   {contrato.dependencia.abreviatura}
                                 </span>
                               )}
-                              {vencido && (
+                              {/* El color no lo dice solo: la insignia lo dice con palabras. */}
+                              {vistaContratista ? (
+                                // «Vigente» lleva un brillo que la cruza una vez al aparecer la tarjeta y luego queda quieta
+                                // (app/globals.css, `insignia-brillo`; sin movimiento si el sistema pide reducirlo).
+                                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TONO[vigencia].insignia} ${vigencia === 'vigente' ? 'insignia-brillo inline-flex items-center gap-1.5' : ''}`}>
+                                  {vigencia === 'vigente' && <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONO.vigente.punto}`} />}
+                                  {rotuloVigencia}
+                                </span>
+                              ) : vencido && (
                                 <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                                  Vencido
+                                  {rotuloVigencia}
                                 </span>
                               )}
                               {incompleto && (

@@ -18,6 +18,7 @@ import type { PDFData } from './types'
 import { SelloVerificacion, FirmaSellada } from './verificacion-componentes'
 import { formatCedula } from '@/lib/format'
 import { conPesos } from '@/lib/numero-letras'
+import { plazoParaDocumento } from '@/lib/plazo-contrato'
 
 // Mismas reglas que el Informe de Actividades
 const ESTADOS_FIRMA_CONTRATISTA = new Set(['enviado', 'revision', 'aprobado', 'radicado'])
@@ -46,12 +47,13 @@ function mmNombre(iso: string): string { return MESES[parseInt(iso.split('-')[1]
 function yyyy(iso: string): string { return iso.split('-')[0] }
 
 /** Calendar days between two ISO dates → e.g. "245 DÍAS" */
-function calcDias(inicio?: string, fin?: string): string {
-  if (!inicio || !fin) return '—'
-  const diff = Math.round(
-    (new Date(fin).getTime() - new Date(inicio).getTime()) / 86_400_000
+/** «180 DÍAS»: el plazo del contrato (lib/plazo-contrato.ts). Sin plazo que contar, «—». */
+function textoPlazo(contrato: PDFData['contrato'], periodo: PDFData['periodo']): string {
+  const dias = plazoParaDocumento(
+    { plazo_dias: contrato.plazo_dias, dias_otrosi_aplicados: contrato.dias_otrosi_aplicados, fecha_inicio: contrato.fecha_inicio_contrato, fecha_fin: contrato.fecha_fin_contrato },
+    periodo,
   )
-  return diff > 0 ? `${diff} DÍAS` : '—'
+  return dias !== null && dias > 0 ? `${dias} DÍAS` : '—'
 }
 
 /** COP currency: $24.000.000 (Colombian dot separator) */
@@ -322,7 +324,7 @@ export function CuentaDeCobroPDF({ data }: { data: PDFData }) {
       : formatCOP(contrato.valor_total)
 
   // Plazo — calendar days between contract start and end
-  const plazo = calcDias(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato)
+  const plazo = textoPlazo(contrato, periodo)
 
   // Period range — "DEL 02 AL 28 DE FEBRERO DE 2026"
   const periodoTexto = `DEL ${dd(periodo.fecha_inicio)} AL ${dd(periodo.fecha_fin)} DE ${mmNombre(periodo.fecha_fin)} DE ${yyyy(periodo.fecha_fin)}`

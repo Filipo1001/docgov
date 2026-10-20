@@ -19,6 +19,22 @@ import { enviarNotificacion } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
 import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
+import { MAX_PLAZO_DIAS, diasDelPlazo, mesesDelPlazo, plazoValido } from '@/lib/plazo-contrato'
+
+const ERROR_DE_FECHAS = 'La fecha de terminación no puede ser anterior a la de inicio. Revisa las dos fechas.'
+const ERROR_DE_PLAZO = `El plazo debe ser un número entero de días, entre 1 y ${MAX_PLAZO_DIAS.toLocaleString('es-CO')}.`
+
+/**
+ * El plazo que se guarda: el que escribió quien registra el contrato, que es lo que dice el contrato firmado, o —si no
+ * escribió ninguno— lo que dan las fechas (lib/plazo-contrato.ts). Un plazo escrito que no es un plazo es un error.
+ */
+function plazoAGuardar(escrito: unknown, inicio: string, fin: string): { plazo: number } | { error: string } {
+  const porFechas = diasDelPlazo(inicio, fin)
+  if (porFechas === null) return { error: ERROR_DE_FECHAS }
+  if (escrito === undefined || escrito === null || escrito === '') return { plazo: porFechas }
+  const plazo = plazoValido(escrito)
+  return plazo === null ? { error: ERROR_DE_PLAZO } : { plazo }
+}
 
 async function requireAdminId(): Promise<string | null> {
   const supabase = await createServerSupabaseClient()
@@ -45,7 +61,8 @@ export type CrearContratoInput = {
   valor_mensual: number
   valor_letras_total: string
   valor_letras_mensual: string
-  plazo_dias: number
+  /** El plazo escrito (lo que dice el contrato). Si no viene, se toma de las fechas. */
+  plazo_dias?: number | null
   fecha_inicio: string
   fecha_fin: string
   cdp: string | null
@@ -67,6 +84,9 @@ export async function crearContrato(
     if (!input.contratista_id) return { error: 'Selecciona el contratista' }
     if (!input.supervisor_id) return { error: 'Selecciona el supervisor' }
     if (!input.fecha_inicio || !input.fecha_fin) return { error: 'Las fechas son obligatorias' }
+    const plazo = plazoAGuardar(input.plazo_dias, input.fecha_inicio, input.fecha_fin)
+    if ('error' in plazo) return { error: plazo.error }
+    const plazoDias = plazo.plazo
     if (!Number.isFinite(input.valor_total) || input.valor_total <= 0) {
       return { error: 'El valor total debe ser mayor a 0' }
     }
@@ -76,8 +96,6 @@ export async function crearContrato(
     // municipio (single-tenant): tomar el del registro
     const { data: muni } = await adminClient.from('municipios').select('id').limit(1).single()
     if (!muni) return { error: 'No se encontró el municipio configurado' }
-
-    const meses = Math.round(input.plazo_dias / 30) // aproximado, compat hacia atrás
 
     const { data, error } = await adminClient
       .from('contratos')
@@ -94,8 +112,8 @@ export async function crearContrato(
         valor_mensual: input.valor_mensual || 0,
         valor_letras_total: input.valor_letras_total,
         valor_letras_mensual: input.valor_letras_mensual,
-        plazo_dias: input.plazo_dias,
-        plazo_meses: meses,
+        plazo_dias: plazoDias,
+        plazo_meses: mesesDelPlazo(plazoDias),
         fecha_inicio: input.fecha_inicio,
         fecha_fin: input.fecha_fin,
         cdp: input.cdp,
@@ -159,6 +177,12 @@ export async function crearContratoConContratista(
     const adminClient = createAdminSupabaseClient()
     const { data: muni } = await adminClient.from('municipios').select('id').limit(1).single()
     if (!muni) return { error: 'No se encontró el municipio configurado' }
+
+    // Se comprueba antes de crear la cuenta del contratista, para no crearla y borrarla por un error de fechas o de plazo.
+    if (!input.fecha_inicio || !input.fecha_fin) return { error: 'Las fechas son obligatorias' }
+    const plazo = plazoAGuardar(input.plazo_dias, input.fecha_inicio, input.fecha_fin)
+    if ('error' in plazo) return { error: plazo.error }
+    const plazoDias = plazo.plazo
 
     // ── Paso 1: resolver contratista_id (crear si es nuevo) ──────
     let contratistaId = input.contratista_id?.trim() || ''
@@ -230,7 +254,6 @@ export async function crearContratoConContratista(
     }
 
     // ── Paso 3: crear el contrato ────────────────────────────────
-    const meses = Math.round(input.plazo_dias / 30)
     const { data, error } = await adminClient
       .from('contratos')
       .insert({
@@ -246,8 +269,8 @@ export async function crearContratoConContratista(
         valor_mensual: input.valor_mensual || 0,
         valor_letras_total: input.valor_letras_total,
         valor_letras_mensual: input.valor_letras_mensual,
-        plazo_dias: input.plazo_dias,
-        plazo_meses: meses,
+        plazo_dias: plazoDias,
+        plazo_meses: mesesDelPlazo(plazoDias),
         fecha_inicio: input.fecha_inicio,
         fecha_fin: input.fecha_fin,
         cdp: input.cdp,
@@ -459,6 +482,24 @@ export async function actualizarContrato(
     // Se rechaza en bloque en vez de ignorar en silencio: si el formulario
     // envía un campo bloqueado es un fallo, y guardar "casi todo" dejaría al
     // usuario creyendo que su corrección quedó registrada.
+    // El plazo se escribe (lib/plazo-contrato.ts): llega de la pantalla y se valida; los meses se derivan de él, no se aceptan.
+    cambios = Object.fromEntries(Object.entries(cambios).filter(([campo]) => campo !== 'plazo_meses')) as typeof cambios
+    if ('plazo_dias' in cambios) {
+      const plazo = plazoValido(cambios.plazo_dias)
+      if (plazo === null) return { error: ERROR_DE_PLAZO }
+      cambios = { ...cambios, plazo_dias: plazo, plazo_meses: mesesDelPlazo(plazo) }
+    }
+    // Las fechas siguen mandando la vigencia: no pueden quedar al revés.
+    const fechaCambia = (c: 'fecha_inicio' | 'fecha_fin') =>
+      c in cambios && String(cambios[c] ?? '') !== String((actual as Record<string, unknown>)[c] ?? '')
+    if (fechaCambia('fecha_inicio') || fechaCambia('fecha_fin')) {
+      const dias = diasDelPlazo(
+        String(cambios.fecha_inicio ?? actual.fecha_inicio ?? ''),
+        String(cambios.fecha_fin ?? actual.fecha_fin ?? ''),
+      )
+      if (dias === null) return { error: ERROR_DE_FECHAS }
+    }
+
     const rechazados = Object.keys(cambios).filter(c => !permitidos.has(c))
     if (rechazados.length) {
       const motivo = CAMPOS_HASTA_PRIMER_INFORME.some(c => rechazados.includes(c))
