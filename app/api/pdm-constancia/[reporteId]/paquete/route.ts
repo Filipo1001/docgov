@@ -15,7 +15,10 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
  *     sesión no ve ese reporte (lo decide la base). Solo quien ve el reporte y sus archivos se los puede llevar.
  *   · Las huellas del listado se calculan al empaquetar y se comparan con las registradas al subir cada archivo. Si alguna NO
  *     coincide, el paquete se entrega igual, marcado en el LEEME, y la respuesta lo dice en `X-Paquete-Discrepancias`.
- *   · Un archivo que no se puede leer deja sin paquete (502): no se entrega uno incompleto. Más de 100 MB: 413.
+ *   · Un archivo que no se puede leer deja sin paquete (502): no se entrega uno incompleto por una falla.
+ *   · Si los archivos pasan de lo que cabe en un paquete (150 MB: en la práctica, videos), el paquete sale con los que caben y el
+ *     LEEME dice cuáles dejó fuera y su huella; la respuesta lo dice en `X-Paquete-Omitidos`. No hay 413: un paquete que se
+ *     declara parcial sigue sirviendo, y uno que no baja no sirve de nada.
  *   · `nodejs` y sin caché; hasta 60 s para leer los archivos.
  */
 export const runtime = 'nodejs'
@@ -51,6 +54,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ reporte
         'Content-Disposition': `attachment; filename="${nombreDeArchivoDePaquete(p.codigo)}"`,
         'X-Paquete-Archivos': String(p.resultado.archivos.length),
         'X-Paquete-Discrepancias': String(p.resultado.discrepancias),
+        'X-Paquete-Omitidos': String(p.resultado.omitidos.length),
         ...SIN_CACHE,
       },
     })

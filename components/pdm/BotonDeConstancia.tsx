@@ -5,11 +5,12 @@
  * pública (migración 072) y el paquete completo —constancia, archivos originales y listado de huellas—.
  *
  * Se piden al servidor con `fetch` y se bajan como archivo, no con un enlace: así, si algo falla (no tiene acceso, la base no
- * responde, los archivos pesan demasiado) se dice aquí mismo en vez de dejar un archivo roto en la carpeta de descargas. La primera
+ * responde, no se pudo leer un archivo) se dice aquí mismo en vez de dejar un archivo roto en la carpeta de descargas. La primera
  * vez que alguien pide la constancia de una versión se emite su código; desde entonces es siempre el mismo.
  *
  * Si al empaquetar un archivo NO coincide con la huella que se registró al subirlo, el paquete baja igual (marcado en su LEEME)
- * y aquí se avisa con todas las letras: es lo más importante que puede decir este botón.
+ * y aquí se avisa con todas las letras: es lo más importante que puede decir este botón. Si algún archivo no cupo (un video grande),
+ * el paquete baja sin él y aquí se dice, para que nadie crea que lo tiene completo.
  */
 
 import { useState } from 'react'
@@ -24,24 +25,29 @@ function useDescarga(url: string, respaldo: string) {
   const [estado, setEstado] = useState<Estado>('quieto')
   const [mensaje, setMensaje] = useState<string | null>(null)
   const [alerta, setAlerta] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
 
   async function descargar() {
-    setEstado('generando'); setMensaje(null); setAlerta(null)
+    setEstado('generando'); setMensaje(null); setAlerta(null); setAviso(null)
     try {
       const r = await fetch(url, { credentials: 'same-origin' })
       if (!r.ok) {
-        // 413 y 502 traen su frase (pesa demasiado; no se pudo leer un archivo); el resto, la de siempre.
-        const frase = r.status === 413 || r.status === 502 ? (await r.text()).slice(0, 300) : ''
+        // El 502 trae su frase (no se pudo leer un archivo); el resto, la de siempre.
+        const frase = r.status === 502 ? (await r.text()).slice(0, 300) : ''
         throw new Error(frase)
       }
       const nombre = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? respaldo
       const discrepancias = Number(r.headers.get('X-Paquete-Discrepancias') ?? 0)
+      const omitidos = Number(r.headers.get('X-Paquete-Omitidos') ?? 0)
       const href = URL.createObjectURL(await r.blob())
       const a = document.createElement('a')
       a.href = href; a.download = nombre
       document.body.appendChild(a); a.click(); a.remove()
       setTimeout(() => URL.revokeObjectURL(href), 10_000)
       setEstado('quieto')
+      if (omitidos > 0) {
+        setAviso(`El paquete bajó SIN ${omitidos === 1 ? 'un archivo que no cupo' : `${omitidos} archivos que no cupieron`} por su tamaño (suelen ser videos). El LEEME dice cuál${omitidos === 1 ? ' es' : 'es son'} y su huella; descárgalo${omitidos === 1 ? '' : 's'} desde el reporte.`)
+      }
       if (discrepancias > 0) {
         setAlerta(`Atención: ${discrepancias === 1 ? 'un archivo NO coincide' : `${discrepancias} archivos NO coinciden`} con la huella que se registró al subirse. El paquete bajó, pero no lo uses como prueba sin avisar al administrador (el LEEME lo explica).`)
       }
@@ -50,7 +56,7 @@ function useDescarga(url: string, respaldo: string) {
       setMensaje(e instanceof Error && e.message ? e.message : null)
     }
   }
-  return { estado, mensaje, alerta, descargar }
+  return { estado, mensaje, alerta, aviso, descargar }
 }
 
 function Boton({ etiqueta, icono, estado, onClick }: { etiqueta: string; icono: LucideIcon; estado: Estado; onClick: () => void }) {
@@ -77,6 +83,7 @@ export default function BotonDeConstancia({ reporteId }: { reporteId: string }) 
       </div>
       {falla(constancia, 'la constancia')}
       {falla(paquete, 'el paquete')}
+      {paquete.aviso && <p role="status" className="mt-1.5 text-xs font-medium leading-snug text-[#7A4A06]">{paquete.aviso}</p>}
       {paquete.alerta && <p role="alert" className="mt-1.5 text-xs font-semibold leading-snug text-[#912018]">{paquete.alerta}</p>}
     </div>
   )

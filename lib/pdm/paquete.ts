@@ -12,6 +12,10 @@
  *   huellas-sha256.txt               «huella  archivos/nombre», una línea por archivo: se comprueba con `shasum -a 256 -c`
  *   LEEME.txt                        qué es esto, cómo se comprueba, y si cada archivo coincide con lo que se registró al subirlo
  *
+ * SI LOS ARCHIVOS NO CABEN (un video de 150 MB), el paquete sale igual con los que sí caben —primero los más pequeños— y dice,
+ * arriba del LEEME y en la respuesta, cuáles dejó fuera, con la huella que se registró al subirlos. Un paquete que parece completo
+ * y no lo es sería peor que ninguno; uno que lo declara sigue sirviendo de prueba de lo que contiene.
+ *
  * LAS HUELLAS DEL LISTADO SE CALCULAN AL EMPAQUETAR, sobre los bytes que de verdad van dentro del ZIP, y se COMPARAN con la que
  * el servidor anotó cuando el archivo se subió: así el paquete dice, archivo por archivo, «coincide» o «NO COINCIDE» con lo
  * registrado (o «sin huella registrada»). Un archivo que no coincide no se esconde ni se corrige: va en el paquete, marcado.
@@ -23,8 +27,12 @@ import { createHash } from 'node:crypto'
 import JSZip from 'jszip'
 import { etiquetaDeTipo } from './constancia'
 
-/** Lo más que pesa un paquete (suma de sus archivos): con 5 archivos de 10 MB como máximo por reporte hay margen de sobra. */
-export const MAX_BYTES_DE_PAQUETE = 100 * 1024 * 1024
+/**
+ * Lo más que pesa un paquete (suma de sus archivos). Se arma EN MEMORIA, en una función de Vercel: con los archivos, el ZIP y la copia
+ * que se envía caben unos 3 × este tamaño. Cinco archivos que no son video (25 MB cada uno) entran enteros; un video grande, no.
+ * Lo que no cabe NO tumba el paquete: se deja fuera y se declara (ver `ArchivoOmitido`).
+ */
+export const MAX_BYTES_DE_PAQUETE = 150 * 1024 * 1024
 
 export type EstadoDeHuella = 'coincide' | 'no_coincide' | 'sin_registro'
 
@@ -49,6 +57,17 @@ export interface ArchivoEmpaquetado {
   sha256: string
   registrada: string | null
   estado: EstadoDeHuella
+}
+
+/** Un archivo que no cupo en el paquete: se sabe qué es y qué huella se registró, pero sus bytes no van. */
+export interface ArchivoOmitido {
+  /** Su número en el reporte (desde 1): el mismo que habría llevado en el ZIP. */
+  numero: number
+  nombreOriginal: string
+  tipo: string
+  bytes: number
+  /** La huella que se anotó al subirlo, o `null`. Es la REGISTRADA: aquí no se leyó el archivo. */
+  registrada: string | null
 }
 
 // ─── Nombres dentro del ZIP ───────────────────────────────────────────────────
@@ -124,7 +143,8 @@ function tamano(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toLocaleString('es-CO', { maximumFractionDigits: 1 })} MB`
 }
 
-export function textoLeeme(a: { codigo: string; url: string; generadoEn: string; archivos: ArchivoEmpaquetado[] }): string {
+export function textoLeeme(a: { codigo: string; url: string; generadoEn: string; archivos: ArchivoEmpaquetado[]; omitidos?: ArchivoOmitido[] }): string {
+  const omitidos = a.omitidos ?? []
   const discrepancias = a.archivos.filter(x => x.estado === 'no_coincide').length
   const sinRegistro = a.archivos.filter(x => x.estado === 'sin_registro').length
   const lineas: string[] = [
@@ -155,8 +175,16 @@ export function textoLeeme(a: { codigo: string; url: string; generadoEn: string;
       '',
     )
   }
+  if (omitidos.length > 0) {
+    lineas.push(
+      '*** ESTE PAQUETE NO INCLUYE TODOS LOS ARCHIVOS ***',
+      `  ${omitidos.length === 1 ? 'Un archivo no cupo' : `${omitidos.length} archivos no cupieron`} (un paquete admite hasta ${tamano(MAX_BYTES_DE_PAQUETE)}) y NO ${omitidos.length === 1 ? 'está' : 'están'} en esta carpeta.`,
+      '  Más abajo, en «ARCHIVOS QUE NO ESTÁN EN ESTE PAQUETE», se dice cuáles son y cuál es la huella que se registró al subirlos.',
+      '',
+    )
+  }
   lineas.push('ARCHIVOS')
-  if (a.archivos.length === 0) lineas.push('  Esta versión del reporte no tiene archivos.')
+  if (a.archivos.length === 0) lineas.push(omitidos.length > 0 ? '  Ningún archivo cupo en este paquete.' : '  Esta versión del reporte no tiene archivos.')
   for (const f of a.archivos) {
     lineas.push(
       `  archivos/${f.nombreEnPaquete}`,
@@ -169,6 +197,22 @@ export function textoLeeme(a: { codigo: string; url: string; generadoEn: string;
   }
   if (sinRegistro > 0) {
     lineas.push('  Un archivo «sin huella registrada» es uno al que el sistema no le calculó la huella cuando se subió: su huella aquí', '  se calculó al empaquetar y dice qué contiene HOY, no qué contenía al subirse.', '')
+  }
+  if (omitidos.length > 0) {
+    lineas.push('ARCHIVOS QUE NO ESTÁN EN ESTE PAQUETE')
+    for (const f of omitidos) {
+      lineas.push(
+        `  ${String(f.numero).padStart(2, '0')} · ${f.nombreOriginal}`,
+        `    ${etiquetaDeTipo(f.tipo)} · ${tamano(f.bytes)}`,
+        f.registrada ? `    SHA-256 registrada al subirlo  ${f.registrada}` : '    Sin huella registrada al subirlo.',
+        '',
+      )
+    }
+    lineas.push(
+      '  Descárguelos desde el reporte, en la aplicación (Plan de Desarrollo → el indicador → ese reporte). Al recibirlos, compruebe que',
+      '  su huella sea la registrada con los pasos de abajo: la de cada archivo no se calculó aquí porque no se leyó.',
+      '',
+    )
   }
   lineas.push(
     'CÓMO COMPROBAR QUE UN ARCHIVO NO CAMBIÓ',
@@ -194,44 +238,59 @@ export interface EntradaDePaquete {
   url: string
   constanciaPdf: Uint8Array
   evidencias: EvidenciaParaPaquete[]
-  /** Lee un archivo del almacenamiento. Si no puede, lanza: un paquete incompleto no se entrega. */
+  /** Lee un archivo del almacenamiento. Si no puede, lanza: un paquete incompleto por una falla no se entrega. */
   leer: (ruta: string) => Promise<Uint8Array>
   /** Cuándo se genera, ya dicho («19 oct 2026 · 10:42»). */
   generadoEn: string
 }
 
 export type ResultadoDePaquete =
-  | { ok: true; zip: Uint8Array; archivos: ArchivoEmpaquetado[]; discrepancias: number; bytes: number }
-  | { ok: false; motivo: 'demasiado_grande' | 'ilegible'; error: string }
+  | { ok: true; zip: Uint8Array; archivos: ArchivoEmpaquetado[]; omitidos: ArchivoOmitido[]; discrepancias: number; bytes: number }
+  | { ok: false; motivo: 'ilegible'; error: string }
+
+/**
+ * Qué archivos entran. Los más pequeños primero: así se llevan cuantos más se pueda y lo que se queda fuera es lo grande (un
+ * video), que de todos modos se descarga aparte. A igual tamaño, el orden del reporte. Devuelve los índices (desde 0) que entran.
+ */
+export function indicesQueCaben(pesos: number[], tope: number): Set<number> {
+  const entran = new Set<number>()
+  let suma = 0
+  const orden = pesos.map((p, i) => ({ p: Math.max(0, p), i })).sort((a, b) => a.p - b.p || a.i - b.i)
+  for (const { p, i } of orden) {
+    if (suma + p > tope) continue
+    suma += p
+    entran.add(i)
+  }
+  return entran
+}
 
 export async function armarPaquete(e: EntradaDePaquete): Promise<ResultadoDePaquete> {
-  // Antes de leer nada: lo declarado ya dice si cabe.
-  const declarado = e.evidencias.reduce((t, x) => t + Math.max(0, x.bytes), 0)
-  if (declarado > MAX_BYTES_DE_PAQUETE) {
-    return { ok: false, motivo: 'demasiado_grande', error: `Los archivos de este reporte pesan ${tamano(declarado)}: más de lo que cabe en un paquete (${tamano(MAX_BYTES_DE_PAQUETE)}).` }
-  }
+  // Lo declarado ya dice qué cabe: lo que no cabe ni se lee.
+  const caben = indicesQueCaben(e.evidencias.map(x => x.bytes), MAX_BYTES_DE_PAQUETE)
+  const omitidos: ArchivoOmitido[] = []
+  const omitir = (ev: EvidenciaParaPaquete, indice: number, bytes = ev.bytes) =>
+    omitidos.push({ numero: indice + 1, nombreOriginal: ev.nombre, tipo: ev.tipo, bytes, registrada: ev.sha256 })
 
-  const leidos: { ev: EvidenciaParaPaquete; datos: Uint8Array }[] = []
+  const leidos: { ev: EvidenciaParaPaquete; indice: number; datos: Uint8Array }[] = []
   let total = 0
-  for (const ev of e.evidencias) {
+  for (const [indice, ev] of e.evidencias.entries()) {
+    if (!caben.has(indice)) { omitir(ev, indice); continue }
     let datos: Uint8Array
     try {
       datos = await e.leer(ev.ruta)
     } catch {
       return { ok: false, motivo: 'ilegible', error: 'No se pudo leer uno de los archivos del reporte. Inténtalo de nuevo en unos minutos.' }
     }
+    // Lo que se lee puede pesar más que lo declarado: se vigila lo real, y lo que ya no cabe se deja fuera igual que lo demás.
+    if (total + datos.byteLength > MAX_BYTES_DE_PAQUETE) { omitir(ev, indice, datos.byteLength); continue }
     total += datos.byteLength
-    // Lo que se lee puede pesar más que lo declarado: se vigila lo real.
-    if (total > MAX_BYTES_DE_PAQUETE) {
-      return { ok: false, motivo: 'demasiado_grande', error: `Los archivos de este reporte pesan más de lo que cabe en un paquete (${tamano(MAX_BYTES_DE_PAQUETE)}).` }
-    }
-    leidos.push({ ev, datos })
+    leidos.push({ ev, indice, datos })
   }
 
-  const archivos: ArchivoEmpaquetado[] = leidos.map(({ ev, datos }, i) => {
+  const archivos: ArchivoEmpaquetado[] = leidos.map(({ ev, indice, datos }) => {
     const sha256 = createHash('sha256').update(datos).digest('hex')
     return {
-      nombreEnPaquete: nombreEnPaquete(i, ev.nombre, ev.tipo),
+      nombreEnPaquete: nombreEnPaquete(indice, ev.nombre, ev.tipo),
       nombreOriginal: ev.nombre,
       tipo: ev.tipo,
       bytes: datos.byteLength,
@@ -240,17 +299,18 @@ export async function armarPaquete(e: EntradaDePaquete): Promise<ResultadoDePaqu
       estado: estadoDeHuella(ev.sha256, sha256),
     }
   })
+  omitidos.sort((a, b) => a.numero - b.numero)
 
   const zip = new JSZip()
   zip.file(`constancia-${e.codigo}.pdf`, e.constanciaPdf)
   const carpeta = zip.folder('archivos')!
   leidos.forEach(({ datos }, i) => carpeta.file(archivos[i].nombreEnPaquete, datos))
   zip.file('huellas-sha256.txt', listadoDeHuellas(archivos))
-  zip.file('LEEME.txt', textoLeeme({ codigo: e.codigo, url: e.url, generadoEn: e.generadoEn, archivos }))
+  zip.file('LEEME.txt', textoLeeme({ codigo: e.codigo, url: e.url, generadoEn: e.generadoEn, archivos, omitidos }))
 
   // STORE: los PDF y las imágenes ya vienen comprimidos; DEFLATE gastaría CPU sin ganancia.
   const salida = await zip.generateAsync({ type: 'uint8array', compression: 'STORE' })
-  return { ok: true, zip: salida, archivos, discrepancias: archivos.filter(a => a.estado === 'no_coincide').length, bytes: total }
+  return { ok: true, zip: salida, archivos, omitidos, discrepancias: archivos.filter(a => a.estado === 'no_coincide').length, bytes: total }
 }
 
 /** El nombre del archivo ZIP de un paquete. */

@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { test } from 'node:test'
 import JSZip from 'jszip'
 import {
-  MAX_BYTES_DE_PAQUETE, armarPaquete, estadoDeHuella, listadoDeHuellas, nombreDeArchivoDePaquete, nombreEnPaquete, nombreSeguroDeArchivo, textoLeeme,
+  MAX_BYTES_DE_PAQUETE, armarPaquete, estadoDeHuella, indicesQueCaben, listadoDeHuellas, nombreDeArchivoDePaquete, nombreEnPaquete, nombreSeguroDeArchivo, textoLeeme,
   type EvidenciaParaPaquete,
 } from '@/lib/pdm/paquete'
 
@@ -177,15 +177,58 @@ test('un archivo que no se puede leer: no se entrega un paquete incompleto', asy
   assert.ok(!r.ok && r.motivo === 'ilegible' && /No se pudo leer/.test(r.error))
 })
 
-test('un paquete demasiado grande se rechaza, y si lo declarado ya no cabe ni se lee nada', async () => {
-  let lecturas = 0
-  const ev: EvidenciaParaPaquete[] = [{ ruta: 'r/a', nombre: 'a.mp4', tipo: 'video/mp4', bytes: MAX_BYTES_DE_PAQUETE + 1, sha256: null }]
-  const r = await armarPaquete(entrada(ev, {}, { leer: async () => { lecturas++; return new Uint8Array(1) } }))
-  assert.ok(!r.ok && r.motivo === 'demasiado_grande'); assert.equal(lecturas, 0, 'no se leyó nada')
-  // Lo declarado cabe, pero lo real no (alguien declaró menos de lo que pesa).
+test('lo que no cabe NO tumba el paquete: sale con lo que cabe y declara lo que dejó fuera, con su huella registrada', async () => {
+  const pequeno = randomBytes(2000), mediano = randomBytes(5000)
+  const huellaDelVideo = 'a'.repeat(64)
+  const ev: EvidenciaParaPaquete[] = [
+    { ruta: 'r/video', nombre: 'Rendición de cuentas.mp4', tipo: 'video/mp4', bytes: MAX_BYTES_DE_PAQUETE - 1000, sha256: huellaDelVideo },
+    { ruta: 'r/a', nombre: 'acta.pdf', tipo: 'application/pdf', bytes: pequeno.length, sha256: sha(pequeno) },
+    { ruta: 'r/b', nombre: 'foto.jpg', tipo: 'image/jpeg', bytes: mediano.length, sha256: sha(mediano) },
+  ]
+  const leidas: string[] = []
+  const r = await armarPaquete(entrada(ev, { 'r/a': pequeno, 'r/b': mediano }, { leer: async (ruta: string) => { leidas.push(ruta); return ruta === 'r/a' ? pequeno : mediano } }))
+  assert.ok(r.ok)
+  assert.deepEqual(leidas, ['r/a', 'r/b'], 'el video no se leyó: lo declarado ya decía que no cabía')
+  assert.equal(r.omitidos.length, 1)
+  assert.deepEqual(r.omitidos[0], { numero: 1, nombreOriginal: 'Rendición de cuentas.mp4', tipo: 'video/mp4', bytes: MAX_BYTES_DE_PAQUETE - 1000, registrada: huellaDelVideo })
+  const zip = await JSZip.loadAsync(r.zip)
+  // Los números son los del reporte (el video era el 1): los que entran conservan el suyo, sin renumerar.
+  assert.deepEqual(Object.keys(zip.files).sort(), ['LEEME.txt', `constancia-${CODIGO}.pdf`, 'archivos/', 'archivos/02-acta.pdf', 'archivos/03-foto.jpg', 'huellas-sha256.txt'].sort())
+  const leeme = await zip.file('LEEME.txt')!.async('string')
+  assert.match(leeme, /NO INCLUYE TODOS LOS ARCHIVOS/)
+  assert.match(leeme, /ARCHIVOS QUE NO ESTÁN EN ESTE PAQUETE/)
+  assert.match(leeme, /01 · Rendición de cuentas\.mp4/)
+  assert.ok(leeme.includes(`SHA-256 registrada al subirlo  ${huellaDelVideo}`), 'la huella registrada del video, dicha como registrada')
+  // El listado de huellas solo lleva lo que está dentro: `shasum -c` no se queja de archivos que no existen.
+  const listado = await zip.file('huellas-sha256.txt')!.async('string')
+  assert.equal(listado.trim().split('\n').length, 2)
+  assert.ok(!listado.includes(huellaDelVideo))
+  assert.equal(r.discrepancias, 0)
+})
+
+test('se llevan primero los archivos más pequeños, y a igual tamaño el orden del reporte', () => {
+  assert.deepEqual([...indicesQueCaben([100, 10, 50, 10], 70)].sort(), [1, 3, 2].sort(), 'caben 10 + 10 + 50 = 70')
+  assert.deepEqual([...indicesQueCaben([100, 10, 50, 10], 69)].sort(), [1, 3].sort())
+  assert.deepEqual([...indicesQueCaben([5, 5, 5], 10)].sort(), [0, 1], 'empate: los primeros del reporte')
+  assert.deepEqual([...indicesQueCaben([], 10)], [])
+  assert.deepEqual([...indicesQueCaben([MAX_BYTES_DE_PAQUETE + 1], MAX_BYTES_DE_PAQUETE)], [])
+  assert.deepEqual([...indicesQueCaben([MAX_BYTES_DE_PAQUETE], MAX_BYTES_DE_PAQUETE)], [0], 'justo en el tope, cabe')
+  assert.deepEqual([...indicesQueCaben([-5, 3], 10)].sort(), [0, 1], 'un tamaño absurdo (negativo) no rompe la cuenta')
+})
+
+test('cinco archivos de 25 MB (lo más que admite un reporte sin video) caben enteros', () => {
+  const MB = 1024 * 1024
+  assert.equal(indicesQueCaben([25 * MB, 25 * MB, 25 * MB, 25 * MB, 25 * MB], MAX_BYTES_DE_PAQUETE).size, 5)
+})
+
+test('si lo que se lee pesa más de lo declarado y ya no cabe, se deja fuera igual', async () => {
   const grande = new Uint8Array(MAX_BYTES_DE_PAQUETE + 5)
-  const r2 = await armarPaquete(entrada([{ ruta: 'r/g', nombre: 'g.bin', tipo: 'application/octet-stream', bytes: 5, sha256: null }], { 'r/g': grande }))
-  assert.ok(!r2.ok && r2.motivo === 'demasiado_grande')
+  const r = await armarPaquete(entrada([{ ruta: 'r/g', nombre: 'g.bin', tipo: 'application/octet-stream', bytes: 5, sha256: null }], { 'r/g': grande }))
+  assert.ok(r.ok)
+  assert.equal(r.archivos.length, 0); assert.equal(r.omitidos.length, 1)
+  assert.equal(r.omitidos[0].bytes, MAX_BYTES_DE_PAQUETE + 5, 'se dice lo que pesa de verdad')
+  const leeme = await (await JSZip.loadAsync(r.zip)).file('LEEME.txt')!.async('string')
+  assert.match(leeme, /Ningún archivo cupo/)
 })
 
 test('una versión sin archivos da un paquete con la constancia y un listado vacío, sin error', async () => {

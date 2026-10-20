@@ -26,7 +26,7 @@ async function leerDeAlmacenamiento(admin: SupabaseClient, ruta: string): Promis
 
 export type PaqueteConstruido =
   | { ok: true; codigo: string; resultado: Extract<ResultadoDePaquete, { ok: true }> }
-  | { ok: false; estado: 413 | 500 | 502; error: string }
+  | { ok: false; estado: 500 | 502; error: string }
 
 export async function construirPaquete(sesion: SupabaseClient, reporteId: string): Promise<PaqueteConstruido> {
   const { data, error } = await sesion
@@ -51,6 +51,6 @@ export async function construirPaquete(sesion: SupabaseClient, reporteId: string
     codigo: constancia.codigo, url: constancia.url, constanciaPdf: constancia.pdf, generadoEn: constancia.generadaEn, evidencias,
     leer: ruta => leerDeAlmacenamiento(admin, ruta),
   })
-  if (!resultado.ok) return { ok: false, estado: resultado.motivo === 'demasiado_grande' ? 413 : 502, error: resultado.error }
+  if (!resultado.ok) return { ok: false, estado: 502, error: resultado.error }
   return { ok: true, codigo: constancia.codigo, resultado }
 }
