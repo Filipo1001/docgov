@@ -39,6 +39,7 @@ import {
 import FormularioReporte from './FormularioReporte'
 import { useAbrirEvidencia } from './abrir-evidencia'
 import Huella from './Huella'
+import BotonDeConstancia from './BotonDeConstancia'
 import ComentariosIndicador from './ComentariosIndicador'
 import EvolucionDelAnio from './EvolucionDelAnio'
 import { Sello, Seccion, SituacionTexto } from './ui'
@@ -430,6 +431,8 @@ function Version({ r, acciones, onHecho, nueva }: { r: ReporteDetalle; acciones:
           <b>{a.accion === 'anular' ? 'Anulado' : 'Restaurado'}</b> por {nombrePropio(a.por)} · {fechaHoraBogota(a.cuando)}: «{a.motivo}»
         </p>
       ))}
+      {/* La constancia: el código y el QR con que cualquiera comprueba, sin sesión, el estado vivo de ESTA versión. */}
+      <BotonDeConstancia reporteId={r.id} />
       {r.puedeValidar && <Validar reporte={r} acciones={acciones} onHecho={onHecho} />}
       {r.puedeAnular && <Anulacion reporte={r} modo="anular" acciones={acciones} onHecho={onHecho} />}
       {r.puedeRestaurar && <Anulacion reporte={r} modo="restaurar" acciones={acciones} onHecho={onHecho} />}

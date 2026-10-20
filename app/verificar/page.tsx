@@ -67,7 +67,7 @@ export default function VerificarLandingPage() {
             Verificar documento
           </button>
           <p style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5, marginTop: 12, marginBottom: 0 }}>
-            Escriba el código impreso en el pie del documento (formato CD-XXXX-XXXX) o escanee el código QR directamente.
+            Escriba el código impreso en el pie del documento (formato CD-XXXX-XXXX, o PDM-XXXX-XXXX en una constancia de reporte del Plan de Desarrollo) o escanee el código QR directamente.
           </p>
         </form>
 

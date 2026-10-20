@@ -20,6 +20,9 @@
 
 import type { Metadata } from 'next'
 import { getVerificacion, TIPO_LABEL, type TipoDocumento } from '@/lib/verificacion'
+import { normalizarCodigo, pareceCodigoPdm } from '@/lib/pdm/constancia'
+import { cargarConstanciaPublica } from '@/lib/pdm/constancia-servidor'
+import VerificacionPublica, { ConstanciaNoDisponible, ConstanciaNoEncontrada } from '@/components/pdm/verificacion/VerificacionPublica'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +61,18 @@ function Fila({ label, value }: { label: string; value: string }) {
 
 export default async function VerificarPage({ params }: { params: Promise<{ codigo: string }> }) {
   const { codigo } = await params
+
+  // Las constancias del módulo Plan de Desarrollo (`PDM-XXXX-XXXX`) tienen su propia verificación y su propia tabla. Los
+  // documentos de contratos (`CD-…`) siguen EXACTAMENTE por el camino de siempre, más abajo: este desvío solo se toma por el
+  // prefijo, antes de tocar nada de ellos (regla 1 de CLAUDE.md: `/verificar/*` no puede dejar de responder).
+  if (pareceCodigoPdm(codigo)) {
+    const lectura = await cargarConstanciaPublica(codigo)
+    if (lectura.estado === 'ok') return <VerificacionPublica c={lectura.constancia} />
+    return lectura.estado === 'error'
+      ? <ConstanciaNoDisponible codigo={normalizarCodigo(codigo)} />
+      : <ConstanciaNoEncontrada codigo={normalizarCodigo(codigo)} />
+  }
+
   const resultado = await getVerificacion(codigo)
   const esCert = resultado?.datos.tipo === 'certificacion-retencion'
 
