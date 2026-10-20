@@ -116,10 +116,13 @@ export function compararPlazo(escrito: number | null, porFechas: number | null):
  * Desde cuándo las actas y la cuenta de cobro imprimen el plazo del contrato. Es el momento en que se publicó el cambio: un
  * periodo aprobado antes conserva la cuenta con que se emitieron sus documentos.
  *
- * SE FIJA AL PUBLICAR (no al programar): es la hora exacta del despliegue a producción. Un periodo aprobado entre que se
- * escribió esto y que se publicó se emitió con la cuenta vieja.
+ * Fijado el 20-oct-2026 a las 20:04 UTC (3:04 p. m. en Colombia) con 16 minutos de margen sobre la subida a `main`: lo que se
+ * apruebe mientras Vercel construye todavía lo emite el código viejo, y por eso cuenta como «ya emitido». El margen solo se
+ * equivoca hacia el lado seguro: un periodo aprobado entre que el despliegue sale y las 20:20 conserva la cuenta vieja (la
+ * misma que imprimiría el código viejo) y la conserva para siempre, porque la regla depende solo de su fecha de aprobación.
+ * Ese día no había una sola aprobación en los 7 días anteriores.
  */
-export const PLAZO_DEL_CONTRATO_DESDE = '2026-10-21T05:00:00Z'
+export const PLAZO_DEL_CONTRATO_DESDE = '2026-10-20T20:20:00Z'
 
 /**
  * ¿Los documentos de este periodo usan la regla nueva del plazo?
