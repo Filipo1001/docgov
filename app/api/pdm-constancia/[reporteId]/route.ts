@@ -1,10 +1,7 @@
-import QRCode from 'qrcode'
 import { accesoPdm } from '@/lib/pdm/acceso'
-import { nombreDeArchivoDeConstancia, rutaDeVerificacion } from '@/lib/pdm/constancia'
-import { cargarConstanciaPublica, emitirConstancia } from '@/lib/pdm/constancia-servidor'
-import { fechaHoraBogota } from '@/lib/pdm/historial'
+import { nombreDeArchivoDeConstancia } from '@/lib/pdm/constancia'
+import { generarConstanciaPdf } from '@/lib/pdm/constancia-documento'
 import { pdmHabilitado } from '@/lib/pdm/habilitado'
-import { ORIGEN_APP } from '@/lib/dominio'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 /**
@@ -21,6 +18,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
  *     (`pdm_constancia_emitir`); el QR impreso no cambia nunca.
  *   · El contenido es el que entrega `pdm_constancia_publica`: el mismo que ve el público. Nada de nombres de archivo ni textos.
  *   · `nodejs` y no borde: @react-pdf/renderer necesita APIs de Node. Sin caché: el estado impreso es el de este instante.
+ *
+ * El paquete ZIP (`./paquete`) usa la misma generación (`generarConstanciaPdf`) y las mismas comprobaciones.
  */
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,27 +45,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ reporte
     }
     if (!visible) return new Response(null, { status: 404, headers: SIN_CACHE })
 
-    const emitida = await emitirConstancia(reporteId)
-    if (!emitida.ok) return new Response(emitida.error, { status: 500, headers: SIN_CACHE })
-    const lectura = await cargarConstanciaPublica(emitida.codigo)
-    if (lectura.estado !== 'ok') return new Response('No se pudo generar la constancia.', { status: 500, headers: SIN_CACHE })
-
-    const url = `${ORIGEN_APP}${rutaDeVerificacion(emitida.codigo)}`
-    const qr = await QRCode.toDataURL(url, { margin: 0, width: 360, errorCorrectionLevel: 'M', color: { dark: '#111827', light: '#ffffff' } })
-
-    const [{ renderToBuffer }, React, { ConstanciaDeReporte }] = await Promise.all([
-      import('@react-pdf/renderer'),
-      import('react'),
-      import('@/lib/pdm/constancia-pdf'),
-    ])
-    const pdf = await renderToBuffer(
-      React.createElement(ConstanciaDeReporte, { c: lectura.constancia, qr, url, generadaEn: fechaHoraBogota(new Date().toISOString()) }) as never,
-    )
-    return new Response(new Uint8Array(pdf), {
+    const c = await generarConstanciaPdf(reporteId)
+    if (!c.ok) return new Response(c.error, { status: 500, headers: SIN_CACHE })
+    return new Response(c.pdf as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${nombreDeArchivoDeConstancia(emitida.codigo)}"`,
+        'Content-Disposition': `attachment; filename="${nombreDeArchivoDeConstancia(c.codigo)}"`,
         ...SIN_CACHE,
       },
     })

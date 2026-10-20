@@ -76,6 +76,9 @@ correr() {   # nombre, VERCEL_ENV, PDM_PRODUCCION, esperado: cerrado|abierto
   # La constancia en PDF de un reporte: sin el módulo no existe; con él, sin sesión responde 401 (no 404).
   local cons; cons="$(codigo "$B/api/pdm-constancia/00000000-0000-4000-8000-000000000000")"
   if [ "$esperado" = "cerrado" ]; then esperar_estado "GET /api/pdm-constancia/{reporte}" "404" "$cons"; else esperar_no_404 "GET /api/pdm-constancia/{reporte}" "$cons"; fi
+  # El paquete ZIP de ese reporte: mismas reglas (sin el módulo no existe; con él, sin sesión responde 401).
+  local paq; paq="$(codigo "$B/api/pdm-constancia/00000000-0000-4000-8000-000000000000/paquete")"
+  if [ "$esperado" = "cerrado" ]; then esperar_estado "GET /api/pdm-constancia/{reporte}/paquete" "404" "$paq"; else esperar_no_404 "GET /api/pdm-constancia/{reporte}/paquete" "$paq"; fi
   # La verificación PÚBLICA de una constancia NO depende del interruptor del módulo: un QR impreso tiene que seguir valiendo
   # (regla 1 de CLAUDE.md). Un código que no existe responde 200 («Código no encontrado»), esté el módulo abierto o cerrado.
   esperar_estado "GET /verificar/PDM-… (no depende del módulo)" "200" "$(codigo "$B/verificar/PDM-ZZZZ-ZZZZ")"
