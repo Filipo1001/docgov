@@ -13,7 +13,7 @@ import type { PDFData, PDFPagoHistorial } from './types'
 import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-componentes'
 import { formatCedula, numeroALetras } from '@/lib/format'
 import { conPesos } from '@/lib/numero-letras'
-import { cuentaUltimoDia, diasDelPlazo } from '@/lib/plazo-contrato'
+import { plazoParaDocumento } from '@/lib/plazo-contrato'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
 
@@ -346,9 +346,12 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
   const valorMensualTexto =
     `${conPesos(numeroALetras(periodo.valor_cobro))} M/L (${formatCOP(periodo.valor_cobro)})`
 
-  // El plazo sale de las fechas con la cuenta de todo el sistema (lib/plazo-contrato.ts).
+  // El plazo del contrato (lib/plazo-contrato.ts): el escrito más los otrosíes aplicados; a lo ya emitido, su cuenta de entonces.
   let plazoTexto = '—'
-  const dias = diasDelPlazo(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato, { contarUltimoDia: cuentaUltimoDia(periodo) })
+  const dias = plazoParaDocumento(
+    { plazo_dias: contrato.plazo_dias, dias_otrosi_aplicados: contrato.dias_otrosi_aplicados, fecha_inicio: contrato.fecha_inicio_contrato, fecha_fin: contrato.fecha_fin_contrato },
+    periodo,
+  )
   if (dias !== null) {
     plazoTexto = `${numeroALetras(dias)} DÍAS (${dias})`
   } else if (contrato.plazo_meses) {

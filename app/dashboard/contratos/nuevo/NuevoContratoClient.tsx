@@ -9,7 +9,8 @@ import SelectorSupervisor from '@/components/SelectorSupervisor'
 import type { UsuarioSelect } from '@/services/admin'
 import { numerosALetras } from '@/lib/numero-letras'
 import { diasDelPlazo } from '@/lib/plazo-contrato'
-import PlazoCalculado from '@/components/PlazoCalculado'
+import CampoPlazo from '@/components/CampoPlazo'
+import { usePlazo } from '@/lib/use-plazo'
 import { crearContratoConContratista } from '@/app/actions/contratos'
 
 interface ExcelData {
@@ -101,11 +102,12 @@ export default function NuevoContratoPage({
     }
   }, [form.valor_mensual])
 
-  // ── El plazo sale de las fechas ─────────────────────────────
-  // No se escribe ni se corrige: contando el primer y el último día (lib/plazo-contrato.ts). El servidor lo vuelve a
-  // calcular al guardar, así que esto es solo para mostrarlo.
+  // ── El plazo se escribe; las fechas lo sugieren ─────────────
+  // Lo que dicen las fechas (primer y último día contados) llena el campo mientras nadie lo toque; si el contrato dice otra
+  // cosa se escribe y manda, y la pantalla avisa la diferencia sin impedir guardar (lib/plazo-contrato.ts).
   const plazoDias = useMemo(() => diasDelPlazo(form.fecha_inicio, form.fecha_fin), [form.fecha_inicio, form.fecha_fin])
   const fechasAlReves = !!form.fecha_inicio && !!form.fecha_fin && plazoDias === null
+  const plazo = usePlazo(plazoDias)
 
   // ── Lookup contract data from Excel staging when numero changes ─
   const lookupExcel = useCallback(async (numero: string) => {
@@ -155,12 +157,14 @@ export default function NuevoContratoPage({
         crp: excel.crp || f.crp,
         secop_url: (excel as any).secop_url || f.secop_url,
       }))
+      // El plazo del Excel es lo que dice el contrato: se escribe, y si no cuadra con las fechas la pantalla lo avisa.
+      if (excel.plazo_dias) plazo.fijar(excel.plazo_dias)
       setExcelEncontrado(true)
     } catch {
       setExcelEncontrado(false)
     }
     setBuscandoExcel(false)
-  }, [dependencias, usuarios])
+  }, [dependencias, usuarios, plazo.fijar])
 
   // Debounced lookup when numero changes (only after dropdowns are loaded)
   useEffect(() => {
@@ -204,6 +208,10 @@ export default function NuevoContratoPage({
       toast.error(fechasAlReves ? 'La fecha de terminación es anterior a la de inicio' : 'Escribe la fecha de inicio y la de terminación')
       return
     }
+    if (plazo.invalido || plazo.efectivo === null) {
+      toast.error('El plazo debe ser un número entero de días, entre 1 y 3.650')
+      return
+    }
 
     setGuardando(true)
 
@@ -235,6 +243,7 @@ export default function NuevoContratoPage({
         valor_mensual: parseFloat(form.valor_mensual) || 0,
         valor_letras_total: form.valor_letras_total,
         valor_letras_mensual: form.valor_letras_mensual,
+        plazo_dias: plazo.efectivo,
         fecha_inicio: form.fecha_inicio,
         fecha_fin: form.fecha_fin,
         cdp: form.cdp || null,
@@ -540,10 +549,10 @@ export default function NuevoContratoPage({
               </label>
               <input id="fecha_fin" name="fecha_fin" type="date" value={form.fecha_fin} onChange={handleChange} required
                 min={form.fecha_inicio || undefined} aria-invalid={fechasAlReves || undefined}
-                aria-describedby="plazo-calculado"
+                aria-describedby="plazo-ayuda"
                 className={fechasAlReves ? `${inputClass} border-red-300 bg-red-50` : excelEncontrado && form.fecha_fin ? autoClass : inputClass} />
             </div>
-            <PlazoCalculado dias={plazoDias} fechasAlReves={fechasAlReves} />
+            <CampoPlazo plazo={plazo} porFechas={plazoDias} fechasAlReves={fechasAlReves} clase={inputClass} />
           </div>
         </div>
 

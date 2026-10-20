@@ -227,14 +227,15 @@ function useDebounced<T>(value: T, ms = 300): T {
 type FiltroVigencia = 'todos' | 'vigentes' | 'vencidos'
 
 /**
- * Los colores pastel que distinguen un contrato vigente de uno vencido en «Mis contratos» (decisión de Felipe,
- * 20-oct-2026: azul y durazno). El punto del filtro es el mismo color: el filtro hace de leyenda.
+ * Los colores pastel que distinguen un contrato vigente de uno finalizado en «Mis contratos» (decisión de Felipe,
+ * 20-oct-2026: verde y durazno). El punto del filtro es el mismo color: el filtro hace de leyenda. El verde es el mismo del
+ * estado «Vigente» de la ficha del contrato (lib/estado-contrato.ts).
  */
 const TONO = {
   vigente: {
-    tarjeta: 'bg-[#EEF4FF] border-[#C9DBF8] hover:border-[#9FBDEB]',
-    insignia: 'bg-[#D9E7FD] text-[#1D3F7A]',
-    punto: 'bg-[#7FA8E8]',
+    tarjeta: 'bg-[#ECFDF5] border-[#A7F3D0] hover:border-[#6EE7B7]',
+    insignia: 'bg-[#D1FAE5] text-[#065F46]',
+    punto: 'bg-[#10B981]',
   },
   vencido: {
     tarjeta: 'bg-[#FFF3EB] border-[#F6D3BE] hover:border-[#EBB38F]',
@@ -245,7 +246,7 @@ const TONO = {
 
 /** El orden y las palabras son los que pidió Felipe. */
 const OPCIONES_CONTRATISTA: { id: FiltroVigencia; label: string; punto: string | null }[] = [
-  { id: 'vencidos', label: 'Contratos vencidos', punto: TONO.vencido.punto },
+  { id: 'vencidos', label: 'Contratos finalizados', punto: TONO.vencido.punto },
   { id: 'todos', label: 'Todos los contratos', punto: null },
   { id: 'vigentes', label: 'Contratos vigentes', punto: TONO.vigente.punto },
 ]
@@ -609,7 +610,7 @@ export default function ContratosPage() {
                   onClick={() => setFiltroVig(v)}
                   className={`px-3 py-2 transition-colors ${filtroVigencia === v ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
-                  {v === 'todos' ? 'Todos' : v === 'vigentes' ? 'Vigentes' : 'Vencidos'}
+                  {v === 'todos' ? 'Todos' : v === 'vigentes' ? 'Vigentes' : 'Finalizados'}
                 </button>
               ))}
             </div>
@@ -702,11 +703,11 @@ export default function ContratosPage() {
             <Icono glifo={Iconos.navegacion.contratos} tamano="lg" />
           </div>
           <p className="text-sm font-medium text-gray-700">
-            {filtroVigencia === 'vigentes' ? 'No tienes contratos vigentes' : 'No tienes contratos vencidos'}
+            {filtroVigencia === 'vigentes' ? 'No tienes contratos vigentes' : 'No tienes contratos finalizados'}
           </p>
           <p className="text-xs text-gray-400 mt-1">
             {filtroVigencia === 'vigentes'
-              ? totalVencidos === 1 ? 'Tu contrato anterior está en «Contratos vencidos».' : `Tus ${totalVencidos} contratos anteriores están en «Contratos vencidos».`
+              ? totalVencidos === 1 ? 'Tu contrato anterior está en «Contratos finalizados».' : `Tus ${totalVencidos} contratos anteriores están en «Contratos finalizados».`
               : 'Todos tus contratos están vigentes.'}
           </p>
           <button
@@ -715,7 +716,7 @@ export default function ContratosPage() {
             className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${filtroVigencia === 'vigentes' ? TONO.vencido.punto : TONO.vigente.punto}`} />
-            {filtroVigencia === 'vigentes' ? 'Ver contratos vencidos' : 'Ver contratos vigentes'}
+            {filtroVigencia === 'vigentes' ? 'Ver contratos finalizados' : 'Ver contratos vigentes'}
           </button>
         </div>
       ) : visibles.length === 0 ? (
@@ -745,9 +746,9 @@ export default function ContratosPage() {
                 const incompleto = faltantes.length > 0
                 const vigencia = vigenciaDe(contrato, hoy)
                 const vencido = vigencia === 'vencido'
-                // Un contrato cerrado antes de tiempo dice cómo se cerró (Terminado, Liquidado, Cedido), no «Vencido».
+                // Un contrato cerrado antes de tiempo dice cómo se cerró (Terminado, Liquidado, Cedido), no «Finalizado».
                 const cerrado = !!contrato.estado && ['terminado', 'liquidado', 'cedido'].includes(contrato.estado)
-                const rotuloVigencia = cerrado ? metaEstado(contrato.estado).label : vencido ? 'Vencido' : 'Vigente'
+                const rotuloVigencia = cerrado ? metaEstado(contrato.estado).label : vencido ? 'Finalizado' : 'Vigente'
                 const atencion = esSupervision
                   ? calcularAtencion(contrato)
                   : { porRevisar: 0, atrasados: 0, total: 0 }
@@ -794,7 +795,10 @@ export default function ContratosPage() {
                               )}
                               {/* El color no lo dice solo: la insignia lo dice con palabras. */}
                               {vistaContratista ? (
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TONO[vigencia].insignia}`}>
+                                // «Vigente» lleva un brillo que la cruza una vez al aparecer la tarjeta y luego queda quieta
+                                // (app/globals.css, `insignia-brillo`; sin movimiento si el sistema pide reducirlo).
+                                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TONO[vigencia].insignia} ${vigencia === 'vigente' ? 'insignia-brillo inline-flex items-center gap-1.5' : ''}`}>
+                                  {vigencia === 'vigente' && <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONO.vigente.punto}`} />}
                                   {rotuloVigencia}
                                 </span>
                               ) : vencido && (

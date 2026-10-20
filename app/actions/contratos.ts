@@ -19,9 +19,22 @@ import { enviarNotificacion } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
 import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
-import { diasDelPlazo, mesesDelPlazo } from '@/lib/plazo-contrato'
+import { MAX_PLAZO_DIAS, diasDelPlazo, mesesDelPlazo, plazoValido } from '@/lib/plazo-contrato'
 
 const ERROR_DE_FECHAS = 'La fecha de terminación no puede ser anterior a la de inicio. Revisa las dos fechas.'
+const ERROR_DE_PLAZO = `El plazo debe ser un número entero de días, entre 1 y ${MAX_PLAZO_DIAS.toLocaleString('es-CO')}.`
+
+/**
+ * El plazo que se guarda: el que escribió quien registra el contrato, que es lo que dice el contrato firmado, o —si no
+ * escribió ninguno— lo que dan las fechas (lib/plazo-contrato.ts). Un plazo escrito que no es un plazo es un error.
+ */
+function plazoAGuardar(escrito: unknown, inicio: string, fin: string): { plazo: number } | { error: string } {
+  const porFechas = diasDelPlazo(inicio, fin)
+  if (porFechas === null) return { error: ERROR_DE_FECHAS }
+  if (escrito === undefined || escrito === null || escrito === '') return { plazo: porFechas }
+  const plazo = plazoValido(escrito)
+  return plazo === null ? { error: ERROR_DE_PLAZO } : { plazo }
+}
 
 async function requireAdminId(): Promise<string | null> {
   const supabase = await createServerSupabaseClient()
@@ -48,6 +61,8 @@ export type CrearContratoInput = {
   valor_mensual: number
   valor_letras_total: string
   valor_letras_mensual: string
+  /** El plazo escrito (lo que dice el contrato). Si no viene, se toma de las fechas. */
+  plazo_dias?: number | null
   fecha_inicio: string
   fecha_fin: string
   cdp: string | null
@@ -69,9 +84,9 @@ export async function crearContrato(
     if (!input.contratista_id) return { error: 'Selecciona el contratista' }
     if (!input.supervisor_id) return { error: 'Selecciona el supervisor' }
     if (!input.fecha_inicio || !input.fecha_fin) return { error: 'Las fechas son obligatorias' }
-    // El plazo no se recibe: sale de las fechas (lib/plazo-contrato.ts).
-    const plazoDias = diasDelPlazo(input.fecha_inicio, input.fecha_fin)
-    if (plazoDias === null) return { error: ERROR_DE_FECHAS }
+    const plazo = plazoAGuardar(input.plazo_dias, input.fecha_inicio, input.fecha_fin)
+    if ('error' in plazo) return { error: plazo.error }
+    const plazoDias = plazo.plazo
     if (!Number.isFinite(input.valor_total) || input.valor_total <= 0) {
       return { error: 'El valor total debe ser mayor a 0' }
     }
@@ -163,11 +178,11 @@ export async function crearContratoConContratista(
     const { data: muni } = await adminClient.from('municipios').select('id').limit(1).single()
     if (!muni) return { error: 'No se encontró el municipio configurado' }
 
-    // El plazo no se recibe: sale de las fechas (lib/plazo-contrato.ts). Se comprueba antes de crear la cuenta del
-    // contratista, para no crearla y borrarla por un error de fechas.
+    // Se comprueba antes de crear la cuenta del contratista, para no crearla y borrarla por un error de fechas o de plazo.
     if (!input.fecha_inicio || !input.fecha_fin) return { error: 'Las fechas son obligatorias' }
-    const plazoDias = diasDelPlazo(input.fecha_inicio, input.fecha_fin)
-    if (plazoDias === null) return { error: ERROR_DE_FECHAS }
+    const plazo = plazoAGuardar(input.plazo_dias, input.fecha_inicio, input.fecha_fin)
+    if ('error' in plazo) return { error: plazo.error }
+    const plazoDias = plazo.plazo
 
     // ── Paso 1: resolver contratista_id (crear si es nuevo) ──────
     let contratistaId = input.contratista_id?.trim() || ''
@@ -467,11 +482,14 @@ export async function actualizarContrato(
     // Se rechaza en bloque en vez de ignorar en silencio: si el formulario
     // envía un campo bloqueado es un fallo, y guardar "casi todo" dejaría al
     // usuario creyendo que su corrección quedó registrada.
-    // El plazo no se edita: sigue a las fechas. Si alguna cambia, se recalcula aquí; si no, un plazo que llegue (de una
-    // pantalla vieja) se ignora, para que nunca contradiga las fechas.
-    cambios = Object.fromEntries(
-      Object.entries(cambios).filter(([campo]) => campo !== 'plazo_dias' && campo !== 'plazo_meses'),
-    ) as typeof cambios
+    // El plazo se escribe (lib/plazo-contrato.ts): llega de la pantalla y se valida; los meses se derivan de él, no se aceptan.
+    cambios = Object.fromEntries(Object.entries(cambios).filter(([campo]) => campo !== 'plazo_meses')) as typeof cambios
+    if ('plazo_dias' in cambios) {
+      const plazo = plazoValido(cambios.plazo_dias)
+      if (plazo === null) return { error: ERROR_DE_PLAZO }
+      cambios = { ...cambios, plazo_dias: plazo, plazo_meses: mesesDelPlazo(plazo) }
+    }
+    // Las fechas siguen mandando la vigencia: no pueden quedar al revés.
     const fechaCambia = (c: 'fecha_inicio' | 'fecha_fin') =>
       c in cambios && String(cambios[c] ?? '') !== String((actual as Record<string, unknown>)[c] ?? '')
     if (fechaCambia('fecha_inicio') || fechaCambia('fecha_fin')) {
@@ -480,7 +498,6 @@ export async function actualizarContrato(
         String(cambios.fecha_fin ?? actual.fecha_fin ?? ''),
       )
       if (dias === null) return { error: ERROR_DE_FECHAS }
-      cambios = { ...cambios, plazo_dias: dias, plazo_meses: mesesDelPlazo(dias) }
     }
 
     const rechazados = Object.keys(cambios).filter(c => !permitidos.has(c))

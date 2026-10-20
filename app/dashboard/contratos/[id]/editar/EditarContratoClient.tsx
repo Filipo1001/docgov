@@ -21,7 +21,8 @@ import EstadoContratoPanel from './EstadoContratoPanel'
 import type { EstadoContrato } from '@/lib/estado-contrato'
 import { numerosALetras } from '@/lib/numero-letras'
 import { diasDelPlazo } from '@/lib/plazo-contrato'
-import PlazoCalculado from '@/components/PlazoCalculado'
+import CampoPlazo from '@/components/CampoPlazo'
+import { usePlazo } from '@/lib/use-plazo'
 import {
   actualizarContrato,
   type CampoContrato, type CamposBloqueados, type CambioContrato,
@@ -43,13 +44,15 @@ const inputBloqueado =
   'w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-400 cursor-not-allowed'
 
 export default function EditarContratoClient({
-  contrato, dependencias, supervisores, bloqueo, historial,
+  contrato, dependencias, supervisores, bloqueo, historial, diasOtrosi = 0,
 }: {
   contrato: Record<string, any>
   dependencias: { id: string; nombre: string }[]
   supervisores: UsuarioSelect[]
   bloqueo: CamposBloqueados
   historial: CambioContrato[]
+  /** Días de plazo de los otrosíes ya aplicados: se suman al plazo escrito al compararlo con las fechas. */
+  diasOtrosi?: number
 }) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
@@ -70,9 +73,14 @@ export default function EditarContratoClient({
     secop_url: contrato.secop_url ?? '',
   })
 
-  // El plazo sigue a las fechas: no se escribe (lib/plazo-contrato.ts). El servidor lo recalcula si una fecha cambia.
+  // El plazo se escribe; las fechas lo sugieren (lib/plazo-contrato.ts). Si el plazo guardado no coincide con las fechas, se
+  // conserva tal cual —es lo que dice el contrato— y la pantalla avisa la diferencia.
   const plazoDias = useMemo(() => diasDelPlazo(f.fecha_inicio, f.fecha_fin), [f.fecha_inicio, f.fecha_fin])
   const fechasAlReves = !!f.fecha_inicio && !!f.fecha_fin && plazoDias === null
+  const plazo = usePlazo(
+    plazoDias,
+    contrato.plazo_dias && contrato.plazo_dias + diasOtrosi !== diasDelPlazo(contrato.fecha_inicio, contrato.fecha_fin) ? String(contrato.plazo_dias) : null,
+  )
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF(prev => ({ ...prev, [k]: e.target.value }))
@@ -80,6 +88,7 @@ export default function EditarContratoClient({
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
     if (!bloqueo.economicos && fechasAlReves) { toast.error('La fecha de terminación es anterior a la de inicio'); return }
+    if (!bloqueo.economicos && (plazo.invalido || plazo.efectivo === null)) { toast.error('El plazo debe ser un número entero de días, entre 1 y 3.650'); return }
     setGuardando(true)
 
     const cambios: Partial<Record<CampoContrato, string | number | null>> = {
@@ -99,6 +108,7 @@ export default function EditarContratoClient({
     if (!bloqueo.economicos) {
       cambios.valor_total = Number(f.valor_total)
       cambios.valor_mensual = Number(f.valor_mensual)
+      cambios.plazo_dias = plazo.efectivo
       cambios.fecha_inicio = f.fecha_inicio
       cambios.fecha_fin = f.fecha_fin
       // Las letras se derivan del número: dejarlas desactualizadas produciría
@@ -193,10 +203,10 @@ export default function EditarContratoClient({
             </Campo>
             <Campo etiqueta="Fecha de terminación">
               <input type="date" value={f.fecha_fin} onChange={set('fecha_fin')} disabled={bloqueo.economicos}
-                min={f.fecha_inicio || undefined} aria-describedby="plazo-calculado"
+                min={f.fecha_inicio || undefined} aria-describedby="plazo-ayuda"
                 className={bloqueo.economicos ? inputBloqueado : fechasAlReves ? `${input} border-red-300 bg-red-50` : input} />
             </Campo>
-            <PlazoCalculado dias={plazoDias} fechasAlReves={fechasAlReves} />
+            <CampoPlazo plazo={plazo} porFechas={plazoDias} fechasAlReves={fechasAlReves} deshabilitado={bloqueo.economicos} diasOtrosi={diasOtrosi} clase={input} claseDeshabilitado={inputBloqueado} />
           </div>
         </Seccion>
 

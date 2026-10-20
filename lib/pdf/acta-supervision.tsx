@@ -14,7 +14,7 @@ import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-comp
 import { calcularBaseCotizacionSS } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
 import { corregirDePesos, numeroALetras, pesosEnLetras } from '@/lib/numero-letras'
-import { cuentaUltimoDia, diasDelPlazo } from '@/lib/plazo-contrato'
+import { plazoParaDocumento } from '@/lib/plazo-contrato'
 
 // Disable automatic hyphenation — prevents words being split mid-line
 Font.registerHyphenationCallback(word => [word])
@@ -430,9 +430,12 @@ export function ActaSupervisionPDF({ data }: { data: PDFData }) {
   const mostrarFirmaSupervisor = ESTADOS_FIRMA_SUPERVISOR.has(periodo.estado) && !!contrato.supervisor.firma_url
 
   // Plazo en días
-  // El plazo sale de las fechas con la cuenta de todo el sistema (lib/plazo-contrato.ts).
+  // El plazo del contrato (lib/plazo-contrato.ts): el escrito más los otrosíes aplicados; a lo ya emitido, su cuenta de entonces.
   let plazoTexto = '—'
-  const dias = diasDelPlazo(contrato.fecha_inicio_contrato, contrato.fecha_fin_contrato, { contarUltimoDia: cuentaUltimoDia(periodo) })
+  const dias = plazoParaDocumento(
+    { plazo_dias: contrato.plazo_dias, dias_otrosi_aplicados: contrato.dias_otrosi_aplicados, fecha_inicio: contrato.fecha_inicio_contrato, fecha_fin: contrato.fecha_fin_contrato },
+    periodo,
+  )
   if (dias !== null) {
     plazoTexto = `${numeroALetras(dias)} (${dias}) DÍAS`
   } else if (contrato.plazo_meses) {
