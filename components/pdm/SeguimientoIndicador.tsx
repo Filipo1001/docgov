@@ -18,8 +18,10 @@
  *   · Validar (aprobar o devolver): el administrador y la secretaría de la dependencia, nunca sobre
  *     un reporte propio. El servidor dice a cada reporte si quien mira puede validarlo. Devolver un reporte que ya
  *     estaba APROBADO se llama «reabrirlo» (deja de contar hasta que se corrija y se apruebe de nuevo) y así se dice.
+ *   · Reabrir un aprobado es solo del administrador (migración 069): la secretaría aprueba y devuelve lo pendiente.
  *   · Anular y restaurar: solo el administrador (migración 068). Un reporte equivocado que no tiene arreglo deja de contar
- *     y de verse —solo el administrador y Control Interno lo siguen viendo, tachado, con quién lo anuló y por qué—.
+ *     y de verse —solo el administrador, Control Interno y quien lo reportó lo siguen viendo, tachado, con quién lo anuló
+ *     y por qué; a quien lo reportó se le dice «Tu reporte fue anulado»—.
  *   · Comentar: cualquiera con acceso al módulo.
  */
 
@@ -397,7 +399,12 @@ function Anulacion({ reporte, modo, acciones, onHecho }: {
   )
 }
 
-function Version({ r, acciones, onHecho, nueva }: { r: ReporteDetalle; acciones: AccionesSeguimiento; onHecho: (mensaje: string) => void; nueva: boolean }) {
+function Version({ r, acciones, onHecho, nueva, yoId }: {
+  r: ReporteDetalle; acciones: AccionesSeguimiento; onHecho: (mensaje: string) => void; nueva: boolean
+  /** Quien mira: si el reporte es suyo, la nota de anulación se lo dice a él («Tu reporte fue anulado»). */
+  yoId: string
+}) {
+  const esSuyo = r.autorId !== null && r.autorId === yoId
   // Lo anulado se ve TACHADO (solo lo ven el administrador y Control Interno), sin atenuarlo todo: la nota de quién lo anuló
   // y por qué tiene que leerse con el mismo contraste que el resto.
   const tachado = r.anulado ? 'text-[#667085] line-through decoration-[#98A2B3]' : ''
@@ -428,7 +435,7 @@ function Version({ r, acciones, onHecho, nueva }: { r: ReporteDetalle; acciones:
       ))}
       {r.anulaciones.map((a, k) => (
         <p key={`anulacion-${k}`} className={`mt-2 text-xs leading-snug ${a.accion === 'anular' ? 'text-[#912018]' : 'text-[#1F5D43]'}`}>
-          <b>{a.accion === 'anular' ? 'Anulado' : 'Restaurado'}</b> por {nombrePropio(a.por)} · {fechaHoraBogota(a.cuando)}: «{a.motivo}»
+          <b>{a.accion === 'anular' ? (esSuyo ? 'Tu reporte fue anulado' : 'Anulado') : (esSuyo ? 'Tu reporte fue restaurado' : 'Restaurado')}</b> por {nombrePropio(a.por)} · {fechaHoraBogota(a.cuando)}: «{a.motivo}»
         </p>
       ))}
       {/* La constancia: el código y el QR con que cualquiera comprueba, sin sesión, el estado vivo de ESTA versión. */}
@@ -510,7 +517,7 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
           <>
             <EvolucionDelAnio puntos={serie} meta={indicador.meta} anio={indicador.anio} />
             <ol className="space-y-0">
-              {delAnio.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={recargar} nueva={nuevas.has(r.id)} />)}
+              {delAnio.map(r => <Version key={r.id} r={r} acciones={acciones} onHecho={recargar} nueva={nuevas.has(r.id)} yoId={yoId} />)}
             </ol>
           </>
         )}

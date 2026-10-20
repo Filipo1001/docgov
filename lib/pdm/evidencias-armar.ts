@@ -1,3 +1,4 @@
+import { anulacionesPorReporte, idsAnulados, type FilaAnulacion } from './anulaciones'
 import { nombrePropio } from './personas'
 import type { Indicador } from './plan'
 import { anioDeParametro, type EstadoReporte, type ReporteAnio } from './seguimiento'
@@ -290,6 +291,19 @@ export interface ArchivoDeIndicador {
   autor: string
   /** Otros indicadores del mismo año a los que sirve este mismo archivo. */
   tambien: IndicadorRelacionado[]
+  /**
+   * Si el reporte de este archivo está ANULADO (migración 068): quién lo anuló, cuándo y por qué. Solo hay archivos así para
+   * quien la base deja ver lo anulado (el administrador, Control Interno y quien lo reportó). `null` en los que cuentan.
+   */
+  anulacion: AnulacionDeArchivo | null
+}
+
+/** Cómo se anuló el reporte de un archivo. El motivo y el nombre vacíos son posibles si la lectura del registro falló. */
+export interface AnulacionDeArchivo {
+  por: string
+  /** ISO. */
+  cuando: string
+  motivo: string
 }
 
 /** Una fila lista para pintar: un indicador, un año, y lo que lo respalda. */
@@ -310,6 +324,11 @@ export interface FilaIndicador {
   validador: string | null
   /** Los archivos vigentes del año, del más reciente al más antiguo. Uno solo: se muestra el archivo; varios: una carpeta. */
   archivos: ArchivoDeIndicador[]
+  /**
+   * Los archivos de reportes ANULADOS del año (tachados en pantalla), del más reciente al más antiguo. No cuentan para nada:
+   * ni para el estado ni para los recuentos. Vacío para quien no ve lo anulado.
+   */
+  anulados: ArchivoDeIndicador[]
 }
 
 /**
@@ -371,24 +390,84 @@ export function contarPorEstado(
 /** Los estados que se ofrecen como chips, de lo que más urge a lo que menos. */
 export { ESTADOS_POR_URGENCIA }
 
-/** Arma las filas de una página: cada indicador con SUS archivos de ese año (los vigentes). */
+/**
+ * Los indicadores que NO tienen un reporte vigente con archivos en el año pero sí archivos de un reporte ANULADO que quien
+ * pregunta puede ver (`conAnulados`: los indicadores con archivos anulados, según la base). Se muestran al final, solo sin
+ * filtro de estado (no tienen ninguno), con la secretaría y la búsqueda puestas. Salen por código.
+ */
+export function indicadoresSoloAnulados(
+  lista: Indicador[],
+  f: Pick<FiltroEvidencias, 'anio' | 'dependencia'>,
+  conAnulados: ReadonlySet<string>,
+  ids: ReadonlySet<string> | null,
+): Indicador[] {
+  const conVigente = new Set(conEvidencia(lista, f, null).map(x => x.i.uuid))
+  return lista
+    .filter(i => conAnulados.has(i.uuid) && !conVigente.has(i.uuid)
+      && (f.dependencia === null || i.dependencia === f.dependencia)
+      && (ids === null || ids.has(i.uuid)))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }) || a.id - b.id)
+}
+
+/**
+ * De las filas de `pdm_anulaciones` de los reportes anulados: por reporte, la ÚLTIMA anulación (quién, cuándo, por qué).
+ * Un reporte restaurado después no figura. Pura: el servidor le pasa lo que la base le entregó.
+ */
+export function anulacionDeArchivos(filas: readonly FilaAnulacion[]): Map<string, AnulacionDeArchivo> {
+  const anulados = idsAnulados(filas)
+  const res = new Map<string, AnulacionDeArchivo>()
+  for (const [reporte, historia] of anulacionesPorReporte(filas)) {
+    if (!anulados.has(reporte)) continue
+    const ultima = [...historia].reverse().find(h => h.accion === 'anular')
+    if (ultima) res.set(reporte, { por: nombrePropio(ultima.por), cuando: ultima.cuando, motivo: ultima.motivo })
+  }
+  return res
+}
+
+/**
+ * Arma las filas de una página: cada indicador con SUS archivos de ese año (los vigentes) y, aparte, los de reportes
+ * anulados. `anulaciones` dice cómo se anuló cada reporte (por id de reporte); sin dato, el archivo igual se marca anulado.
+ */
 export function armarFilasIndicador(
   pagina: Indicador[],
   anio: number,
   archivos: FilaDeVista[],
   relaciones: ReadonlyMap<string, IndicadorRelacionado[]> = new Map(),
+  anulaciones: ReadonlyMap<string, AnulacionDeArchivo> = new Map(),
 ): FilaIndicador[] {
   const porIndicador = new Map<string, FilaDeVista[]>()
+  const anuladosPorIndicador = new Map<string, FilaDeVista[]>()
   for (const a of archivos) {
-    if (a.anio !== anio || a.reemplazada || a.anulada) continue
-    const l = porIndicador.get(a.indicador_id)
-    if (l) l.push(a); else porIndicador.set(a.indicador_id, [a])
+    // Las versiones reemplazadas por una corrección son historia (vigentes o anuladas): solo cuenta la última de cada cadena.
+    if (a.anio !== anio || a.reemplazada) continue
+    const destino = a.anulada ? anuladosPorIndicador : porIndicador
+    const l = destino.get(a.indicador_id)
+    if (l) l.push(a); else destino.set(a.indicador_id, [a])
   }
+  const masRecienteQue = (a: FilaDeVista, b: FilaDeVista) =>
+    (a.reportado_en < b.reportado_en ? 1 : a.reportado_en > b.reportado_en ? -1 : a.nombre.localeCompare(b.nombre, 'es'))
+  const aArchivo = (a: FilaDeVista): ArchivoDeIndicador => ({
+    id: a.id,
+    reporteId: a.reporte_id,
+    nombre: a.nombre,
+    tipo: a.tipo,
+    categoria: categoriaDeMime(a.tipo),
+    bytes: numero(a.bytes) ?? 0,
+    conservada: a.conservada === true,
+    sha256: a.sha256 ?? null,
+    huellaCalculadaEn: a.huella_calculada_en ?? null,
+    estado: ESTADOS.find(e => e === a.estado_reporte) ?? null,
+    observacion: a.observacion && a.observacion.trim() !== '' ? a.observacion : null,
+    reportadoEn: a.reportado_en,
+    autor: nombrePropio(a.autor_nombre),
+    // Lo anulado no «también respalda» a nada: es historia.
+    tambien: a.anulada ? [] : relaciones.get(a.id) ?? [],
+    anulacion: a.anulada ? anulaciones.get(a.reporte_id) ?? { por: '', cuando: '', motivo: '' } : null,
+  })
   return pagina.map(i => {
     const r = i.anios.find(a => a.anio === anio)?.enAnio?.reporte ?? null
-    const propios = (porIndicador.get(i.uuid) ?? [])
-      .slice()
-      .sort((a, b) => (a.reportado_en < b.reportado_en ? 1 : a.reportado_en > b.reportado_en ? -1 : a.nombre.localeCompare(b.nombre, 'es')))
+    const propios = (porIndicador.get(i.uuid) ?? []).slice().sort(masRecienteQue)
+    const anulados = (anuladosPorIndicador.get(i.uuid) ?? []).slice().sort(masRecienteQue)
     return {
       indicadorFila: i.id,
       codigo: i.codigo,
@@ -400,22 +479,8 @@ export function armarFilasIndicador(
       autor: r ? nombrePropio(r.autorNombre) : '',
       reportadoEn: r?.creado ?? '',
       validador: r?.validadorNombre && r.validadorNombre.trim() !== '' ? nombrePropio(r.validadorNombre) : null,
-      archivos: propios.map(a => ({
-        id: a.id,
-        reporteId: a.reporte_id,
-        nombre: a.nombre,
-        tipo: a.tipo,
-        categoria: categoriaDeMime(a.tipo),
-        bytes: numero(a.bytes) ?? 0,
-        conservada: a.conservada === true,
-        sha256: a.sha256 ?? null,
-        huellaCalculadaEn: a.huella_calculada_en ?? null,
-        estado: ESTADOS.find(e => e === a.estado_reporte) ?? null,
-        observacion: a.observacion && a.observacion.trim() !== '' ? a.observacion : null,
-        reportadoEn: a.reportado_en,
-        autor: nombrePropio(a.autor_nombre),
-        tambien: relaciones.get(a.id) ?? [],
-      })),
+      archivos: propios.map(aArchivo),
+      anulados: anulados.map(aArchivo),
     }
   })
 }

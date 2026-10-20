@@ -416,9 +416,6 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
     if (rep.error || com.error || !rep.data || !com.data) return falla(GENERICO)
 
     const nivel = s.acceso.nivel
-    // Lo anulado solo lo ve el administrador y Control Interno: la base ni entrega los reportes anulados a nadie más, y
-    // las filas de `pdm_anulaciones` solo se piden (y solo se entregan) a ellos.
-    const veAnulados = nivel === 'admin' || nivel === 'consulta'
 
     const ids = rep.data.map(r => r.id as string)
     let evidencias: FilaEvidencia[] = []
@@ -428,9 +425,9 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
       const [evi, val, anu] = await Promise.all([
         s.supabase.from('pdm_evidencias').select('id, reporte_id, nombre, tipo, bytes, copia_de, sha256, huella_calculada_en').in('reporte_id', ids),
         s.supabase.from('pdm_validaciones').select('reporte_id, estado, comentario, validador_nombre, created_at, observaciones').in('reporte_id', ids),
-        veAnulados
-          ? s.supabase.from('pdm_anulaciones').select('reporte_id, accion, motivo, actor_nombre, created_at').in('reporte_id', ids)
-          : Promise.resolve({ data: [] as FilaAnulacion[], error: null }),
+        // Lo anulado lo ven el administrador, Control Interno y quien lo reportó: se piden las anulaciones de todos y la base
+        // entrega solo las que cada quien puede ver (para el resto no llega ninguna, ni tampoco el reporte anulado).
+        s.supabase.from('pdm_anulaciones').select('reporte_id, accion, motivo, actor_nombre, created_at').in('reporte_id', ids),
       ])
       if (evi.error || val.error || anu.error || !evi.data || !val.data || !anu.data) return falla(GENERICO)
       evidencias = evi.data as FilaEvidencia[]

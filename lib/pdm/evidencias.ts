@@ -1,9 +1,11 @@
 import 'server-only'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { Indicador } from './plan'
+import type { FilaAnulacion } from './anulaciones'
 import {
-  SIN_CONTEO, aplicarBusqueda, armarFilasIndicador, contarPorEstado, indicadoresConEvidencia, nombresPedibles, rangoDePagina, relacionar,
-  type ConteoEstados, type FilaDeVista, type FilaIndicador, type FilaRelacionable, type FiltroEvidencias, type IndicadorRelacionado,
+  SIN_CONTEO, anulacionDeArchivos, aplicarBusqueda, armarFilasIndicador, contarPorEstado, indicadoresConEvidencia, indicadoresSoloAnulados,
+  nombresPedibles, rangoDePagina, relacionar,
+  type AnulacionDeArchivo, type ConteoEstados, type FilaDeVista, type FilaIndicador, type FilaRelacionable, type FiltroEvidencias, type IndicadorRelacionado,
 } from './evidencias-armar'
 
 /**
@@ -19,6 +21,12 @@ import {
  * archivo, en el indicador o en su código). Son solo identificadores, y se piden por tandas de 1.000 porque PostgREST
  * corta en silencio en ese número.
  *
+ * ── Lo anulado (migraciones 068 y 069) ───────────────────────────────────
+ *
+ * Los archivos de un reporte ANULADO no cuentan, pero quien puede verlos (el administrador, Control Interno y quien reportó;
+ * para el resto la base ni los entrega) los ve tachados, con quién los anuló y por qué. Salen dentro de la fila de su
+ * indicador; y los indicadores cuyo único reporte del año fue anulado salen al final de la lista, sin estado.
+ *
  * Si la lectura falla, se dice; no se inventa.
  */
 
@@ -31,6 +39,11 @@ export interface Evidencias {
   conteo: ConteoEstados
   /** La página que de verdad se trajo (si se pidió una que no existe, la última). */
   pagina: number
+  /**
+   * Cuántos indicadores del filtro no tienen reporte vigente con archivos pero sí archivos anulados que quien pregunta ve
+   * (con la secretaría y la búsqueda puestas, sin el filtro de estado). Cuentan en «Todos»; no tienen estado.
+   */
+  soloAnulados: number
 }
 
 const COLUMNAS =
@@ -39,7 +52,7 @@ const COLUMNAS =
 const COLUMNAS_RELACIONADAS =
   'id, indicador_id, indicador_fila, codigo, indicador, sector, dependencia, anio, estado_reporte, nombre, bytes, tipo'
 
-const FALLO: Evidencias = { ok: false, filas: [], total: 0, conteo: SIN_CONTEO, pagina: 1 }
+const FALLO: Evidencias = { ok: false, filas: [], total: 0, conteo: SIN_CONTEO, pagina: 1, soloAnulados: 0 }
 
 /** Tope de seguridad de la búsqueda por tandas: 20 tandas de 1.000 archivos coincidentes. */
 const MAX_TANDAS = 20
@@ -54,7 +67,7 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
       ids = new Set<string>()
       for (let t = 0; t < MAX_TANDAS; t++) {
         const r = await aplicarBusqueda(
-          supabase.from('pdm_evidencias_vista').select('id, indicador_id').eq('anio', f.anio).eq('reemplazada', false).eq('anulada', false),
+          supabase.from('pdm_evidencias_vista').select('id, indicador_id').eq('anio', f.anio).eq('reemplazada', false),
           f.q,
         ).order('id').range(t * 1000, t * 1000 + 999)
         if (r.error || !r.data) {
@@ -66,21 +79,40 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
       }
     }
 
-    // 2 · Los indicadores con evidencia en el año, filtrados y ordenados; se muestra una página.
-    const todos = indicadoresConEvidencia(indicadores, f, ids)
+    // 1b · Qué indicadores tienen archivos de reportes ANULADOS que quien pregunta puede ver (la base entrega solo esos).
+    //      Es un complemento: si esta lectura falla se sigue sin ellos y se deja constancia, no se esconde la pantalla.
+    const conAnulados = new Set<string>()
+    for (let t = 0; t < MAX_TANDAS; t++) {
+      const r = await supabase
+        .from('pdm_evidencias_vista')
+        .select('id, indicador_id')
+        .eq('anio', f.anio).eq('reemplazada', false).eq('anulada', true)
+        .order('id').range(t * 1000, t * 1000 + 999)
+      if (r.error || !r.data) {
+        console.error('[pdm/evidencias] anulados no leídos:', r.error?.message)
+        break
+      }
+      for (const x of r.data as { indicador_id: string }[]) conAnulados.add(x.indicador_id)
+      if (r.data.length < 1000) break
+    }
+
+    // 2 · Los indicadores con evidencia en el año, filtrados y ordenados; después, los que solo tienen archivos anulados.
+    //     Se muestra una página.
+    const vigentes = indicadoresConEvidencia(indicadores, f, ids)
+    const soloAnulados = indicadoresSoloAnulados(indicadores, f, conAnulados, ids)
+    const todos = f.estado === null ? [...vigentes, ...soloAnulados] : vigentes
     const conteo = contarPorEstado(indicadores, f, ids)
     const { desde, hasta, pagina } = rangoDePagina(f.pagina, todos.length)
     const deLaPagina = todos.slice(desde === 0 ? 0 : desde - 1, hasta)
-    if (deLaPagina.length === 0) return { ok: true, filas: [], total: todos.length, conteo, pagina }
+    if (deLaPagina.length === 0) return { ok: true, filas: [], total: todos.length, conteo, pagina, soloAnulados: soloAnulados.length }
 
-    // 3 · Los archivos vigentes de esos indicadores en ese año.
+    // 3 · Los archivos vigentes de esos indicadores en ese año, y los de reportes anulados que quien pregunta ve.
     const a = await supabase
       .from('pdm_evidencias_vista')
       .select(COLUMNAS)
       .in('indicador_id', deLaPagina.map(i => i.uuid))
       .eq('anio', f.anio)
       .eq('reemplazada', false)
-      .eq('anulada', false)
       .order('reportado_en', { ascending: false })
       .order('id')
       .limit(1000)
@@ -93,7 +125,7 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
     // 4 · Qué otros indicadores del mismo año respalda cada archivo. Si esta lectura falla, la lista sigue: solo faltan
     //     los «también respalda a…», que son un complemento y no justifican esconder los archivos.
     let relaciones = new Map<string, IndicadorRelacionado[]>()
-    const nombres = nombresPedibles(archivos)
+    const nombres = nombresPedibles(archivos.filter(x => !x.anulada))
     if (nombres.length > 0) {
       const otras = await supabase
         .from('pdm_evidencias_vista')
@@ -104,10 +136,25 @@ export async function cargarEvidencias(indicadores: Indicador[], f: FiltroEviden
         .eq('anulada', false)
         .limit(1000)
       if (otras.error) console.error('[pdm/evidencias] relaciones no leídas:', otras.error.message)
-      else relaciones = relacionar(archivos, (otras.data ?? []) as unknown as FilaRelacionable[])
+      else relaciones = relacionar(archivos.filter(x => !x.anulada), (otras.data ?? []) as unknown as FilaRelacionable[])
     }
 
-    return { ok: true, filas: armarFilasIndicador(deLaPagina, f.anio, archivos, relaciones), total: todos.length, conteo, pagina }
+    // 5 · Cómo se anuló cada reporte anulado (quién, cuándo, por qué). Otro complemento: sin él, el archivo sale igual tachado.
+    let anulaciones = new Map<string, AnulacionDeArchivo>()
+    const reportesAnulados = [...new Set(archivos.filter(x => x.anulada).map(x => x.reporte_id))]
+    if (reportesAnulados.length > 0) {
+      const an = await supabase
+        .from('pdm_anulaciones')
+        .select('reporte_id, accion, motivo, actor_nombre, created_at')
+        .in('reporte_id', reportesAnulados)
+      if (an.error) console.error('[pdm/evidencias] anulaciones no leídas:', an.error.message)
+      else anulaciones = anulacionDeArchivos((an.data ?? []) as unknown as FilaAnulacion[])
+    }
+
+    return {
+      ok: true, filas: armarFilasIndicador(deLaPagina, f.anio, archivos, relaciones, anulaciones),
+      total: todos.length, conteo, pagina, soloAnulados: soloAnulados.length,
+    }
   } catch (e) {
     console.error('[pdm/evidencias] excepción:', e)
     return FALLO

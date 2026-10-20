@@ -5,24 +5,25 @@
 --
 --   · Que anular un reporte lo saca de lo vigente y de lo validado, y que el reporte anterior vuelve a ser el vigente
 --     (el siguiente avance parte del valor anterior, no del anulado).
---   · Que lo anulado solo lo ven el administrador y Control Interno: ni quien lo reportó, ni la secretaría, ni sus
---     archivos, ni sus validaciones. Y que la tabla de anulaciones solo la leen ellos.
+--   · Que lo anulado lo ven el administrador, Control Interno y QUIEN LO REPORTÓ (con el motivo), pero no la secretaría
+--     ni nadie más: ni el reporte, ni sus archivos, ni sus validaciones. Y que a un reporte anulado no se le agregan archivos.
 --   · Que se anula lo MÁS RECIENTE (con otro vigente más nuevo, no), que un reporte y sus versiones se anulan y se
 --     restauran JUNTOS (de la más nueva a la primera / de la primera a la más nueva) y que una cadena nunca queda a medias.
 --   · Que no se valida lo anulado, que no se anula dos veces, que restaurar exige que el reporte anterior siga aprobado
 --     y que se puede anular, restaurar y volver a anular.
---   · Que reabrir un reporte aprobado (devolverlo) lo quita de lo validado y deja corregirlo.
+--   · Que reabrir un reporte aprobado (devolverlo) lo quita de lo validado y deja corregirlo, y que SOLO el administrador
+--     puede (la secretaría sigue aprobando y devolviendo lo pendiente).
 --   · Que solo el administrador anula y restaura, que el motivo es obligatorio (10 a 500 caracteres), y que la tabla solo
 --     crece (nadie la actualiza ni la borra, ni escribe a nombre de otro).
 --   · Que ninguna función ni vista de reportes se quedó sin saltar lo anulado.
 --
--- Cómo se corre: DESPUÉS de aplicar la 068, pegar el archivo entero en el editor SQL de Supabase (o por la herramienta de
+-- Cómo se corre: DESPUÉS de aplicar la 068 y la 069, pegar el archivo entero en el editor SQL de Supabase (o por la herramienta de
 -- la sesión). NO DEJA NADA ESCRITO, ni en producción: todo pasa dentro de un bloque que termina con un error a propósito,
 -- y Postgres deshace la transacción entera. EL MENSAJE DE ESE ERROR ES EL RESULTADO: «PDM-ANULAR: N comprobaciones,
 -- 0 fallas» y la lista. La última línea (1/0) es una red de seguridad por si el bloque terminara sin error.
 --
--- Para ensayar la migración ANTES de aplicarla: pegar primero la migración sin su `begin` ni su `commit`, y a
--- continuación este archivo. Todo queda en la misma transacción y se deshace.
+-- Para ensayar la migración 069 ANTES de aplicarla (con la 068 ya aplicada): pegar primero la 069 sin su `begin` ni su
+-- `commit`, y a continuación este archivo. Todo queda en la misma transacción y se deshace.
 --
 -- No lleva identificadores de personas: elige del propio contenido de la base a un administrador, una persona de una
 -- secretaría con indicadores (será su coordinadora) y dos personas activas más sin acceso (la que reporta y la de consulta).
@@ -120,7 +121,7 @@ language sql as $f$ select pg_temp.como(p_uid, format('select public.pdm_restaur
 do $$
 declare
   v_admin uuid; v_c uuid; v_r uuid; v_q uuid; v_dep uuid; v_i uuid; v_plan uuid; v_p uuid[];
-  r1 uuid; r2 uuid; r3 uuid; r4 uuid; r5 uuid; r6 uuid; a1 uuid; a2 uuid;
+  r1 uuid; r2 uuid; r3 uuid; r4 uuid; r5 uuid; r6 uuid; a1 uuid; a2 uuid; c1 uuid;
   v_msg text; v_x jsonb; v_otro uuid; v_mot constant text := 'Prueba automática de anular';
   v_resultado text; v_fallas int; v_total int;
 begin
@@ -186,19 +187,28 @@ begin
   -- Quién ve lo anulado
   perform pg_temp.chequear('el administrador ve el reporte anulado', pg_temp.n(v_admin, format('from public.pdm_reportes where id = %L', r2)) = 1);
   perform pg_temp.chequear('Control Interno ve el reporte anulado', pg_temp.n(v_q, format('from public.pdm_reportes where id = %L', r2)) = 1);
-  perform pg_temp.chequear('quien lo reportó ya no lo ve', pg_temp.n(v_r, format('from public.pdm_reportes where id = %L', r2)) = 0);
+  perform pg_temp.chequear('quien lo reportó SÍ lo ve (es suyo)', pg_temp.n(v_r, format('from public.pdm_reportes where id = %L', r2)) = 1);
   perform pg_temp.chequear('la secretaría tampoco', pg_temp.n(v_c, format('from public.pdm_reportes where id = %L', r2)) = 0);
-  perform pg_temp.chequear('quien lo reportó no ve sus archivos', pg_temp.n(v_r, format('from public.pdm_evidencias where reporte_id = %L', r2)) = 0);
+  perform pg_temp.chequear('quien lo reportó ve sus archivos', pg_temp.n(v_r, format('from public.pdm_evidencias where reporte_id = %L', r2)) = 1);
+  perform pg_temp.chequear('la secretaría no ve sus archivos', pg_temp.n(v_c, format('from public.pdm_evidencias where reporte_id = %L', r2)) = 0);
   perform pg_temp.chequear('el administrador sí ve sus archivos', pg_temp.n(v_admin, format('from public.pdm_evidencias where reporte_id = %L', r2)) = 1);
   perform pg_temp.chequear('el reporte anterior sigue a la vista de quien lo reportó', pg_temp.n(v_r, format('from public.pdm_reportes where id = %L', r1)) = 1);
   perform pg_temp.chequear('la vista de evidencias marca los archivos del reporte anulado (administrador)',
     pg_temp.n(v_admin, format('from public.pdm_evidencias_vista where reporte_id = %L and anulada', r2)) = 1
     and pg_temp.n(v_admin, format('from public.pdm_evidencias_vista where reporte_id = %L and not anulada', r1)) = 1);
-  perform pg_temp.chequear('…y quien lo reportó no los ve en la vista', pg_temp.n(v_r, format('from public.pdm_evidencias_vista where reporte_id = %L', r2)) = 0);
+  perform pg_temp.chequear('…quien lo reportó los ve en la vista, marcados como anulados', pg_temp.n(v_r, format('from public.pdm_evidencias_vista where reporte_id = %L and anulada', r2)) = 1);
+  perform pg_temp.chequear('…y la secretaría no los ve en la vista', pg_temp.n(v_c, format('from public.pdm_evidencias_vista where reporte_id = %L', r2)) = 0);
 
   perform pg_temp.chequear('el administrador lee las anulaciones', pg_temp.n(v_admin, format('from public.pdm_anulaciones where reporte_id = %L', r2)) = 1);
   perform pg_temp.chequear('Control Interno lee las anulaciones', pg_temp.n(v_q, format('from public.pdm_anulaciones where reporte_id = %L', r2)) = 1);
-  perform pg_temp.chequear('quien lo reportó no lee las anulaciones', pg_temp.n(v_r, 'from public.pdm_anulaciones') = 0);
+  perform pg_temp.chequear('quien lo reportó lee las anulaciones de SUS reportes, con el motivo',
+    pg_temp.n(v_r, 'from public.pdm_anulaciones') = 1
+    and pg_temp.una(v_r, format('select to_jsonb(motivo) from public.pdm_anulaciones where reporte_id = %L', r2)) = v_mot);
+  -- A un reporte anulado no se le agregan archivos, aunque su autor lo vea y todavía no tenga validaciones.
+  v_msg := pg_temp.fallo_de_correr(v_r, format(
+    'insert into public.pdm_evidencias (reporte_id, ruta, nombre, tipo, bytes, subido_por) values (%L::uuid, %L, ''otro.pdf'', ''application/pdf'', 1000, %L::uuid)',
+    r2, v_plan::text || '/' || v_i::text || '/2026/' || gen_random_uuid()::text || '.pdf', v_r));
+  perform pg_temp.chequear('a un reporte anulado no se le agregan archivos', v_msg like '42501%');
   perform pg_temp.chequear('la secretaría tampoco', pg_temp.n(v_c, 'from public.pdm_anulaciones') = 0);
 
   -- El siguiente avance parte de lo que cuenta
@@ -229,8 +239,16 @@ begin
   -- ══ Reabrir un aprobado ══════════════════════════════════════════════════
   perform pg_temp.validar(v_c, r2, 'aprobado');
   perform pg_temp.chequear('aprobado el segundo avance, lo validado es 25', pg_temp.una(v_admin, format('select to_jsonb(valor) from public.pdm_avance_validado where indicador_id = %L and anio = 2026', v_i)) = '25');
-  v_x := pg_temp.validar(v_c, r2, 'devuelto', 'Reabierto: el valor no coincide con el soporte.');
-  perform pg_temp.chequear('reabrir (devolver un aprobado) lo deja devuelto', v_x->>'cambio' = 'devuelto'
+  -- Reabrir un aprobado es del administrador: la secretaría no puede, ni por la función ni escribiendo la fila a mano.
+  v_msg := pg_temp.fallo_de(v_c, format('select public.pdm_validar(%L::uuid, ''devuelto'', %L)', r2, 'Reabierto: el valor no coincide con el soporte.'));
+  perform pg_temp.chequear('la secretaría no puede reabrir un aprobado', v_msg like '42501%administrador%');
+  v_msg := pg_temp.fallo_de_correr(v_c, format(
+    'insert into public.pdm_validaciones (reporte_id, estado, comentario, validador_id, validador_nombre) values (%L::uuid, ''devuelto'', %L, %L::uuid, ''x'')',
+    r2, 'Reabierto: el valor no coincide con el soporte.', v_c));
+  perform pg_temp.chequear('tampoco escribiendo la validación a mano', v_msg like '42501%administrador%');
+  perform pg_temp.chequear('y el reporte sigue aprobado', pg_temp.una(v_admin, format('select to_jsonb(estado) from public.pdm_reportes_vigentes where indicador_id = %L and anio = 2026', v_i)) = 'aprobado');
+  v_x := pg_temp.validar(v_admin, r2, 'devuelto', 'Reabierto: el valor no coincide con el soporte.');
+  perform pg_temp.chequear('el administrador reabre (devuelve un aprobado) y lo deja devuelto', v_x->>'cambio' = 'devuelto'
     and pg_temp.una(v_admin, format('select to_jsonb(estado) from public.pdm_reportes_vigentes where indicador_id = %L and anio = 2026', v_i)) = 'devuelto');
   perform pg_temp.chequear('y deja de contar como validado: vuelve el aprobado anterior (10)', pg_temp.una(v_admin, format('select to_jsonb(valor) from public.pdm_avance_validado where indicador_id = %L and anio = 2026', v_i)) = '10');
 
@@ -245,6 +263,7 @@ begin
     and (select pdm_privado.anulado(r4)) and (select pdm_privado.anulado(r2)));
   perform pg_temp.chequear('el vigente vuelve a ser el primer aprobado', pg_temp.una(v_admin, format('select to_jsonb(reporte_id) from public.pdm_reportes_vigentes where indicador_id = %L and anio = 2026', v_i)) = to_jsonb(r1)#>>'{}');
   perform pg_temp.chequear('la secretaría ya no ve las validaciones del reporte anulado', pg_temp.n(v_c, format('from public.pdm_validaciones where reporte_id = %L', r2)) = 0);
+  perform pg_temp.chequear('quien lo reportó sí ve las validaciones de su reporte anulado', pg_temp.n(v_r, format('from public.pdm_validaciones where reporte_id = %L', r2)) = 2);
   perform pg_temp.chequear('el administrador sí las ve (aprobó y devolvió)', pg_temp.n(v_admin, format('from public.pdm_validaciones where reporte_id = %L', r2)) = 2);
 
   r5 := pg_temp.reportar(v_r, v_i, v_plan, 2026, 30);
@@ -279,13 +298,17 @@ begin
   perform pg_temp.validar(v_c, a1, 'aprobado');
   a2 := pg_temp.reportar(v_r, v_i, v_plan, 2025, 9);
   perform pg_temp.anular(v_admin, a2, v_mot);
-  perform pg_temp.validar(v_c, a1, 'devuelto', 'Reabierto: la cifra se reportó mal.');
+  perform pg_temp.validar(v_admin, a1, 'devuelto', 'Reabierto: la cifra se reportó mal.');
   v_msg := pg_temp.fallo_de(v_admin, format('select public.pdm_restaurar_reporte(%L::uuid, %L)', a2, v_mot));
   perform pg_temp.chequear('no se restaura un avance si el reporte anterior dejó de estar aprobado', v_msg like '23514%ya no está aprobado%');
   perform pg_temp.chequear('el intento fallido no restauró nada', (select pdm_privado.anulado(a2)));
 
   -- ══ Quién puede y con qué motivo ═════════════════════════════════════════
   -- Quien no es administrador (aquí, una sesión de alguien que ni existe en el sistema: no es admin de ninguna manera).
+  -- La secretaría sigue devolviendo (y aprobando) lo PENDIENTE: solo lo aprobado es del administrador.
+  c1 := pg_temp.reportar(v_r, v_i, v_plan, 2024, 3);
+  v_x := pg_temp.validar(v_c, c1, 'devuelto', 'Falta la firma del acta de la actividad.');
+  perform pg_temp.chequear('la secretaría devuelve un reporte pendiente', v_x->>'cambio' = 'devuelto');
   v_msg := pg_temp.fallo_de(gen_random_uuid(), format('select public.pdm_anular_reporte(%L::uuid, %L)', r6, v_mot));
   perform pg_temp.chequear('quien no es administrador no anula', v_msg like '42501%administrador%');
   v_msg := pg_temp.fallo_de(gen_random_uuid(), format('select public.pdm_restaurar_reporte(%L::uuid, %L)', a2, v_mot));
@@ -321,7 +344,10 @@ begin
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('public', 'pdm_privado') and p.prokind = 'f'
     and p.prosrc ilike '%pdm_reportes%' and p.prosrc not ilike '%anulado%'
-    and p.proname not in ('preparar_evidencia');   -- solo comprueba que el reporte sea de quien sube el archivo
+    and p.proname not in ('preparar_evidencia')   -- solo comprueba que el reporte sea de quien sube el archivo
+    -- Las cifras por secretaría (071) leen las VISTAS pdm_reportes_vigentes y pdm_avance_validado, que ya saltan lo anulado:
+    -- su texto nombra la vista, no la tabla, y por eso no dice «anulado».
+    and p.proname not in ('cifras_por_secretaria');
   perform pg_temp.chequear('ninguna función que lee reportes se olvidó de lo anulado' || coalesce(' (' || v_msg || ')', ''), v_msg is null);
   select string_agg(v.viewname, ', ') into v_msg
   from pg_views v where v.schemaname = 'public' and v.definition ilike '%pdm_reportes%' and v.definition not ilike '%anulado%';

@@ -8,8 +8,8 @@ import type { EstadoReporte } from './seguimiento'
  * años) con sus evidencias y validaciones, y sus comentarios.
  *
  * Lo ANULADO (migración 068) es historia: no cuenta como «lo último del año», no corrige ni es corregido por nada que
- * cuente, y solo llega aquí para quien la base deja verlo (administrador y Control Interno); para el resto, la base ni
- * entrega los reportes anulados.
+ * cuente, y solo llega aquí para quien la base deja verlo (el administrador, Control Interno y quien lo reportó, esto
+ * último desde la 069); para el resto, la base ni entrega los reportes anulados.
  *
  * Pura: no lee nada. La lectura vive en `app/actions/pdm-seguimiento.ts`.
  */
@@ -174,7 +174,9 @@ export function armarDetalle(entrada: {
       evidencias: evidenciasDe.get(r.id) ?? [],
       validaciones,
       // Nadie valida lo suyo, ni lo que ya fue superado por una corrección o por un reporte más reciente del año, ni lo anulado.
-      puedeValidar: entrada.puedeValidarElIndicador && vigente && ultimoDelAnio.get(r.anio) === r.id && r.autor_id !== entrada.yoId,
+      // Y un reporte APROBADO solo lo reabre el administrador (la secretaría aprueba y devuelve lo pendiente; la base lo exige igual).
+      puedeValidar: entrada.puedeValidarElIndicador && vigente && ultimoDelAnio.get(r.anio) === r.id && r.autor_id !== entrada.yoId
+        && (estado !== 'aprobado' || esAdmin),
       anulado,
       anulaciones: historiaAnulaciones.get(r.id) ?? [],
       puedeAnular: esAdmin && !anulado && ultimoDelAnio.get(r.anio) === r.id,
