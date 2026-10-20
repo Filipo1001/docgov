@@ -16,7 +16,15 @@ import type { AnulacionVista } from './anulaciones'
 
 // ─── Reglas ───────────────────────────────────────────────────────────────────
 
-export const MAX_EVIDENCIAS = 5
+/**
+ * Cuántos archivos admite un reporte como máximo. Es una RED DE SEGURIDAD, no una regla que se le explique a nadie: ninguna
+ * pantalla ni mensaje dice este número (Felipe, 20-oct-2026: «que no lo especifiques en la aplicación»). Antes eran 5, un valor que
+ * puse yo en la Fase B sin que nadie lo decidiera. Está escrito también en la base (`pdm_privado.max_evidencias()` y la restricción
+ * `pdm_validaciones_observaciones_check`, migración 075); tests/pdm/seguimiento.test.ts vigila que los tres digan lo mismo.
+ */
+export const MAX_EVIDENCIAS = 30
+/** Lo que se dice cuando un reporte lleva más archivos de los que admite: sin el número, a propósito. */
+export const MENSAJE_DEMASIADOS_ARCHIVOS = 'Este reporte tiene más archivos de los que admite.'
 /** Lo que puede pesar un archivo que no es video: PDF, foto, Word, Excel o presentación. */
 export const MAX_BYTES_EVIDENCIA = 25 * 1024 * 1024
 /**
@@ -114,11 +122,11 @@ export interface ArchivoPorSubir {
 
 /**
  * `null` si los archivos sirven como evidencia; si no, qué falla. `conservadas` son los archivos de la versión
- * anterior que pasan a esta (solo al corregir): cuentan para el mínimo de uno y el máximo de cinco.
+ * anterior que pasan a esta (solo al corregir): cuentan para el mínimo de uno y para el máximo.
  */
 export function errorEnArchivos(archivos: ArchivoPorSubir[], conservadas = 0): string | null {
   if (archivos.length + conservadas === 0) return 'Adjunta al menos una evidencia.'
-  if (archivos.length + conservadas > MAX_EVIDENCIAS) return `Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`
+  if (archivos.length + conservadas > MAX_EVIDENCIAS) return MENSAJE_DEMASIADOS_ARCHIVOS
   for (const a of archivos) {
     if (!a.nombre.trim() || a.nombre.length > MAX_NOMBRE_ARCHIVO) return 'Un archivo tiene un nombre que no sirve.'
     const tipo = tipoDeArchivo(a.nombre, a.tipo)
@@ -246,7 +254,7 @@ export function errorEnValidacion(estado: unknown, comentario: unknown, observac
   if (!Array.isArray(observaciones)) return 'Algo de lo elegido no es válido.'
   if (observaciones.length === 0) return null
   if (estado !== 'devuelto') return 'Solo se marcan archivos al devolver un reporte.'
-  if (observaciones.length > MAX_EVIDENCIAS) return `Un reporte tiene como máximo ${MAX_EVIDENCIAS} archivos.`
+  if (observaciones.length > MAX_EVIDENCIAS) return 'Se marcaron más archivos de los que tiene un reporte.'
   const vistos = new Set<string>()
   for (const o of observaciones) {
     const id = typeof o?.evidencia === 'string' ? o.evidencia : ''

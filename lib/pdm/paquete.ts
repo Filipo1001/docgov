@@ -29,8 +29,9 @@ import { etiquetaDeTipo } from './constancia'
 
 /**
  * Lo más que pesa un paquete (suma de sus archivos). Se arma EN MEMORIA, en una función de Vercel: con los archivos, el ZIP y la copia
- * que se envía caben unos 3 × este tamaño. Cinco archivos que no son video (25 MB cada uno) entran enteros; un video grande, no.
- * Lo que no cabe NO tumba el paquete: se deja fuera y se declara (ver `ArchivoOmitido`).
+ * que se envía caben unos 3 × este tamaño. Seis archivos de 25 MB entran enteros; un reporte con muchos archivos pesados (o un video
+ * grande) no cabe entero. Lo que no cabe NO tumba el paquete: se deja fuera —primero los más grandes— y se declara en el LEEME y en
+ * la cabecera (ver `ArchivoOmitido`).
  */
 export const MAX_BYTES_DE_PAQUETE = 150 * 1024 * 1024
 

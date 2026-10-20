@@ -54,8 +54,9 @@ import { anioDeFecha, anioIniciado, esAnioPlan } from '@/lib/pdm/seguimiento'
 import { armarDetalle, type FilaComentario, type FilaEvidencia, type FilaReporteDetalle, type FilaValidacion } from '@/lib/pdm/detalle-armar'
 import { errorEnAnulacion, type AccionAnulacion, type FilaAnulacion } from '@/lib/pdm/anulaciones'
 import { direccionReanudable } from '@/lib/pdm/subir-reanudable'
+import { LIMITE_EN_PARALELO, conLimite } from '@/lib/pdm/con-limite'
 import {
-  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO,
+  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO, MENSAJE_DEMASIADOS_ARCHIVOS,
   esNombreDeEvidenciaEnAlmacen, esVideo, errorEnArchivos, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, tipoDeArchivo,
   type DetalleIndicador, type EntradaAnulacion, type EntradaComentar, type EntradaPrepararEvidencias, type EntradaReportar,
   type EntradaValidar, type EvidenciaPreparada, type EvidenciaSubida,
@@ -154,27 +155,30 @@ export async function prepararEvidencias(e: EntradaPrepararEvidencias): Promise<
     if (!ctx.ok) return rechazo('prepararEvidencias', ctx.error)
 
     const admin = createAdminSupabaseClient()
-    const preparadas: EvidenciaPreparada[] = []
-    for (const a of archivos) {
+    // Un reporte puede llevar muchos archivos: las firmas se piden varias a la vez (no una tras otra), y el resultado conserva el
+    // orden de `archivos`, que es el que espera quien llama.
+    const preparadas = await conLimite(archivos, LIMITE_EN_PARALELO, async (a): Promise<EvidenciaPreparada | null> => {
       const tipo = tipoDeArchivo(a.nombre, a.tipo)!
       const ruta = `${ctx.planId}/${e.indicador}/${ctx.anio}/${randomUUID()}.${tipo.ext}`
       const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(ruta, { upsert: false })
       if (error || !data) {
         console.error('[pdm/seguimiento] prepararEvidencias:', error?.message)
-        return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
+        return null
       }
       const base: EvidenciaPreparada = { ruta, urlSubida: data.signedUrl, tipo: tipo.mime }
-      if (!esVideo(tipo.mime)) { preparadas.push(base); continue }
+      if (!esVideo(tipo.mime)) return base
       // Un video se sube por partes: el navegador recibe la firma de ESTA ruta (no sirve para otra) y habla con el almacenamiento.
       const urlProyecto = process.env.NEXT_PUBLIC_SUPABASE_URL
       const apikey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       if (!urlProyecto || !apikey) {
         console.error('[pdm/seguimiento] prepararEvidencias: faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY')
-        return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
+        return null
       }
-      preparadas.push({ ...base, reanudable: { endpoint: direccionReanudable(urlProyecto), firma: data.token, apikey, bucket: BUCKET } })
-    }
-    return { ok: true, datos: preparadas }
+      return { ...base, reanudable: { endpoint: direccionReanudable(urlProyecto), firma: data.token, apikey, bucket: BUCKET } }
+    })
+    const completas = preparadas.filter((p): p is EvidenciaPreparada => p !== null)
+    if (completas.length !== preparadas.length) return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
+    return { ok: true, datos: completas }
   } catch (err) {
     console.error('[pdm/seguimiento] prepararEvidencias:', err)
     return falla(GENERICO)
@@ -194,12 +198,12 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
     if (motivo.length > MAX_MOTIVO_CORRECCION) return rechazo('reportar', `El motivo no puede pasar de ${MAX_MOTIVO_CORRECCION} caracteres.`)
     if (!Array.isArray(e.evidencias)) return rechazo('reportar', 'Adjunta al menos una evidencia.')
-    // Lo conservado de la versión anterior cuenta para el mínimo de uno y el máximo de cinco.
+    // Lo conservado de la versión anterior cuenta para el mínimo de uno y para el máximo (que no se dice: ver `MAX_EVIDENCIAS`).
     const conservar = e.conservar === undefined ? [] : e.conservar
     if (!Array.isArray(conservar) || !conservar.every(esUuid)) return rechazo('reportar', 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
     if (new Set(conservar).size !== conservar.length) return rechazo('reportar', 'Un archivo está repetido entre los que conservas.')
     if (e.evidencias.length + conservar.length === 0) return rechazo('reportar', 'Adjunta al menos una evidencia.')
-    if (e.evidencias.length + conservar.length > MAX_EVIDENCIAS) return rechazo('reportar', `Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`)
+    if (e.evidencias.length + conservar.length > MAX_EVIDENCIAS) return rechazo('reportar', MENSAJE_DEMASIADOS_ARCHIVOS)
 
     const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
     if (!ctx.ok) return rechazo('reportar', ctx.error)
@@ -252,10 +256,10 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       if (yaUsadas.data?.length) return rechazo('reportar', 'Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
     }
 
-    // La huella de cada archivo nuevo, leyéndolo del almacenamiento (en paralelo: son a lo sumo cinco). Si no se puede
-    // calcular, o el archivo no pesa lo que el almacenamiento dice, no se registra nada: un reporte sin la huella que
-    // debería tener no se puede arreglar después.
-    const calculadas = await Promise.all(evidencias.map(ev => huellaDeObjeto(admin, BUCKET, ev.ruta)))
+    // La huella de cada archivo nuevo, leyéndolo del almacenamiento (varios a la vez, con un máximo: un reporte puede llevar
+    // muchos). Si no se puede calcular, o el archivo no pesa lo que el almacenamiento dice, no se registra nada: un reporte sin
+    // la huella que debería tener no se puede arreglar después.
+    const calculadas = await conLimite(evidencias, LIMITE_EN_PARALELO, ev => huellaDeObjeto(admin, BUCKET, ev.ruta))
     const huellas: HuellaCalculada[] = []
     for (let k = 0; k < evidencias.length; k++) {
       const c = calculadas[k]

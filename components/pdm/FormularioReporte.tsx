@@ -20,7 +20,7 @@
  *
  * El formulario muestra los archivos de la versión anterior. Los que la secretaría no objetó pasan solos a la
  * nueva (se pueden quitar uno a uno); los que devolvió NO se conservan: se reemplazan con uno nuevo o se dejan
- * fuera, y cada uno trae la nota de quien lo devolvió. Entre lo conservado y lo nuevo hay de uno a cinco archivos.
+ * fuera, y cada uno trae la nota de quien lo devolvió. Entre lo conservado y lo nuevo hay al menos uno (y un máximo que no se dice).
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -28,7 +28,7 @@ import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
 import {
-  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_TEXTO_REPORTE, MIN_TEXTO,
+  MAX_MOTIVO_CORRECCION, MAX_TEXTO_REPORTE, MIN_TEXTO,
   describirTamano, errorEnArchivos, errorEnReporte, leerNumero,
   type AccionesSeguimiento, type ReporteDetalle,
 } from '@/lib/pdm/seguimiento-acciones'
@@ -363,7 +363,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
 
         <div>
           <span className={`${T.rotulo} mb-1.5 block`}>
-            Evidencia <span className="font-normal normal-case tracking-normal">· obligatoria · {total} de {MAX_EVIDENCIAS} archivos</span>
+            Evidencia <span className="font-normal normal-case tracking-normal">· obligatoria{total > 0 ? ` · ${total} ${total === 1 ? 'archivo' : 'archivos'}` : ''}</span>
           </span>
 
           {anteriores.length > 0 && (

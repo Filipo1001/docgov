@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { clasificarSeleccion, motivoDeRechazo, consejoDeFormato, resumenDeSubida, mensajeDeFallos, entradaNueva, claveDe, esImagenDibujable, FORMATOS_ADMITIDOS, type ArchivoLike, type ArchivoEnCola } from '@/lib/pdm/evidencias-cola'
 import { subirCola, type CambioDeSubida } from '@/lib/pdm/subir-cola'
+import { MAX_EVIDENCIAS } from '@/lib/pdm/seguimiento-acciones'
 
 let n = 0
 const ok = (t: string, f: () => void | Promise<void>) => Promise.resolve(f()).then(() => { n++; console.log('  ✓', t) })
@@ -45,10 +46,16 @@ async function main() {
   await ok('nombre vacío o larguísimo', () => {
     assert.match(motivoDeRechazo(f('   ', 5, 'application/pdf'))!, /nombre/); assert.match(motivoDeRechazo(f('x'.repeat(201) + '.pdf', 5, 'application/pdf'))!, /nombre/)
   })
-  await ok('con 2 en cola y 1 conservada caben exactamente 2 más, en el orden elegido', () => {
-    const ya = [f('1.pdf', 5, 'application/pdf'), f('2.pdf', 5, 'application/pdf')]
+  await ok('cuando el reporte se llena, caben exactamente los que faltan, en el orden elegido, y el rechazo no dice el número', () => {
+    // Con el tope, 3 menos que el máximo en la cola + 1 conservada dejan lugar para exactamente 2 más.
+    const ya = Array.from({ length: MAX_EVIDENCIAS - 3 }, (_, k) => f(`${k}.pdf`, 5, 'application/pdf'))
     const r = clasificarSeleccion(ya, 1, [f('a.pdf', 5, 'application/pdf'), f('b.pdf', 5, 'application/pdf'), f('c.pdf', 5, 'application/pdf')])
-    assert.deepEqual(r.aceptados.map(x => x.name), ['a.pdf', 'b.pdf']); assert.deepEqual(r.rechazados.map(x => x.nombre), ['c.pdf']); assert.match(r.rechazados[0].motivo, /hasta 5/)
+    assert.deepEqual(r.aceptados.map(x => x.name), ['a.pdf', 'b.pdf']); assert.deepEqual(r.rechazados.map(x => x.nombre), ['c.pdf'])
+    assert.match(r.rechazados[0].motivo, /todos los archivos que admite/); assert.doesNotMatch(r.rechazados[0].motivo, /\d/)
+  })
+  await ok('cinco o seis archivos ya no llenan el reporte', () => {
+    const r = clasificarSeleccion([], 0, Array.from({ length: 6 }, (_, k) => f(`${k}.pdf`, 5, 'application/pdf')))
+    assert.equal(r.aceptados.length, 6); assert.equal(r.rechazados.length, 0)
   })
   await ok('repetidos (ya adjuntos o dos veces en la misma selección) se ignoran sin ruido', () => {
     const a = f('a.pdf', 5, 'application/pdf', 7)

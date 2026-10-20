@@ -7,13 +7,15 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   ANIOS_PLAN, anioDeParametro, anioIniciado, anioPorDefecto, estadoDelAnio, requiereReporte, resumirAnio, situacionEn,
 } from '@/lib/pdm/seguimiento'
 import {
-  MAX_BYTES_EVIDENCIA, MAX_BYTES_VIDEO, MAX_EVIDENCIAS, TIPOS_EVIDENCIA, errorEnArchivos, esNombreDeEvidenciaEnAlmacen, esVideo, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, leerNumero, tipoDeArchivo,
+  MAX_BYTES_EVIDENCIA, MAX_BYTES_VIDEO, MAX_EVIDENCIAS, MENSAJE_DEMASIADOS_ARCHIVOS, TIPOS_EVIDENCIA, errorEnArchivos, esNombreDeEvidenciaEnAlmacen, esVideo, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, leerNumero, tipoDeArchivo,
 } from '@/lib/pdm/seguimiento-acciones'
+import { clasificarSeleccion } from '@/lib/pdm/evidencias-cola'
 
 test('los años del plan', () => {
   assert.deepEqual([...ANIOS_PLAN], [2024, 2025, 2026, 2027])
@@ -79,16 +81,19 @@ test('qué archivos se admiten', () => {
   assert.equal(tipoDeArchivo('truco.pdf', 'text/html'), null)
 })
 
-test('los archivos de un reporte: de 1 a 5, de hasta 25 MB cada uno (100 MB los videos)', () => {
+test('los archivos de un reporte: al menos uno, hasta el tope (que no se dice), de hasta 25 MB cada uno (100 MB los videos)', () => {
   const pdf = (n = 1, bytes = 1000) => Array.from({ length: n }, (_, k) => ({ nombre: `a${k}.pdf`, tipo: 'application/pdf', bytes }))
-  assert.equal(MAX_EVIDENCIAS, 5)
+  assert.equal(MAX_EVIDENCIAS, 30)
   assert.equal(MAX_BYTES_EVIDENCIA, 25 * 1024 * 1024)
   assert.equal(MAX_BYTES_VIDEO, 100 * 1024 * 1024)
   assert.match(errorEnArchivos([])!, /al menos una/)
   assert.equal(errorEnArchivos([], 1), null)
-  assert.equal(errorEnArchivos(pdf(5)), null)
-  assert.match(errorEnArchivos(pdf(6))!, /hasta 5/)
-  assert.match(errorEnArchivos(pdf(3), 3)!, /hasta 5/)
+  assert.equal(errorEnArchivos(pdf(5)), null, 'cinco ya no es el tope')
+  assert.equal(errorEnArchivos(pdf(6)), null, 'ni seis')
+  assert.equal(errorEnArchivos(pdf(30)), null)
+  assert.equal(errorEnArchivos(pdf(31)), MENSAJE_DEMASIADOS_ARCHIVOS)
+  assert.equal(errorEnArchivos(pdf(10), 20), null, 'lo conservado de la versión anterior también cuenta')
+  assert.equal(errorEnArchivos(pdf(10), 21), MENSAJE_DEMASIADOS_ARCHIVOS)
   assert.equal(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA)), null)
   assert.match(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA + 1))!, /máximo/)
   assert.match(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA + 1))!, /para un PDF es 25 MB/)
@@ -150,6 +155,60 @@ test('la lista de tipos de la aplicación dice lo mismo que la base (migraciones
   // Los tipos que acepta el espacio: los de la última migración que los fija.
   const bucket = /update storage\.buckets[\s\S]*?allowed_mime_types = array\[([\s\S]*?)\]/.exec(ultima(/allowed_mime_types = array\[[\s\S]*?'video\/mp4'/).sql)?.[1] ?? ''
   assert.deepEqual([...bucket.matchAll(/'([^']+)'/g)].map(m => m[1]).sort(), [...deLaApp.keys()].sort(), 'el espacio acepta los mismos tipos')
+})
+
+test('la aplicación no dice cuántos archivos caben: ningún mensaje lleva el número', () => {
+  const pdf = (n: number) => Array.from({ length: n }, (_, k) => ({ nombre: `a${k}.pdf`, tipo: 'application/pdf', bytes: 1000 }))
+  const mensajes = [
+    MENSAJE_DEMASIADOS_ARCHIVOS,
+    errorEnArchivos(pdf(MAX_EVIDENCIAS + 1))!,
+    errorEnValidacion('devuelto', 'Hay archivos con problema', Array.from({ length: MAX_EVIDENCIAS + 1 }, (_, k) => ({ evidencia: `e${k}`, motivo: 'No abre' })))!,
+    clasificarSeleccion([], MAX_EVIDENCIAS, [{ name: 'uno-mas.pdf', size: 1000, type: 'application/pdf', lastModified: 1 }]).rechazados[0]?.motivo,
+  ]
+  for (const m of mensajes) {
+    assert.ok(typeof m === 'string' && m.length > 0, 'cada rechazo trae su mensaje')
+    assert.doesNotMatch(m, new RegExp(`\\b(${MAX_EVIDENCIAS}|${MAX_EVIDENCIAS + 1}|treinta|cinco|5)\\b`, 'i'), m)
+  }
+  // Y ninguna cadena de la pantalla o del servidor imprime la constante: lo que se ve no puede traer el número.
+  const raiz = new URL('../../', import.meta.url).pathname
+  const carpetas = ['components/pdm', 'lib/pdm', 'app/dashboard/plan-desarrollo', 'app/actions']
+  const archivos: string[] = []
+  const recorrer = (dir: string) => {
+    for (const n of readdirSync(dir)) {
+      const ruta = join(dir, n)
+      if (statSync(ruta).isDirectory()) { if (n !== 'node_modules') recorrer(ruta); continue }
+      if (/\.(ts|tsx)$/.test(n) && (dir.includes('pdm') || n.startsWith('pdm-'))) archivos.push(ruta)
+    }
+  }
+  for (const c of carpetas) recorrer(join(raiz, c))
+  assert.ok(archivos.length > 20, 'encontré los archivos del módulo')
+  const imprimen = archivos.filter(f => /\$\{\s*MAX_EVIDENCIAS\s*\}/.test(readFileSync(f, 'utf8'))).map(f => f.slice(raiz.length))
+  assert.deepEqual(imprimen, [], 'nadie debe escribir ${MAX_EVIDENCIAS} en un texto')
+})
+
+test('el tope de archivos de la aplicación dice lo mismo que la base (migración 075)', () => {
+  const dir = new URL('../../supabase/migrations/', import.meta.url)
+  const migraciones = readdirSync(dir).filter(n => n.endsWith('.sql')).sort().map(n => ({ n, sql: readFileSync(new URL(n, dir), 'utf8') }))
+  const ultima = (patron: RegExp) => {
+    const m = migraciones.filter(x => patron.test(x.sql)).at(-1)
+    assert.ok(m, `ninguna migración define ${patron}`)
+    return m
+  }
+  // La función de la base que guarda el número.
+  const f = ultima(/create or replace function pdm_privado\.max_evidencias\(\)/)
+  const enLaFuncion = Number(/create or replace function pdm_privado\.max_evidencias\(\)[\s\S]*?as \$f\$ select (\d+) \$f\$/.exec(f.sql)?.[1])
+  assert.equal(enLaFuncion, MAX_EVIDENCIAS, `${f.n}: pdm_privado.max_evidencias() dice lo mismo que MAX_EVIDENCIAS`)
+  // La restricción de la tabla de validaciones (una observación por archivo) lleva el mismo número.
+  const r = ultima(/add constraint pdm_validaciones_observaciones_check/)
+  const enLaRestriccion = Number(/add constraint pdm_validaciones_observaciones_check\s+check \(jsonb_typeof\(observaciones\) = 'array' and jsonb_array_length\(observaciones\) <= (\d+)\)/.exec(r.sql)?.[1])
+  assert.equal(enLaRestriccion, MAX_EVIDENCIAS, `${r.n}: la restricción de observaciones dice lo mismo`)
+  // Las dos funciones que cuentan archivos consultan la función y no repiten un número.
+  for (const nombre of ['pdm_reportar', 'pdm_validar']) {
+    const d = ultima(new RegExp(`create or replace function public\\.${nombre}\\(`))
+    const cuerpo = new RegExp(`create or replace function public\\.${nombre}\\([\\s\\S]*?end \\$f\\$;`).exec(d.sql)![0]
+    assert.match(cuerpo, /pdm_privado\.max_evidencias\(\)/, `${d.n}: ${nombre} consulta el tope`)
+    assert.doesNotMatch(cuerpo, /(>|>=|<|<=) 5( |;|\n)/, `${d.n}: ${nombre} no conserva el 5`)
+  }
 })
 
 test('lo escrito en un reporte', () => {
