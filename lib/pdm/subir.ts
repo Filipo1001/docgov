@@ -27,9 +27,9 @@ export const MS_SIN_AVANCE = 30_000
  * Qué le pasó al archivo, SIN su nombre ni la instrucción de qué hacer: la fila ya lo muestra debajo del nombre, y quien
  * arma el aviso general (`mensajeDeFallos`) añade el «Pulsa Reintentar» una sola vez.
  */
-function rechazo(estado: number): string {
+export function rechazo(estado: number): string {
   if (estado === 413) return 'Pesa más de lo permitido.'
-  if (estado === 400 || estado === 415) return 'El almacenamiento no lo aceptó: revisa que sea PDF, foto, Word o Excel.'
+  if (estado === 400 || estado === 415) return 'El almacenamiento no lo aceptó: revisa que sea PDF, foto, Word, Excel, presentación o video MP4 o MOV.'
   if (estado === 401 || estado === 403) return 'La subida venció.'
   if (estado === 409) return 'Ya estaba subido.'
   return `No se pudo subir (error ${estado}).`

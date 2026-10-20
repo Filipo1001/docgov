@@ -57,12 +57,14 @@ export function pesoLegible(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toLocaleString('es-CO', { maximumFractionDigits: 1 })} MB`
 }
 
-/** Con qué palabra se llama a un archivo según su tipo: «PDF», «Foto», «Word», «Excel». */
+/** Con qué palabra se llama a un archivo según su tipo: «PDF», «Foto», «Word», «Excel», «Presentación», «Video». */
 export function rotuloDeTipo(mime: string, nombre: string): string {
   if (mime === 'application/pdf') return 'PDF'
   if (mime.startsWith('image/')) return 'Foto'
   if (mime.includes('word') || /\.docx?$/i.test(nombre)) return 'Word'
   if (mime.includes('excel') || mime.includes('spreadsheet') || /\.xlsx?$/i.test(nombre)) return 'Excel'
+  if (mime.includes('powerpoint') || mime.includes('presentation') || /\.pptx?$/i.test(nombre)) return 'Presentación'
+  if (mime.startsWith('video/') || /\.(mp4|mov)$/i.test(nombre)) return 'Video'
   return 'Archivo'
 }
 

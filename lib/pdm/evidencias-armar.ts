@@ -31,11 +31,11 @@ export const MAX_BUSQUEDA = 60
 
 // ─── Tipos de archivo ─────────────────────────────────────────────────────────
 
-export type CategoriaTipo = 'pdf' | 'imagen' | 'word' | 'excel'
+export type CategoriaTipo = 'pdf' | 'imagen' | 'word' | 'excel' | 'presentacion' | 'video'
 
 /** Cómo se llama un tipo de archivo en singular, para la fila («PDF · 146 KB»). */
 export const ETIQUETA_CATEGORIA: Record<CategoriaTipo, string> = {
-  pdf: 'PDF', imagen: 'Imagen', word: 'Word', excel: 'Excel',
+  pdf: 'PDF', imagen: 'Imagen', word: 'Word', excel: 'Excel', presentacion: 'Presentación', video: 'Video',
 }
 
 const MIME_WORD = [
@@ -46,6 +46,10 @@ const MIME_EXCEL = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]
+const MIME_PRESENTACION = [
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]
 
 /** A qué categoría pertenece un tipo de archivo; `null` si no es de las que se admiten. */
 export function categoriaDeMime(mime: string): CategoriaTipo | null {
@@ -53,6 +57,8 @@ export function categoriaDeMime(mime: string): CategoriaTipo | null {
   if (mime.startsWith('image/')) return 'imagen'
   if (MIME_WORD.includes(mime)) return 'word'
   if (MIME_EXCEL.includes(mime)) return 'excel'
+  if (MIME_PRESENTACION.includes(mime)) return 'presentacion'
+  if (mime.startsWith('video/')) return 'video'
   return null
 }
 

@@ -38,7 +38,7 @@ import {
   LayoutDashboard, Users, PenLine, FileText, ClipboardList, Building2,
   Landmark, Archive, Settings, UserCog,
   // Documentos
-  FileCheck2, Receipt, FileSignature, FileSpreadsheet, Files, Paperclip,
+  FileCheck2, Receipt, FileSignature, FileSpreadsheet, FileVideo, Presentation, Files, Paperclip,
   Download, Upload, FolderOpen, ScrollText, Banknote,
   // Estado y retroalimentación
   Check, CheckCircle2, XCircle, AlertTriangle, Info, CircleDashed, Clock,
@@ -110,6 +110,8 @@ export const Iconos = {
     archivoWord: FileText,
     archivoImagen: FileImage,
     archivoHoja: FileSpreadsheet,
+    archivoPresentacion: Presentation,
+    archivoVideo: FileVideo,
   },
 
   estado: {

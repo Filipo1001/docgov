@@ -33,7 +33,7 @@ import {
   type AccionesSeguimiento, type ReporteDetalle,
 } from '@/lib/pdm/seguimiento-acciones'
 import { clasificarSeleccion, entradaNueva, esImagenDibujable, mensajeDeFallos, resumenDeSubida, type ArchivoEnCola, type Rechazo } from '@/lib/pdm/evidencias-cola'
-import { subirArchivo } from '@/lib/pdm/subir'
+import { subirEvidencia } from '@/lib/pdm/subir-evidencia'
 import { crearMiniatura } from '@/lib/pdm/miniatura'
 import { limpio, marcar } from '@/lib/pdm/diagnostico'
 import { subirCola } from '@/lib/pdm/subir-cola'
@@ -227,7 +227,7 @@ export default function FormularioReporte({ indicador, vigente, acciones, onHech
           pendientes,
           async (c, alProgreso) => {
             const d = destino.get(c.clave)!
-            await subirArchivo(d.urlSubida, c.archivo, d.tipo, { alProgreso })
+            await subirEvidencia(d, c.archivo, { alProgreso })
             subidas.current.set(c.clave, { ruta: d.ruta, tipo: d.tipo })
           },
           {

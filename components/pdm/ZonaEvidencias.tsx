@@ -25,11 +25,11 @@ import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { categoriaDeMime, ETIQUETA_CATEGORIA } from '@/lib/pdm/evidencias-armar'
 import type { ArchivoEnCola, Rechazo } from '@/lib/pdm/evidencias-cola'
-import { MAX_EVIDENCIAS, describirTamano, tipoDeArchivo } from '@/lib/pdm/seguimiento-acciones'
+import { MAX_BYTES_EVIDENCIA, MAX_BYTES_VIDEO, MAX_EVIDENCIAS, describirTamano, tipoDeArchivo } from '@/lib/pdm/seguimiento-acciones'
 import { CheckDibujado, Despliegue } from './Movimiento'
 import { GLIFO_DE_CATEGORIA } from './iconos-tipo'
 
-const ACEPTA = 'image/*,.pdf,.doc,.docx,.xls,.xlsx'
+const ACEPTA = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.mov,video/mp4,video/quicktime'
 
 // ─── Soltar archivos ─────────────────────────────────────────────────────────
 
@@ -235,7 +235,8 @@ export default function ZonaEvidencias({ cola, conservadas, bloqueada, error, av
               )}
             </span>
             <span className="text-xs text-[#556072] [@media(pointer:coarse)]:hidden">o <span className="font-semibold underline decoration-[#9AA3B5] underline-offset-2 group-hover:decoration-[#192031]">elígelos desde tu equipo</span></span>
-            <span className="text-[11px] text-[#667085]">PDF, fotos, Word o Excel · hasta 10 MB cada uno</span>
+            <span className="text-[11px] text-[#667085]">Hasta {describirTamano(MAX_BYTES_EVIDENCIA)}: PDF, fotos, Word, Excel o presentaciones</span>
+            <span className="text-[11px] text-[#667085]">Hasta {describirTamano(MAX_BYTES_VIDEO)}: videos MP4 o MOV</span>
             <input
               ref={entrada}
               id="pdm-evidencia"

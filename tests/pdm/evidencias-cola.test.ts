@@ -17,21 +17,30 @@ async function main() {
     const r = clasificarSeleccion([], 0, [f('informe.docx', 5, ''), f('foto.HEIC', 5, ''), f('x.xls', 5, 'application/octet-stream')])
     assert.equal(r.aceptados.length, 3)
   })
+  await ok('presentaciones y videos MP4 o MOV pasan', () => {
+    const r = clasificarSeleccion([], 0, [f('charla.pptx', 5 * MB, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'), f('vieja.ppt', 5 * MB, 'application/vnd.ms-powerpoint'), f('evento.mp4', 150 * MB, 'video/mp4'), f('IMG_1.MOV', 90 * MB, 'video/quicktime')])
+    assert.equal(r.aceptados.length, 4); assert.equal(r.rechazados.length, 0)
+  })
   await ok('uno malo NO tumba a los buenos, y cada rechazo trae su motivo propio', () => {
-    const r = clasificarSeleccion([], 0, [f('bien.pdf', 5, 'application/pdf'), f('charla.pptx', 5, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'), f('evento.mp4', 5, 'video/mp4'), f('vacio.pdf', 0, 'application/pdf'), f('enorme.pdf', 12 * MB, 'application/pdf'), f('foto.jpg', 5, 'image/jpeg')])
+    const r = clasificarSeleccion([], 0, [f('bien.pdf', 5, 'application/pdf'), f('show.ppsx', 5, ''), f('evento.avi', 5, 'video/x-msvideo'), f('vacio.pdf', 0, 'application/pdf'), f('enorme.pdf', 30 * MB, 'application/pdf'), f('foto.jpg', 5, 'image/jpeg')])
     assert.deepEqual(r.aceptados.map(x => x.name), ['bien.pdf', 'foto.jpg'])
     assert.equal(r.rechazados.length, 4)
     const m = Object.fromEntries(r.rechazados.map(x => [x.nombre, x.motivo]))
-    assert.match(m['charla.pptx'], /presentaciones.*PDF/); assert.match(m['evento.mp4'], /videos/)
-    assert.equal(m['vacio.pdf'], 'Está vacío.'); assert.match(m['enorme.pdf'], /12 MB y el máximo es 10 MB/)
+    assert.match(m['show.ppsx'], /\.pptx.*PDF/); assert.match(m['evento.avi'], /MP4 o MOV/)
+    assert.equal(m['vacio.pdf'], 'Está vacío.'); assert.match(m['enorme.pdf'], /30 MB y el máximo para un PDF es 25 MB/)
     for (const x of r.rechazados) assert.ok(!x.motivo.includes(x.nombre), 'el motivo no repite el nombre')
+  })
+  await ok('cada tipo con su tope: un video de 150 MB sirve, un PDF de 150 MB no, y uno de 201 MB tampoco', () => {
+    assert.equal(motivoDeRechazo(f('v.mp4', 150 * MB, 'video/mp4')), null)
+    assert.match(motivoDeRechazo(f('v.pdf', 150 * MB, 'application/pdf'))!, /máximo para un PDF es 25 MB/)
+    assert.match(motivoDeRechazo(f('v.mp4', 201 * MB, 'video/mp4'))!, /máximo para un video es 200 MB.*Recórtalo/)
   })
   await ok('formato desconocido: se dice cuáles sí se admiten', () => {
     assert.equal(consejoDeFormato('cosa.xyz'), FORMATOS_ADMITIDOS); assert.equal(consejoDeFormato('sinextension'), FORMATOS_ADMITIDOS)
     assert.match(consejoDeFormato('datos.csv'), /xlsx/); assert.match(consejoDeFormato('logo.GIF'), /JPG o PNG/)
   })
-  await ok('exactamente 10 MB sirve; un byte más, no', () => {
-    assert.equal(motivoDeRechazo(f('a.pdf', 10 * MB, 'application/pdf')), null); assert.match(motivoDeRechazo(f('a.pdf', 10 * MB + 1, 'application/pdf'))!, /Pesa/)
+  await ok('exactamente 25 MB sirve; un byte más, no', () => {
+    assert.equal(motivoDeRechazo(f('a.pdf', 25 * MB, 'application/pdf')), null); assert.match(motivoDeRechazo(f('a.pdf', 25 * MB + 1, 'application/pdf'))!, /Pesa/)
   })
   await ok('nombre vacío o larguísimo', () => {
     assert.match(motivoDeRechazo(f('   ', 5, 'application/pdf'))!, /nombre/); assert.match(motivoDeRechazo(f('x'.repeat(201) + '.pdf', 5, 'application/pdf'))!, /nombre/)

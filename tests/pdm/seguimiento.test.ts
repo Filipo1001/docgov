@@ -7,11 +7,12 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   ANIOS_PLAN, anioDeParametro, anioIniciado, anioPorDefecto, estadoDelAnio, requiereReporte, resumirAnio, situacionEn,
 } from '@/lib/pdm/seguimiento'
 import {
-  MAX_BYTES_EVIDENCIA, MAX_EVIDENCIAS, errorEnArchivos, errorEnComentario, errorEnReporte, errorEnValidacion, leerNumero, tipoDeArchivo,
+  MAX_BYTES_EVIDENCIA, MAX_BYTES_VIDEO, MAX_EVIDENCIAS, TIPOS_EVIDENCIA, errorEnArchivos, esNombreDeEvidenciaEnAlmacen, esVideo, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, leerNumero, tipoDeArchivo,
 } from '@/lib/pdm/seguimiento-acciones'
 
 test('los años del plan', () => {
@@ -64,17 +65,25 @@ test('qué archivos se admiten', () => {
   assert.equal(tipoDeArchivo('foto.JPG', '')?.ext, 'jpg')
   assert.equal(tipoDeArchivo('foto.heic', 'application/octet-stream')?.ext, 'heic')
   assert.equal(tipoDeArchivo('a.jpg', 'image/jpg')?.ext, 'jpg')
-  assert.equal(tipoDeArchivo('charla.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'), null)
-  assert.equal(tipoDeArchivo('video.mp4', 'video/mp4'), null)
+  assert.equal(tipoDeArchivo('charla.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')?.ext, 'pptx')
+  assert.equal(tipoDeArchivo('charla.PPT', '')?.ext, 'ppt')
+  assert.equal(tipoDeArchivo('video.mp4', 'video/mp4')?.ext, 'mp4')
+  assert.equal(tipoDeArchivo('IMG_0001.MOV', 'video/quicktime')?.ext, 'mov')
+  assert.equal(tipoDeArchivo('IMG_0001.mov', '')?.ext, 'mov')
+  // Los demás formatos de video no se admiten: ni declarados ni por la extensión.
+  assert.equal(tipoDeArchivo('video.avi', 'video/x-msvideo'), null)
+  assert.equal(tipoDeArchivo('video.webm', 'video/webm'), null)
+  assert.equal(tipoDeArchivo('video.mkv', ''), null)
   assert.equal(tipoDeArchivo('sinextension', ''), null)
   // Un tipo declarado que no se admite no se «arregla» por la extensión.
   assert.equal(tipoDeArchivo('truco.pdf', 'text/html'), null)
 })
 
-test('los archivos de un reporte: de 1 a 5, cada uno de hasta 10 MB', () => {
+test('los archivos de un reporte: de 1 a 5, de hasta 25 MB cada uno (200 MB los videos)', () => {
   const pdf = (n = 1, bytes = 1000) => Array.from({ length: n }, (_, k) => ({ nombre: `a${k}.pdf`, tipo: 'application/pdf', bytes }))
   assert.equal(MAX_EVIDENCIAS, 5)
-  assert.equal(MAX_BYTES_EVIDENCIA, 10 * 1024 * 1024)
+  assert.equal(MAX_BYTES_EVIDENCIA, 25 * 1024 * 1024)
+  assert.equal(MAX_BYTES_VIDEO, 200 * 1024 * 1024)
   assert.match(errorEnArchivos([])!, /al menos una/)
   assert.equal(errorEnArchivos([], 1), null)
   assert.equal(errorEnArchivos(pdf(5)), null)
@@ -82,9 +91,54 @@ test('los archivos de un reporte: de 1 a 5, cada uno de hasta 10 MB', () => {
   assert.match(errorEnArchivos(pdf(3), 3)!, /hasta 5/)
   assert.equal(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA)), null)
   assert.match(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA + 1))!, /máximo/)
+  assert.match(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA + 1))!, /para un PDF es 25 MB/)
   assert.match(errorEnArchivos(pdf(1, 0))!, /vacío/)
+  // Un video pesa más y su tope es otro; una presentación se mide como un documento.
+  const video = (bytes: number) => [{ nombre: 'evento.mp4', tipo: 'video/mp4', bytes }]
+  assert.equal(errorEnArchivos(video(MAX_BYTES_VIDEO)), null)
+  assert.match(errorEnArchivos(video(MAX_BYTES_VIDEO + 1))!, /para un video es 200 MB/)
+  assert.equal(errorEnArchivos(video(MAX_BYTES_EVIDENCIA + 1)), null)
+  const pptx = (bytes: number) => [{ nombre: 'charla.pptx', tipo: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', bytes }]
+  assert.equal(errorEnArchivos(pptx(MAX_BYTES_EVIDENCIA)), null)
+  assert.match(errorEnArchivos(pptx(MAX_BYTES_EVIDENCIA + 1))!, /para una presentación es 25 MB/)
   assert.match(errorEnArchivos([{ nombre: '  ', tipo: 'application/pdf', bytes: 5 }])!, /nombre/)
   assert.match(errorEnArchivos([{ nombre: 'x.exe', tipo: 'application/x-msdownload', bytes: 5 }])!, /solo se admite/)
+})
+
+test('la lista de tipos: sin repetidos, extensiones que el servidor acepta y un tope por tipo', () => {
+  const mimes = TIPOS_EVIDENCIA.map(t => t.mime)
+  assert.equal(new Set(mimes).size, mimes.length)
+  // Al registrar, el servidor acepta como ruta un identificador con la extensión de CADA tipo (también `mp4`, que lleva un dígito).
+  const id = '0b7e4f0e-2f5c-4c0e-8a8e-6f1f7a3b9c10'
+  for (const t of TIPOS_EVIDENCIA) assert.equal(esNombreDeEvidenciaEnAlmacen(`${id}.${t.ext}`), true, t.mime)
+  for (const malo of [`${id}.exe`, `${id}.`, `${id}`, `${id}.mp4.exe`, `${id.slice(1)}.pdf`, `../${id}.pdf`, `${id}.PDF`, `a/${id}.pdf`]) assert.equal(esNombreDeEvidenciaEnAlmacen(malo), false, malo)
+  for (const t of TIPOS_EVIDENCIA) assert.equal(t.maxBytes, esVideo(t.mime) ? MAX_BYTES_VIDEO : MAX_BYTES_EVIDENCIA, t.mime)
+  assert.equal(limiteDeTipo('video/quicktime'), MAX_BYTES_VIDEO)
+  assert.equal(limiteDeTipo('application/pdf'), MAX_BYTES_EVIDENCIA)
+  assert.equal(limiteDeTipo('application/x-msdownload'), null)
+  assert.equal(esVideo('video/mp4'), true)
+  assert.equal(esVideo('application/pdf'), false)
+})
+
+test('la lista de tipos de la aplicación dice lo mismo que la función de la base (migración 073)', () => {
+  // Lee la función `pdm_privado.limite_de_evidencia` TAL COMO está escrita en la migración y la compara con TIPOS_EVIDENCIA: si alguien
+  // añade un tipo en un lado y no en el otro, la aplicación aceptaría archivos que la base rechaza (o al revés) y se vería en el último paso.
+  const sql = readFileSync(new URL('../../supabase/migrations/073_pdm_evidencias_presentaciones_y_video.sql', import.meta.url), 'utf8')
+  const funcion = /create or replace function pdm_privado\.limite_de_evidencia[\s\S]*?\$f\$;/.exec(sql)?.[0]
+  assert.ok(funcion, 'la función existe en la migración')
+  const delSql = new Map<string, number>()
+  for (const m of funcion.matchAll(/when p_tipo in \(([^)]*)\)\s*then\s*(\d+)::bigint/g)) {
+    for (const t of m[1].matchAll(/'([^']+)'/g)) delSql.set(t[1], Number(m[2]))
+  }
+  const deLaApp = new Map(TIPOS_EVIDENCIA.map(t => [t.mime, t.maxBytes]))
+  assert.deepEqual([...delSql.keys()].sort(), [...deLaApp.keys()].sort(), 'los mismos tipos, ni uno más ni uno menos')
+  for (const [mime, tope] of deLaApp) assert.equal(delSql.get(mime), tope, `el tope de ${mime}`)
+  // Y el espacio de archivos y la restricción de la tabla, con el máximo de todos.
+  const maximo = Math.max(...deLaApp.values())
+  assert.match(sql, new RegExp(`file_size_limit = ${maximo}\\b`), 'el espacio de archivos admite el máximo')
+  assert.match(sql, new RegExp(`bytes <= ${maximo}\\)`), 'la restricción de la tabla admite el máximo')
+  const bucket = /update storage\.buckets[\s\S]*?allowed_mime_types = array\[([\s\S]*?)\]/.exec(sql)?.[1] ?? ''
+  assert.deepEqual([...bucket.matchAll(/'([^']+)'/g)].map(m => m[1]).sort(), [...deLaApp.keys()].sort(), 'el espacio acepta los mismos tipos')
 })
 
 test('lo escrito en un reporte', () => {

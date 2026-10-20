@@ -17,7 +17,10 @@ import type { AnulacionVista } from './anulaciones'
 // ─── Reglas ───────────────────────────────────────────────────────────────────
 
 export const MAX_EVIDENCIAS = 5
-export const MAX_BYTES_EVIDENCIA = 10 * 1024 * 1024
+/** Lo que puede pesar un archivo que no es video: PDF, foto, Word, Excel o presentación. */
+export const MAX_BYTES_EVIDENCIA = 25 * 1024 * 1024
+/** Lo que puede pesar un video. Se sube por partes (ver `subir-reanudable.ts`): una conexión que se cae no lo empieza de cero. */
+export const MAX_BYTES_VIDEO = 200 * 1024 * 1024
 export const MIN_TEXTO = 10
 export const MAX_TEXTO_REPORTE = 1000
 export const MAX_MOTIVO_CORRECCION = 500
@@ -32,23 +35,51 @@ export interface TipoEvidencia {
   ext: string
   /** Otras extensiones con que llega el mismo tipo. */
   alias?: string[]
+  /** Lo que puede pesar. La base lo impone igual (`pdm_privado.limite_de_evidencia`, migración 073). */
+  maxBytes: number
+  /** Cómo se llama en una frase: «un PDF», «un video». */
+  nombre: string
 }
 
-/** Lo que se acepta como evidencia: la misma lista que el espacio `pdm-evidencias` y la función `pdm_reportar`. */
+/**
+ * Lo que se acepta como evidencia: la misma lista que el espacio `pdm-evidencias` y la función `pdm_reportar` (migración 073).
+ * Un tipo nuevo se añade en estos tres lugares; `tests/pdm/seguimiento.test.ts` vigila que estos dos coincidan con lo que la base
+ * documenta, y `supabase/tests/pdm_evidencias_tipos.sql` que la base haga lo que aquí se dice.
+ */
 export const TIPOS_EVIDENCIA: readonly TipoEvidencia[] = [
-  { mime: 'application/pdf', ext: 'pdf' },
-  { mime: 'image/jpeg', ext: 'jpg', alias: ['jpeg'] },
-  { mime: 'image/png', ext: 'png' },
-  { mime: 'image/webp', ext: 'webp' },
-  { mime: 'image/heic', ext: 'heic' },
-  { mime: 'image/heif', ext: 'heif' },
-  { mime: 'application/msword', ext: 'doc' },
-  { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx' },
-  { mime: 'application/vnd.ms-excel', ext: 'xls' },
-  { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx' },
+  { mime: 'application/pdf', ext: 'pdf', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'un PDF' },
+  { mime: 'image/jpeg', ext: 'jpg', alias: ['jpeg'], maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'una foto' },
+  { mime: 'image/png', ext: 'png', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'una foto' },
+  { mime: 'image/webp', ext: 'webp', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'una foto' },
+  { mime: 'image/heic', ext: 'heic', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'una foto' },
+  { mime: 'image/heif', ext: 'heif', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'una foto' },
+  { mime: 'application/msword', ext: 'doc', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'un Word' },
+  { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'un Word' },
+  { mime: 'application/vnd.ms-excel', ext: 'xls', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'un Excel' },
+  { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'un Excel' },
+  { mime: 'application/vnd.ms-powerpoint', ext: 'ppt', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'una presentación' },
+  { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ext: 'pptx', maxBytes: MAX_BYTES_EVIDENCIA, nombre: 'una presentación' },
+  { mime: 'video/mp4', ext: 'mp4', maxBytes: MAX_BYTES_VIDEO, nombre: 'un video' },
+  { mime: 'video/quicktime', ext: 'mov', maxBytes: MAX_BYTES_VIDEO, nombre: 'un video' },
 ]
 
-export const TEXTO_TIPOS_EVIDENCIA = 'PDF, foto, Word o Excel'
+export const TEXTO_TIPOS_EVIDENCIA = 'PDF, foto, Word, Excel, presentación o video (MP4 o MOV)'
+
+/**
+ * El nombre de un archivo en el almacenamiento: un identificador y la extensión de ALGUNO de los tipos admitidos. Sale de la misma
+ * lista que todo lo demás: así un tipo nuevo no queda rechazado al registrar por una regla escrita aparte (a `mp4` le pasó: una
+ * regla que pedía solo letras lo habría rechazado).
+ */
+export function esNombreDeEvidenciaEnAlmacen(nombre: string): boolean {
+  const m = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.([a-z0-9]+)$/.exec(nombre)
+  return !!m && TIPOS_EVIDENCIA.some(t => t.ext === m[1])
+}
+
+/** ¿Es un video? Los videos se suben por partes y pueden pesar mucho más que el resto. */
+export const esVideo = (mime: string): boolean => mime.startsWith('video/')
+
+/** Lo que puede pesar un archivo de este tipo, o `null` si el tipo no se admite. */
+export const limiteDeTipo = (mime: string): number | null => TIPOS_EVIDENCIA.find(t => t.mime === mime)?.maxBytes ?? null
 
 /**
  * Qué tipo de archivo es, o `null` si no se admite. Se cree primero lo que declara el navegador
@@ -86,9 +117,10 @@ export function errorEnArchivos(archivos: ArchivoPorSubir[], conservadas = 0): s
   if (archivos.length + conservadas > MAX_EVIDENCIAS) return `Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`
   for (const a of archivos) {
     if (!a.nombre.trim() || a.nombre.length > MAX_NOMBRE_ARCHIVO) return 'Un archivo tiene un nombre que no sirve.'
-    if (!tipoDeArchivo(a.nombre, a.tipo)) return `«${a.nombre}»: solo se admite ${TEXTO_TIPOS_EVIDENCIA}.`
+    const tipo = tipoDeArchivo(a.nombre, a.tipo)
+    if (!tipo) return `«${a.nombre}»: solo se admite ${TEXTO_TIPOS_EVIDENCIA}.`
     if (!Number.isFinite(a.bytes) || a.bytes < 1) return `«${a.nombre}» está vacío.`
-    if (a.bytes > MAX_BYTES_EVIDENCIA) return `«${a.nombre}» pesa ${describirTamano(a.bytes)}; el máximo es ${describirTamano(MAX_BYTES_EVIDENCIA)}.`
+    if (a.bytes > tipo.maxBytes) return `«${a.nombre}» pesa ${describirTamano(a.bytes)}; el máximo para ${tipo.nombre} es ${describirTamano(tipo.maxBytes)}.`
   }
   return null
 }
@@ -102,12 +134,28 @@ export interface EntradaPrepararEvidencias {
   archivos: ArchivoPorSubir[]
 }
 
+/**
+ * Cómo se sube un archivo por partes (los videos): el servidor firma una clave para ESA ruta —no sirve para otra— y el
+ * navegador habla con el almacenamiento directamente, sin pasar por una función de Vercel. Ver `subir-reanudable.ts`.
+ */
+export interface SubidaReanudable {
+  /** Dirección del almacenamiento que recibe las partes (protocolo TUS). */
+  endpoint: string
+  /** La clave firmada para esta ruta; vale unas horas. */
+  firma: string
+  /** La clave pública del proyecto (la misma que ya viaja en cada página). */
+  apikey: string
+  bucket: string
+}
+
 export interface EvidenciaPreparada {
   ruta: string
   /** Dirección firmada y de un solo uso: el navegador sube el archivo con un PUT. */
   urlSubida: string
   /** El tipo con que hay que subirlo (el que se resolvió, no el declarado). */
   tipo: string
+  /** Solo en los videos: se suben por partes con esto y no con `urlSubida`. */
+  reanudable?: SubidaReanudable
 }
 
 /** Una evidencia ya subida, tal como se registra. */

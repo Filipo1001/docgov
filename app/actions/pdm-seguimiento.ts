@@ -53,9 +53,10 @@ import { hoyBogota } from '@/lib/pdm/contrato'
 import { anioDeFecha, anioIniciado, esAnioPlan } from '@/lib/pdm/seguimiento'
 import { armarDetalle, type FilaComentario, type FilaEvidencia, type FilaReporteDetalle, type FilaValidacion } from '@/lib/pdm/detalle-armar'
 import { errorEnAnulacion, type AccionAnulacion, type FilaAnulacion } from '@/lib/pdm/anulaciones'
+import { direccionReanudable } from '@/lib/pdm/subir-reanudable'
 import {
-  MAX_BYTES_EVIDENCIA, MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO,
-  TIPOS_EVIDENCIA, errorEnArchivos, errorEnComentario, errorEnReporte, errorEnValidacion, tipoDeArchivo,
+  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO,
+  esNombreDeEvidenciaEnAlmacen, esVideo, errorEnArchivos, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, tipoDeArchivo,
   type DetalleIndicador, type EntradaAnulacion, type EntradaComentar, type EntradaPrepararEvidencias, type EntradaReportar,
   type EntradaValidar, type EvidenciaPreparada, type EvidenciaSubida,
 } from '@/lib/pdm/seguimiento-acciones'
@@ -162,7 +163,16 @@ export async function prepararEvidencias(e: EntradaPrepararEvidencias): Promise<
         console.error('[pdm/seguimiento] prepararEvidencias:', error?.message)
         return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
       }
-      preparadas.push({ ruta, urlSubida: data.signedUrl, tipo: tipo.mime })
+      const base: EvidenciaPreparada = { ruta, urlSubida: data.signedUrl, tipo: tipo.mime }
+      if (!esVideo(tipo.mime)) { preparadas.push(base); continue }
+      // Un video se sube por partes: el navegador recibe la firma de ESTA ruta (no sirve para otra) y habla con el almacenamiento.
+      const urlProyecto = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const apikey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!urlProyecto || !apikey) {
+        console.error('[pdm/seguimiento] prepararEvidencias: faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY')
+        return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
+      }
+      preparadas.push({ ...base, reanudable: { endpoint: direccionReanudable(urlProyecto), firma: data.token, apikey, bucket: BUCKET } })
     }
     return { ok: true, datos: preparadas }
   } catch (err) {
@@ -170,8 +180,6 @@ export async function prepararEvidencias(e: EntradaPrepararEvidencias): Promise<
     return falla(GENERICO)
   }
 }
-
-const NOMBRE_RUTA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z]{3,4}$/
 
 export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte: string; correccion: boolean }>> {
   try {
@@ -202,7 +210,7 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     for (const ev of e.evidencias) {
       const ruta = typeof ev?.ruta === 'string' ? ev.ruta : ''
       const nombre = typeof ev?.nombre === 'string' ? ev.nombre.trim() : ''
-      if (!ruta.startsWith(`${carpeta}/`) || !NOMBRE_RUTA.test(ruta.slice(carpeta.length + 1))) {
+      if (!ruta.startsWith(`${carpeta}/`) || !esNombreDeEvidenciaEnAlmacen(ruta.slice(carpeta.length + 1))) {
         return rechazo('reportar', 'Una evidencia no corresponde a este indicador y este año. Vuelve a adjuntarla.')
       }
       if (nombre === '' || nombre.length > MAX_NOMBRE_ARCHIVO) return rechazo('reportar', 'Un archivo tiene un nombre que no sirve.')
@@ -229,7 +237,8 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       if (!obj || !Number.isFinite(bytes) || bytes < 1 || typeof tipo !== 'string') {
         return rechazo('reportar', 'Un archivo no llegó a subirse. Vuelve a adjuntarlo.')
       }
-      if (bytes > MAX_BYTES_EVIDENCIA || !TIPOS_EVIDENCIA.some(t => t.mime === tipo)) {
+      const limite = limiteDeTipo(tipo)
+      if (limite === null || bytes > limite) {
         await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
         return rechazo('reportar', 'Un archivo no es válido como evidencia. Vuelve a adjuntarlo.')
       }

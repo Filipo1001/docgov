@@ -7,4 +7,6 @@ export const GLIFO_DE_CATEGORIA: Record<CategoriaTipo, typeof Iconos.documentos.
   word: Iconos.documentos.archivoWord,
   imagen: Iconos.documentos.archivoImagen,
   excel: Iconos.documentos.archivoHoja,
+  presentacion: Iconos.documentos.archivoPresentacion,
+  video: Iconos.documentos.archivoVideo,
 }

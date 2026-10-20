@@ -14,7 +14,7 @@
  *   · El motivo no repite el nombre del archivo: la pantalla ya lo pone al lado.
  */
 
-import { MAX_BYTES_EVIDENCIA, MAX_EVIDENCIAS, MAX_NOMBRE_ARCHIVO, describirTamano, tipoDeArchivo } from './seguimiento-acciones'
+import { MAX_EVIDENCIAS, MAX_NOMBRE_ARCHIVO, describirTamano, esVideo, tipoDeArchivo } from './seguimiento-acciones'
 
 /** Lo que se necesita saber de un archivo (un `File` lo cumple). */
 export interface ArchivoLike {
@@ -51,8 +51,8 @@ export function entradaNueva<F extends ArchivoLike>(archivo: F): ArchivoEnCola<F
 // ─── Por qué se rechaza un archivo ───────────────────────────────────────────
 
 const CONSEJOS: { extensiones: string[]; consejo: string }[] = [
-  { extensiones: ['ppt', 'pptx', 'pps', 'ppsx', 'odp', 'key'], consejo: 'Las presentaciones no se admiten todavía: expórtala a PDF.' },
-  { extensiones: ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'webm', 'm4v', '3gp'], consejo: 'Los videos no se admiten: adjunta una foto o un acta en PDF.' },
+  { extensiones: ['pps', 'ppsx', 'odp', 'key'], consejo: 'Guárdala como presentación de PowerPoint (.pptx) o como PDF.' },
+  { extensiones: ['avi', 'mkv', 'wmv', 'webm', 'm4v', '3gp', 'flv'], consejo: 'Ese formato de video no se admite: expórtalo como MP4 o MOV.' },
   { extensiones: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'opus'], consejo: 'El audio no se admite: adjunta el acta o la lista de asistencia.' },
   { extensiones: ['zip', 'rar', '7z', 'tar', 'gz'], consejo: 'Los comprimidos no se admiten: adjunta los archivos por separado.' },
   { extensiones: ['csv'], consejo: 'Ábrelo en Excel y guárdalo como libro de Excel (.xlsx).' },
@@ -61,7 +61,7 @@ const CONSEJOS: { extensiones: string[]; consejo: string }[] = [
   { extensiones: ['xlsm', 'xlsb', 'docm', 'ods'], consejo: 'Guárdalo como Word (.docx) o Excel (.xlsx) normal.' },
 ]
 
-export const FORMATOS_ADMITIDOS = 'Solo se admiten PDF, fotos (JPG, PNG, WebP o HEIC), Word y Excel.'
+export const FORMATOS_ADMITIDOS = 'Solo se admiten PDF, fotos (JPG, PNG, WebP o HEIC), Word, Excel, presentaciones de PowerPoint y videos (MP4 o MOV).'
 
 const extensionDe = (nombre: string): string => (nombre.includes('.') ? nombre.split('.').pop()!.toLowerCase() : '')
 
@@ -75,9 +75,11 @@ export function consejoDeFormato(nombre: string): string {
 export function motivoDeRechazo(f: ArchivoLike): string | null {
   if (!f.name.trim() || f.name.length > MAX_NOMBRE_ARCHIVO) return `Su nombre no sirve (hasta ${MAX_NOMBRE_ARCHIVO} caracteres).`
   if (!Number.isFinite(f.size) || f.size < 1) return 'Está vacío.'
-  if (!tipoDeArchivo(f.name, f.type)) return `Formato no admitido. ${consejoDeFormato(f.name)}`
-  if (f.size > MAX_BYTES_EVIDENCIA) {
-    return `Pesa ${describirTamano(f.size)} y el máximo es ${describirTamano(MAX_BYTES_EVIDENCIA)}. Comprímelo o divídelo.`
+  const tipo = tipoDeArchivo(f.name, f.type)
+  if (!tipo) return `Formato no admitido. ${consejoDeFormato(f.name)}`
+  if (f.size > tipo.maxBytes) {
+    const salida = esVideo(tipo.mime) ? 'Recórtalo o expórtalo con menos calidad.' : 'Comprímelo o divídelo.'
+    return `Pesa ${describirTamano(f.size)} y el máximo para ${tipo.nombre} es ${describirTamano(tipo.maxBytes)}. ${salida}`
   }
   return null
 }
