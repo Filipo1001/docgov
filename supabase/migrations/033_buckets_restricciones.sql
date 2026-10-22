@@ -1,11 +1,14 @@
 -- Migration 033: Restricciones a nivel de bucket (hallazgo de seguridad)
 --
--- ESTADO: NUNCA SE HA APLICADO. Este archivo estuvo en el repositorio desde la entrega de los adjuntos PDF, pero los tres espacios
--- siguen sin tope ni lista de tipos (comprobado en producción el 20-oct-2026: `file_size_limit` y `allowed_mime_types` en NULL).
+-- ESTADO: APLICADA en producción el 21-oct-2026 (hora de Colombia), por orden de Felipe: versión 20261022020736, nombre
+-- `buckets_restricciones`, con las sentencias de este archivo. Hasta entonces NUNCA se había aplicado: estuvo en el repositorio desde la
+-- entrega de los adjuntos PDF, pero los tres espacios seguían sin tope ni lista de tipos (comprobado el 20-oct-2026: `file_size_limit` y
+-- `allowed_mime_types` en NULL). Verificada después con supabase/tests/buckets_restricciones.sql (23 comprobaciones, 0 fallas) y con
+-- subidas reales de prueba (tres rechazadas, una aceptada).
 -- Se reescribió el 20-oct-2026 porque sus números eran de entonces y el código ya no los respeta: ver «QUÉ CAMBIÓ» más abajo.
 --
 -- PROBLEMA
--- Los buckets `evidencias`, `documentos` y `certificaciones` tienen allowed_mime_types = NULL y file_size_limit = NULL, es decir,
+-- Los buckets `evidencias`, `documentos` y `certificaciones` tenían (hasta el 21-oct-2026) allowed_mime_types = NULL y file_size_limit = NULL, es decir,
 -- ninguna restricción de tipo ni de tamaño en el almacenamiento.
 --
 -- Eso importa por el patrón de subida: el archivo viaja del navegador DIRECTO a Storage mediante una URL prefirmada, sin pasar por
