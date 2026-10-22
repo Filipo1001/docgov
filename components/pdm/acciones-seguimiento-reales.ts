@@ -1,5 +1,5 @@
 import {
-  anularReporte, comentar, detalleIndicador, prepararEvidencias, reportar, restaurarReporte, urlEvidencia, validarReporte,
+  anularReporte, comentar, descartarBorrador, detalleIndicador, guardarBorrador, prepararEvidencias, reportar, restaurarReporte, urlEvidencia, validarReporte,
 } from '@/app/actions/pdm-seguimiento'
 import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
 
@@ -8,5 +8,5 @@ import type { AccionesSeguimiento } from '@/lib/pdm/seguimiento-acciones'
  * propiedad con esto como valor por defecto, para poder probarlas con un doble sin tocar la base.
  */
 export const ACCIONES_SEGUIMIENTO_REALES: AccionesSeguimiento = {
-  prepararEvidencias, reportar, validarReporte, comentar, anularReporte, restaurarReporte, detalleIndicador, urlEvidencia,
+  prepararEvidencias, reportar, guardarBorrador, descartarBorrador, validarReporte, comentar, anularReporte, restaurarReporte, detalleIndicador, urlEvidencia,
 }

@@ -216,9 +216,10 @@ test('se llevan primero los archivos más pequeños, y a igual tamaño el orden 
   assert.deepEqual([...indicesQueCaben([-5, 3], 10)].sort(), [0, 1], 'un tamaño absurdo (negativo) no rompe la cuenta')
 })
 
-test('cinco archivos de 25 MB (lo más que admite un reporte sin video) caben enteros', () => {
+test('seis archivos de 25 MB caben enteros; con 30 de 25 MB caben seis y los demás se declaran', () => {
   const MB = 1024 * 1024
-  assert.equal(indicesQueCaben([25 * MB, 25 * MB, 25 * MB, 25 * MB, 25 * MB], MAX_BYTES_DE_PAQUETE).size, 5)
+  assert.equal(indicesQueCaben(Array(6).fill(25 * MB), MAX_BYTES_DE_PAQUETE).size, 6)
+  assert.equal(indicesQueCaben(Array(30).fill(25 * MB), MAX_BYTES_DE_PAQUETE).size, 6, 'los 24 que sobran quedan fuera, no tumban el paquete')
 })
 
 test('si lo que se lee pesa más de lo declarado y ya no cabe, se deja fuera igual', async () => {

@@ -156,7 +156,7 @@ function Fila({ e, bloqueada, onQuitar }: { e: ArchivoEnCola<File>; bloqueada: b
 
 export default function ZonaEvidencias({ cola, conservadas, bloqueada, error, avisos, onAgregar, onQuitar, onLimpiarAvisos }: {
   cola: ArchivoEnCola<File>[]
-  /** Archivos de la versión anterior que pasan a esta: cuentan para el tope de cinco. */
+  /** Archivos de la versión anterior que pasan a esta: cuentan para el tope de archivos del reporte (que no se dice). */
   conservadas: number
   /** Mientras se envía: no se agrega ni se quita nada. */
   bloqueada: boolean
@@ -261,14 +261,14 @@ export default function ZonaEvidencias({ cola, conservadas, bloqueada, error, av
       </Despliegue>
       </div>
 
-      {llena && <p className="text-xs text-[#667085]">Llegaste al máximo de {MAX_EVIDENCIAS} archivos. Quita uno si necesitas cambiarlo.</p>}
+      {llena && <p className="text-xs text-[#667085]">Este reporte ya tiene todos los archivos que admite. Quita uno si necesitas cambiarlo.</p>}
 
       <Despliegue abierto={!!error} separacion="pt-1.5">
         {error ? <p id="pdm-evidencia-error" role="alert" className="text-xs font-medium text-[#B42318]">{error}</p> : null}
       </Despliegue>
 
       <p className="sr-only" role="status" aria-live="polite">
-        {total === 0 ? 'Ningún archivo adjunto.' : `${total} de ${MAX_EVIDENCIAS} archivos adjuntos.`}
+        {total === 0 ? 'Ningún archivo adjunto.' : `${total} ${total === 1 ? 'archivo adjunto' : 'archivos adjuntos'}.`}
       </p>
     </div>
   )

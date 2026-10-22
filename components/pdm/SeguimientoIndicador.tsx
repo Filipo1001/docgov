@@ -529,6 +529,8 @@ export default function SeguimientoIndicador({ indicador, ctx }: { indicador: In
           key={`${indicador.anio}:${ultimoDelAnio?.id ?? 'nuevo'}:${ultimoDelAnio?.estado ?? ''}`}
           indicador={indicador}
           vigente={ultimoDelAnio}
+          borrador={detalle.borradores.find(b => b.anio === indicador.anio) ?? null}
+          yoId={yoId}
           acciones={acciones}
           onHecho={recargar}
         />

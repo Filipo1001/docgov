@@ -54,11 +54,13 @@ import { anioDeFecha, anioIniciado, esAnioPlan } from '@/lib/pdm/seguimiento'
 import { armarDetalle, type FilaComentario, type FilaEvidencia, type FilaReporteDetalle, type FilaValidacion } from '@/lib/pdm/detalle-armar'
 import { errorEnAnulacion, type AccionAnulacion, type FilaAnulacion } from '@/lib/pdm/anulaciones'
 import { direccionReanudable } from '@/lib/pdm/subir-reanudable'
+import { LIMITE_EN_PARALELO, conLimite } from '@/lib/pdm/con-limite'
+import { armarBorradores, type FilaBorrador, type FilaBorradorArchivo } from '@/lib/pdm/borradores'
 import {
-  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO,
-  esNombreDeEvidenciaEnAlmacen, esVideo, errorEnArchivos, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, tipoDeArchivo,
-  type DetalleIndicador, type EntradaAnulacion, type EntradaComentar, type EntradaPrepararEvidencias, type EntradaReportar,
-  type EntradaValidar, type EvidenciaPreparada, type EvidenciaSubida,
+  MAX_EVIDENCIAS, MAX_MOTIVO_CORRECCION, MAX_NOMBRE_ARCHIVO, MENSAJE_DEMASIADOS_ARCHIVOS,
+  esNombreDeEvidenciaEnAlmacen, esVideo, errorEnArchivos, errorEnBorrador, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, tipoDeArchivo,
+  type BorradorArchivo, type BorradorVista, type DetalleIndicador, type EntradaAnulacion, type EntradaComentar, type EntradaDescartarBorrador,
+  type EntradaGuardarBorrador, type EntradaPrepararEvidencias, type EntradaReportar, type EntradaValidar, type EvidenciaPreparada, type EvidenciaSubida,
 } from '@/lib/pdm/seguimiento-acciones'
 
 const BUCKET = 'pdm-evidencias'
@@ -97,6 +99,66 @@ async function buscarEnAlmacen(
     if (data.length < 100) break
   }
   return { data: halladas, error: null }
+}
+
+/**
+ * Las rutas de los archivos que hay hoy en el borrador de este indicador y año (vacío si no hay borrador), o `null` si no se pudieron
+ * leer. Sirve para una sola cosa: que fallar un envío NUNCA quite del almacenamiento lo que está guardado en un borrador.
+ */
+async function rutasDelBorrador(admin: ReturnType<typeof createAdminSupabaseClient>, indicador: string, anio: number): Promise<Set<string> | null> {
+  const b = await admin.from('pdm_borradores').select('id').eq('indicador_id', indicador).eq('anio', anio).maybeSingle()
+  if (b.error) { console.error('[pdm/seguimiento] rutasDelBorrador:', b.error.message); return null }
+  if (!b.data) return new Set()
+  const a = await admin.from('pdm_borrador_archivos').select('ruta').eq('borrador_id', b.data.id)
+  if (a.error) { console.error('[pdm/seguimiento] rutasDelBorrador (archivos):', a.error.message); return null }
+  return new Set((a.data ?? []).map(x => x.ruta as string))
+}
+
+/**
+ * Quita archivos del almacenamiento, salvo los que ya son evidencia de algún reporte: esos NUNCA se tocan. Ante la duda (no se pudo
+ * comprobar), no se borra nada: un archivo que sobra cuesta unos MB; uno de más que se borra, una evidencia.
+ */
+async function quitarDelAlmacen(admin: ReturnType<typeof createAdminSupabaseClient>, rutas: string[]): Promise<void> {
+  if (rutas.length === 0) return
+  const usadas = await admin.from('pdm_evidencias').select('ruta').in('ruta', rutas)
+  if (usadas.error) { console.error('[pdm/seguimiento] quitarDelAlmacen:', usadas.error.message); return }
+  const enUso = new Set((usadas.data ?? []).map(r => r.ruta as string))
+  const aBorrar = rutas.filter(r => !enUso.has(r))
+  if (aBorrar.length > 0) await admin.storage.from(BUCKET).remove(aBorrar).catch(() => {})
+}
+
+/**
+ * Lo que de verdad llegó al almacenamiento: existencia, tamaño y tipo reales (no los que dice el navegador). Lo usan el envío del
+ * reporte y el guardado del borrador. `borrar`: el archivo es inválido y lo recién subido no debe quedarse; `esFallo`: no fue culpa de
+ * quien subió (se dice con el mensaje genérico).
+ */
+async function comprobarSubidos(
+  admin: ReturnType<typeof createAdminSupabaseClient>, carpeta: string, rutas: string[], nombres: string[],
+): Promise<{ ok: true; evidencias: EvidenciaSubida[] } | { ok: false; error: string; borrar: boolean; esFallo: boolean }> {
+  // Si no hay nada que mirar (solo se conserva lo anterior), no se lee el almacenamiento.
+  const listado = rutas.length === 0
+    ? { data: [] as { name: string; metadata?: unknown }[], error: null }
+    : await buscarEnAlmacen(admin, carpeta, rutas.map(r => r.slice(carpeta.length + 1)))
+  if (listado.error || !listado.data) {
+    console.error('[pdm/seguimiento] comprobarSubidos (listado):', listado.error?.message)
+    return { ok: false, error: GENERICO, borrar: false, esFallo: true }
+  }
+  const enAlmacen = new Map(listado.data.map(o => [o.name, o]))
+  const evidencias: EvidenciaSubida[] = []
+  for (let k = 0; k < rutas.length; k++) {
+    const obj = enAlmacen.get(rutas[k].slice(carpeta.length + 1))
+    const bytes = Number((obj?.metadata as { size?: unknown } | null | undefined)?.size)
+    const tipo = (obj?.metadata as { mimetype?: unknown } | null | undefined)?.mimetype
+    if (!obj || !Number.isFinite(bytes) || bytes < 1 || typeof tipo !== 'string') {
+      return { ok: false, error: 'Un archivo no llegó a subirse. Vuelve a adjuntarlo.', borrar: false, esFallo: false }
+    }
+    const limite = limiteDeTipo(tipo)
+    if (limite === null || bytes > limite) {
+      return { ok: false, error: 'Un archivo no es válido como evidencia. Vuelve a adjuntarlo.', borrar: true, esFallo: false }
+    }
+    evidencias.push({ ruta: rutas[k], nombre: nombres[k], tipo, bytes })
+  }
+  return { ok: true, evidencias }
 }
 
 /** Sesión de quien pide, con el acceso ya comprobado. */
@@ -154,27 +216,30 @@ export async function prepararEvidencias(e: EntradaPrepararEvidencias): Promise<
     if (!ctx.ok) return rechazo('prepararEvidencias', ctx.error)
 
     const admin = createAdminSupabaseClient()
-    const preparadas: EvidenciaPreparada[] = []
-    for (const a of archivos) {
+    // Un reporte puede llevar muchos archivos: las firmas se piden varias a la vez (no una tras otra), y el resultado conserva el
+    // orden de `archivos`, que es el que espera quien llama.
+    const preparadas = await conLimite(archivos, LIMITE_EN_PARALELO, async (a): Promise<EvidenciaPreparada | null> => {
       const tipo = tipoDeArchivo(a.nombre, a.tipo)!
       const ruta = `${ctx.planId}/${e.indicador}/${ctx.anio}/${randomUUID()}.${tipo.ext}`
       const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(ruta, { upsert: false })
       if (error || !data) {
         console.error('[pdm/seguimiento] prepararEvidencias:', error?.message)
-        return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
+        return null
       }
       const base: EvidenciaPreparada = { ruta, urlSubida: data.signedUrl, tipo: tipo.mime }
-      if (!esVideo(tipo.mime)) { preparadas.push(base); continue }
+      if (!esVideo(tipo.mime)) return base
       // Un video se sube por partes: el navegador recibe la firma de ESTA ruta (no sirve para otra) y habla con el almacenamiento.
       const urlProyecto = process.env.NEXT_PUBLIC_SUPABASE_URL
       const apikey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       if (!urlProyecto || !apikey) {
         console.error('[pdm/seguimiento] prepararEvidencias: faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY')
-        return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
+        return null
       }
-      preparadas.push({ ...base, reanudable: { endpoint: direccionReanudable(urlProyecto), firma: data.token, apikey, bucket: BUCKET } })
-    }
-    return { ok: true, datos: preparadas }
+      return { ...base, reanudable: { endpoint: direccionReanudable(urlProyecto), firma: data.token, apikey, bucket: BUCKET } }
+    })
+    const completas = preparadas.filter((p): p is EvidenciaPreparada => p !== null)
+    if (completas.length !== preparadas.length) return rechazo('prepararEvidencias', 'No se pudo preparar la subida. Intenta de nuevo.')
+    return { ok: true, datos: completas }
   } catch (err) {
     console.error('[pdm/seguimiento] prepararEvidencias:', err)
     return falla(GENERICO)
@@ -194,12 +259,12 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
     if (motivo.length > MAX_MOTIVO_CORRECCION) return rechazo('reportar', `El motivo no puede pasar de ${MAX_MOTIVO_CORRECCION} caracteres.`)
     if (!Array.isArray(e.evidencias)) return rechazo('reportar', 'Adjunta al menos una evidencia.')
-    // Lo conservado de la versión anterior cuenta para el mínimo de uno y el máximo de cinco.
+    // Lo conservado de la versión anterior cuenta para el mínimo de uno y para el máximo (que no se dice: ver `MAX_EVIDENCIAS`).
     const conservar = e.conservar === undefined ? [] : e.conservar
     if (!Array.isArray(conservar) || !conservar.every(esUuid)) return rechazo('reportar', 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
     if (new Set(conservar).size !== conservar.length) return rechazo('reportar', 'Un archivo está repetido entre los que conservas.')
     if (e.evidencias.length + conservar.length === 0) return rechazo('reportar', 'Adjunta al menos una evidencia.')
-    if (e.evidencias.length + conservar.length > MAX_EVIDENCIAS) return rechazo('reportar', `Una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.`)
+    if (e.evidencias.length + conservar.length > MAX_EVIDENCIAS) return rechazo('reportar', MENSAJE_DEMASIADOS_ARCHIVOS)
 
     const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
     if (!ctx.ok) return rechazo('reportar', ctx.error)
@@ -218,32 +283,20 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     }
     if (new Set(rutas).size !== rutas.length) return rechazo('reportar', 'Un mismo archivo está repetido.')
 
-    // Lo que de verdad llegó al almacenamiento: existencia, tamaño y tipo reales (no los que dice el navegador).
-    // Si solo se conserva lo anterior, no hay nada nuevo que mirar.
+    // Los archivos que ya están en el borrador de este indicador y año: si este envío falla, NO se quitan del almacenamiento
+    // (siguen siendo del borrador, que se conserva); solo se quita lo que se subió ahora.
     const admin = createAdminSupabaseClient()
-    const listado = rutas.length === 0
-      ? { data: [] as { name: string; metadata?: unknown }[], error: null }
-      : await buscarEnAlmacen(admin, carpeta, rutas.map(r => r.slice(carpeta.length + 1)))
-    if (listado.error || !listado.data) {
-      console.error('[pdm/seguimiento] reportar (listado):', listado.error?.message)
-      return falla(GENERICO)
+    const delBorrador = await rutasDelBorrador(admin, e.indicador, ctx.anio)
+    if (delBorrador === null) return falla(GENERICO)
+    const recienSubidas = rutas.filter(r => !delBorrador.has(r))
+
+    // Lo que de verdad llegó al almacenamiento: existencia, tamaño y tipo reales (no los que dice el navegador).
+    const comprobado = await comprobarSubidos(admin, carpeta, rutas, e.evidencias.map(ev => ev.nombre.trim()))
+    if (!comprobado.ok) {
+      if (comprobado.borrar) await quitarDelAlmacen(admin, recienSubidas)
+      return comprobado.esFallo ? falla(comprobado.error) : rechazo('reportar', comprobado.error)
     }
-    const enAlmacen = new Map(listado.data.map(o => [o.name, o]))
-    const evidencias: EvidenciaSubida[] = []
-    for (let k = 0; k < rutas.length; k++) {
-      const obj = enAlmacen.get(rutas[k].slice(carpeta.length + 1))
-      const bytes = Number((obj?.metadata as { size?: unknown } | null | undefined)?.size)
-      const tipo = (obj?.metadata as { mimetype?: unknown } | null | undefined)?.mimetype
-      if (!obj || !Number.isFinite(bytes) || bytes < 1 || typeof tipo !== 'string') {
-        return rechazo('reportar', 'Un archivo no llegó a subirse. Vuelve a adjuntarlo.')
-      }
-      const limite = limiteDeTipo(tipo)
-      if (limite === null || bytes > limite) {
-        await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
-        return rechazo('reportar', 'Un archivo no es válido como evidencia. Vuelve a adjuntarlo.')
-      }
-      evidencias.push({ ruta: rutas[k], nombre: e.evidencias[k].nombre.trim(), tipo, bytes })
-    }
+    const evidencias = comprobado.evidencias
 
     // Que ninguno pertenezca ya a otro reporte: así, si registrar falla, borrar lo subido no toca lo de nadie.
     if (rutas.length > 0) {
@@ -252,22 +305,22 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       if (yaUsadas.data?.length) return rechazo('reportar', 'Uno de esos archivos ya está en otro reporte. Vuelve a adjuntarlo.')
     }
 
-    // La huella de cada archivo nuevo, leyéndolo del almacenamiento (en paralelo: son a lo sumo cinco). Si no se puede
-    // calcular, o el archivo no pesa lo que el almacenamiento dice, no se registra nada: un reporte sin la huella que
-    // debería tener no se puede arreglar después.
-    const calculadas = await Promise.all(evidencias.map(ev => huellaDeObjeto(admin, BUCKET, ev.ruta)))
+    // La huella de cada archivo nuevo, leyéndolo del almacenamiento (varios a la vez, con un máximo: un reporte puede llevar
+    // muchos). Si no se puede calcular, o el archivo no pesa lo que el almacenamiento dice, no se registra nada: un reporte sin
+    // la huella que debería tener no se puede arreglar después.
+    const calculadas = await conLimite(evidencias, LIMITE_EN_PARALELO, ev => huellaDeObjeto(admin, BUCKET, ev.ruta))
     const huellas: HuellaCalculada[] = []
     for (let k = 0; k < evidencias.length; k++) {
       const c = calculadas[k]
       if (!c.ok || c.bytes !== evidencias[k].bytes) {
         console.error('[pdm/seguimiento] reportar (huella):', c.ok ? `pesa ${c.bytes} y el almacenamiento dice ${evidencias[k].bytes}` : c.error)
-        await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
+        await quitarDelAlmacen(admin, recienSubidas)
         return rechazo('reportar', 'No pudimos comprobar un archivo. Vuelve a adjuntarlo e intenta de nuevo.')
       }
       huellas.push({ ruta: evidencias[k].ruta, sha256: c.sha256, bytes: c.bytes })
     }
     if (!(await anotarHuellas(admin, s.acceso.userId, huellas))) {
-      await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
+      await quitarDelAlmacen(admin, recienSubidas)
       return rechazo('reportar', 'No pudimos registrar los archivos. Vuelve a adjuntarlos e intenta de nuevo.')
     }
 
@@ -276,14 +329,17 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       p_conservar: conservar,
     })
     if (error) {
-      // Solo se borra lo recién subido: lo conservado es de un reporte que ya existe.
-      if (rutas.length > 0) await admin.storage.from(BUCKET).remove(rutas).catch(() => {})
+      // Solo se borra lo recién subido: lo conservado es de un reporte que ya existe y lo del borrador sigue siendo del borrador.
+      await quitarDelAlmacen(admin, recienSubidas)
       console.warn('[pdm/seguimiento] pdm_reportar falló con el código', error.code)
       return rechazo('reportar', traducirErrorPdm(error.code, error.message))
     }
     const d = (data ?? {}) as { reporte?: unknown; correccion?: unknown }
     if (!esUuid(d.reporte)) return falla(GENERICO)
     const reporteId = d.reporte
+    // El reporte ya borró el borrador (en la misma transacción de la base). Los archivos del borrador que van en el reporte son ahora
+    // evidencias suyas; los que quedaron fuera (se quitaron del formulario sin guardar el borrador) sobran en el almacenamiento.
+    await quitarDelAlmacen(admin, [...delBorrador].filter(r => !rutas.includes(r)))
     refrescar()
     // El aviso («Recibimos tu reporte») sale después de responder y no puede estorbar: ver `lib/pdm/correos`.
     await avisarDespues(origen => avisarReporteEnviado({ reporteId, origen }))
@@ -292,6 +348,141 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     return { ok: true, datos: { reporte: reporteId, correccion: d.correccion === true } }
   } catch (err) {
     console.error('[pdm/seguimiento] reportar:', err)
+    return falla(GENERICO)
+  }
+}
+
+// ─── El borrador del reporte (migración 076) ──────────────────────────────────
+
+/**
+ * Lo que la base devuelve al guardar: la versión nueva, quién guardó, los archivos que quedaron y los que se retiraron. Se lee con
+ * desconfianza: nada de aquí llega a la pantalla sin tener la forma que debe.
+ */
+function leerBorradorGuardado(
+  d: unknown, base: { anio: number; valor: number | null; texto: string; motivo: string; conservar: string[] },
+): { borrador: BorradorVista; retirados: string[] } | null {
+  const o = (d ?? {}) as Record<string, unknown>
+  if (typeof o.version !== 'number' || !Array.isArray(o.archivos) || !Array.isArray(o.retirados)) return null
+  const archivos: BorradorArchivo[] = []
+  for (const a of o.archivos as Record<string, unknown>[]) {
+    if (typeof a?.ruta !== 'string' || typeof a?.nombre !== 'string' || typeof a?.tipo !== 'string' || typeof a?.bytes !== 'number') return null
+    archivos.push({ ruta: a.ruta, nombre: a.nombre, tipo: a.tipo, bytes: a.bytes })
+  }
+  return {
+    borrador: {
+      ...base,
+      version: o.version,
+      archivos,
+      editadoPorId: typeof o.editado_por_id === 'string' ? o.editado_por_id : '',
+      editadoPor: typeof o.editado_por === 'string' ? o.editado_por : '',
+      editadoEn: typeof o.editado_en === 'string' ? o.editado_en : new Date().toISOString(),
+    },
+    retirados: (o.retirados as unknown[]).filter((r): r is string => typeof r === 'string'),
+  }
+}
+
+/**
+ * Guarda (o actualiza) el borrador del reporte de un indicador en un año. Los archivos ya están en el almacenamiento (se subieron
+ * antes, como al enviar); aquí se comprueban igual que al enviar y quedan registrados en el borrador. Los que el borrador tenía y ya
+ * no vienen en la lista se quitan del almacenamiento. NO calcula huellas ni crea nada que cuente: un borrador no es un reporte.
+ */
+export async function guardarBorrador(e: EntradaGuardarBorrador): Promise<Resultado<BorradorVista>> {
+  try {
+    const s = await sesionPdm()
+    if (!s) return rechazo('guardarBorrador', SIN_PERMISO)
+    if (!puedeReportar(s.acceso)) return rechazo('guardarBorrador', SOLO_RESPONSABLES)
+    if (!esUuid(e?.indicador)) return rechazo('guardarBorrador', 'Algo de lo elegido no es válido.')
+    if (!Number.isInteger(e.version) || e.version < 0) return rechazo('guardarBorrador', 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
+    const valor = e.valor === null || e.valor === undefined ? null : e.valor
+    if (valor !== null && typeof valor !== 'number') return rechazo('guardarBorrador', 'El valor debe ser un número igual o mayor que cero.')
+    const texto = typeof e.texto === 'string' ? e.texto : ''
+    const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
+    const conservar = e.conservar === undefined ? [] : e.conservar
+    if (!Array.isArray(conservar) || !conservar.every(esUuid)) return rechazo('guardarBorrador', 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
+    if (new Set(conservar).size !== conservar.length) return rechazo('guardarBorrador', 'Un archivo está repetido entre los que conservas.')
+    if (!Array.isArray(e.archivos)) return rechazo('guardarBorrador', 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
+    const mal = errorEnBorrador({ valor, texto, motivo, archivos: e.archivos.length, conservadas: conservar.length })
+    if (mal) return rechazo('guardarBorrador', mal)
+
+    const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
+    if (!ctx.ok) return rechazo('guardarBorrador', ctx.error)
+    const carpeta = `${ctx.planId}/${e.indicador}/${ctx.anio}`
+
+    // Cada ruta es de ESTE indicador y ESTE año, con el nombre que armó el servidor.
+    const rutas: string[] = []
+    for (const ev of e.archivos) {
+      const ruta = typeof ev?.ruta === 'string' ? ev.ruta : ''
+      const nombre = typeof ev?.nombre === 'string' ? ev.nombre.trim() : ''
+      if (!ruta.startsWith(`${carpeta}/`) || !esNombreDeEvidenciaEnAlmacen(ruta.slice(carpeta.length + 1))) {
+        return rechazo('guardarBorrador', 'Un archivo no corresponde a este indicador y este año. Vuelve a adjuntarlo.')
+      }
+      if (nombre === '' || nombre.length > MAX_NOMBRE_ARCHIVO) return rechazo('guardarBorrador', 'Un archivo tiene un nombre que no sirve.')
+      rutas.push(ruta)
+    }
+    if (new Set(rutas).size !== rutas.length) return rechazo('guardarBorrador', 'Un mismo archivo está repetido.')
+
+    const admin = createAdminSupabaseClient()
+    // Lo que ya estaba en el borrador no se toca si algo falla; solo se quita lo que se subió ahora.
+    const delBorrador = await rutasDelBorrador(admin, e.indicador, ctx.anio)
+    if (delBorrador === null) return falla(GENERICO)
+    const recienSubidas = rutas.filter(r => !delBorrador.has(r))
+
+    const comprobado = await comprobarSubidos(admin, carpeta, rutas, e.archivos.map(a => a.nombre.trim()))
+    if (!comprobado.ok) {
+      if (comprobado.borrar) await quitarDelAlmacen(admin, recienSubidas)
+      return comprobado.esFallo ? falla(comprobado.error) : rechazo('guardarBorrador', comprobado.error)
+    }
+
+    // Que ninguno pertenezca ya a un reporte (la base también lo comprueba, pero solo ve lo que quien guarda puede ver).
+    if (recienSubidas.length > 0) {
+      const yaUsadas = await admin.from('pdm_evidencias').select('ruta').in('ruta', recienSubidas)
+      if (yaUsadas.error) return falla(GENERICO)
+      if (yaUsadas.data?.length) return rechazo('guardarBorrador', 'Uno de esos archivos ya está en un reporte. Vuelve a adjuntarlo.')
+    }
+
+    const { data, error } = await s.supabase.rpc('pdm_borrador_guardar', {
+      p_indicador: e.indicador, p_anio: ctx.anio, p_version: e.version, p_valor: valor, p_texto: texto, p_motivo: motivo || null,
+      p_conservar: conservar, p_archivos: comprobado.evidencias,
+    })
+    if (error) {
+      await quitarDelAlmacen(admin, recienSubidas)
+      console.warn('[pdm/seguimiento] pdm_borrador_guardar falló con el código', error.code)
+      return rechazo('guardarBorrador', traducirErrorPdm(error.code, error.message))
+    }
+    const leido = leerBorradorGuardado(data, { anio: ctx.anio, valor, texto, motivo, conservar })
+    if (!leido) return falla(GENERICO)
+    // Lo que el borrador tenía y ya no tiene sobra en el almacenamiento.
+    await quitarDelAlmacen(admin, leido.retirados)
+    return { ok: true, datos: leido.borrador }
+  } catch (err) {
+    console.error('[pdm/seguimiento] guardarBorrador:', err)
+    return falla(GENERICO)
+  }
+}
+
+/** Borra el borrador y quita sus archivos del almacenamiento. Si otra persona lo cambió mientras tanto, se niega y pide recargar. */
+export async function descartarBorrador(e: EntradaDescartarBorrador): Promise<Resultado> {
+  try {
+    const s = await sesionPdm()
+    if (!s) return rechazo('descartarBorrador', SIN_PERMISO)
+    if (!puedeReportar(s.acceso)) return rechazo('descartarBorrador', SOLO_RESPONSABLES)
+    if (!esUuid(e?.indicador)) return rechazo('descartarBorrador', 'Algo de lo elegido no es válido.')
+    if (!Number.isInteger(e.version) || e.version < 0) return rechazo('descartarBorrador', 'Algo de lo elegido no es válido. Recarga la página e intenta de nuevo.')
+    const ctx = await contextoDeReporte(s.supabase, e.indicador, e.anio, s.acceso.userId)
+    if (!ctx.ok) return rechazo('descartarBorrador', ctx.error)
+
+    const { data, error } = await s.supabase.rpc('pdm_borrador_descartar', { p_indicador: e.indicador, p_anio: ctx.anio, p_version: e.version })
+    if (error) {
+      console.warn('[pdm/seguimiento] pdm_borrador_descartar falló con el código', error.code)
+      return rechazo('descartarBorrador', traducirErrorPdm(error.code, error.message))
+    }
+    const retirados = Array.isArray((data as { retirados?: unknown } | null)?.retirados)
+      ? ((data as { retirados: unknown[] }).retirados).filter((r): r is string => typeof r === 'string')
+      : []
+    await quitarDelAlmacen(createAdminSupabaseClient(), retirados)
+    return { ok: true, datos: undefined }
+  } catch (err) {
+    console.error('[pdm/seguimiento] descartarBorrador:', err)
     return falla(GENERICO)
   }
 }
@@ -444,12 +635,23 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
       anulaciones = anu.data as FilaAnulacion[]
     }
 
+    // El borrador (si lo hay) de este indicador: la base entrega solo los de quienes tienen el indicador a su cargo.
+    const bor = await s.supabase.from('pdm_borradores').select('id, anio, valor, texto, motivo, conservar, version, editado_por, editado_nombre, editado_en').eq('indicador_id', indicador)
+    if (bor.error) return falla(GENERICO)
+    let archivosDeBorrador: FilaBorradorArchivo[] = []
+    if (bor.data && bor.data.length) {
+      const arch = await s.supabase.from('pdm_borrador_archivos').select('borrador_id, ruta, nombre, tipo, bytes, subido_en').in('borrador_id', bor.data.map(b => b.id as string))
+      if (arch.error) return falla(GENERICO)
+      archivosDeBorrador = (arch.data ?? []) as FilaBorradorArchivo[]
+    }
+
     const puedeValidarElIndicador = nivel === 'admin'
       || (nivel === 'coordinador' && s.acceso.dependenciaId !== null && s.acceso.dependenciaId === ind.data.dependencia_id)
 
     return {
       ok: true,
-      datos: armarDetalle({
+      datos: {
+        ...armarDetalle({
         reportes: rep.data as unknown as FilaReporteDetalle[],
         evidencias,
         validaciones,
@@ -458,7 +660,9 @@ export async function detalleIndicador(indicador: string): Promise<Resultado<Det
         puedeValidarElIndicador,
         anulaciones,
         esAdmin: nivel === 'admin',
-      }),
+        }),
+        borradores: armarBorradores((bor.data ?? []) as unknown as FilaBorrador[], archivosDeBorrador),
+      },
     }
   } catch (err) {
     console.error('[pdm/seguimiento] detalleIndicador:', err)

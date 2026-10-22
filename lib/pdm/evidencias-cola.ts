@@ -100,7 +100,7 @@ export interface Seleccion<F extends ArchivoLike> {
  * Separa lo que se eligió en lo que se adjunta y lo que no.
  *
  * `existentes` son los de la cola; `conservadas`, los de la versión anterior que pasan a esta (cuentan para el tope de
- * cinco). Se respeta el orden en que se eligieron: si no caben todos, se adjuntan los primeros.
+ * archivos del reporte, que no se dice). Se respeta el orden en que se eligieron: si no caben todos, se adjuntan los primeros.
  */
 export function clasificarSeleccion<F extends ArchivoLike>(existentes: readonly ArchivoLike[], conservadas: number, nuevos: readonly F[]): Seleccion<F> {
   const vistos = new Set(existentes.map(claveDe))
@@ -113,7 +113,7 @@ export function clasificarSeleccion<F extends ArchivoLike>(existentes: readonly 
     const motivo = motivoDeRechazo(f)
     if (motivo) { rechazados.push({ nombre: f.name, motivo }); continue }
     if (existentes.length + aceptados.length + conservadas >= MAX_EVIDENCIAS) {
-      rechazados.push({ nombre: f.name, motivo: `No cabe: una evidencia admite hasta ${MAX_EVIDENCIAS} archivos.` })
+      rechazados.push({ nombre: f.name, motivo: 'No cabe: el reporte ya tiene todos los archivos que admite.' })
       continue
     }
     vistos.add(clave)
