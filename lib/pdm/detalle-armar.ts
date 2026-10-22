@@ -84,7 +84,7 @@ export function armarDetalle(entrada: {
   anulaciones?: FilaAnulacion[]
   /** Quien pregunta es el administrador: puede anular y restaurar. */
   esAdmin?: boolean
-}): DetalleIndicador {
+}): Omit<DetalleIndicador, 'borradores'> {
   const esAdmin = entrada.esAdmin === true
   const anulados = idsAnulados(entrada.anulaciones ?? [])
   const historiaAnulaciones = anulacionesPorReporte(entrada.anulaciones ?? [])

@@ -127,6 +127,11 @@ export interface ArchivoPorSubir {
 export function errorEnArchivos(archivos: ArchivoPorSubir[], conservadas = 0): string | null {
   if (archivos.length + conservadas === 0) return 'Adjunta al menos una evidencia.'
   if (archivos.length + conservadas > MAX_EVIDENCIAS) return MENSAJE_DEMASIADOS_ARCHIVOS
+  return errorEnCadaArchivo(archivos)
+}
+
+/** Lo de cada archivo (nombre, tipo y peso), sin contar cuántos son. */
+function errorEnCadaArchivo(archivos: ArchivoPorSubir[]): string | null {
   for (const a of archivos) {
     if (!a.nombre.trim() || a.nombre.length > MAX_NOMBRE_ARCHIVO) return 'Un archivo tiene un nombre que no sirve.'
     const tipo = tipoDeArchivo(a.nombre, a.tipo)
@@ -135,6 +140,15 @@ export function errorEnArchivos(archivos: ArchivoPorSubir[], conservadas = 0): s
     if (a.bytes > tipo.maxBytes) return `«${a.nombre}» pesa ${describirTamano(a.bytes)}; el máximo para ${tipo.nombre} es ${describirTamano(tipo.maxBytes)}.`
   }
   return null
+}
+
+/**
+ * Lo mismo para un BORRADOR: sin el mínimo de uno (un borrador puede no tener archivos todavía). `nuevos` son los que se van a subir
+ * ahora; `yaGuardados`, los que ya están en el borrador; `conservadas`, los de la versión anterior que se piensa conservar.
+ */
+export function errorEnArchivosDelBorrador(nuevos: ArchivoPorSubir[], yaGuardados: number, conservadas: number): string | null {
+  if (nuevos.length + yaGuardados + conservadas > MAX_EVIDENCIAS) return MENSAJE_DEMASIADOS_ARCHIVOS
+  return errorEnCadaArchivo(nuevos)
 }
 
 /** Lo que se pide al servidor para poder subir los archivos directamente al almacenamiento. */
@@ -193,6 +207,78 @@ export interface EntradaReportar {
   conservar?: string[]
   /** Solo si el último reporte del año está sin cerrar (pendiente o devuelto): entonces esto es una corrección y el motivo es obligatorio. */
   motivo?: string
+}
+
+// ─── El borrador de un reporte (migración 076) ────────────────────────────────
+
+/** Un archivo ya subido al almacenamiento que espera, en un borrador, el envío del reporte. */
+export interface BorradorArchivo {
+  ruta: string
+  nombre: string
+  tipo: string
+  bytes: number
+}
+
+/**
+ * El borrador de un indicador en un año: lo que alguien dejó a medias para continuar después. Es de quienes tienen el indicador a su
+ * cargo (responsable y apoyo); NO lo ven la secretaría, Control Interno ni el administrador, y no cuenta en nada hasta que se envía.
+ */
+export interface BorradorVista {
+  anio: number
+  /** Sube en cada guardado: se manda de vuelta al guardar, y si otra persona guardó mientras tanto, se niega (nadie pisa a nadie). */
+  version: number
+  /** Puede faltar: un borrador no es un reporte. */
+  valor: number | null
+  texto: string
+  motivo: string
+  /** Ids de evidencias de la versión que se corrige que se piensa conservar (se vuelven a comprobar al enviar). */
+  conservar: string[]
+  archivos: BorradorArchivo[]
+  editadoPorId: string
+  editadoPor: string
+  /** Instante ISO del último guardado. */
+  editadoEn: string
+}
+
+export interface EntradaGuardarBorrador {
+  indicador: string
+  anio: number
+  /** La versión del borrador que quien guarda tenía a la vista; 0 si todavía no hay borrador. */
+  version: number
+  /** `null` si todavía no hay valor. */
+  valor: number | null
+  texto: string
+  motivo?: string
+  conservar?: string[]
+  /** TODOS los archivos que deben quedar en el borrador, ya subidos (los que no estén aquí se retiran del borrador). */
+  archivos: EvidenciaSubida[]
+}
+
+export interface EntradaDescartarBorrador {
+  indicador: string
+  anio: number
+  version: number
+}
+
+/**
+ * `null` si lo escrito en un borrador sirve. Un borrador puede estar incompleto (sin valor, con un texto corto, sin archivos), pero lo
+ * que trae tiene que servir y tiene que haber ALGO que guardar. `archivos` cuenta los del borrador y los nuevos; `conservadas`, los de
+ * la versión anterior que se conservan.
+ */
+export function errorEnBorrador(e: { valor: number | null; texto: string; motivo?: string; archivos: number; conservadas: number }): string | null {
+  if (e.valor !== null) {
+    if (typeof e.valor !== 'number' || !Number.isFinite(e.valor) || e.valor < 0) return 'El valor debe ser un número igual o mayor que cero.'
+    if (e.valor > 1e12) return 'Ese valor es demasiado grande.'
+  }
+  const texto = typeof e.texto === 'string' ? e.texto : ''
+  if (texto.length > MAX_TEXTO_REPORTE) return `La descripción no puede pasar de ${MAX_TEXTO_REPORTE} caracteres.`
+  const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
+  if (motivo.length > MAX_MOTIVO_CORRECCION) return `El motivo no puede pasar de ${MAX_MOTIVO_CORRECCION} caracteres.`
+  if (e.archivos + e.conservadas > MAX_EVIDENCIAS) return MENSAJE_DEMASIADOS_ARCHIVOS
+  if (e.valor === null && texto.trim() === '' && motivo === '' && e.archivos === 0 && e.conservadas === 0) {
+    return 'Todavía no hay nada que guardar: escribe algo o adjunta un archivo.'
+  }
+  return null
 }
 
 /** Un archivo que la secretaría devuelve, con lo que le pasa. */
@@ -358,12 +444,21 @@ export interface DetalleIndicador {
   reportes: ReporteDetalle[]
   /** Del más reciente al más antiguo. */
   comentarios: ComentarioVista[]
+  /**
+   * Los borradores de este indicador (uno por año, a lo sumo). Solo llegan a quienes tienen el indicador a su cargo: la base no
+   * entrega los de nadie más, ni siquiera al administrador.
+   */
+  borradores: BorradorVista[]
 }
 
 /** Lo que el seguimiento puede hacer. En producción lo respalda el servidor; en pruebas, un doble. */
 export interface AccionesSeguimiento {
   prepararEvidencias: (e: EntradaPrepararEvidencias) => Promise<Resultado<EvidenciaPreparada[]>>
   reportar: (e: EntradaReportar) => Promise<Resultado<{ reporte: string; correccion: boolean }>>
+  /** Guarda (o actualiza) el borrador del reporte; devuelve cómo quedó. Si otra persona guardó antes, se niega y pide recargar. */
+  guardarBorrador: (e: EntradaGuardarBorrador) => Promise<Resultado<BorradorVista>>
+  /** Borra el borrador y quita sus archivos del almacenamiento. */
+  descartarBorrador: (e: EntradaDescartarBorrador) => Promise<Resultado>
   validarReporte: (e: EntradaValidar) => Promise<Resultado<{ cambio: 'aprobado' | 'devuelto' | 'ninguno' }>>
   comentar: (e: EntradaComentar) => Promise<Resultado>
   /** Solo el administrador. `versiones`: cuántas versiones del reporte se anularon con él. */
