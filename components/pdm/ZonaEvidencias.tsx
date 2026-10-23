@@ -139,7 +139,8 @@ function Fila({ e, bloqueada, onQuitar }: { e: ArchivoEnCola<File>; bloqueada: b
       <button
         type="button"
         onClick={onQuitar}
-        disabled={bloqueada}
+        // Mientras sube, no se quita: el guardado ya lo está llevando (y registraría un archivo que la persona ya no ve).
+        disabled={bloqueada || subiendo}
         className="shrink-0 rounded-md p-2.5 text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] disabled:pointer-events-none disabled:opacity-30"
       >
         <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta={`Quitar ${e.archivo.name}`} />
@@ -154,12 +155,14 @@ function Fila({ e, bloqueada, onQuitar }: { e: ArchivoEnCola<File>; bloqueada: b
 
 // ─── La zona ─────────────────────────────────────────────────────────────────
 
-export default function ZonaEvidencias({ cola, conservadas, bloqueada, error, avisos, onAgregar, onQuitar, onLimpiarAvisos }: {
+export default function ZonaEvidencias({ cola, conservadas, bloqueada, sinQuitar = false, error, avisos, onAgregar, onQuitar, onLimpiarAvisos }: {
   cola: ArchivoEnCola<File>[]
   /** Archivos de la versión anterior que pasan a esta: cuentan para el tope de archivos del reporte (que no se dice). */
   conservadas: number
   /** Mientras se envía: no se agrega ni se quita nada. */
   bloqueada: boolean
+  /** Mientras se guarda el borrador: se puede seguir adjuntando, pero no quitar los archivos que ese guardado está llevando. */
+  sinQuitar?: boolean
   /** Lo que falta, si se intentó enviar sin evidencia. */
   error: string | null
   /** Archivos que se rechazaron al elegir, cada uno con su motivo. */
@@ -184,7 +187,7 @@ export default function ZonaEvidencias({ cola, conservadas, bloqueada, error, av
     <div>
       {cola.length > 0 && (
         <ul className="mb-2 space-y-1.5">
-          {cola.map(e => <Fila key={e.clave} e={e} bloqueada={bloqueada} onQuitar={() => onQuitar(e.clave)} />)}
+          {cola.map(e => <Fila key={e.clave} e={e} bloqueada={bloqueada || sinQuitar} onQuitar={() => onQuitar(e.clave)} />)}
         </ul>
       )}
 

@@ -96,6 +96,86 @@ export function firmaDelFormulario(f: {
   return JSON.stringify([f.valor.trim(), f.texto, f.motivo, [...f.conservar].sort(), [...f.guardados], [...f.porSubir]])
 }
 
+// ─── El guardado automático ──────────────────────────────────────────────────
+
+/** Cuánto se espera tras la última tecla antes de guardar lo escrito (los archivos no esperan: se suben al elegirlos). */
+export const ESPERA_TEXTO_MS = 1500
+/** Cuánto se espera antes de descartar un borrador cuyo formulario quedó vacío (por si quien lo vació está reescribiendo). */
+export const ESPERA_VACIO_MS = 3000
+/** Intentos seguidos que fallan antes de dejar de insistir y pedir que la persona reintente. */
+export const MAX_FALLOS_AUTOGUARDADO = 4
+
+/** Lo que el formulario hace ahora con su borrador. */
+export type DecisionAutoguardado = { accion: 'nada' } | { accion: 'guardar' | 'descartar'; enMs: number }
+
+/**
+ * Cuándo guarda solo el formulario. Nadie pulsa «Guardar»: en cuanto hay algo distinto de lo último guardado, se guarda.
+ *
+ *   · Los archivos se suben y se guardan de inmediato (no hay razón para esperar: es lo que costó tiempo).
+ *   · Lo escrito espera a que se deje de teclear (`ESPERA_TEXTO_MS`), para no guardar cada letra.
+ *   · Si falla, se reintenta cada vez más tarde y, tras `MAX_FALLOS_AUTOGUARDADO` fallos seguidos, se para: insistir sin fin
+ *     volvería a subir un video de 100 MB una y otra vez. Se retoma cuando la persona cambia algo o pulsa «Reintentar».
+ *   · Si otra persona guardó el borrador mientras tanto (`detenido`), no se pisa su trabajo: se espera a que la persona decida.
+ *   · Un formulario que quedó vacío no se puede guardar (el servidor lo rechaza: no hay nada): se descarta el borrador, si había.
+ *   · Mientras se envía, se descarta o ya se está guardando, no se empieza otro guardado: uno a la vez.
+ *   · `urgente` (se pidió enviar): sin esperas.
+ */
+export function decidirAutoguardado(e: {
+  firma: string
+  /** La firma de lo último que quedó guardado (o, sin borrador, la del formulario recién abierto). */
+  firmaGuardada: string
+  /** Se está enviando o descartando a mano. */
+  ocupado: boolean
+  /** Ya hay un guardado en marcha. */
+  guardando: boolean
+  /** Otra persona guardó antes: no se sigue hasta que la persona decida. */
+  detenido: boolean
+  /** El valor escrito es un número o está vacío (un valor que no se entiende no se guarda). */
+  valorLegible: boolean
+  /** Archivos elegidos que aún no están subidos. */
+  porSubir: number
+  /** No hay valor, texto, motivo, archivos ni nada que conservar. */
+  vacio: boolean
+  hayBorrador: boolean
+  /** Fallos seguidos hasta ahora. */
+  fallos: number
+  urgente?: boolean
+}): DecisionAutoguardado {
+  if (e.ocupado || e.guardando || e.detenido) return { accion: 'nada' }
+  if (e.firma === e.firmaGuardada) return { accion: 'nada' }
+  if (!e.valorLegible) return { accion: 'nada' }
+  if (e.fallos >= MAX_FALLOS_AUTOGUARDADO) return { accion: 'nada' }
+  // 4 s, 8 s, 16 s… sin pasar de 30 s.
+  const reintento = e.fallos > 0 ? Math.min(30_000, 4_000 * 2 ** (e.fallos - 1)) : 0
+  if (e.vacio) {
+    return e.hayBorrador ? { accion: 'descartar', enMs: e.urgente ? 0 : Math.max(ESPERA_VACIO_MS, reintento) } : { accion: 'nada' }
+  }
+  const base = e.porSubir > 0 ? 0 : ESPERA_TEXTO_MS
+  return { accion: 'guardar', enMs: e.urgente ? 0 : Math.max(base, reintento) }
+}
+
+/** ¿El servidor se negó a guardar porque otra persona cambió el borrador antes? (Ver el error 40001 de la migración 076.) */
+export const esConflictoDeBorrador = (mensaje: string | null | undefined): boolean => /cambió mientras lo editabas/i.test(mensaje ?? '')
+
+/** Lo que el formulario le dice a quien lo llena sobre su borrador mientras se guarda solo. */
+export type EstadoDelGuardado = 'conflicto' | 'detenido' | 'reintentando' | 'valor-ilegible' | 'guardando' | 'reposo'
+
+export function estadoDelGuardado(e: {
+  conflicto: boolean
+  guardando: boolean
+  /** Hay algo distinto de lo último guardado. */
+  hayCambios: boolean
+  valorLegible: boolean
+  fallos: number
+}): EstadoDelGuardado {
+  if (e.conflicto) return 'conflicto'
+  if (e.fallos >= MAX_FALLOS_AUTOGUARDADO) return 'detenido'
+  if (e.fallos > 0) return 'reintentando'
+  if (e.hayCambios && !e.valorLegible) return 'valor-ilegible'
+  if (e.guardando || e.hayCambios) return 'guardando'
+  return 'reposo'
+}
+
 /** Quién guardó el borrador, para el aviso: «tú» si fue la misma persona. */
 export const quienGuardo = (b: Pick<BorradorVista, 'editadoPorId' | 'editadoPor'>, yoId: string): string =>
   b.editadoPorId === yoId ? 'ti' : nombrePropio(b.editadoPor)

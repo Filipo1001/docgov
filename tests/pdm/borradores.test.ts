@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { aplicarSituacion, armarBorradores, firmaDelFormulario, quienGuardo, type FilaBorrador, type FilaBorradorArchivo } from '@/lib/pdm/borradores'
+import {
+  ESPERA_TEXTO_MS, ESPERA_VACIO_MS, MAX_FALLOS_AUTOGUARDADO,
+  aplicarSituacion, armarBorradores, decidirAutoguardado, esConflictoDeBorrador, estadoDelGuardado, firmaDelFormulario, quienGuardo,
+  type FilaBorrador, type FilaBorradorArchivo,
+} from '@/lib/pdm/borradores'
+import { traducirErrorPdm } from '@/lib/pdm/acciones'
 import {
   MAX_EVIDENCIAS, MENSAJE_DEMASIADOS_ARCHIVOS, errorEnArchivos, errorEnArchivosDelBorrador, errorEnBorrador,
 } from '@/lib/pdm/seguimiento-acciones'
@@ -111,4 +117,74 @@ test('los archivos de un borrador se revisan como los de un reporte, pero sin el
   assert.match(errorEnArchivosDelBorrador([{ nombre: 'vacio.pdf', tipo: 'application/pdf', bytes: 0 }], 0, 0)!, /vacío/)
   assert.match(errorEnArchivosDelBorrador([{ nombre: 'enorme.pdf', tipo: 'application/pdf', bytes: 26 * 1024 * 1024 }], 0, 0)!, /máximo para un PDF/)
   assert.match(errorEnArchivosDelBorrador([{ nombre: '  ', tipo: 'application/pdf', bytes: 10 }], 0, 0)!, /nombre/)
+})
+
+// ─── El guardado automático ──────────────────────────────────────────────────
+
+const quieto = { firma: 'b', firmaGuardada: 'a', ocupado: false, guardando: false, detenido: false, valorLegible: true, porSubir: 0, vacio: false, hayBorrador: false, fallos: 0 }
+
+test('guardado automático: lo escrito espera a que se deje de teclear; los archivos se suben y guardan de inmediato', () => {
+  assert.deepEqual(decidirAutoguardado(quieto), { accion: 'guardar', enMs: ESPERA_TEXTO_MS })
+  assert.deepEqual(decidirAutoguardado({ ...quieto, porSubir: 2 }), { accion: 'guardar', enMs: 0 })
+})
+
+test('guardado automático: sin cambios respecto a lo último guardado no se hace nada (abrir el formulario no crea un borrador)', () => {
+  assert.deepEqual(decidirAutoguardado({ ...quieto, firma: 'a' }), { accion: 'nada' })
+  assert.deepEqual(decidirAutoguardado({ ...quieto, firma: 'a', porSubir: 3 }), { accion: 'nada' })
+})
+
+test('guardado automático: uno a la vez, y no mientras se envía, se descarta o hay un conflicto por resolver', () => {
+  for (const parcial of [{ ocupado: true }, { guardando: true }, { detenido: true }]) {
+    assert.deepEqual(decidirAutoguardado({ ...quieto, ...parcial }), { accion: 'nada' }, JSON.stringify(parcial))
+    assert.deepEqual(decidirAutoguardado({ ...quieto, ...parcial, porSubir: 1, urgente: true }), { accion: 'nada' }, `${JSON.stringify(parcial)} con urgencia`)
+  }
+})
+
+test('guardado automático: un valor que no se entiende no se guarda (el campo ya lo marca), y se retoma cuando se corrige', () => {
+  assert.deepEqual(decidirAutoguardado({ ...quieto, valorLegible: false }), { accion: 'nada' })
+  assert.equal(decidirAutoguardado({ ...quieto, valorLegible: true }).accion, 'guardar')
+})
+
+test('guardado automático: tras un fallo reintenta cada vez más tarde y, al llegar al tope, para (no sube un video de 100 MB sin fin)', () => {
+  const esperas = Array.from({ length: MAX_FALLOS_AUTOGUARDADO }, (_, fallos) => decidirAutoguardado({ ...quieto, porSubir: 1, fallos }))
+  const ms = esperas.map(d => (d.accion === 'nada' ? -1 : d.enMs))
+  assert.deepEqual(ms, [0, 4000, 8000, 16000])
+  assert.deepEqual(decidirAutoguardado({ ...quieto, porSubir: 1, fallos: MAX_FALLOS_AUTOGUARDADO }), { accion: 'nada' })
+  // Aun con muchos fallos acumulados, la espera nunca pasa de 30 s.
+  assert.ok(ms.every(m => m <= 30_000))
+})
+
+test('guardado automático: un formulario que quedó vacío descarta el borrador (el servidor no admite uno vacío); sin borrador no hay nada que hacer', () => {
+  assert.deepEqual(decidirAutoguardado({ ...quieto, vacio: true, hayBorrador: true }), { accion: 'descartar', enMs: ESPERA_VACIO_MS })
+  assert.deepEqual(decidirAutoguardado({ ...quieto, vacio: true, hayBorrador: false }), { accion: 'nada' })
+})
+
+test('guardado automático: «enviar» no espera (urgente) pero sigue respetando el tope de fallos', () => {
+  assert.deepEqual(decidirAutoguardado({ ...quieto, urgente: true }), { accion: 'guardar', enMs: 0 })
+  assert.deepEqual(decidirAutoguardado({ ...quieto, vacio: true, hayBorrador: true, urgente: true }), { accion: 'descartar', enMs: 0 })
+  assert.deepEqual(decidirAutoguardado({ ...quieto, urgente: true, fallos: MAX_FALLOS_AUTOGUARDADO }), { accion: 'nada' })
+})
+
+test('el aviso de conflicto reconoce lo que dice la base cuando otra persona guardó antes (y solo eso)', () => {
+  // Los mensajes salen de la migración 076, tal como llegan a la persona: si alguien reescribe uno, esta prueba lo avisa.
+  const sql = readFileSync('supabase/migrations/076_pdm_borradores.sql', 'utf8')
+  const mensajes = [...sql.matchAll(/raise exception '([^']*)' using errcode = '40001'/g)].map(m => m[1])
+  assert.ok(mensajes.length >= 2, 'la migración tiene al menos dos conflictos (guardar y descartar)')
+  for (const m of mensajes) {
+    assert.equal(esConflictoDeBorrador(traducirErrorPdm('40001', m)), true, m)
+  }
+  assert.equal(esConflictoDeBorrador('No se pudo guardar el cambio. Intenta de nuevo.'), false)
+  assert.equal(esConflictoDeBorrador('Un archivo no corresponde a este indicador y este año. Vuelve a adjuntarlo.'), false)
+  assert.equal(esConflictoDeBorrador(null), false)
+})
+
+test('lo que se le dice a quien llena el formulario sobre su borrador', () => {
+  const base = { conflicto: false, guardando: false, hayCambios: false, valorLegible: true, fallos: 0 }
+  assert.equal(estadoDelGuardado(base), 'reposo')
+  assert.equal(estadoDelGuardado({ ...base, hayCambios: true }), 'guardando', 'con algo por guardar ya se dice que se guarda')
+  assert.equal(estadoDelGuardado({ ...base, guardando: true }), 'guardando')
+  assert.equal(estadoDelGuardado({ ...base, hayCambios: true, valorLegible: false }), 'valor-ilegible')
+  assert.equal(estadoDelGuardado({ ...base, hayCambios: true, fallos: 1 }), 'reintentando')
+  assert.equal(estadoDelGuardado({ ...base, hayCambios: true, fallos: MAX_FALLOS_AUTOGUARDADO }), 'detenido')
+  assert.equal(estadoDelGuardado({ ...base, hayCambios: true, fallos: MAX_FALLOS_AUTOGUARDADO, conflicto: true }), 'conflicto', 'el conflicto manda sobre todo')
 })
