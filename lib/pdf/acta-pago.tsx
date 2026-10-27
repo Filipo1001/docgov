@@ -14,6 +14,7 @@ import { BloqueVerificacion, CodigoPie, FirmaSellada } from './verificacion-comp
 import { formatCedula, numeroALetras } from '@/lib/format'
 import { conPesos } from '@/lib/numero-letras'
 import { plazoParaDocumento } from '@/lib/plazo-contrato'
+import { actaConFechasDelContrato } from './fechas-del-contrato'
 
 const HEADER_PATH = path.join(process.cwd(), 'public', 'header-acta-pago.png')
 
@@ -303,6 +304,22 @@ const s = StyleSheet.create({
 
 // ─── Component ────────────────────────────────────────────────
 
+/** Las dos filas bajo «No. CRP», con el mismo formato que «No. CDP» y «No. CRP». La última cierra la tabla. */
+function FilasFechasDelContrato({ inicio, fin }: { inicio: string; fin: string }) {
+  return (
+    <>
+      <View style={s.infoRow}>
+        <View style={s.infoLabel}><Text>Fecha de inicio</Text></View>
+        <View style={s.infoVal}><Text>{inicio}</Text></View>
+      </View>
+      <View style={s.infoRowLast}>
+        <View style={s.infoLabel}><Text>Fecha de fin</Text></View>
+        <View style={s.infoVal}><Text>{fin}</Text></View>
+      </View>
+    </>
+  )
+}
+
 const ESTADOS_FIRMA_SUPERVISOR = new Set(['aprobado', 'radicado'])
 
 export function ActaPagoPDF({ data }: { data: PDFData }) {
@@ -359,6 +376,11 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
   }
 
   const periodoNum = String(periodo.numero).padStart(2, '0')
+
+  // Bajo «No. CRP»: cuándo empieza y cuándo termina el contrato (la fecha de fin ya trae lo que movió un otrosí). Un acta de un periodo
+  // que ya estaba aprobado o radicado al publicar esto conserva su forma (ver `fechas-del-contrato.ts`).
+  const conFechas = actaConFechasDelContrato(periodo)
+  const fechaDelContrato = (iso?: string | null) => (iso ? fechaTexto(iso.slice(0, 10)) : '—')
 
   return (
     <Document
@@ -434,7 +456,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
                   <View style={s.infoVal}><Text>{contrato.cdp || '—'}</Text></View>
                 )}
               </View>
-              <View style={s.infoRowLast}>
+              <View style={conFechas ? s.infoRow : s.infoRowLast}>
                 <View style={s.infoLabel}><Text>No. CRP</Text></View>
                 {ot.crp ? (
                   <View style={s.infoValSplit}>
@@ -445,6 +467,7 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
                   <View style={s.infoVal}><Text>{contrato.crp || '—'}</Text></View>
                 )}
               </View>
+              {conFechas && <FilasFechasDelContrato inicio={fechaDelContrato(contrato.fecha_inicio_contrato)} fin={fechaDelContrato(contrato.fecha_fin_contrato)} />}
             </>
           ) : (
             <>
@@ -460,10 +483,11 @@ export function ActaPagoPDF({ data }: { data: PDFData }) {
                 <View style={s.infoLabel}><Text>No. CDP</Text></View>
                 <View style={s.infoVal}><Text>{contrato.cdp || '—'}</Text></View>
               </View>
-              <View style={s.infoRowLast}>
+              <View style={conFechas ? s.infoRow : s.infoRowLast}>
                 <View style={s.infoLabel}><Text>No. CRP</Text></View>
                 <View style={s.infoVal}><Text>{contrato.crp || '—'}</Text></View>
               </View>
+              {conFechas && <FilasFechasDelContrato inicio={fechaDelContrato(contrato.fecha_inicio_contrato)} fin={fechaDelContrato(contrato.fecha_fin_contrato)} />}
             </>
           )}
         </View>
