@@ -14,13 +14,15 @@
  */
 
 /**
- * Desde cuándo el acta de pago lleva las fechas del contrato. Es el momento en que se publicó el cambio, con un margen sobre la subida
- * a `main` (lo que se apruebe mientras Vercel construye todavía lo emite el código viejo, y por eso cuenta como «ya emitido»: el margen
- * solo se equivoca hacia el lado seguro).
+ * Desde cuándo el acta de pago lleva las fechas del contrato. Es el momento en que se publicó el cambio: un periodo aprobado antes
+ * conserva la forma con que se emitieron sus documentos.
  *
- * PROVISIONAL: se fija al publicar. Mientras no se publique, ningún periodo aprobado la cumple.
+ * Fijado el 27-oct-2026 a las 14:21 UTC (9:21 a. m. en Colombia), unos 9 minutos después de la subida a `main`: lo que se apruebe
+ * mientras Vercel construye todavía lo emite el código viejo, y por eso cuenta como «ya emitido». El margen solo se equivoca hacia el
+ * lado seguro: un periodo aprobado entre que el despliegue sale y las 14:21 conserva la forma vieja (la misma que imprimiría el código
+ * viejo) y la conserva para siempre, porque la regla depende solo de su fecha de aprobación.
  */
-export const FECHAS_EN_ACTA_DESDE = '2099-01-01T00:00:00Z'
+export const FECHAS_EN_ACTA_DESDE = '2026-10-27T14:21:00Z'
 
 /**
  * ¿El acta de este periodo lleva las fechas del contrato?

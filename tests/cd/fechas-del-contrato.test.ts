@@ -28,11 +28,12 @@ test('un radicado o aprobado sin fecha de aprobación es anterior a que existier
   assert.equal(actaConFechasDelContrato({ estado: 'aprobado' }, CORTE), false)
 })
 
-test('mientras el corte sea provisional (sin publicar), ningún periodo aprobado lo cumple', () => {
-  // Guardia: el corte se fija al publicar. Si alguien lo deja en el futuro lejano, lo ya emitido está a salvo, pero las actas nuevas
-  // aprobadas tampoco llevarían las filas: esta prueba avisa cuando el corte deja de ser el provisional.
-  assert.equal(FECHAS_EN_ACTA_DESDE, '2099-01-01T00:00:00Z', 'si ya se fijó el corte real, actualiza esta guardia con la fecha publicada')
-  assert.equal(actaConFechasDelContrato({ estado: 'aprobado', fecha_aprobacion: '2026-12-01T12:00:00Z' }), false)
+test('el corte publicado es el del 27-oct-2026 14:21 UTC y se aplica por defecto', () => {
+  // Es la hora en que se publicó el cambio (ver la nota de `FECHAS_EN_ACTA_DESDE`): moverlo reescribiría actas ya emitidas.
+  assert.equal(FECHAS_EN_ACTA_DESDE, '2026-10-27T14:21:00Z')
+  assert.equal(actaConFechasDelContrato({ estado: 'aprobado', fecha_aprobacion: '2026-10-27T14:20:59Z' }), false, 'aprobado antes del corte: conserva su forma')
+  assert.equal(actaConFechasDelContrato({ estado: 'aprobado', fecha_aprobacion: '2026-10-27T14:21:00Z' }), true, 'en el corte y después: lleva las fechas')
+  assert.equal(actaConFechasDelContrato({ estado: 'radicado', fecha_aprobacion: '2026-10-20T12:00:00Z' }), false)
   assert.equal(actaConFechasDelContrato({ estado: 'borrador' }), true)
 })
 
