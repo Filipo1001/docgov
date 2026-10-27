@@ -3646,7 +3646,7 @@ export default function PeriodoDetallePage({
               className={`text-white px-6 py-3 rounded-xl font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed shrink-0 w-full sm:w-auto flex items-center justify-center gap-2 ${
                 rechazado
                   ? 'bg-red-600 hover:bg-red-700'
-                  : 'hover:bg-[#242F45]'
+                  : 'hover:bg-tinta-clara'
               }`}
               style={rechazado ? undefined : { backgroundColor: MARCA }}
             >

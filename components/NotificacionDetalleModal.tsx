@@ -322,7 +322,7 @@ export default function NotificacionDetalleModal({
               <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500">
                 {ROTULOS[severidad]}
               </p>
-              <h2 className="text-lg sm:text-xl font-bold text-[#192031] leading-tight tracking-tight mt-1 text-balance">
+              <h2 className="text-lg sm:text-xl font-bold text-tinta leading-tight tracking-tight mt-1 text-balance">
                 {notificacion.titulo}
               </h2>
             </div>
@@ -381,7 +381,7 @@ export default function NotificacionDetalleModal({
                 <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500 mb-1.5">
                   Qué hay que hacer
                 </p>
-                <p className="text-sm text-[#192031] leading-relaxed font-medium">
+                <p className="text-sm text-tinta leading-relaxed font-medium">
                   {detalle.instruccion}
                 </p>
               </div>
@@ -411,7 +411,7 @@ export default function NotificacionDetalleModal({
                       {/* En móvil el nombre y el mes se apilan: así no se corta
                           ningún nombre, que es medio directorio del municipio. */}
                       <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                        <span className="text-[13px] sm:text-sm text-[#192031] font-medium leading-snug">
+                        <span className="text-[13px] sm:text-sm text-tinta font-medium leading-snug">
                           {item.nombre}
                         </span>
                         {item.extra && (
@@ -512,7 +512,7 @@ export default function NotificacionDetalleModal({
           {notificacion.periodo_id && contratoDelPeriodo ? (
             <button
               onClick={() => irA(`/dashboard/contratos/${contratoDelPeriodo}/periodo/${notificacion.periodo_id}`)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#192031] hover:bg-[#242F45] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#192031] focus-visible:outline-none transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-tinta hover:bg-tinta-clara focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-tinta focus-visible:outline-none transition-colors"
             >
               Ir al informe
               <Icono glifo={Iconos.accion.avanzar} tamano="sm" />
@@ -520,7 +520,7 @@ export default function NotificacionDetalleModal({
           ) : totalItems > 0 ? (
             <button
               onClick={() => irA('/dashboard/contratos')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#192031] hover:bg-[#242F45] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#192031] focus-visible:outline-none transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-tinta hover:bg-tinta-clara focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-tinta focus-visible:outline-none transition-colors"
             >
               Ver contratos
               <Icono glifo={Iconos.accion.avanzar} tamano="sm" />
@@ -528,7 +528,7 @@ export default function NotificacionDetalleModal({
           ) : (
             <button
               onClick={cerrar}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#192031] hover:bg-[#242F45] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#192031] focus-visible:outline-none transition-colors"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-tinta hover:bg-tinta-clara focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-tinta focus-visible:outline-none transition-colors"
             >
               Entendido
             </button>

@@ -18,7 +18,11 @@
  * logo correctamente, sin necesidad de un segundo archivo.
  */
 
-import { MARCA } from '@/lib/marca'
+/**
+ * La tinta por defecto es la VARIABLE de la marca (`--tinta` en globals.css), no su valor: en el tema oscuro cambia a un tono claro y el
+ * logo se lee sobre el fondo oscuro. Quien pase `color` (un blanco sobre una superficie de color, por ejemplo) manda sobre ella.
+ */
+const TINTA = 'var(--tinta)'
 
 /** Proporción del original: 865.92 × 898.2. El alto manda. */
 const RELACION = 865.92 / 898.2
@@ -40,7 +44,7 @@ interface Props {
 }
 
 /** Isotipo: la carpeta con las iniciales. */
-export function LogoCD({ size = 32, color = MARCA, className }: Props) {
+export function LogoCD({ size = 32, color = TINTA, className }: Props) {
   return (
     <svg
       width={Math.round(size * RELACION)}
@@ -52,8 +56,8 @@ export function LogoCD({ size = 32, color = MARCA, className }: Props) {
       role="img"
       aria-label="Contratista Digital"
     >
-      <path d={TRAZO_CARPETA} fill={color} />
-      <path d={TRAZO_OJO_D} fill={color} />
+      <path d={TRAZO_CARPETA} style={{ fill: color }} />
+      <path d={TRAZO_OJO_D} style={{ fill: color }} />
     </svg>
   )
 }
@@ -66,7 +70,7 @@ export function LogoCD({ size = 32, color = MARCA, className }: Props) {
  */
 export function LogoHorizontal({
   size = 36,
-  color = MARCA,
+  color = TINTA,
   colorNombre,
   subtitulo,
   className,
@@ -77,7 +81,7 @@ export function LogoHorizontal({
       <div className="min-w-0 leading-tight">
         <p
           className="font-bold tracking-tight truncate"
-          style={{ color: colorNombre ?? MARCA, fontSize: size * 0.44 }}
+          style={{ color: colorNombre ?? TINTA, fontSize: size * 0.44 }}
         >
           Contratista Digital
         </p>

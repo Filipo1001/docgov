@@ -35,8 +35,8 @@ export const MARCA_FONDO = '#FDFDFE'
  * perceptible y repintarlas solo añadiría ruido al historial.
  */
 export const CLASES_MARCA = {
-  fondo: 'bg-[#192031]',
-  fondoHover: 'hover:bg-[#242F45]',
-  texto: 'text-[#192031]',
-  borde: 'border-[#192031]',
+  fondo: 'bg-tinta',
+  fondoHover: 'hover:bg-tinta-clara',
+  texto: 'text-tinta',
+  borde: 'border-tinta',
 } as const

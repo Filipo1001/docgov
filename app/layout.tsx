@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SITIO, NOMBRE, DESCRIPCION } from "@/lib/seo";
+import { SCRIPT_TEMA } from "@/lib/tema";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -66,9 +67,14 @@ export default function RootLayout({
     // sitio» y pasa por encima de esa declaración. Esta aplicación es
     // monolingüe para municipios colombianos, así que no hay ningún caso en el
     // que traducirla sea correcto.
-    <html lang="es" translate="no">
+    //
+    // `suppressHydrationWarning`: el script de abajo puede poner `data-tema` en esta etiqueta antes de que React arranque (el tema
+    // oscuro, solo en el panel; ver lib/tema.ts), y eso no es un error de hidratación.
+    <html lang="es" translate="no" suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
+        {/* Antes de pintar: sin esto, quien eligió el tema oscuro vería un destello blanco en cada carga. No hace nada fuera del panel. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased notranslate`}

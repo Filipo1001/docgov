@@ -112,7 +112,7 @@ export default function AvisosPendientesClient() {
             <button
               onClick={() => setConfirmando(true)}
               disabled={enviando}
-              className="rounded-xl bg-[#192031] px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              className="rounded-xl bg-tinta px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
             >
               Reenviar {pendientes.length} aviso(s)
             </button>
@@ -124,7 +124,7 @@ export default function AvisosPendientesClient() {
               <button
                 onClick={enviar}
                 disabled={enviando}
-                className="rounded-xl bg-[#192031] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded-xl bg-tinta px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
                 {enviando ? 'Enviando…' : 'Sí, enviar'}
               </button>

@@ -62,7 +62,7 @@ export default function FuncionarioHome({ nombre }: { nombre: string }) {
               </p>
               <Link
                 href={ITEM_PLAN_DESARROLLO.href}
-                className="mt-4 inline-flex rounded-xl bg-[#192031] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#242F45]"
+                className="mt-4 inline-flex rounded-xl bg-tinta px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-tinta-clara"
               >
                 Entrar al Plan de Desarrollo
               </Link>

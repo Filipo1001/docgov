@@ -165,7 +165,7 @@ export default function CapturaFirma({
             <button
               onClick={() => setEscaneando(true)}
               disabled={subiendo}
-              className="w-full bg-[#192031] hover:bg-[#242F45] active:scale-[.99] disabled:opacity-60 text-white py-3.5 px-4 rounded-2xl transition-all flex items-center gap-3 text-left shadow-sm"
+              className="w-full bg-tinta hover:bg-tinta-clara active:scale-[.99] disabled:opacity-60 text-white py-3.5 px-4 rounded-2xl transition-all flex items-center gap-3 text-left shadow-sm"
             >
               <span className="shrink-0 w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
                 <IconoCamara />

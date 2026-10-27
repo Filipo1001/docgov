@@ -44,7 +44,7 @@ function Cifra({ valor, etiqueta, resaltada = false }: {
   valor: string; etiqueta: string; resaltada?: boolean
 }) {
   return (
-    <div className={`rounded-2xl p-4 ${resaltada ? 'bg-[#192031]' : 'bg-gray-50'}`}>
+    <div className={`rounded-2xl p-4 ${resaltada ? 'bg-tinta' : 'bg-gray-50'}`}>
       <p className={`text-xl lg:text-2xl font-bold ${resaltada ? 'text-white' : ''}`}
          style={resaltada ? undefined : { color: MARCA }}>
         {valor}

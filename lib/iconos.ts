@@ -58,6 +58,8 @@ import {
   FileImage,
   // La huella (SHA-256) de una evidencia
   Fingerprint,
+  // El tema de la aplicación (claro, oscuro, automático)
+  Sun, Moon, Monitor,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -228,6 +230,12 @@ export const Iconos = {
     economia: TrendingUp,
     habitat: TreePine,
     seguridad: Handshake,
+  },
+  /** Las tres opciones del interruptor de tema (`components/SelectorTema.tsx`). */
+  tema: {
+    claro: Sun,
+    oscuro: Moon,
+    sistema: Monitor,
   },
 } as const
 

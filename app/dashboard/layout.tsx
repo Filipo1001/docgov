@@ -16,6 +16,8 @@ import { avatarThumb } from '@/lib/avatar'
 import NotificacionesBell from '@/components/NotificacionesBell'
 import AvisoMigracion from '@/components/AvisoMigracion'
 import { LogoCD } from '@/components/Logo'
+import AplicarTema from '@/components/AplicarTema'
+import SelectorTema from '@/components/SelectorTema'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 
@@ -173,7 +175,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           <div className="flex items-center gap-3">
             <LogoCD size={40} />
             <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-tight text-[#192031] truncate">Contratista Digital</h1>
+              <h1 className="text-base font-bold tracking-tight text-tinta truncate">Contratista Digital</h1>
               {municipio && <p className="text-xs text-gray-400">{municipio.nombre}</p>}
             </div>
           </div>
@@ -260,6 +262,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
               </svg>
             </Link>
           )}
+          {/* El tema: claro, oscuro o el del dispositivo. Se guarda en este dispositivo (lib/tema.ts). */}
+          <SelectorTema />
           <button
             onClick={cerrarSesion}
             disabled={cerrando}
@@ -292,7 +296,7 @@ function MobileHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
       <div className="flex items-center gap-2">
         <LogoCD size={32} />
         <div className="min-w-0">
-          <h1 className="text-sm font-bold tracking-tight text-[#192031] truncate">Contratista Digital</h1>
+          <h1 className="text-sm font-bold tracking-tight text-tinta truncate">Contratista Digital</h1>
           {municipio && <p className="text-[10px] text-gray-400 -mt-0.5">{municipio.nombre}</p>}
         </div>
       </div>
@@ -391,6 +395,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <QueryProvider>
       <UserProvider>
+        {/* Mantiene el tema acorde con la ruta al navegar sin recargar (el módulo Plan de Desarrollo sigue siendo claro). */}
+        <AplicarTema />
         <DashboardContent>{children}</DashboardContent>
       </UserProvider>
     </QueryProvider>

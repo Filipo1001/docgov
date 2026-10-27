@@ -86,7 +86,7 @@ export const ESTADO_COLOR: Record<EstadoPeriodo, string> = {
   enviado: 'bg-blue-100 text-blue-700',
   revision: 'bg-indigo-100 text-indigo-700',
   aprobado: 'bg-green-100 text-green-800',
-  radicado: 'bg-[#192031] text-white',
+  radicado: 'bg-tinta text-white',
   rechazado: 'bg-red-100 text-red-700',
 }
 

@@ -75,7 +75,7 @@ export default function SeguridadSocialContratista({
             onClick={onEnviarCorreccion}
             disabled={enviando || bloqueoEnvio !== null}
             aria-busy={enviando}
-            className="w-full shrink-0 rounded-xl bg-[#192031] px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#242F45] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 sm:w-auto"
+            className="w-full shrink-0 rounded-xl bg-tinta px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-tinta-clara active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 sm:w-auto"
           >
             {enviando ? 'Enviando…' : 'Enviar corrección a revisión'}
           </button>
