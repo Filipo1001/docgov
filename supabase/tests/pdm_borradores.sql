@@ -107,6 +107,12 @@ language sql as $f$
   from generate_series(1, p_n) g
 $f$;
 
+-- Cuántas filas de archivos tienen los borradores del indicador de la prueba (no de toda la tabla: puede haber borradores reales).
+create or replace function pg_temp.archivos_de_borrador(p_ind uuid) returns bigint
+language sql as $f$
+  select count(*) from public.pdm_borrador_archivos a join public.pdm_borradores b on b.id = a.borrador_id where b.indicador_id = p_ind
+$f$;
+
 -- Guarda un borrador como esa persona. El valor va como TEXTO (para poder pasar la palabra null); el motivo, como texto o NULL de verdad.
 create or replace function pg_temp.guardar(p_uid uuid, p_ind uuid, p_ver int, p_valor text, p_texto text, p_motivo text, p_conservar text, p_archivos jsonb)
 returns jsonb
@@ -228,7 +234,7 @@ begin
   perform pg_temp.chequear('el archivo que ya no está se devuelve como retirado, y solo ese',
     jsonb_array_length(v_res2 -> 'retirados') = 1 and (v_res2 -> 'retirados' ->> 0) = (v_arch -> 1 ->> 'ruta'));
   perform pg_temp.chequear('la lista de archivos quedó con 2 (uno de antes y uno nuevo)',
-    jsonb_array_length(v_res2 -> 'archivos') = 2 and (select count(*) from public.pdm_borrador_archivos) = 2
+    jsonb_array_length(v_res2 -> 'archivos') = 2 and pg_temp.archivos_de_borrador(v_i) = 2
     and exists (select 1 from public.pdm_borrador_archivos where ruta = v_arch -> 0 ->> 'ruta'));
   perform pg_temp.chequear('el archivo que se conservó sigue a nombre de quien lo subió primero',
     (select subido_por = v_r from public.pdm_borrador_archivos where ruta = v_arch -> 0 ->> 'ruta'));
@@ -274,21 +280,21 @@ begin
   v_res := pg_temp.como(v_r2, format('select public.pdm_borrador_descartar(%L::uuid, 2026, 3)', v_i));
   perform pg_temp.chequear('con la versión buena se borra y devuelve las rutas de sus 2 archivos', jsonb_array_length(v_res -> 'retirados') = 2);
   perform pg_temp.chequear('no queda nada del borrador ni de sus archivos',
-    (select count(*) from public.pdm_borradores where indicador_id = v_i) = 0 and (select count(*) from public.pdm_borrador_archivos) = 0);
+    (select count(*) from public.pdm_borradores where indicador_id = v_i) = 0 and pg_temp.archivos_de_borrador(v_i) = 0);
   v_res := pg_temp.como(v_r, format('select public.pdm_borrador_descartar(%L::uuid, 2026, 3)', v_i));
   perform pg_temp.chequear('descartar lo que no existe no falla y no devuelve nada', jsonb_array_length(v_res -> 'retirados') = 0);
 
   -- ══ Enviar el reporte borra el borrador ═══════════════════════════════════
   v_arch := pg_temp.archivos(v_plan, v_i, 3);
   v_res := pg_temp.guardar(v_r, v_i, 0, '5', v_texto, null, '{}', v_arch);
-  perform pg_temp.chequear('se guarda un borrador de 3 archivos para enviarlo', (v_res ->> 'version')::int = 1 and (select count(*) from public.pdm_borrador_archivos) = 3);
+  perform pg_temp.chequear('se guarda un borrador de 3 archivos para enviarlo', (v_res ->> 'version')::int = 1 and pg_temp.archivos_de_borrador(v_i) = 3);
   -- El reporte lleva 2 archivos del borrador y 1 nuevo (el otro archivo del borrador se quedó fuera).
   v_res2 := pg_temp.como(v_r2, format('select public.pdm_reportar(%L::uuid, 2026, 5::numeric, %L, %L::jsonb)', v_i, v_texto,
     (jsonb_build_array(v_arch -> 0, v_arch -> 1) || pg_temp.archivos(v_plan, v_i, 1))::text));
   v_rep := (v_res2 ->> 'reporte')::uuid;
   perform pg_temp.chequear('enviar el reporte funciona (lo envía la otra persona)', v_rep is not null and (select count(*) from public.pdm_evidencias where reporte_id = v_rep) = 3);
   perform pg_temp.chequear('el borrador y sus filas de archivos desaparecieron en el mismo paso',
-    (select count(*) from public.pdm_borradores where indicador_id = v_i) = 0 and (select count(*) from public.pdm_borrador_archivos) = 0);
+    (select count(*) from public.pdm_borradores where indicador_id = v_i) = 0 and pg_temp.archivos_de_borrador(v_i) = 0);
   perform pg_temp.chequear('los archivos del borrador son ahora evidencias del reporte, con su misma ruta',
     exists (select 1 from public.pdm_evidencias where reporte_id = v_rep and ruta = v_arch -> 0 ->> 'ruta')
     and exists (select 1 from public.pdm_evidencias where reporte_id = v_rep and ruta = v_arch -> 1 ->> 'ruta'));
@@ -307,7 +313,7 @@ begin
     v_i, v_texto, v_arch2::text, 'Se agrega el taller que faltaba al reporte', array[v_ev]::text));
   v_rep2 := (v_res2 ->> 'reporte')::uuid;
   perform pg_temp.chequear('enviar la corrección funciona y conserva el archivo', v_rep2 is not null and (v_res2 ->> 'correccion')::boolean and (v_res2 ->> 'conservadas')::int = 1);
-  perform pg_temp.chequear('y también borra ese borrador', (select count(*) from public.pdm_borradores where indicador_id = v_i) = 0 and (select count(*) from public.pdm_borrador_archivos) = 0);
+  perform pg_temp.chequear('y también borra ese borrador', (select count(*) from public.pdm_borradores where indicador_id = v_i) = 0 and pg_temp.archivos_de_borrador(v_i) = 0);
 
   -- Enviar sin borrador sigue funcionando (el camino de siempre).
   v_res2 := pg_temp.como(v_r, format('select public.pdm_reportar(%L::uuid, 2026, 8::numeric, %L, %L::jsonb, %L, %L::uuid[])',
