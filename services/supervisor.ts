@@ -336,7 +336,7 @@ export async function getColaboradoresSupervisor(
   const { data: contratos } = await supabase
     .from('contratos')
     .select(`
-      id, numero, contratista_id, valor_mensual, fecha_inicio, fecha_fin,
+      id, numero, contratista_id, valor_mensual, fecha_inicio, fecha_fin, fecha_fin_efectiva,
       contratista:usuarios!contratos_contratista_id_fkey(
         id, nombre_completo, cedula, email, foto_url, cargo
       ),
@@ -357,7 +357,7 @@ export async function getColaboradoresSupervisor(
     const cont = c.contratista
     if (!cont) continue
 
-    const isActivo = c.fecha_inicio <= now && c.fecha_fin >= now
+    const isActivo = c.fecha_inicio <= now && (c.fecha_fin_efectiva ?? c.fecha_fin) >= now
     const periodos: { estado: string }[] = c.periodos ?? []
 
     const existing = map.get(cont.id)
@@ -497,7 +497,7 @@ export async function getSupervisorDashboard(
   const { data: contratosData, error: errContratos } = await supabase
     .from('contratos')
     .select(`
-      id, numero, valor_mensual, fecha_inicio, fecha_fin,
+      id, numero, valor_mensual, fecha_inicio, fecha_fin, fecha_fin_efectiva,
       contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)
     `)
     .eq('supervisor_id', supervisorId)
@@ -507,7 +507,8 @@ export async function getSupervisorDashboard(
   const contratoIds = contratos.map(c => c.id)
   if (contratoIds.length === 0) return empty
 
-  const contratosActivos = contratos.filter(c => c.fecha_fin >= hoy)
+  // Activo: hasta su fecha de fin EFECTIVA (un contrato terminado antes deja de contar desde su último día de ejecución).
+  const contratosActivos = contratos.filter(c => (c.fecha_fin_efectiva ?? c.fecha_fin) >= hoy)
   const valorBajoGestion = contratosActivos.reduce((s: number, c: any) => s + (c.valor_mensual ?? 0), 0)
 
   // 2. Parallel queries
@@ -624,7 +625,7 @@ export async function getSupervisorDashboard(
     const mesIdx = (MESES as readonly string[]).findIndex(m => m === mes)
     const mesStr = new Date(anio, mesIdx, 1).toISOString().slice(0, 10)
     const activosMes = contratos.filter(
-      (c: any) => c.fecha_inicio <= mesStr && c.fecha_fin >= mesStr,
+      (c: any) => c.fecha_inicio <= mesStr && (c.fecha_fin_efectiva ?? c.fecha_fin) >= mesStr,
     ).length
     const mPeriods = periodos5Meses.filter((p: any) => p.mes === mes && p.anio === anio)
     return {
@@ -699,7 +700,7 @@ export async function getPersonaDetalle(
     .from('contratos')
     .select(`
       id, numero, objeto, valor_total, valor_mensual,
-      fecha_inicio, fecha_fin, plazo_meses,
+      fecha_inicio, fecha_fin, fecha_fin_efectiva, plazo_meses,
       dependencia:dependencias(nombre, abreviatura),
       periodos(id, contrato_id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, fecha_envio, motivo_rechazo)
     `)
@@ -726,7 +727,7 @@ export async function getPersonaDetalle(
       fecha_inicio: c.fecha_inicio,
       fecha_fin: c.fecha_fin,
       plazo_meses: c.plazo_meses,
-      activo: isContratoActivo(c.fecha_inicio, c.fecha_fin),
+      activo: isContratoActivo(c.fecha_inicio, c.fecha_fin_efectiva ?? c.fecha_fin),
       dependencia: c.dependencia as any,
       periodos: ((c.periodos ?? []) as PeriodoColaborador[]).sort(
         (a: any, b: any) => a.numero_periodo - b.numero_periodo

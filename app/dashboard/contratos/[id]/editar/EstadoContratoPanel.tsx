@@ -84,7 +84,9 @@ export default function EstadoContratoPanel({
                 onChange={e => setEstado(e.target.value as EstadoContrato)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                {ESTADOS_CONTRATO.map(e => (
+                {/* «Terminado» no está: la terminación anticipada tiene efectos (anula periodos, suspende avisos) y se
+                    registra en la ficha del contrato, con su causal. */}
+                {ESTADOS_CONTRATO.filter(e => e.id !== 'terminado').map(e => (
                   <option key={e.id} value={e.id}>{e.label}</option>
                 ))}
               </select>

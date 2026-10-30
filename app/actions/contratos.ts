@@ -20,6 +20,7 @@ import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/types'
 import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
 import { MAX_PLAZO_DIAS, diasDelPlazo, mesesDelPlazo, plazoValido } from '@/lib/plazo-contrato'
+import { ESTADOS_NO_PRESENTADOS, informePresentado } from '@/lib/constants'
 
 const ERROR_DE_FECHAS = 'La fecha de terminación no puede ser anterior a la de inicio. Revisa las dos fechas.'
 const ERROR_DE_PLAZO = `El plazo debe ser un número entero de días, entre 1 y ${MAX_PLAZO_DIAS.toLocaleString('es-CO')}.`
@@ -442,7 +443,7 @@ export async function getCamposBloqueados(contratoId: string): Promise<CamposBlo
   const [{ count: periodos }, { count: presentados }] = await Promise.all([
     admin.from('periodos').select('id', { count: 'exact', head: true }).eq('contrato_id', contratoId),
     admin.from('periodos').select('id', { count: 'exact', head: true })
-      .eq('contrato_id', contratoId).neq('estado', 'borrador'),
+      .eq('contrato_id', contratoId).not('estado', 'in', ESTADOS_NO_PRESENTADOS),
   ])
 
   const conPeriodos = (periodos ?? 0) > 0
@@ -600,6 +601,11 @@ export async function cambiarEstadoContrato(
     if (!gestorId) return { error: 'No autorizado' }
 
     if (!ESTADOS_CONTRATO.some(e => e.id === estado)) return { error: 'Estado no válido.' }
+    // La terminación anticipada no es una etiqueta: anula periodos, recorta el último y suspende avisos (migración 081).
+    // Se registra y se deshace en la ficha del contrato (app/actions/terminacion-contrato.ts), nunca desde aquí.
+    if (estado === 'terminado') {
+      return { error: 'La terminación anticipada se registra en la ficha del contrato, con su causal y su último día de ejecución.' }
+    }
     if (!fecha) return { error: 'Indica la fecha del acto.' }
     if (estado !== 'vigente' && !motivo.trim()) {
       return { error: 'Indica el motivo: queda como constancia en el expediente.' }
@@ -610,6 +616,9 @@ export async function cambiarEstadoContrato(
       .from('contratos').select('estado').eq('id', contratoId).single()
     if (!actual) return { error: 'Contrato no encontrado' }
     if (actual.estado === estado) return { error: `El contrato ya está en estado "${estado}".` }
+    if (actual.estado === 'terminado') {
+      return { error: 'El contrato está terminado anticipadamente. Para cambiarlo, primero deshaz la terminación en la ficha del contrato.' }
+    }
 
     const { error } = await admin
       .from('contratos')
@@ -698,7 +707,7 @@ export async function resumenBorradoContrato(contratoId: string): Promise<Resume
     obligaciones: obligaciones ?? 0,
     evidencias: evidencias ?? 0,
     documentos: (adjuntosPeriodo ?? 0) + (adjuntosContrato ?? 0),
-    informesPresentados: (periodos ?? []).filter(p => p.estado !== 'borrador').length,
+    informesPresentados: (periodos ?? []).filter(p => informePresentado(p.estado)).length,
     codigosVerificacion: codigos ?? 0,
   }
 }

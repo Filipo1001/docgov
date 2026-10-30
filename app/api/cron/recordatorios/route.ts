@@ -36,6 +36,10 @@
  *  R4 — Contratación/admin: contratos sin CDP, CRP o contrato firmado
  *  R7 — Admin + supervisor del contrato: contratos que vencen en 60 o 30 días
  *
+ * Un contrato terminado anticipadamente (migración 081) deja de producir avisos por sí solo: sus periodos posteriores
+ * quedan `anulado` y ninguna regla de periodos los ve, y R4 y R7 miran la fecha de fin EFECTIVA o lo excluyen. Los
+ * periodos hasta su último día de ejecución siguen avisándose: son el informe con el que se cobra lo ejecutado.
+ *
  * Anti-spam:
  *  - R1: guard de 20 h por (tipo, periodo) — un retry del cron no duplica
  *  - R1: el aviso al supervisor sobre primerizos, 20 h (la regla corre 1 vez/mes)
@@ -653,7 +657,7 @@ export async function GET(req: NextRequest) {
       .from('contratos')
       .select('id, numero, cdp, crp, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
       .eq('activo', true)
-      .gte('fecha_fin', iso)
+      .gte('fecha_fin_efectiva', iso)
 
     type Vig = {
       id: string; numero: string; cdp: string | null; crp: string | null
@@ -725,6 +729,8 @@ export async function GET(req: NextRequest) {
       .from('contratos')
       .select('id, numero, fecha_fin, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
       .in('fecha_fin', [en60, en30])
+      // A un contrato terminado antes no hay prórroga que tramitarle: «vence en 30 días, tramita el otrosí» sería falso.
+      .is('fecha_terminacion', null)
 
     type ContratoVence = {
       id: string; numero: string; fecha_fin: string; supervisor_id: string | null

@@ -1,6 +1,6 @@
 import { requireRole } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { MESES } from '@/lib/constants'
+import { MESES, informePresentado } from '@/lib/constants'
 import InformesClient from './InformesClient'
 import type { Periodo } from '@/lib/types'
 
@@ -53,7 +53,7 @@ export default async function InformesPage() {
   ])
 
   let periodos = ((rawPeriodos ?? []) as Periodo[]).filter(
-    p => p.estado !== 'borrador' || p.es_historico === true,
+    p => informePresentado(p.estado) || p.es_historico === true,
   )
   let borradores = (rawBorradores ?? []) as Periodo[]
 

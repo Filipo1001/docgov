@@ -18,6 +18,7 @@ export type EstadoPeriodo =
   | 'aprobado'          // Secretary approved → downloadable package
   | 'radicado'          // Physically filed (radicado)
   | 'rechazado'         // Rejected → back to contratista for edits
+  | 'anulado'           // Ya no corresponde: el contrato terminó antes de que empezara (migraciones 080 y 081)
 
 export type TipoCuenta = 'ahorros' | 'corriente'
 

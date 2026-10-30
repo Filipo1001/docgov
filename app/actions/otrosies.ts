@@ -162,7 +162,8 @@ export async function crearOtrosi(input: CrearOtrosiInput): Promise<ActionResult
       .select('id')
       .single()
 
-    if (error) return { error: `Error al guardar el otrosí: ${error.message}` }
+    // La base se niega si el contrato terminó anticipadamente (migración 081) y dice por qué.
+    if (error) return { error: mensajeDeLaBase(error, `Error al guardar el otrosí: ${error.message}`) }
 
     await invalidarCacheContrato(adminClient, input.contratoId)
     revalidatePath(`/dashboard/contratos/${input.contratoId}`)

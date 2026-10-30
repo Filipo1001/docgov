@@ -6,7 +6,7 @@
 
 import { createClient } from '@/lib/supabase'
 import type { Periodo, Obligacion, Actividad, Contrato, EstadoPeriodo } from '@/lib/types'
-import { MESES } from '@/lib/constants'
+import { MESES, informePresentado } from '@/lib/constants'
 
 // ─── Periodo queries ──────────────────────────────────────────
 
@@ -135,7 +135,7 @@ export async function getInformesMensuales(
   let periodos = (data as Periodo[]) ?? []
 
   // Show submitted+ periods OR historical ones (even if borrador)
-  periodos = periodos.filter(p => p.estado !== 'borrador' || p.es_historico === true)
+  periodos = periodos.filter(p => informePresentado(p.estado) || p.es_historico === true)
 
   // Filter by dependencia if specified (for asesores)
   if (dependenciaId) {

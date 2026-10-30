@@ -13,6 +13,7 @@ import {
   ESTADOS_EDITABLES,
   DEFAULT_BASE_COTIZACION_SS,
   MESES,
+  informePresentado,
 } from '@/lib/constants'
 import { motivoBaseBloqueada, mostrarControlDeBaseEnPeriodo } from '@/lib/base-cotizacion'
 import { explicarBasePorDefecto } from '@/lib/importe'
@@ -1170,7 +1171,7 @@ export default function PeriodoDetallePage({
   // documentos aparecen al cerrarse, como consecuencia de lo que se acaba de
   // ver.
   const puedeVerDocumentos = periodo
-    ? periodo.estado !== 'borrador' && !mostrarEnvio
+    ? informePresentado(periodo.estado) && !mostrarEnvio
     : false
 
   // La sección nace en su estado final —visible, en su sitio— y solo se le
@@ -2349,8 +2350,22 @@ export default function PeriodoDetallePage({
         </div>
       )}
 
+      {/* ── Periodo anulado por la terminación anticipada del contrato (migración 081) ── */}
+      {periodo.estado === 'anulado' && (
+        <div className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
+          <Icono glifo={Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Periodo anulado — no hay informe que presentar</p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              El contrato terminó anticipadamente antes de que empezara este periodo. Lo que se alcanzó a escribir se conserva
+              por si la terminación se deshace.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Past-month supervisor control panel ───────────────── */}
-      {esPeriodoPasado && esSecretaria && !esAsesor && (
+      {esPeriodoPasado && esSecretaria && !esAsesor && periodo.estado !== 'anulado' && (
         <div className={`border rounded-2xl px-5 py-4 mb-6 flex flex-wrap items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
           <Icono glifo={periodo.habilitado_tardio ? Iconos.estado.desbloqueado : Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
           <div className="flex-1 min-w-[12rem]">
@@ -2757,7 +2772,7 @@ export default function PeriodoDetallePage({
       )}
 
       {/* ── Admin: Devoluciones forzadas ── */}
-      {usuario?.rol === 'admin' && periodo.estado !== 'borrador' && (
+      {usuario?.rol === 'admin' && informePresentado(periodo.estado) && (
         <div className="bg-white rounded-2xl border border-orange-100 p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Icono glifo={Iconos.navegacion.configuracion} tamano="sm" className="text-gray-400" />

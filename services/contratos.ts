@@ -8,6 +8,7 @@
 import { createClient } from '@/lib/supabase'
 import type { Contrato, Obligacion, Rol } from '@/lib/types'
 import { MESES } from '@/lib/constants'
+import { hoyEnColombia } from '@/lib/vigencia-contrato'
 
 // ─── Paginated list (TanStack Query) ──────────────────────────
 
@@ -33,6 +34,10 @@ export interface ContratoListItem {
   plazo_meses: number
   fecha_inicio: string
   fecha_fin: string
+  /** Último día de ejecución si se terminó antes (migración 081). */
+  fecha_terminacion?: string | null
+  /** La pactada o, si se terminó antes, el último día de ejecución: la que decide si está vigente. */
+  fecha_fin_efectiva?: string | null
   contratista: {
     id: string
     nombre_completo: string
@@ -96,7 +101,7 @@ export async function getContratosPagina(params: {
     .select(
       `
       id, numero, anio, objeto, valor_total, valor_mensual, plazo_meses,
-      fecha_inicio, fecha_fin,
+      fecha_inicio, fecha_fin, fecha_terminacion, fecha_fin_efectiva,
       contratista:usuarios!contratos_contratista_id_fkey(
         id, nombre_completo, cedula, email, telefono, foto_url,
         firma_url, cargo
@@ -119,9 +124,9 @@ export async function getContratosPagina(params: {
   if (filtros.rangoMin && filtros.rangoMin > 0) query = query.gte('valor_mensual', filtros.rangoMin)
   if (filtros.rangoMax && Number.isFinite(filtros.rangoMax)) query = query.lte('valor_mensual', filtros.rangoMax)
 
-  const hoy = new Date().toISOString().slice(0, 10)
-  if (filtros.vigencia === 'vigentes') query = query.gte('fecha_fin', hoy)
-  else if (filtros.vigencia === 'vencidos') query = query.lt('fecha_fin', hoy)
+  const hoy = hoyEnColombia()
+  if (filtros.vigencia === 'vigentes') query = query.gte('fecha_fin_efectiva', hoy)
+  else if (filtros.vigencia === 'vencidos') query = query.lt('fecha_fin_efectiva', hoy)
 
   // Text search — server-side OR on numero/objeto
   if (filtros.q && filtros.q.trim()) {
@@ -159,7 +164,7 @@ export async function getTodosContratos(params: {
     .from('contratos')
     .select(`
       id, numero, anio, objeto, valor_total, valor_mensual, plazo_meses,
-      fecha_inicio, fecha_fin,
+      fecha_inicio, fecha_fin, fecha_terminacion, fecha_fin_efectiva,
       contratista:usuarios!contratos_contratista_id_fkey(
         id, nombre_completo, cedula, email, telefono, foto_url,
         firma_url, cargo

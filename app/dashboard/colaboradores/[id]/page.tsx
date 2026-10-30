@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
-import { ESTADO_LABEL, ESTADO_COLOR } from '@/lib/constants'
+import { ESTADO_LABEL, ESTADO_COLOR, informePresentado } from '@/lib/constants'
 import { formatCedula } from '@/lib/format'
 import Avatar from '@/components/ui/Avatar'
 import { porPeriodoCorto } from '@/lib/valor-contrato'
@@ -135,7 +135,7 @@ function PeriodoRow({
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-wrap">
-            {periodo.estado !== 'borrador' && (
+            {informePresentado(periodo.estado) && (
               <Link
                 href={`/dashboard/contratos/${contratoId}/periodo/${periodo.id}`}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"

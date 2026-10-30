@@ -115,7 +115,9 @@ export async function getResumenAlcalde(): Promise<{ data?: ResumenAlcalde; erro
 
     const [contratos, { data: deps }, { data: supers }] = await Promise.all([
       todas<FilaContrato>((desde, hasta) => admin.from('contratos')
-        .select('id, dependencia_id, contratista_id, valor_total, fecha_inicio, fecha_fin')
+        // `fecha_fin` es aquí la fecha de fin EFECTIVA (el alias de PostgREST): todo lo que este resumen hace con ella
+        // —vigentes, plazo corrido, vencimientos— es preguntar hasta cuándo va el contrato de verdad (migración 081).
+        .select('id, dependencia_id, contratista_id, valor_total, fecha_inicio, fecha_fin:fecha_fin_efectiva')
         .eq('activo', true)
         .range(desde, hasta)),
       admin.from('dependencias').select('id, nombre'),

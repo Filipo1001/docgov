@@ -746,8 +746,9 @@ export default function ContratosPage() {
                 const incompleto = faltantes.length > 0
                 const vigencia = vigenciaDe(contrato, hoy)
                 const vencido = vigencia === 'vencido'
-                // Un contrato cerrado antes de tiempo dice cómo se cerró (Terminado, Liquidado, Cedido), no «Finalizado».
-                const cerrado = !!contrato.estado && ['terminado', 'liquidado', 'cedido'].includes(contrato.estado)
+                // Un contrato cerrado antes de tiempo dice cómo se cerró (Terminado, Liquidado, Cedido), no «Finalizado». Una
+                // terminación registrada por adelantado no lo cierra todavía: hasta su último día de ejecución sigue «Vigente».
+                const cerrado = vencido && !!contrato.estado && ['terminado', 'liquidado', 'cedido'].includes(contrato.estado)
                 const rotuloVigencia = cerrado ? metaEstado(contrato.estado).label : vencido ? 'Finalizado' : 'Vigente'
                 const atencion = esSupervision
                   ? calcularAtencion(contrato)

@@ -79,7 +79,7 @@ export async function getDatosFaltantes(): Promise<{ data?: ResumenFaltantes; er
         contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, firma_url, banco, numero_cuenta),
         dependencia:dependencias(nombre)
       `)
-      .gte('fecha_fin', hoy)
+      .gte('fecha_fin_efectiva', hoy)
       .order('numero')
     if (eC) return { error: eC.message }
 

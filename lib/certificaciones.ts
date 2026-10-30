@@ -1,5 +1,6 @@
 import 'server-only'
 import { createAdminSupabaseClient } from './supabase-admin'
+import { ESTADOS_NO_PRESENTADOS } from './constants'
 
 // Reactivada en septiembre de 2026, con el municipio entero entrando al
 // sistema: la carta debe acompañar la primera cuenta de cobro por norma, y
@@ -46,7 +47,7 @@ export async function certificacionPendiente(
     .select('id', { count: 'exact', head: true })
     .eq('contrato_id', contratoId)
     .neq('id', periodoId)
-    .neq('estado', 'borrador')
+    .not('estado', 'in', ESTADOS_NO_PRESENTADOS)
 
   const esPrimerInforme = (count ?? 0) === 0
   return esPrimerInforme

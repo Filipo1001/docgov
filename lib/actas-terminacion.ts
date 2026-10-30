@@ -53,6 +53,10 @@ const BUCKET = 'actas-terminacion'
  * Sin la (b) le pediríamos al contratista firmar la terminación de un contrato
  * que acaba de ser extendido.
  *
+ * Y nunca en un contrato TERMINADO ANTICIPADAMENTE (migración 081): esta acta dice que el contrato terminó «por haber
+ * ocurrido el vencimiento del plazo» y que el objeto se cumplió a entera satisfacción, y ninguna de las dos cosas es
+ * cierta. Su periodo recortado ya no alcanza el fin pactado, pero no se confía en eso: se pregunta.
+ *
  * El sesgo es deliberado: ante la duda, NO se pide. Que un acta se firme un mes
  * tarde es un trámite; que se firme la terminación de un contrato vigente es un
  * problema jurídico.
@@ -75,9 +79,10 @@ export async function actaTerminacionPendiente(
 
   const [{ data: periodo }, { data: contrato }] = await Promise.all([
     admin.from('periodos').select('numero_periodo, fecha_fin').eq('id', periodoId).maybeSingle(),
-    admin.from('contratos').select('fecha_fin').eq('id', contratoId).maybeSingle(),
+    admin.from('contratos').select('fecha_fin, fecha_terminacion').eq('id', contratoId).maybeSingle(),
   ])
   if (!periodo || !contrato?.fecha_fin) return false
+  if (contrato.fecha_terminacion) return false
 
   const { count: posteriores } = await admin
     .from('periodos')

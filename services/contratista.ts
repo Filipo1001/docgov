@@ -28,6 +28,10 @@ export interface ContratoContratista {
   valor_mensual: number
   fecha_inicio: string
   fecha_fin: string
+  /** Último día de ejecución si se terminó antes de la fecha pactada (migración 081). */
+  fecha_terminacion?: string | null
+  /** La pactada o el último día de ejecución: hasta cuándo va el contrato de verdad. */
+  fecha_fin_efectiva?: string | null
   plazo_meses: number
   dependencia: { nombre: string; abreviatura: string } | null
   supervisor: { nombre_completo: string } | null
@@ -127,7 +131,7 @@ export async function getDashboardContratista(
     .from('contratos')
     .select(`
       id, numero, anio, objeto, valor_total, valor_mensual,
-      fecha_inicio, fecha_fin, plazo_meses,
+      fecha_inicio, fecha_fin, fecha_fin_efectiva, fecha_terminacion, plazo_meses,
       dependencia:dependencias(nombre, abreviatura),
       supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo)
     `)
@@ -137,7 +141,7 @@ export async function getDashboardContratista(
 
   // Prefer active contract, else most recent
   const activo = (contratos ?? []).find(
-    (c: any) => c.fecha_inicio <= now && c.fecha_fin >= now
+    (c: any) => c.fecha_inicio <= now && (c.fecha_fin_efectiva ?? c.fecha_fin) >= now
   ) ?? (contratos ?? [])[0]
 
   if (!activo) {
@@ -167,15 +171,18 @@ export async function getDashboardContratista(
   const mesActual = MESES[new Date().getMonth()].toUpperCase()
   const anioActual = new Date().getFullYear()
 
+  // Un periodo anulado (el contrato terminó antes de que empezara) no es el informe de nadie: no se ofrece.
   const periodoActual = periodos.find(
-    p => p.mes.toUpperCase() === mesActual && p.anio === anioActual
+    p => p.mes.toUpperCase() === mesActual && p.anio === anioActual && p.estado !== 'anulado'
   ) ?? null
 
   // 4. Calculate contract progress
   let progreso: DashboardContratista['progreso'] = null
-  if (contrato.fecha_inicio && contrato.fecha_fin) {
+  // Hasta el fin EFECTIVO: un contrato terminado antes está al 100 % desde su último día de ejecución.
+  const finContrato = contrato.fecha_fin_efectiva ?? contrato.fecha_fin
+  if (contrato.fecha_inicio && finContrato) {
     const inicio = new Date(contrato.fecha_inicio).getTime()
-    const fin = new Date(contrato.fecha_fin).getTime()
+    const fin = new Date(finContrato).getTime()
     const hoy = Date.now()
     const diasTotales = Math.round((fin - inicio) / 86_400_000)
     const diasTranscurridos = Math.max(0, Math.min(diasTotales, Math.round((hoy - inicio) / 86_400_000)))
@@ -186,7 +193,7 @@ export async function getDashboardContratista(
       diasTotales,
       porcentaje: Math.min(100, porcentaje),
       diasRestantes: Math.max(0, diasTotales - diasTranscurridos),
-      fechaFin: contrato.fecha_fin,
+      fechaFin: finContrato,
     }
   }
 
@@ -277,7 +284,7 @@ export async function getDashboardContratista(
 
   // 6. Stats
   const stats = {
-    totalPeriodos: periodos.length,
+    totalPeriodos: periodos.filter(p => p.estado !== 'anulado').length,
     aprobados: periodos.filter(p => p.estado === 'aprobado' || p.estado === 'radicado').length,
     pendientes: periodos.filter(p => ['enviado', 'revision'].includes(p.estado)).length,
     rechazados: periodos.filter(p => p.estado === 'rechazado').length,

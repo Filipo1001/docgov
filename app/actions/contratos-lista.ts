@@ -34,7 +34,7 @@ export async function getTodosContratosConBanco(): Promise<ContratoListItem[]> {
     .from('contratos')
     .select(`
       id, numero, anio, objeto, valor_total, valor_mensual, plazo_meses,
-      fecha_inicio, fecha_fin,
+      fecha_inicio, fecha_fin, fecha_terminacion, fecha_fin_efectiva,
       contratista:usuarios!contratos_contratista_id_fkey(
         id, nombre_completo, cedula, email, telefono, foto_url,
         firma_url, cargo, banco, tipo_cuenta, numero_cuenta

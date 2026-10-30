@@ -19,6 +19,9 @@ import {
 } from '@/lib/constants'
 import { totalConAdiciones, valorPorPeriodo, pesos } from '@/lib/valor-contrato'
 import { etiquetaEstado } from '@/lib/estado-contrato'
+import { puedeGestionarTerminacion } from '@/lib/terminacion-contrato'
+import type { TerminacionVigente } from '@/app/actions/terminacion-contrato'
+import TerminacionContrato from './TerminacionContrato'
 import ExpedienteContrato from './ExpedienteContrato'
 import CopiarObligaciones from './CopiarObligaciones'
 import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
@@ -31,11 +34,13 @@ export default function ContratoDetallePage({
   initialObligaciones,
   initialPeriodos,
   initialDocumentos = [],
+  terminacion = null,
 }: {
   initialContrato: any
   initialObligaciones: any[]
   initialPeriodos: any[]
   initialDocumentos?: DocumentoContratoDTO[]
+  terminacion?: TerminacionVigente | null
 }) {
   const { id } = useParams()
   const router = useRouter()
@@ -48,6 +53,7 @@ export default function ContratoDetallePage({
   const [contrato, setContrato] = useState<any>(initialContrato)
   const [obligaciones, setObligaciones] = useState<any[]>(initialObligaciones)
   const [periodos, setPeriodos] = useState<any[]>(initialPeriodos)
+
 
   // El mes cuya cuenta de cobro lleva el contrato dentro del paquete de SECOP.
   //
@@ -247,8 +253,10 @@ export default function ContratoDetallePage({
   // `valor_mensual` supone que todos los meses se cobra lo mismo, que es falso
   // en cuanto un contrato empieza a mitad de mes. Ver lib/valor-contrato.ts.
   const valorContrato = totalConAdiciones(contrato.valor_total, otrosies)
-  const porPeriodo = valorPorPeriodo(periodos)
-  const radicados = periodos.filter((p: any) => p.estado === 'radicado').length
+  // Los periodos anulados por una terminación anticipada no se cobran ni se radican: no entran en las cuentas.
+  const enEjecucion = periodos.filter((p: { estado?: string }) => p.estado !== 'anulado')
+  const porPeriodo = valorPorPeriodo(enEjecucion)
+  const radicados = enEjecucion.filter((p: any) => p.estado === 'radicado').length
   // Los periodos en blanco se nombran: si no, un contrato con diez periodos sin
   // cargar se describiría por los dos que sí tienen valor.
   const pendientes = porPeriodo.clase === 'sin-periodos' ? 0 : porPeriodo.sinValor
@@ -355,6 +363,9 @@ export default function ContratoDetallePage({
             <span className="text-gray-400 text-xs">Plazo</span>
             <p className="font-medium text-gray-900">{contrato.plazo_meses} meses</p>
             <p className="text-xs text-gray-400">{formatDateMedium(contrato.fecha_inicio)} — {formatDateMedium(contrato.fecha_fin)}</p>
+            {contrato.fecha_terminacion && (
+              <p className="text-xs font-medium text-gray-600">Terminó el {formatDateMedium(contrato.fecha_terminacion)}</p>
+            )}
           </div>
           <div className="min-w-0">
             {/* Antes decía «Valor mensual» y mostraba `contrato.valor_mensual`.
@@ -395,6 +406,13 @@ export default function ContratoDetallePage({
           </div>
         )}
       </div>
+
+      {/* Terminación anticipada (migración 081): la registran admin, contratación y el supervisor del contrato. */}
+      <TerminacionContrato
+        contrato={contrato}
+        terminacion={terminacion}
+        puedeGestionar={puedeGestionarTerminacion(usuario?.rol, usuario?.id, contrato)}
+      />
 
       {/* Obligaciones */}
       <div className="bg-white rounded-2xl border p-6 mb-6">
@@ -576,9 +594,9 @@ export default function ContratoDetallePage({
             {/* El conteo a secas —«(12)»— no decía nada que la lista de abajo
                 no dijera. Cuántos quedaron radicados sí: es el avance real del
                 contrato y se lee sin bajar la vista. */}
-            {periodos.length > 0 && (
+            {enEjecucion.length > 0 && (
               <span className="ml-2 normal-case tracking-normal text-gray-400">
-                {radicados} de {periodos.length} radicados
+                {radicados} de {enEjecucion.length} radicados
               </span>
             )}
           </h3>
@@ -617,7 +635,12 @@ export default function ContratoDetallePage({
               <Link
                 key={periodo.id}
                 href={`/dashboard/contratos/${id}/periodo/${periodo.id}`}
-                className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                className={`flex items-center gap-3 p-4 rounded-xl transition-colors ${
+                  // Un periodo anulado se sigue viendo (y se abre: conserva lo escrito), pero se aparta del resto.
+                  periodo.estado === 'anulado'
+                    ? 'bg-white border border-dashed border-gray-200 text-gray-400 hover:bg-gray-50'
+                    : 'bg-gray-50 hover:bg-gray-100 active:bg-gray-200'
+                }`}
               >
                 {/* Número de periodo */}
                 <div className="w-10 h-10 bg-white border rounded-lg flex items-center justify-center shrink-0">

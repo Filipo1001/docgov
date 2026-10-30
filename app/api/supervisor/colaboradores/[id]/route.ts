@@ -51,7 +51,7 @@ export async function GET(
     .from('contratos')
     .select(`
       id, numero, objeto, valor_total, valor_mensual,
-      fecha_inicio, fecha_fin, plazo_meses,
+      fecha_inicio, fecha_fin, fecha_fin_efectiva, plazo_meses,
       dependencia:dependencias(nombre, abreviatura),
       periodos(id, contrato_id, numero_periodo, mes, anio, fecha_inicio, fecha_fin, valor_cobro, estado, fecha_envio, motivo_rechazo)
     `)
@@ -78,7 +78,7 @@ export async function GET(
       fecha_inicio: c.fecha_inicio,
       fecha_fin: c.fecha_fin,
       plazo_meses: c.plazo_meses,
-      activo: isContratoActivo(c.fecha_inicio, c.fecha_fin),
+      activo: isContratoActivo(c.fecha_inicio, c.fecha_fin_efectiva ?? c.fecha_fin),
       dependencia: c.dependencia,
       periodos: ((c.periodos ?? []) as any[]).sort(
         (a: any, b: any) => a.numero_periodo - b.numero_periodo

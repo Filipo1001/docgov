@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import ContratoDetalleClient from './ContratoDetalleClient'
 import { listarDocumentosContrato } from '@/app/actions/documentos-contrato'
+import { getTerminacionVigente } from '@/app/actions/terminacion-contrato'
 
 /**
  * Server component — fetches all contract data with server-side auth
@@ -30,7 +31,7 @@ export default async function ContratoDetallePage({
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: contrato, error: errorContrato }, { data: obligaciones }, { data: periodos }, documentos] = await Promise.all([
+  const [{ data: contrato, error: errorContrato }, { data: obligaciones }, { data: periodos }, documentos, terminacion] = await Promise.all([
     supabase
       .from('contratos')
       .select(`
@@ -56,6 +57,9 @@ export default async function ContratoDetallePage({
 
     // Expediente documental — RLS decide la visibilidad según el rol.
     listarDocumentosContrato(id),
+
+    // Terminación anticipada vigente (migración 081), con la misma visibilidad que el contrato.
+    getTerminacionVigente(id),
   ])
 
   // Este redirect ocultó durante horas un fallo real: al añadir una columna a
@@ -69,13 +73,15 @@ export default async function ContratoDetallePage({
   if (!contrato) redirect('/dashboard/contratos')
 
   return (
-    // key={id} ensures fresh state when navigating between contracts
+    // La clave reinicia el estado al cambiar de contrato y también al registrar o deshacer una terminación (migración
+    // 081): esa operación cambia el contrato y sus periodos en la base, y la pantalla tiene que nacer de nuevo con ellos.
     <ContratoDetalleClient
-      key={id}
+      key={`${id}:${contrato.estado}:${contrato.fecha_terminacion ?? ''}`}
       initialContrato={contrato}
       initialObligaciones={obligaciones ?? []}
       initialPeriodos={periodos ?? []}
       initialDocumentos={documentos}
+      terminacion={terminacion}
     />
   )
 }

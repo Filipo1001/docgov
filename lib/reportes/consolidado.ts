@@ -42,7 +42,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { MESES } from '@/lib/constants'
+import { MESES, informePresentado } from '@/lib/constants'
+import { vigenteEntre as estuvoVigenteEntre } from '@/lib/vigencia-contrato'
 import { cargarAmbitos, type Ambito } from '@/lib/alcance'
 
 /** Estados en los que el ciclo del mes se dio por cerrado. */
@@ -152,6 +153,7 @@ type FilaContrato = {
   valor_mensual: number | null
   fecha_inicio: string
   fecha_fin: string
+  fecha_fin_efectiva?: string | null
 }
 
 type FilaPeriodo = {
@@ -190,7 +192,7 @@ export async function calcularConsolidado(
     cargarAmbitos(admin),
     todas<FilaContrato>((desde, hasta) => admin
       .from('contratos')
-      .select('id, numero, dependencia_id, contratista_id, valor_mensual, fecha_inicio, fecha_fin')
+      .select('id, numero, dependencia_id, contratista_id, valor_mensual, fecha_inicio, fecha_fin, fecha_fin_efectiva')
       .eq('activo', true)
       .range(desde, hasta)),
     todas<{ id: string; nombre_completo: string }>((desde, hasta) => admin
@@ -215,9 +217,8 @@ export async function calcularConsolidado(
   const periodoDe = (contratoId: string, m: string, a: number) =>
     periodos.find(p => p.contrato_id === contratoId && p.mes === m && p.anio === a)
 
-  /** Vigente durante la ventana: empezó antes de que acabara y no había terminado. */
-  const vigenteEntre = (c: FilaContrato, desde: string, hasta: string) =>
-    c.fecha_inicio <= hasta && c.fecha_fin >= desde
+  /** Vigente durante la ventana: empezó antes de que acabara y no había terminado (hasta su fin EFECTIVO: lib/vigencia-contrato.ts). */
+  const vigenteEntre = (c: FilaContrato, desde: string, hasta: string) => estuvoVigenteEntre(c, desde, hasta)
 
   // ── Tiempo de trámite: enviado → radicado, del mes reportado ────────────
   const idsDelMes = periodos
@@ -263,7 +264,7 @@ export async function calcularConsolidado(
     // aprobado, radicado, e incluso devuelto —quien recibió una devolución sí
     // mandó su informe—. Los históricos no cuentan: se tramitaron fuera.
     const enviados = conPeriodo.filter(
-      x => x.p && !x.p.es_historico && x.p.estado !== 'borrador',
+      x => x.p && !x.p.es_historico && informePresentado(x.p.estado),
     ).length
     const historicos = conPeriodo.filter(x => x.p?.es_historico).length
 

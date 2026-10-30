@@ -64,7 +64,7 @@ export async function enviarCorreoMasivoAsesor(
       .from('contratos')
       .select('id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, email)')
       .eq('dependencia_id', asesor.dependencia_id)
-      .gte('fecha_fin', hoy)
+      .gte('fecha_fin_efectiva', hoy)
 
     const contratoList = (contratos ?? []) as unknown as Array<{
       id: string

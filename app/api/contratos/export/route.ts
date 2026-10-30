@@ -30,7 +30,7 @@ export async function GET() {
     .from('contratos')
     .select(`
       numero, anio, objeto, valor_total, valor_mensual, plazo_dias,
-      fecha_inicio, fecha_fin, cdp, crp,
+      fecha_inicio, fecha_fin, fecha_terminacion, fecha_fin_efectiva, cdp, crp,
       contratista:usuarios!contratos_contratista_id_fkey(nombre_completo, cedula, email, telefono),
       supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo),
       dependencia:dependencias(nombre)
@@ -40,6 +40,7 @@ export async function GET() {
   type Row = {
     numero: string; anio: number; objeto: string; valor_total: number; valor_mensual: number
     plazo_dias: number; fecha_inicio: string; fecha_fin: string; cdp: string | null; crp: string | null
+    fecha_terminacion: string | null; fecha_fin_efectiva: string | null
     contratista: { nombre_completo: string; cedula: string | null; email: string | null; telefono: string | null } | null
     supervisor: { nombre_completo: string } | null
     dependencia: { nombre: string } | null
@@ -66,6 +67,7 @@ export async function GET() {
     { header: 'Plazo (días)', key: 'plazo_dias', width: 12 },
     { header: 'Fecha inicio', key: 'fecha_inicio', width: 14 },
     { header: 'Fecha fin', key: 'fecha_fin', width: 14 },
+    { header: 'Terminación anticipada', key: 'fecha_terminacion', width: 16 },
     { header: 'CDP', key: 'cdp', width: 12 },
     { header: 'CRP', key: 'crp', width: 12 },
     { header: 'Estado', key: 'estado', width: 12 },
@@ -92,9 +94,10 @@ export async function GET() {
       plazo_dias: c.plazo_dias,
       fecha_inicio: c.fecha_inicio,
       fecha_fin: c.fecha_fin,
+      fecha_terminacion: c.fecha_terminacion ?? '',
       cdp: c.cdp ?? '',
       crp: c.crp ?? '',
-      estado: c.fecha_fin >= hoy ? 'Vigente' : 'Terminado',
+      estado: (c.fecha_fin_efectiva ?? c.fecha_fin) >= hoy ? 'Vigente' : 'Terminado',
     })
   }
 

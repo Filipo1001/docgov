@@ -14,6 +14,7 @@ import type { EstadoPeriodo } from '@/lib/types'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
 import { porPeriodoCorto } from '@/lib/valor-contrato'
+import { fechaLarga } from '@/lib/terminacion-contrato'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -54,12 +55,32 @@ function PanelAccion({
   periodoActual,
   devolucion,
   contratoId,
+  terminacion,
 }: {
   periodoActual: DashboardContratista['periodoActual']
   devolucion: DashboardContratista['devolucion']
   contratoId: string
+  /** Último día de ejecución, si el contrato terminó antes de la fecha pactada (migración 081). */
+  terminacion: string | null
 }) {
   const mes = mesActualNombre()
+
+  // Contrato terminado y sin informe este mes: invitarlo a «subir evidencias de» un mes que ya no le corresponde sería
+  // falso. Lo que sí le toca son los informes hasta su último día, que siguen en su historial de periodos.
+  if (!periodoActual && terminacion) {
+    return (
+      <Link href={`/dashboard/contratos/${contratoId}`} className="block group">
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 transition-all duration-200 p-6">
+          <p className="text-sm font-semibold text-gray-900">
+            Tu contrato terminó el {fechaLarga(terminacion)}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Los informes hasta ese día siguen siendo tuyos: con ellos se paga lo que ejecutaste. Los meses posteriores quedaron anulados.
+          </p>
+        </div>
+      </Link>
+    )
+  }
 
   // Sin periodo activo — CTA para subir evidencias
   if (!periodoActual) {
@@ -458,7 +479,7 @@ export default function ContratistaHome({
       {contrato && (
         <>
           {/* ── Action panel ── */}
-          <PanelAccion periodoActual={periodoActual} devolucion={devolucion} contratoId={contrato.id} />
+          <PanelAccion periodoActual={periodoActual} devolucion={devolucion} contratoId={contrato.id} terminacion={contrato.fecha_terminacion ?? null} />
 
           {/* ── Stats row ── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
@@ -504,8 +525,8 @@ export default function ContratistaHome({
                 <span className="text-gray-600 font-medium">
                   {progreso.diasTranscurridos}/{progreso.diasTotales} dias
                 </span>
-                <span className="hidden sm:inline">{contrato.fecha_fin}</span>
-                <span className="sm:hidden">{contrato.fecha_fin.slice(5)}</span>
+                <span className="hidden sm:inline">{progreso.fechaFin}</span>
+                <span className="sm:hidden">{progreso.fechaFin.slice(5)}</span>
               </div>
             </Card>
           )}
@@ -544,7 +565,9 @@ export default function ContratistaHome({
           <Card className="bg-gray-50/60">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">Contrato activo</p>
+                <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">
+                  {contrato.fecha_terminacion ? 'Contrato terminado anticipadamente' : 'Contrato activo'}
+                </p>
                 <p className="text-sm font-semibold text-gray-900 mt-1">
                   N.o {contrato.numero}-{contrato.anio}
                 </p>

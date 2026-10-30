@@ -29,7 +29,7 @@ export async function GET() {
   const { data: contratos } = await supabase
     .from('contratos')
     .select(`
-      id, numero, contratista_id, valor_mensual, fecha_inicio, fecha_fin,
+      id, numero, contratista_id, valor_mensual, fecha_inicio, fecha_fin, fecha_fin_efectiva,
       contratista:usuarios!contratos_contratista_id_fkey(
         id, nombre_completo, cedula, email, foto_url, cargo
       ),
@@ -50,7 +50,7 @@ export async function GET() {
     const cont = c.contratista
     if (!cont) continue
 
-    const isActivo = c.fecha_inicio <= now && c.fecha_fin >= now
+    const isActivo = c.fecha_inicio <= now && (c.fecha_fin_efectiva ?? c.fecha_fin) >= now
     const periodos: { estado: string }[] = c.periodos ?? []
 
     const contratoInfo = {

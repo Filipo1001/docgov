@@ -573,6 +573,43 @@ export function emailPrimerInformePendiente(data: TemplateData) {
 }
 
 
+/**
+ * Terminación anticipada de un contrato (migración 081): al contratista, al supervisor y a contratación.
+ *
+ * Gris pizarra, no rojo ni ámbar: no es una alerta que pida actuar ya ni una sanción —la causal puede ser un mutuo
+ * acuerdo—, es un hecho del expediente. Lo que sí importa decirle al contratista es que los informes hasta su último
+ * día siguen siendo suyos: con ellos cobra lo ejecutado. El texto lo arma la acción (con la causal y la fecha) y llega
+ * en `detalle`; se escapa porque la observación la escribe una persona.
+ */
+export function emailContratoTerminado(data: TemplateData) {
+  return {
+    subject: `Contrato ${data.contrato} terminado anticipadamente`,
+    html: baseHtml(
+      'Terminación anticipada',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">${esc(data.detalle ?? `El contrato ${data.contrato} terminó anticipadamente.`)}</p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">
+         Contratista Digital deja de pedir informes y de enviar recordatorios por los meses posteriores a la terminación.
+       </p>`,
+      '#475569'
+    ),
+  }
+}
+
+/** La terminación se deshizo (se registró por error): el contrato vuelve a como estaba. */
+export function emailTerminacionRevertida(data: TemplateData) {
+  return {
+    subject: `Contrato ${data.contrato}: se deshizo la terminación`,
+    html: baseHtml(
+      'Terminación deshecha',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">${esc(data.detalle ?? `Se deshizo la terminación del contrato ${data.contrato}.`)}</p>`,
+      '#475569'
+    ),
+  }
+}
+
+
 // ════════════════════════════════════════════════════════════════════════
 //  Consolidados mensuales
 // ════════════════════════════════════════════════════════════════════════
@@ -883,6 +920,8 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   expediente_incompleto: emailExpedienteIncompleto,
   primer_informe_pendiente: emailPrimerInformePendiente,
   contrato_vencimiento: emailContratoVencimiento,
+  contrato_terminado: emailContratoTerminado,
+  contrato_terminacion_revertida: emailTerminacionRevertida,
   bienvenida: emailBienvenida,
   envio_tardio_habilitado: emailEnvioTardioHabilitado,
   envio_tardio_cancelado: emailEnvioTardioCancelado,

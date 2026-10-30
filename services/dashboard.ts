@@ -231,7 +231,7 @@ export async function getAsesorStats(
     .from('contratos')
     .select('id, contratista:usuarios!contratos_contratista_id_fkey(email)')
     .eq('dependencia_id', dependenciaId)
-    .gte('fecha_fin', hoy)
+    .gte('fecha_fin_efectiva', hoy)
   if (errContratos) throw errContratos
 
   const contratoList = (contratos ?? []) as unknown as Array<{ id: string; contratista: { email: string } | null }>

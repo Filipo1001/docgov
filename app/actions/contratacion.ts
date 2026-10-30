@@ -35,10 +35,13 @@ export async function getContratacionStats(): Promise<{ data?: ContratacionStats
     const en60 = new Date(Date.now() + 60 * 24 * 3600_000).toISOString().slice(0, 10)
 
     const [activos, porVencer, importados, todos] = await Promise.all([
-      admin.from('contratos').select('id', { count: 'exact', head: true }).gte('fecha_fin', hoy),
+      // Activos: hasta su fecha de fin EFECTIVA (lib/vigencia-contrato.ts). Por vencer: solo los que llegarán a la pactada;
+      // a uno terminado antes no hay prórroga que tramitarle.
+      admin.from('contratos').select('id', { count: 'exact', head: true }).gte('fecha_fin_efectiva', hoy),
       admin
         .from('contratos')
         .select('id, numero, fecha_fin, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
+        .is('fecha_terminacion', null)
         .gte('fecha_fin', hoy)
         .lte('fecha_fin', en60)
         .order('fecha_fin'),

@@ -40,6 +40,7 @@ export const ESTADO_LABEL: Record<EstadoPeriodo, string> = {
   aprobado: 'Aprobado',
   radicado: 'Radicado',
   rechazado: 'Devuelto',
+  anulado: 'Anulado',
 }
 
 /**
@@ -57,6 +58,7 @@ export const ESTADO_LABEL_LARGO: Record<EstadoPeriodo, string> = {
   aprobado: 'Aprobado, pendiente de radicar',
   radicado: 'Radicado',
   rechazado: 'Devuelto al contratista para corrección',
+  anulado: 'Anulado: el contrato terminó antes de este periodo',
 }
 
 /**
@@ -88,6 +90,8 @@ export const ESTADO_COLOR: Record<EstadoPeriodo, string> = {
   aprobado: 'bg-green-100 text-green-800',
   radicado: 'bg-[#192031] text-white',
   rechazado: 'bg-red-100 text-red-700',
+  // Tachado y sin relleno: no es una fase del trámite sino un periodo que dejó de existir para él (terminación anticipada).
+  anulado: 'bg-transparent text-gray-400 ring-1 ring-inset ring-gray-200 line-through',
 }
 
 // ─── Historical period display ───────────────
@@ -164,6 +168,19 @@ export function esRolSupervision(rol?: Rol | null): boolean {
 
 /** States where a contratista can edit activities and evidence */
 export const ESTADOS_EDITABLES: EstadoPeriodo[] = ['borrador', 'rechazado']
+
+/**
+ * ¿El informe ya salió de borrador? Antes bastaba con `estado !== 'borrador'`, pero desde la terminación anticipada
+ * (migración 081) hay un estado que tampoco es borrador y no es un informe presentado: `anulado`, el periodo que dejó
+ * de corresponder porque el contrato terminó antes. Contarlo como presentado lo metería en la lista de informes, en
+ * el consolidado y en la regla del primer informe.
+ */
+export function informePresentado(estado: string | null | undefined): boolean {
+  return !!estado && estado !== 'borrador' && estado !== 'anulado'
+}
+
+/** Lo mismo, como filtro de PostgREST: `.not('estado', 'in', ESTADOS_NO_PRESENTADOS)`. */
+export const ESTADOS_NO_PRESENTADOS = '(borrador,anulado)'
 
 /** States where a reviewer can approve or reject */
 export const ESTADOS_EN_REVISION: EstadoPeriodo[] = ['enviado']

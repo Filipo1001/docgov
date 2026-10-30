@@ -67,6 +67,14 @@ cabecera en `middleware.ts`.
 **5. No tocar el DNS.** Ahí viven el SPF y el DKIM de Resend (envío de correo) y la
 verificación de Search Console. El dominio **no tiene MX**: no puede recibir correo.
 
+**6. «Contrato activo» se decide con `fecha_fin_efectiva`, nunca con `fecha_fin`.** Desde la migración 081 un
+contrato puede terminar antes de su fecha pactada. `fecha_fin` sigue siendo la pactada (documentos, otrosíes, plazo);
+`fecha_fin_efectiva` es una columna calculada (la pactada o el último día de ejecución) y es la que dice si está
+vigente (`lib/vigencia-contrato.ts`). Los periodos posteriores a una terminación quedan `anulado`, y un periodo anulado
+no es un informe presentado (`informePresentado` en `lib/constants.ts`). La terminación se registra y se deshace solo
+con `terminar_contrato` / `revertir_terminacion`. Vigilancia: `tests/cd/terminacion-contrato.test.ts` falla si una
+consulta vuelve a filtrar contratos activos por `fecha_fin`; `supabase/tests/terminacion_anticipada.sql` debe dar 0 fallas.
+
 ## Estructura
 
 ```
