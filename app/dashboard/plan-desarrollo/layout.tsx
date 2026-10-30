@@ -34,6 +34,16 @@ import { pdmHabilitado } from '@/lib/pdm/habilitado'
  * No se inventa una barra recortada: `nivel` va `undefined` y la barra pregunta al servidor desde el navegador,
  * mostrando solo las pestañas que valen para todos mientras llega la respuesta.
  */
+
+/**
+ * Cuánto puede durar en el servidor una acción de estas pantallas (el formulario de reporte vive en una ficha que se abre desde
+ * varias de ellas). Al ENVIAR, el servidor lee cada archivo entero para calcular su huella: un reporte puede llevar 100 (ver
+ * `MAX_EVIDENCIAS`), y Vercel (iad1) lee el almacenamiento de Supabase (us-west-2) a unos 5 MB/s — el reporte de 30 archivos y
+ * 31 MB del 28-oct-2026 tardó ~6 s en registrarse. Con un tope corto, un envío grande fallaría al final, con todo ya subido. 300 s
+ * lo dice explícito en vez de depender del valor por defecto del proyecto.
+ */
+export const maxDuration = 300
+
 export default async function PlanDesarrolloLayout({ children }: { children: React.ReactNode }) {
   await connection()
   if (!pdmHabilitado()) notFound()

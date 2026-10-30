@@ -13,6 +13,8 @@
  *     sirve se dice cuál es y por qué, sin tumbar a los demás.
  *   · Cada archivo cuenta su historia: su vista previa (o el icono de su clase), peso, y mientras sube, su barra. Si uno
  *     falla, es ese y solo ese el que lo dice.
+ *   · Con muchos, la lista es compacta (`ListaCompacta`): los primeros y «Ver los N archivos restantes», que dice cómo van los
+ *     escondidos (subiendo, o cuántos fallaron).
  *   · En el teléfono el recuadro dice «Elegir archivos» (no hay nada que arrastrar) y aparece «Tomar foto».
  *   · Teclado y lector de pantalla: el recuadro ES la entrada de archivos (se llega con Tab, se activa con Enter o
  *     espacio) y los cambios se anuncian.
@@ -20,12 +22,13 @@
  * No sabe subir nada: solo pinta lo que le dan y avisa de lo que la persona hace.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { categoriaDeMime, ETIQUETA_CATEGORIA } from '@/lib/pdm/evidencias-armar'
-import type { ArchivoEnCola, Rechazo } from '@/lib/pdm/evidencias-cola'
+import { resumenDeSubida, type ArchivoEnCola, type Rechazo } from '@/lib/pdm/evidencias-cola'
 import { MAX_BYTES_EVIDENCIA, MAX_BYTES_VIDEO, MAX_EVIDENCIAS, describirTamano, tipoDeArchivo } from '@/lib/pdm/seguimiento-acciones'
+import ListaCompacta from './ListaCompacta'
 import { CheckDibujado, Despliegue } from './Movimiento'
 import { GLIFO_DE_CATEGORIA } from './iconos-tipo'
 
@@ -153,6 +156,20 @@ function Fila({ e, bloqueada, onQuitar }: { e: ArchivoEnCola<File>; bloqueada: b
   )
 }
 
+/**
+ * Cómo van los archivos que la lista compacta esconde: lo que falló se dice en rojo (no puede quedar detrás de un clic sin aviso) y,
+ * mientras suben, cuánto llevan.
+ */
+function comoVaLoEscondido(resto: readonly ArchivoEnCola<File>[]): ReactNode {
+  const r = resumenDeSubida(resto)
+  if (r.fallidos > 0) {
+    return <span className="font-medium text-[#B42318]">{r.fallidos === 1 ? '1 no se pudo subir' : `${r.fallidos} no se pudieron subir`}</span>
+  }
+  if (r.subidos === r.total) return 'subidos'
+  if (r.subidos > 0 || resto.some(e => e.estado === 'subiendo')) return <span className="tabular-nums">subiendo · {r.porcentaje} %</span>
+  return null
+}
+
 // ─── La zona ─────────────────────────────────────────────────────────────────
 
 export default function ZonaEvidencias({ cola, conservadas, bloqueada, sinQuitar = false, error, avisos, onAgregar, onQuitar, onLimpiarAvisos }: {
@@ -186,9 +203,11 @@ export default function ZonaEvidencias({ cola, conservadas, bloqueada, sinQuitar
   return (
     <div>
       {cola.length > 0 && (
-        <ul className="mb-2 space-y-1.5">
-          {cola.map(e => <Fila key={e.clave} e={e} bloqueada={bloqueada || sinQuitar} onQuitar={() => onQuitar(e.clave)} />)}
-        </ul>
+        <div className="mb-2">
+          <ListaCompacta lista={cola} clave={e => e.clave} className="space-y-1.5" resumen={comoVaLoEscondido}>
+            {e => <Fila e={e} bloqueada={bloqueada || sinQuitar} onQuitar={() => onQuitar(e.clave)} />}
+          </ListaCompacta>
+        </div>
       )}
 
       <Despliegue abierto={avisos.length > 0} separacion="pb-2">

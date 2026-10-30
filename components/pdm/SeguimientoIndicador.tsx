@@ -46,6 +46,7 @@ import ComentariosIndicador from './ComentariosIndicador'
 import EvolucionDelAnio from './EvolucionDelAnio'
 import { Sello, Seccion, SituacionTexto } from './ui'
 import BotonAccion, { Despliegue, useConfirmar, useNuevos } from './Movimiento'
+import ListaCompacta from './ListaCompacta'
 import { useAvisar } from './Avisos'
 import { Bloque } from './Esqueleto'
 import { T } from './tema'
@@ -71,9 +72,18 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
   if (lista.length === 0) return null
   return (
     <div className="mt-2">
-      <ul className="flex flex-wrap items-start gap-x-2 gap-y-2">
-        {lista.map(e => (
-          <li key={e.id} className="min-w-0 max-w-full">
+      <ListaCompacta
+        lista={lista}
+        clave={e => e.id}
+        className="flex flex-wrap items-start gap-x-2 gap-y-2"
+        separacion="pt-2"
+        resumen={resto => {
+          const devueltos = resto.filter(e => e.observacion).length
+          return devueltos > 0 ? <span className="font-medium text-[#912018]">{devueltos === 1 ? '1 devuelto' : `${devueltos} devueltos`}</span> : null
+        }}
+      >
+        {e => (
+          <li className="min-w-0 max-w-full">
             <span className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={() => abrir(e.id)}
@@ -92,8 +102,8 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
               </span>
             )}
           </li>
-        ))}
-      </ul>
+        )}
+      </ListaCompacta>
       <Despliegue abierto={!!error} separacion="">
         {error ? <p role="alert" className="mt-1 text-xs font-medium text-[#B42318]">{error}</p> : null}
       </Despliegue>
@@ -113,14 +123,16 @@ function Evidencias({ lista, acciones }: { lista: EvidenciaVista[]; acciones: Ac
             La huella identifica el contenido exacto de cada archivo: si cambia un solo bit, cambia la huella. La calculó el servidor
             al subirlo, así que sirve para comprobar, más adelante, que un archivo es el mismo que se reportó.
           </p>
-          <ul className="mt-2 space-y-2">
-            {lista.map(e => (
-              <li key={e.id} className="min-w-0">
-                <span className="block truncate text-xs font-medium text-[#192031]" title={e.nombre}>{e.nombre}</span>
-                <Huella sha256={e.sha256} calculadaEn={e.huellaCalculadaEn} />
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2">
+            <ListaCompacta lista={lista} clave={e => e.id} className="space-y-2" separacion="pt-2">
+              {e => (
+                <li className="min-w-0">
+                  <span className="block truncate text-xs font-medium text-[#192031]" title={e.nombre}>{e.nombre}</span>
+                  <Huella sha256={e.sha256} calculadaEn={e.huellaCalculadaEn} />
+                </li>
+              )}
+            </ListaCompacta>
+          </div>
         </div>
       </Despliegue>
     </div>
@@ -231,47 +243,65 @@ function Validar({ reporte, acciones, onHecho }: {
               <p className="mt-1 text-xs leading-relaxed text-[#667085]">
                 El reporte se devuelve completo. Los archivos que no marques pasan solos a la nueva versión; los que marques, no.
               </p>
-              <ul className="mt-1.5 space-y-1.5">
-                {reporte.evidencias.map(ev => {
-                  const marcado = ev.id in marcados
-                  return (
-                    <li key={ev.id} className={`rounded-lg border px-3 py-2 ${marcado ? 'border-[#F1C0BB] bg-[#FDF3F2]' : 'border-[#DCE0E8] bg-white'}`}>
-                      <label className="flex cursor-pointer items-center gap-2.5 text-sm">
-                        <input type="checkbox" checked={marcado} disabled={enviando !== null} onChange={() => marcar(ev.id)} className="h-4 w-4 shrink-0 accent-[#B42318]" />
-                        <span className="min-w-0 flex-1 truncate text-[#192031]">{ev.nombre}</span>
-                        <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(ev.bytes)}</span>
-                      </label>
-                      {marcado && (
-                        <div className="pdm-entra mt-2 space-y-1.5 pl-6">
-                          <input
-                            type="text"
-                            value={marcados[ev.id]}
-                            maxLength={MAX_OBSERVACION}
-                            disabled={enviando !== null}
-                            onChange={e => setMarcados(m => ({ ...m, [ev.id]: e.target.value }))}
-                            placeholder="¿Qué le pasa a este archivo?"
-                            aria-label={`Qué le pasa a ${ev.nombre}`}
-                            className={T.campo}
-                          />
-                          <div className="flex flex-wrap gap-1.5">
-                            {['No abre', 'Ilegible', 'No corresponde al indicador', 'Falta la firma', 'Está en blanco'].map(m => (
-                              <button
-                                key={m}
-                                type="button"
-                                disabled={enviando !== null}
-                                onClick={() => setMarcados(prev => ({ ...prev, [ev.id]: m }))}
-                                className="rounded-md border border-[#C5CBD6] bg-white px-2 py-1 text-[11px] font-medium text-[#556072] transition-colors hover:border-[#192031] hover:text-[#192031] disabled:opacity-60"
-                              >
-                                {m}
-                              </button>
-                            ))}
+              <div className="mt-1.5">
+                <ListaCompacta
+                  lista={reporte.evidencias}
+                  clave={ev => ev.id}
+                  className="space-y-1.5"
+                  // Lo marcado que quedó plegado se dice: «Devolver» no se activa mientras un marcado no diga qué le pasa.
+                  resumen={resto => {
+                    const enResto = resto.filter(ev => ev.id in marcados)
+                    if (enResto.length === 0) return null
+                    const sinMotivo = enResto.filter(ev => marcados[ev.id].trim() === '').length
+                    return (
+                      <span className="font-medium text-[#912018]">
+                        {enResto.length === 1 ? '1 marcado' : `${enResto.length} marcados`}
+                        {sinMotivo > 0 && (sinMotivo === 1 ? ' · 1 sin decir qué le pasa' : ` · ${sinMotivo} sin decir qué les pasa`)}
+                      </span>
+                    )
+                  }}
+                >
+                  {ev => {
+                    const marcado = ev.id in marcados
+                    return (
+                      <li className={`rounded-lg border px-3 py-2 ${marcado ? 'border-[#F1C0BB] bg-[#FDF3F2]' : 'border-[#DCE0E8] bg-white'}`}>
+                        <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+                          <input type="checkbox" checked={marcado} disabled={enviando !== null} onChange={() => marcar(ev.id)} className="h-4 w-4 shrink-0 accent-[#B42318]" />
+                          <span className="min-w-0 flex-1 truncate text-[#192031]">{ev.nombre}</span>
+                          <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(ev.bytes)}</span>
+                        </label>
+                        {marcado && (
+                          <div className="pdm-entra mt-2 space-y-1.5 pl-6">
+                            <input
+                              type="text"
+                              value={marcados[ev.id]}
+                              maxLength={MAX_OBSERVACION}
+                              disabled={enviando !== null}
+                              onChange={e => setMarcados(m => ({ ...m, [ev.id]: e.target.value }))}
+                              placeholder="¿Qué le pasa a este archivo?"
+                              aria-label={`Qué le pasa a ${ev.nombre}`}
+                              className={T.campo}
+                            />
+                            <div className="flex flex-wrap gap-1.5">
+                              {['No abre', 'Ilegible', 'No corresponde al indicador', 'Falta la firma', 'Está en blanco'].map(m => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  disabled={enviando !== null}
+                                  onClick={() => setMarcados(prev => ({ ...prev, [ev.id]: m }))}
+                                  className="rounded-md border border-[#C5CBD6] bg-white px-2 py-1 text-[11px] font-medium text-[#556072] transition-colors hover:border-[#192031] hover:text-[#192031] disabled:opacity-60"
+                                >
+                                  {m}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
+                        )}
+                      </li>
+                    )
+                  }}
+                </ListaCompacta>
+              </div>
             </div>
           )}
 

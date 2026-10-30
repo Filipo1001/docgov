@@ -246,8 +246,8 @@ begin
   perform pg_temp.chequear('un motivo de más de 500 caracteres no se guarda', v_msg like '22001%');
   v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, 'null', '', null, '{}', '[]'::jsonb);
   perform pg_temp.chequear('un borrador sin nada (ni valor, ni texto, ni motivo, ni archivos) no se guarda', v_msg like '22023 PDM: no hay nada que guardar en el borrador');
-  v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '6', v_texto, null, '{}', pg_temp.archivos(v_plan, v_i, 31));
-  perform pg_temp.chequear('31 archivos no caben, y el mensaje no lleva el número', v_msg like '22023 PDM: este reporte tiene más archivos de los que admite' and substr(v_msg, 7) !~ '[0-9]');
+  v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '6', v_texto, null, '{}', pg_temp.archivos(v_plan, v_i, 101));
+  perform pg_temp.chequear('101 archivos no caben, y el mensaje no lleva el número', v_msg like '22023 PDM: este reporte tiene más archivos de los que admite' and substr(v_msg, 7) !~ '[0-9]');
   v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '6', v_texto, null, '{}', jsonb_build_array(jsonb_build_object('ruta', v_plan::text || '/' || v_i::text || '/2026/' || gen_random_uuid()::text || '.exe', 'nombre', 'x.exe', 'tipo', 'application/x-msdownload', 'bytes', '1000')));
   perform pg_temp.chequear('un tipo que no se admite no se guarda', v_msg like '22023 PDM: tipo de archivo no permitido%');
   v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '6', v_texto, null, '{}', jsonb_build_array(jsonb_build_object('ruta', v_plan::text || '/' || v_i::text || '/2026/' || gen_random_uuid()::text || '.pdf', 'nombre', 'x.pdf', 'tipo', 'application/pdf', 'bytes', '999999999')));

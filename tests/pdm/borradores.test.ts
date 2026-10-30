@@ -105,8 +105,8 @@ test('el tope de archivos del borrador es el del reporte (sumando lo guardado, l
   assert.equal(errorEnBorrador({ valor: null, texto: 'x', archivos: MAX_EVIDENCIAS, conservadas: 0 }), null)
   assert.equal(errorEnBorrador({ valor: null, texto: 'x', archivos: MAX_EVIDENCIAS, conservadas: 1 }), MENSAJE_DEMASIADOS_ARCHIVOS)
   const pdf = (n: number) => Array.from({ length: n }, (_, k) => ({ nombre: `a${k}.pdf`, tipo: 'application/pdf', bytes: 1000 }))
-  assert.equal(errorEnArchivosDelBorrador(pdf(10), 10, 10), null)
-  assert.equal(errorEnArchivosDelBorrador(pdf(11), 10, 10), MENSAJE_DEMASIADOS_ARCHIVOS)
+  assert.equal(errorEnArchivosDelBorrador(pdf(MAX_EVIDENCIAS - 20), 10, 10), null)
+  assert.equal(errorEnArchivosDelBorrador(pdf(MAX_EVIDENCIAS - 19), 10, 10), MENSAJE_DEMASIADOS_ARCHIVOS)
   assert.doesNotMatch(MENSAJE_DEMASIADOS_ARCHIVOS, /\d/)
 })
 

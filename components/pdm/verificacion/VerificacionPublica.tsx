@@ -17,12 +17,12 @@
 import Link from 'next/link'
 import { PLAN } from '@/lib/pdm/identidad'
 import {
-  ROTULO_DE_ESTADO, esVersionAnterior, etiquetaDeTipo, fraseDeEstado, rotuloDeConstancia, rutaDeVerificacion, requiereAdvertencia,
+  ROTULO_DE_ESTADO, esVersionAnterior, fraseDeEstado, rotuloDeConstancia, rutaDeVerificacion, requiereAdvertencia,
   type ConstanciaPublica, type EstadoDeConstancia,
 } from '@/lib/pdm/constancia'
 import { fechaHoraBogota } from '@/lib/pdm/historial'
 import { nombrePropio } from '@/lib/pdm/personas'
-import { describirTamano } from '@/lib/pdm/seguimiento-acciones'
+import ArchivosDeConstancia from './ArchivosDeConstancia'
 import ComprobarArchivo from './ComprobarArchivo'
 
 const COLOR: Record<EstadoDeConstancia, { banda: string; caja: string; texto: string }> = {
@@ -180,23 +180,9 @@ export default function VerificacionPublica({ c }: { c: ConstanciaPublica }) {
           {c.archivos.length === 0 ? (
             <p className="mt-1.5 text-xs text-slate-500">Esta versión no tiene archivos.</p>
           ) : (
-            <ul className="mt-2 space-y-2">
-              {c.archivos.map((a, i) => (
-                <li key={i} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
-                  <p className="m-0 text-[13px] font-medium text-slate-800">
-                    {etiquetaDeTipo(a.tipo)} <span className="font-normal text-slate-500">· {describirTamano(a.bytes)}</span>
-                  </p>
-                  {a.sha256 ? (
-                    <>
-                      <p className="m-0 mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Huella digital (SHA-256)</p>
-                      <p className="m-0 break-all font-mono text-[11px] leading-snug text-slate-600">{a.sha256}</p>
-                    </>
-                  ) : (
-                    <p className="m-0 mt-1 text-[11px] text-slate-500">Sin huella registrada para este archivo.</p>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <div className="mt-2">
+              <ArchivosDeConstancia archivos={c.archivos} />
+            </div>
           )}
 
           <ComprobarArchivo archivos={c.archivos} />

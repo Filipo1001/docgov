@@ -19,10 +19,13 @@ import type { AnulacionVista } from './anulaciones'
 /**
  * Cuántos archivos admite un reporte como máximo. Es una RED DE SEGURIDAD, no una regla que se le explique a nadie: ninguna
  * pantalla ni mensaje dice este número (Felipe, 20-oct-2026: «que no lo especifiques en la aplicación»). Antes eran 5, un valor que
- * puse yo en la Fase B sin que nadie lo decidiera. Está escrito también en la base (`pdm_privado.max_evidencias()` y la restricción
- * `pdm_validaciones_observaciones_check`, migración 075); tests/pdm/seguimiento.test.ts vigila que los tres digan lo mismo.
+ * puse yo en la Fase B sin que nadie lo decidiera; luego 30 (migración 075), hasta que un reporte real lo llenó (28-oct-2026) y Felipe
+ * pidió 100 (30-oct-2026). Está escrito también en la base (`pdm_privado.max_evidencias()` y la restricción
+ * `pdm_validaciones_observaciones_check`, migración 077); tests/pdm/seguimiento.test.ts vigila que los tres digan lo mismo.
+ *
+ * Con tantos archivos, las listas de la pantalla se muestran compactas: ver `components/pdm/ListaCompacta.tsx`.
  */
-export const MAX_EVIDENCIAS = 30
+export const MAX_EVIDENCIAS = 100
 /** Lo que se dice cuando un reporte lleva más archivos de los que admite: sin el número, a propósito. */
 export const MENSAJE_DEMASIADOS_ARCHIVOS = 'Este reporte tiene más archivos de los que admite.'
 /** Lo que puede pesar un archivo que no es video: PDF, foto, Word, Excel o presentación. */

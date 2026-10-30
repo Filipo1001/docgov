@@ -308,6 +308,7 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
     // La huella de cada archivo nuevo, leyéndolo del almacenamiento (varios a la vez, con un máximo: un reporte puede llevar
     // muchos). Si no se puede calcular, o el archivo no pesa lo que el almacenamiento dice, no se registra nada: un reporte sin
     // la huella que debería tener no se puede arreglar después.
+    const inicioHuellas = Date.now()
     const calculadas = await conLimite(evidencias, LIMITE_EN_PARALELO, ev => huellaDeObjeto(admin, BUCKET, ev.ruta))
     const huellas: HuellaCalculada[] = []
     for (let k = 0; k < evidencias.length; k++) {
@@ -319,6 +320,10 @@ export async function reportar(e: EntradaReportar): Promise<Resultado<{ reporte:
       }
       huellas.push({ ruta: evidencias[k].ruta, sha256: c.sha256, bytes: c.bytes })
     }
+    // Cuánto tarda leer los archivos para la huella, con datos reales: es lo que crece con un reporte de muchos archivos (ver `maxDuration` en
+    // app/dashboard/plan-desarrollo/layout.tsx).
+    const mb = huellas.reduce((t, h) => t + h.bytes, 0) / 1048576
+    console.info(`[pdm/seguimiento] huellas: ${huellas.length} archivos · ${mb.toFixed(1)} MB · ${((Date.now() - inicioHuellas) / 1000).toFixed(1)} s`)
     if (!(await anotarHuellas(admin, s.acceso.userId, huellas))) {
       await quitarDelAlmacen(admin, recienSubidas)
       return rechazo('reportar', 'No pudimos registrar los archivos. Vuelve a adjuntarlos e intenta de nuevo.')

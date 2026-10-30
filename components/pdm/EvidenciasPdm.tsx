@@ -39,6 +39,7 @@ import Huella from './Huella'
 import IconoSector from './IconoSector'
 import Pagina from './Pagina'
 import SelectorAnio from './SelectorAnio'
+import ListaCompacta from './ListaCompacta'
 import { Despliegue } from './Movimiento'
 import { Marcador, Sello, SemaforoReporte, SituacionTexto } from './ui'
 import { useAbrirEvidencia } from './abrir-evidencia'
@@ -167,13 +168,25 @@ function Carpeta({ fila, abrir, abriendo }: { fila: FilaIndicador; abrir: (id: s
       </button>
       <div id={id}>
         <Despliegue abierto={abierta} separacion="pb-1">
-          <ul className="ml-[18px] mt-3 space-y-3.5 border-l border-[#C5CBD6] pl-4">
-            {fila.archivos.map(a => (
-              <li key={a.id}>
-                <ArchivoLinea a={a} abrir={abrir} abriendo={abriendo} conEstado={variosReportes} />
-              </li>
-            ))}
-          </ul>
+          <div className="ml-[18px] mt-3 border-l border-[#C5CBD6] pl-4">
+            <ListaCompacta
+              lista={fila.archivos}
+              clave={a => a.id}
+              className="space-y-3.5"
+              separacion="pt-3.5"
+              claseBoton="mt-2"
+              resumen={resto => {
+                const n = resto.filter(a => a.observacion !== null).length
+                return n > 0 ? <span className="font-medium text-[#912018]">{n === 1 ? '1 devuelto' : `${n} devueltos`}</span> : null
+              }}
+            >
+              {a => (
+                <li>
+                  <ArchivoLinea a={a} abrir={abrir} abriendo={abriendo} conEstado={variosReportes} />
+                </li>
+              )}
+            </ListaCompacta>
+          </div>
         </Despliegue>
       </div>
     </div>

@@ -71,15 +71,23 @@ export function TextoEstable({ texto, reserva }: { texto: ReactNode; reserva: Re
  *
  * Mientras se pliega conserva el último contenido (si no, se vaciaría antes de cerrarse). Con «reducir movimiento»
  * cambia sin animar. Pasa el espacio de separación por dentro (`pb-3`) para no dejar un hueco cuando está plegado.
+ *
+ * `deGolpe`: cambia sin animar. Lo usa quien pliega algo que quedó por ENCIMA de la vista y corrige el desplazamiento en el mismo
+ * instante (ver `ListaCompacta`): animado, lo que se mira se iría deslizando hacia arriba mientras dura la curva.
  */
-export function Despliegue({ abierto, children, separacion = 'pb-3' }: { abierto: boolean; children: ReactNode; separacion?: string }) {
+export function Despliegue({ abierto, children, separacion = 'pb-3', deGolpe = false }: {
+  abierto: boolean
+  children: ReactNode
+  separacion?: string
+  deGolpe?: boolean
+}) {
   const [congelado, setCongelado] = useState<ReactNode>(children)
   if (abierto && congelado !== children) setCongelado(children)
   return (
     <div
       aria-hidden={!abierto || undefined}
       inert={!abierto || undefined}
-      className={`my-0 grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${abierto ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+      className={`my-0 grid ${deGolpe ? '' : 'transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none'} ${abierto ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
     >
       <div className="min-h-0 overflow-hidden">
         <div className={separacion}>{congelado}</div>

@@ -56,6 +56,7 @@ import { limpio, marcar } from '@/lib/pdm/diagnostico'
 import { subirCola } from '@/lib/pdm/subir-cola'
 import { Seccion } from './ui'
 import BotonAccion, { Despliegue, useConfirmar } from './Movimiento'
+import ListaCompacta from './ListaCompacta'
 import ZonaEvidencias from './ZonaEvidencias'
 import { T } from './tema'
 import { nombrePropio } from '@/lib/pdm/personas'
@@ -681,58 +682,77 @@ export default function FormularioReporte({ indicador, vigente, borrador, yoId, 
               <p className="text-xs leading-relaxed text-[#667085]">
                 Archivos de la versión anterior: los que estaban bien pasan solos; no hace falta subirlos otra vez.
               </p>
-              <ul className="mt-1.5 space-y-1.5">
-                {anteriores.map(a => a.observacion ? (
-                  <li key={a.id} className="rounded-lg border border-[#F1C0BB] bg-[#FDF3F2] px-3 py-2 text-sm">
-                    <p className="flex items-center gap-2">
-                      <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="shrink-0 text-[#B42318]" />
-                      <span className="min-w-0 flex-1 truncate font-medium text-[#192031]">{a.nombre}</span>
-                      <span className="shrink-0 text-xs text-[#912018]">No se conserva</span>
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-[#912018]">
-                      Devuelto por {nombrePropio(a.observacion.por)}: «{a.observacion.motivo}». Reemplázalo con uno nuevo o déjalo fuera.
-                    </p>
-                  </li>
-                ) : (
-                  <li key={a.id}>
-                    <label className={`flex items-center gap-2.5 rounded-lg border bg-white px-3 py-2 text-sm ${ocupado ? 'opacity-60' : 'cursor-pointer'} ${conservar.has(a.id) ? 'border-[#DCE0E8]' : 'border-dashed border-[#C5CBD6]'}`}>
-                      <input
-                        type="checkbox"
-                        checked={conservar.has(a.id)}
-                        disabled={ocupado}
-                        onChange={() => alternarConservado(a.id)}
-                        className="h-4 w-4 shrink-0 accent-[#192031]"
-                      />
-                      <span className={`min-w-0 flex-1 truncate ${conservar.has(a.id) ? 'text-[#192031]' : 'text-[#667085] line-through'}`}>{a.nombre}</span>
-                      <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(a.bytes)}</span>
-                      <span className="shrink-0 text-xs font-medium text-[#556072]">{conservar.has(a.id) ? 'Se conserva' : 'Se quita'}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
+              {/* Los devueltos primero: son los que piden hacer algo (reemplazarlos o dejarlos fuera), y con una lista compacta no deben quedar
+                  escondidos al final. */}
+              <div className="mt-1.5">
+                <ListaCompacta
+                  lista={[...anteriores.filter(a => a.observacion), ...anteriores.filter(a => !a.observacion)]}
+                  clave={a => a.id}
+                  className="space-y-1.5"
+                  resumen={resto => {
+                    const devueltos = resto.filter(a => a.observacion).length
+                    const quitados = resto.filter(a => !a.observacion && !conservar.has(a.id)).length
+                    const partes = [
+                      devueltos > 0 ? (devueltos === 1 ? '1 devuelto' : `${devueltos} devueltos`) : null,
+                      quitados > 0 ? (quitados === 1 ? '1 se quita' : `${quitados} se quitan`) : null,
+                    ].filter(Boolean)
+                    return partes.length > 0 ? partes.join(' · ') : null
+                  }}
+                >
+                  {a => a.observacion ? (
+                    <li className="rounded-lg border border-[#F1C0BB] bg-[#FDF3F2] px-3 py-2 text-sm">
+                      <p className="flex items-center gap-2">
+                        <Icono glifo={Iconos.estado.advertencia} tamano="sm" className="shrink-0 text-[#B42318]" />
+                        <span className="min-w-0 flex-1 truncate font-medium text-[#192031]">{a.nombre}</span>
+                        <span className="shrink-0 text-xs text-[#912018]">No se conserva</span>
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-[#912018]">
+                        Devuelto por {nombrePropio(a.observacion.por)}: «{a.observacion.motivo}». Reemplázalo con uno nuevo o déjalo fuera.
+                      </p>
+                    </li>
+                  ) : (
+                    <li>
+                      <label className={`flex items-center gap-2.5 rounded-lg border bg-white px-3 py-2 text-sm ${ocupado ? 'opacity-60' : 'cursor-pointer'} ${conservar.has(a.id) ? 'border-[#DCE0E8]' : 'border-dashed border-[#C5CBD6]'}`}>
+                        <input
+                          type="checkbox"
+                          checked={conservar.has(a.id)}
+                          disabled={ocupado}
+                          onChange={() => alternarConservado(a.id)}
+                          className="h-4 w-4 shrink-0 accent-[#192031]"
+                        />
+                        <span className={`min-w-0 flex-1 truncate ${conservar.has(a.id) ? 'text-[#192031]' : 'text-[#667085] line-through'}`}>{a.nombre}</span>
+                        <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(a.bytes)}</span>
+                        <span className="shrink-0 text-xs font-medium text-[#556072]">{conservar.has(a.id) ? 'Se conserva' : 'Se quita'}</span>
+                      </label>
+                    </li>
+                  )}
+                </ListaCompacta>
+              </div>
             </div>
           )}
 
           {guardados.length > 0 && (
             <div className="mb-3">
               <p className="text-xs leading-relaxed text-[#667085]">Guardados en el borrador: ya están subidos, no hace falta subirlos otra vez.</p>
-              <ul className="mt-1.5 space-y-1.5">
-                {guardados.map(g => (
-                  <li key={g.ruta} className="flex items-center gap-2.5 rounded-lg border border-[#DCE0E8] bg-white px-3 py-1.5 text-sm">
-                    <Icono glifo={(categoriaDeMime(g.tipo) ? GLIFO_DE_CATEGORIA[categoriaDeMime(g.tipo)!] : Iconos.documentos.adjunto)} tamano="sm" className="shrink-0 text-[#667085]" />
-                    <span className="min-w-0 flex-1 truncate text-[#192031]">{g.nombre}</span>
-                    <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(g.bytes)}</span>
-                    <button
-                      type="button"
-                      onClick={() => quitarGuardado(g.ruta)}
-                      disabled={ocupado || guardandoAuto}
-                      className="shrink-0 rounded-md p-2 text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] disabled:pointer-events-none disabled:opacity-30"
-                    >
-                      <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta={`Quitar ${g.nombre} del borrador`} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-1.5">
+                <ListaCompacta lista={guardados} clave={g => g.ruta} className="space-y-1.5">
+                  {g => (
+                    <li className="flex items-center gap-2.5 rounded-lg border border-[#DCE0E8] bg-white px-3 py-1.5 text-sm">
+                      <Icono glifo={(categoriaDeMime(g.tipo) ? GLIFO_DE_CATEGORIA[categoriaDeMime(g.tipo)!] : Iconos.documentos.adjunto)} tamano="sm" className="shrink-0 text-[#667085]" />
+                      <span className="min-w-0 flex-1 truncate text-[#192031]">{g.nombre}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-[#667085]">{describirTamano(g.bytes)}</span>
+                      <button
+                        type="button"
+                        onClick={() => quitarGuardado(g.ruta)}
+                        disabled={ocupado || guardandoAuto}
+                        className="shrink-0 rounded-md p-2 text-[#667085] transition-colors hover:bg-[#F4F5F8] hover:text-[#192031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#192031] disabled:pointer-events-none disabled:opacity-30"
+                      >
+                        <Icono glifo={Iconos.accion.cerrar} tamano="sm" etiqueta={`Quitar ${g.nombre} del borrador`} />
+                      </button>
+                    </li>
+                  )}
+                </ListaCompacta>
+              </div>
             </div>
           )}
 

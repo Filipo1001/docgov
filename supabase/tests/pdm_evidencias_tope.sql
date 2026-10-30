@@ -1,20 +1,21 @@
 -- ============================================================================
--- Pruebas del TOPE DE ARCHIVOS por reporte del módulo Plan de Desarrollo (migración 075): hasta 30, y sin decir cuántos.
+-- Pruebas del TOPE DE ARCHIVOS por reporte del módulo Plan de Desarrollo (migraciones 075 y 077): hasta 100, y sin decir cuántos.
 --
--- Qué comprueba, con las MISMAS funciones que usa la pantalla (`pdm_reportar`, `pdm_validar`) y con la sesión de cada persona:
+-- Qué comprueba, con las MISMAS funciones que usa la pantalla (`pdm_borrador_guardar`, `pdm_reportar`, `pdm_validar`) y con la sesión
+-- de cada persona:
 --
---   · Que un reporte con 30 archivos pasa y con 31 no, tanto al reportar como al corregir (entre lo nuevo y lo conservado de la
---     versión anterior) y que la secretaría puede marcar hasta 30 archivos al devolver, y 31 no.
+--   · Que un reporte con 100 archivos pasa y con 101 no, tanto en el borrador como al reportar y al corregir (entre lo nuevo y lo
+--     conservado de la versión anterior) y que la secretaría puede marcar hasta 100 archivos al devolver, y 101 no.
 --   · Que ningún mensaje de error de esos rechazos lleva el número: la aplicación no dice cuántos archivos caben.
 --   · Que el número vive en UN solo lugar (`pdm_privado.max_evidencias()`), que las dos funciones lo consultan y no lo repiten, que
 --     la restricción de la tabla de validaciones dice lo mismo y que nada perdió su forma ni sus permisos.
 --
--- Cómo se corre: DESPUÉS de aplicar la 075, pegar el archivo entero en el editor SQL de Supabase (o por la herramienta de la
+-- Cómo se corre: DESPUÉS de aplicar la 077, pegar el archivo entero en el editor SQL de Supabase (o por la herramienta de la
 -- sesión). NO DEJA NADA ESCRITO, ni en producción: todo pasa dentro de un bloque que termina con un error a propósito, y Postgres
 -- deshace la transacción entera. EL MENSAJE DE ESE ERROR ES EL RESULTADO: «PDM-TOPE: N comprobaciones, 0 fallas» y la lista.
 -- La última línea (1/0) es una red de seguridad por si el bloque terminara sin error.
 --
--- Para ensayar la migración ANTES de aplicarla: pegar primero la 075 sin su `begin` ni su `commit`, y a continuación este archivo.
+-- Para ensayar la migración ANTES de aplicarla: pegar primero la 077 sin su `begin` ni su `commit`, y a continuación este archivo.
 -- Todo queda en la misma transacción y se deshace.
 --
 -- No lleva identificadores de personas: elige del propio contenido de la base a un administrador, una persona de una secretaría con
@@ -143,56 +144,65 @@ begin
   perform pg_temp.como(v_admin, format('select public.pdm_asignar(array[%L]::uuid[], %L::uuid, true, ''apoyo'', %L)', v_i, v_r, v_mot));
 
   -- ══ El número vive en un solo lugar ═══════════════════════════════════════
-  perform pg_temp.chequear('el tope es de 30', pdm_privado.max_evidencias() = 30);
+  perform pg_temp.chequear('el tope es de 100', pdm_privado.max_evidencias() = 100);
   perform pg_temp.chequear('anon no alcanza la función del tope', not has_function_privilege('anon', 'pdm_privado.max_evidencias()', 'EXECUTE'));
   perform pg_temp.chequear('quien tiene sesión y el servidor sí', has_function_privilege('authenticated', 'pdm_privado.max_evidencias()', 'EXECUTE') and has_function_privilege('service_role', 'pdm_privado.max_evidencias()', 'EXECUTE'));
   perform pg_temp.chequear('pdm_reportar y pdm_validar consultan la función y no repiten el literal',
-    (select count(*) = 2 and bool_and(prosrc like '%pdm_privado.max_evidencias()%' and prosrc !~ '(>|>=|<|<=) 5( |;|$)')
+    (select count(*) = 2 and bool_and(prosrc like '%pdm_privado.max_evidencias()%' and prosrc !~ '(>|>=|<|<=) (5|30)( |;|$)')
        from pg_proc where oid in ('public.pdm_reportar(uuid, integer, numeric, text, jsonb, text, uuid[])'::regprocedure, 'public.pdm_validar(uuid, text, text, jsonb)'::regprocedure)));
-  perform pg_temp.chequear('la restricción de observaciones dice 30',
+  perform pg_temp.chequear('la restricción de observaciones dice 100',
     exists (select 1 from pg_constraint c where c.conrelid = 'public.pdm_validaciones'::regclass and c.conname = 'pdm_validaciones_observaciones_check'
-              and pg_get_constraintdef(c.oid) ~ 'jsonb_array_length\(observaciones\) <= 30\)'));
+              and pg_get_constraintdef(c.oid) ~ 'jsonb_array_length\(observaciones\) <= 100\)'));
   perform pg_temp.chequear('las dos funciones siguen sin ser de definidor, con ruta de búsqueda fija y sin acceso para anon',
     (select count(*) = 2 and bool_and(not p.prosecdef and exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')
               and has_function_privilege('authenticated', p.oid, 'EXECUTE') and has_function_privilege('service_role', p.oid, 'EXECUTE')
               and not has_function_privilege('anon', p.oid, 'EXECUTE'))
        from pg_proc p where p.oid in ('public.pdm_reportar(uuid, integer, numeric, text, jsonb, text, uuid[])'::regprocedure, 'public.pdm_validar(uuid, text, text, jsonb)'::regprocedure)));
 
-  -- ══ Reportar: 30 pasan, 31 no ═════════════════════════════════════════════
-  v_msg := pg_temp.fallo_de(v_r, format('select public.pdm_reportar(%L::uuid, 2026, 1::numeric, %L, %L::jsonb)', v_i, v_texto, pg_temp.archivos(v_plan, v_i, 31)::text));
-  perform pg_temp.chequear('31 archivos en un reporte nuevo NO pasan', v_msg like '22023 PDM: este reporte tiene más archivos de los que admite');
+  -- ══ El borrador tiene el mismo tope (migración 076) ═══════════════════════
+  v_msg := pg_temp.fallo_de(v_r, format('select public.pdm_borrador_guardar(%L::uuid, 2026, 0, 1::numeric, %L, null, ''{}''::uuid[], %L::jsonb)',
+    v_i, v_texto, pg_temp.archivos(v_plan, v_i, 101)::text));
+  perform pg_temp.chequear('un borrador con 101 archivos NO se guarda, y el mensaje no lleva el número',
+    v_msg like '22023 PDM: este reporte tiene más archivos de los que admite' and substr(v_msg, 7) !~ '[0-9]');
+  v_res := pg_temp.como(v_r, format('select public.pdm_borrador_guardar(%L::uuid, 2026, 0, 1::numeric, %L, null, ''{}''::uuid[], %L::jsonb)',
+    v_i, v_texto, pg_temp.archivos(v_plan, v_i, 100)::text));
+  perform pg_temp.chequear('un borrador con 100 archivos se guarda', jsonb_array_length(v_res -> 'archivos') = 100);
+
+  -- ══ Reportar: 100 pasan, 101 no ═════════════════════════════════════════════
+  v_msg := pg_temp.fallo_de(v_r, format('select public.pdm_reportar(%L::uuid, 2026, 1::numeric, %L, %L::jsonb)', v_i, v_texto, pg_temp.archivos(v_plan, v_i, 101)::text));
+  perform pg_temp.chequear('101 archivos en un reporte nuevo NO pasan', v_msg like '22023 PDM: este reporte tiene más archivos de los que admite');
   perform pg_temp.chequear('…y el mensaje no lleva el número', v_msg is not null and substr(v_msg, 7) !~ '[0-9]');
   perform pg_temp.chequear('…ni quedó nada guardado', (select count(*) from public.pdm_reportes where indicador_id = v_i and anio = 2026) = 0);
 
-  v_rep := (pg_temp.como(v_r, format('select public.pdm_reportar(%L::uuid, 2026, 1::numeric, %L, %L::jsonb)', v_i, v_texto, pg_temp.archivos(v_plan, v_i, 30)::text)) ->> 'reporte')::uuid;
-  perform pg_temp.chequear('30 archivos en un reporte nuevo pasan', v_rep is not null);
-  perform pg_temp.chequear('…y quedan los 30 guardados', (select count(*) from public.pdm_evidencias where reporte_id = v_rep) = 30);
+  v_rep := (pg_temp.como(v_r, format('select public.pdm_reportar(%L::uuid, 2026, 1::numeric, %L, %L::jsonb)', v_i, v_texto, pg_temp.archivos(v_plan, v_i, 100)::text)) ->> 'reporte')::uuid;
+  perform pg_temp.chequear('100 archivos en un reporte nuevo pasan', v_rep is not null);
+  perform pg_temp.chequear('…y quedan los 100 guardados', (select count(*) from public.pdm_evidencias where reporte_id = v_rep) = 100);
 
   -- ══ Corregir: lo nuevo y lo conservado suman lo mismo ═════════════════════
   select array_agg(id order by nombre) into v_ids from public.pdm_evidencias where reporte_id = v_rep;
   v_msg := pg_temp.fallo_de(v_r, format('select public.pdm_reportar(%L::uuid, 2026, 2::numeric, %L, %L::jsonb, %L, %L::uuid[])',
-    v_i, v_texto, pg_temp.archivos(v_plan, v_i, 11)::text, 'Se agregan archivos que faltaban', (select array_agg(x) from unnest(v_ids[1:20]) x)::text));
-  perform pg_temp.chequear('conservar 20 y subir 11 (suman 31) NO pasa', v_msg like '22023 PDM: este reporte tiene más archivos de los que admite' and substr(v_msg, 7) !~ '[0-9]');
+    v_i, v_texto, pg_temp.archivos(v_plan, v_i, 41)::text, 'Se agregan archivos que faltaban', (select array_agg(x) from unnest(v_ids[1:60]) x)::text));
+  perform pg_temp.chequear('conservar 60 y subir 41 (suman 101) NO pasa', v_msg like '22023 PDM: este reporte tiene más archivos de los que admite' and substr(v_msg, 7) !~ '[0-9]');
 
   v_res := pg_temp.como(v_r, format('select public.pdm_reportar(%L::uuid, 2026, 2::numeric, %L, %L::jsonb, %L, %L::uuid[])',
-    v_i, v_texto, pg_temp.archivos(v_plan, v_i, 10)::text, 'Se agregan archivos que faltaban', (select array_agg(x) from unnest(v_ids[1:20]) x)::text));
+    v_i, v_texto, pg_temp.archivos(v_plan, v_i, 40)::text, 'Se agregan archivos que faltaban', (select array_agg(x) from unnest(v_ids[1:60]) x)::text));
   v_rep2 := (v_res ->> 'reporte')::uuid;
-  perform pg_temp.chequear('conservar 20 y subir 10 (suman 30) pasa, como corrección', v_rep2 is not null and (v_res ->> 'correccion')::boolean and (v_res ->> 'conservadas')::int = 20);
-  perform pg_temp.chequear('…y la nueva versión tiene sus 30', (select count(*) from public.pdm_evidencias where reporte_id = v_rep2) = 30);
+  perform pg_temp.chequear('conservar 60 y subir 40 (suman 100) pasa, como corrección', v_rep2 is not null and (v_res ->> 'correccion')::boolean and (v_res ->> 'conservadas')::int = 60);
+  perform pg_temp.chequear('…y la nueva versión tiene sus 100', (select count(*) from public.pdm_evidencias where reporte_id = v_rep2) = 100);
 
-  -- ══ Devolver: la secretaría marca hasta 30 ════════════════════════════════
+  -- ══ Devolver: la secretaría marca hasta 100 ════════════════════════════════
   select jsonb_agg(jsonb_build_object('evidencia', e.id, 'motivo', 'No abre') order by e.nombre) into v_obs from public.pdm_evidencias e where e.reporte_id = v_rep2;
-  perform pg_temp.chequear('el reporte tiene 30 archivos para marcar', jsonb_array_length(v_obs) = 30);
+  perform pg_temp.chequear('el reporte tiene 100 archivos para marcar', jsonb_array_length(v_obs) = 100);
 
   v_msg := pg_temp.fallo_de(v_c, format('select public.pdm_validar(%L::uuid, ''devuelto'', %L, %L::jsonb)', v_rep2, 'Hay archivos con problema, revisarlos todos.',
     (v_obs || jsonb_build_array(jsonb_build_object('evidencia', gen_random_uuid(), 'motivo', 'No abre')))::text));
-  perform pg_temp.chequear('marcar 31 archivos NO pasa', v_msg like '22023 PDM: se marcaron más archivos de los que tiene un reporte');
+  perform pg_temp.chequear('marcar 101 archivos NO pasa', v_msg like '22023 PDM: se marcaron más archivos de los que tiene un reporte');
   perform pg_temp.chequear('…y el mensaje no lleva el número', v_msg is not null and substr(v_msg, 7) !~ '[0-9]');
 
   v_res := pg_temp.como(v_c, format('select public.pdm_validar(%L::uuid, ''devuelto'', %L, %L::jsonb)', v_rep2, 'Hay archivos con problema, revisarlos todos.', v_obs::text));
-  perform pg_temp.chequear('marcar los 30 archivos pasa', (v_res ->> 'cambio') = 'devuelto' and (v_res ->> 'observados')::int = 30);
-  perform pg_temp.chequear('…y las 30 observaciones quedaron guardadas',
-    (select jsonb_array_length(observaciones) from public.pdm_validaciones where reporte_id = v_rep2 order by created_at desc, id desc limit 1) = 30);
+  perform pg_temp.chequear('marcar los 100 archivos pasa', (v_res ->> 'cambio') = 'devuelto' and (v_res ->> 'observados')::int = 100);
+  perform pg_temp.chequear('…y las 100 observaciones quedaron guardadas',
+    (select jsonb_array_length(observaciones) from public.pdm_validaciones where reporte_id = v_rep2 order by created_at desc, id desc limit 1) = 100);
 
   -- ── Resultado ───────────────────────────────────────────────────────────
   select count(*) filter (where not ok), count(*) into v_fallas, v_total from res;

@@ -83,17 +83,19 @@ test('qué archivos se admiten', () => {
 
 test('los archivos de un reporte: al menos uno, hasta el tope (que no se dice), de hasta 25 MB cada uno (100 MB los videos)', () => {
   const pdf = (n = 1, bytes = 1000) => Array.from({ length: n }, (_, k) => ({ nombre: `a${k}.pdf`, tipo: 'application/pdf', bytes }))
-  assert.equal(MAX_EVIDENCIAS, 30)
+  assert.equal(MAX_EVIDENCIAS, 100)
   assert.equal(MAX_BYTES_EVIDENCIA, 25 * 1024 * 1024)
   assert.equal(MAX_BYTES_VIDEO, 100 * 1024 * 1024)
   assert.match(errorEnArchivos([])!, /al menos una/)
   assert.equal(errorEnArchivos([], 1), null)
   assert.equal(errorEnArchivos(pdf(5)), null, 'cinco ya no es el tope')
   assert.equal(errorEnArchivos(pdf(6)), null, 'ni seis')
-  assert.equal(errorEnArchivos(pdf(30)), null)
-  assert.equal(errorEnArchivos(pdf(31)), MENSAJE_DEMASIADOS_ARCHIVOS)
-  assert.equal(errorEnArchivos(pdf(10), 20), null, 'lo conservado de la versión anterior también cuenta')
-  assert.equal(errorEnArchivos(pdf(10), 21), MENSAJE_DEMASIADOS_ARCHIVOS)
+  assert.equal(errorEnArchivos(pdf(30)), null, 'treinta tampoco (el tope de la 075)')
+  assert.equal(errorEnArchivos(pdf(31)), null)
+  assert.equal(errorEnArchivos(pdf(100)), null)
+  assert.equal(errorEnArchivos(pdf(101)), MENSAJE_DEMASIADOS_ARCHIVOS)
+  assert.equal(errorEnArchivos(pdf(10), 90), null, 'lo conservado de la versión anterior también cuenta')
+  assert.equal(errorEnArchivos(pdf(10), 91), MENSAJE_DEMASIADOS_ARCHIVOS)
   assert.equal(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA)), null)
   assert.match(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA + 1))!, /máximo/)
   assert.match(errorEnArchivos(pdf(1, MAX_BYTES_EVIDENCIA + 1))!, /para un PDF es 25 MB/)
@@ -167,7 +169,7 @@ test('la aplicación no dice cuántos archivos caben: ningún mensaje lleva el n
   ]
   for (const m of mensajes) {
     assert.ok(typeof m === 'string' && m.length > 0, 'cada rechazo trae su mensaje')
-    assert.doesNotMatch(m, new RegExp(`\\b(${MAX_EVIDENCIAS}|${MAX_EVIDENCIAS + 1}|treinta|cinco|5)\\b`, 'i'), m)
+    assert.doesNotMatch(m, new RegExp(`\\b(${MAX_EVIDENCIAS}|${MAX_EVIDENCIAS + 1}|cien|treinta|cinco|30|5)\\b`, 'i'), m)
   }
   // Y ninguna cadena de la pantalla o del servidor imprime la constante: lo que se ve no puede traer el número.
   const raiz = new URL('../../', import.meta.url).pathname
@@ -186,7 +188,7 @@ test('la aplicación no dice cuántos archivos caben: ningún mensaje lleva el n
   assert.deepEqual(imprimen, [], 'nadie debe escribir ${MAX_EVIDENCIAS} en un texto')
 })
 
-test('el tope de archivos de la aplicación dice lo mismo que la base (migración 075)', () => {
+test('el tope de archivos de la aplicación dice lo mismo que la base (migraciones 075 y 077)', () => {
   const dir = new URL('../../supabase/migrations/', import.meta.url)
   const migraciones = readdirSync(dir).filter(n => n.endsWith('.sql')).sort().map(n => ({ n, sql: readFileSync(new URL(n, dir), 'utf8') }))
   const ultima = (patron: RegExp) => {
@@ -207,7 +209,7 @@ test('el tope de archivos de la aplicación dice lo mismo que la base (migració
     const d = ultima(new RegExp(`create or replace function public\\.${nombre}\\(`))
     const cuerpo = new RegExp(`create or replace function public\\.${nombre}\\([\\s\\S]*?end \\$f\\$;`).exec(d.sql)![0]
     assert.match(cuerpo, /pdm_privado\.max_evidencias\(\)/, `${d.n}: ${nombre} consulta el tope`)
-    assert.doesNotMatch(cuerpo, /(>|>=|<|<=) 5( |;|\n)/, `${d.n}: ${nombre} no conserva el 5`)
+    assert.doesNotMatch(cuerpo, /(>|>=|<|<=) (5|30)( |;|\n)/, `${d.n}: ${nombre} no conserva un tope viejo`)
   }
 })
 
