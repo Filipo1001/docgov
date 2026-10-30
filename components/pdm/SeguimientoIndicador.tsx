@@ -453,7 +453,7 @@ function Version({ r, acciones, onHecho, nueva, yoId }: {
         {r.corrigeA && <Sello>Corrección</Sello>}
       </div>
       {r.motivoCorreccion && <p className="mt-1 text-xs italic text-[#667085]">«{r.motivoCorreccion}»</p>}
-      {/* Lo que se hizo puede ser largo (hasta 5.000 caracteres): seis líneas y «Leer todo». */}
+      {/* Lo que se hizo puede ser largo (hasta 10.000 caracteres): seis líneas y «Leer todo». */}
       <div className="mt-1.5">
         <TextoLargo texto={r.texto} className={`text-sm leading-snug ${tachado || 'text-[#2D3648]'}`} />
       </div>

@@ -39,10 +39,10 @@ export const MAX_BYTES_VIDEO = 100 * 1024 * 1024
 export const MIN_TEXTO = 10
 /**
  * Cuántos caracteres admite «¿Qué se hizo?» (en el reporte y en su borrador). Eran 1.000 y un reporte real de 2024 llegó a 987: Felipe
- * (30-oct-2026) pidió muchos más y eligió 5.000 (unas 800 palabras). Está escrito también en la base (`pdm_privado.max_texto_reporte()` y la
- * restricción `pdm_borradores_texto_check`, migración 078); tests/pdm/seguimiento.test.ts vigila que los tres digan lo mismo.
+ * (30-oct-2026) pidió muchos más: primero 5.000 (migración 078) y el mismo día 10.000 (unas 1.600 palabras, más de tres páginas). Está escrito
+ * también en la base (`pdm_privado.max_texto_reporte()` y la restricción `pdm_borradores_texto_check`, migración 079); tests/pdm/seguimiento.test.ts vigila que los tres digan lo mismo.
  */
-export const MAX_TEXTO_REPORTE = 5000
+export const MAX_TEXTO_REPORTE = 10000
 /** Desde qué fracción del máximo el formulario dice cuántos caracteres quedan (antes, nada: Felipe, «solo al acercarse»). */
 export const AVISO_TEXTO_DESDE = 0.9
 export const MAX_MOTIVO_CORRECCION = 500
@@ -270,7 +270,7 @@ export interface EntradaDescartarBorrador {
   version: number
 }
 
-/** Un número entero con punto de miles («5.000»), igual en todos los navegadores: `toLocaleString('es')` escribe «5000» y el de otros países «5,000». */
+/** Un número entero con punto de miles («10.000»), igual en todos los navegadores: `toLocaleString('es')` escribe «10000» y el de otros países «10,000». */
 export const miles = (n: number): string => String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
 /** Lo que se dice cuando «¿Qué se hizo?» pasa del máximo (el formulario no deja escribir más; esto es para lo que llegue de otro lado). */

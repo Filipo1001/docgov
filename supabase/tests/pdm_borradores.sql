@@ -244,8 +244,8 @@ begin
     v_msg like '40001 PDM: el borrador cambió mientras lo editabas%' and (select b.valor = 6 from public.pdm_borradores b where b.indicador_id = v_i and b.anio = 2026));
 
   -- ══ Guardar: lo que trae tiene que servir (aunque esté incompleto) ═══════
-  v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '6', repeat('a', 5001), null, '{}', v_arch2);
-  perform pg_temp.chequear('un texto de más de 5.000 caracteres no se guarda (migración 078)', v_msg like '22001%');
+  v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '6', repeat('a', 10001), null, '{}', v_arch2);
+  perform pg_temp.chequear('un texto de más de 10.000 caracteres no se guarda (migración 079)', v_msg like '22001%');
   v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '-1', v_texto, null, '{}', v_arch2);
   perform pg_temp.chequear('un valor negativo no se guarda', v_msg like '22023%');
   v_msg := pg_temp.fallo_guardar(v_r, v_i, 2, '6', v_texto, repeat('m', 501), '{}', v_arch2);

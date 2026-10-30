@@ -98,7 +98,7 @@ test('lo que se escribe en un borrador: puede estar incompleto, pero lo que trae
   assert.match(errorEnBorrador({ ...ok, valor: Number.NaN })!, /número/)
   assert.match(errorEnBorrador({ ...ok, valor: 1e13 })!, /grande/)
   assert.equal(errorEnBorrador({ ...ok, texto: 'a'.repeat(MAX_TEXTO_REPORTE) }), null, 'el máximo cabe')
-  assert.match(errorEnBorrador({ ...ok, texto: 'a'.repeat(MAX_TEXTO_REPORTE + 1) })!, /5\.000/)
+  assert.match(errorEnBorrador({ ...ok, texto: 'a'.repeat(MAX_TEXTO_REPORTE + 1) })!, /10\.000/)
   assert.match(errorEnBorrador({ ...ok, motivo: 'm'.repeat(501) })!, /500/)
 })
 

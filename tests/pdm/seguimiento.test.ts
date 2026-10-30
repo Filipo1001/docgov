@@ -223,29 +223,31 @@ test('lo escrito en un reporte', () => {
   assert.match(errorEnReporte(bien, true)!, /qué corriges/)
   assert.equal(errorEnReporte({ ...bien, motivo: 'Faltaba el acta firmada' }, true), null)
   assert.equal(errorEnReporte({ ...bien, valor: 0 }, false), null)
-  // «¿Qué se hizo?» admite hasta 5.000 caracteres (migración 078); los espacios de los bordes no cuentan.
+  // «¿Qué se hizo?» admite hasta 10.000 caracteres (migraciones 078 y 079); los espacios de los bordes no cuentan.
   assert.equal(errorEnReporte({ ...bien, texto: 'a'.repeat(MAX_TEXTO_REPORTE) }, false), null)
   assert.equal(errorEnReporte({ ...bien, texto: `  ${'a'.repeat(MAX_TEXTO_REPORTE)}\n ` }, false), null)
   assert.equal(errorEnReporte({ ...bien, texto: 'a'.repeat(MAX_TEXTO_REPORTE + 1) }, false), MENSAJE_TEXTO_LARGO)
 })
 
-test('el largo de «¿Qué se hizo?»: 5.000 caracteres, y el aviso de cuántos quedan solo al acercarse', () => {
-  assert.equal(MAX_TEXTO_REPORTE, 5000)
-  assert.equal(MENSAJE_TEXTO_LARGO, 'La descripción no puede pasar de 5.000 caracteres.')
+test('el largo de «¿Qué se hizo?»: 10.000 caracteres, y el aviso de cuántos quedan solo al acercarse', () => {
+  assert.equal(MAX_TEXTO_REPORTE, 10000)
+  assert.equal(MENSAJE_TEXTO_LARGO, 'La descripción no puede pasar de 10.000 caracteres.')
   // El punto de miles es el mismo en todos los navegadores.
-  assert.deepEqual([0, 7, 999, 1000, 5000, 12345, 1234567].map(miles), ['0', '7', '999', '1.000', '5.000', '12.345', '1.234.567'])
+  assert.deepEqual([0, 7, 999, 1000, 5000, 10000, 12345, 1234567].map(miles), ['0', '7', '999', '1.000', '5.000', '10.000', '12.345', '1.234.567'])
   // Nada hasta el 90 %; desde ahí, cuántos quedan; y al llegar, que llegó.
   assert.equal(AVISO_TEXTO_DESDE, 0.9)
   assert.equal(avisoDeLargo(0), null)
   assert.equal(avisoDeLargo(987), null, 'lo que escribió el reporte más largo de octubre no dice nada')
-  assert.equal(avisoDeLargo(4499), null)
-  assert.equal(avisoDeLargo(4500), 'Quedan 500 caracteres.')
-  assert.equal(avisoDeLargo(3999 + 1000), 'Queda 1 carácter.')
-  assert.equal(avisoDeLargo(5000), 'Llegaste al máximo: 5.000 caracteres.')
+  assert.equal(avisoDeLargo(4999), null, 'lo que cabía antes (5.000) tampoco dice nada')
+  assert.equal(avisoDeLargo(8999), null)
+  assert.equal(avisoDeLargo(9000), 'Quedan 1.000 caracteres.')
+  assert.equal(avisoDeLargo(9500), 'Quedan 500 caracteres.')
+  assert.equal(avisoDeLargo(9999), 'Queda 1 carácter.')
+  assert.equal(avisoDeLargo(10000), 'Llegaste al máximo: 10.000 caracteres.')
   assert.equal(avisoDeLargo(1000 - 2, 1000), 'Quedan 2 caracteres.')
 })
 
-test('el largo de «¿Qué se hizo?» de la aplicación dice lo mismo que la base (migración 078)', () => {
+test('el largo de «¿Qué se hizo?» de la aplicación dice lo mismo que la base (migraciones 078 y 079)', () => {
   const dir = new URL('../../supabase/migrations/', import.meta.url)
   const migraciones = readdirSync(dir).filter(n => n.endsWith('.sql')).sort().map(n => ({ n, sql: readFileSync(new URL(n, dir), 'utf8') }))
   const ultima = (patron: RegExp) => {

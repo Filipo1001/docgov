@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Un texto que puede ser largo (lo que se hizo en un reporte: hasta 5.000 caracteres, ver `MAX_TEXTO_REPORTE`) visto en la ficha: se
+ * Un texto que puede ser largo (lo que se hizo en un reporte: hasta 10.000 caracteres, ver `MAX_TEXTO_REPORTE`) visto en la ficha: se
  * muestran las primeras seis líneas y «Leer todo» despliega el resto. Felipe (30-oct-2026): «recortado con Leer todo», como las listas
  * compactas, para que la ficha no se vuelva kilométrica.
  *
