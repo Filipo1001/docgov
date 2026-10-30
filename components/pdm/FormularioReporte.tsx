@@ -42,7 +42,7 @@ import { Iconos } from '@/lib/iconos'
 import { fmt, type Indicador } from '@/lib/pdm/plan'
 import {
   MAX_MOTIVO_CORRECCION, MAX_TEXTO_REPORTE, MIN_TEXTO,
-  describirTamano, errorEnArchivos, errorEnArchivosDelBorrador, errorEnBorrador, errorEnReporte, leerNumero,
+  avisoDeLargo, describirTamano, errorEnArchivos, errorEnArchivosDelBorrador, errorEnBorrador, errorEnReporte, leerNumero,
   type AccionesSeguimiento, type BorradorArchivo, type BorradorVista, type ReporteDetalle,
 } from '@/lib/pdm/seguimiento-acciones'
 import { MAX_FALLOS_AUTOGUARDADO, aplicarSituacion, decidirAutoguardado, esConflictoDeBorrador, estadoDelGuardado, firmaDelFormulario, quienGuardo } from '@/lib/pdm/borradores'
@@ -177,6 +177,8 @@ export default function FormularioReporte({ indicador, vigente, borrador, yoId, 
   const [enviado, setEnviado] = useState(false)
 
   const numero = leerNumero(valor)
+  // Cuántos caracteres quedan en «¿Qué se hizo?», o nada si todavía falta mucho para el máximo.
+  const avisoTexto = avisoDeLargo(texto.length)
 
   // Mientras se sube, se guarda o hay algo sin guardar, cerrar la pestaña perdería el trabajo: el navegador pregunta antes.
   useEffect(() => {
@@ -638,21 +640,33 @@ export default function FormularioReporte({ indicador, vigente, borrador, yoId, 
           </span>
         </label>
 
-        <label className="block">
-          <span className={T.rotulo}>¿Qué se hizo?</span>
-          <textarea
-            id="pdm-texto"
-            value={texto}
-            disabled={ocupado}
-            aria-invalid={ver('texto') ? true : undefined}
-            aria-describedby={ver('texto') ? 'pdm-texto-error' : undefined}
-            onChange={e => setTexto(e.target.value)}
-            rows={3}
-            maxLength={MAX_TEXTO_REPORTE}
-            className={`${T.campo} mt-1.5 resize-none ${ver('texto') ? CAMPO_MAL : ''}`}
-          />
-          {ver('texto') && <span id="pdm-texto-error" role="alert" className="mt-1 block text-[11px] font-medium text-[#B42318]">{ver('texto')}</span>}
-        </label>
+        <div>
+          <label className="block">
+            <span className={T.rotulo}>¿Qué se hizo?</span>
+            <textarea
+              id="pdm-texto"
+              value={texto}
+              disabled={ocupado}
+              aria-invalid={ver('texto') ? true : undefined}
+              aria-describedby={[ver('texto') ? 'pdm-texto-error' : '', avisoTexto ? 'pdm-texto-largo' : ''].filter(Boolean).join(' ') || undefined}
+              onChange={e => setTexto(e.target.value)}
+              rows={3}
+              maxLength={MAX_TEXTO_REPORTE}
+              // Crece con lo que se escribe hasta unas 16 líneas; de ahí, se desplaza por dentro. Donde el navegador no sabe crecer
+              // (`field-sizing`), se queda en 3 líneas con desplazamiento, como antes.
+              className={`${T.campo} mt-1.5 max-h-80 min-h-[4.75rem] resize-none [field-sizing:content] ${ver('texto') ? CAMPO_MAL : ''}`}
+            />
+            {ver('texto') && <span id="pdm-texto-error" role="alert" className="mt-1 block text-[11px] font-medium text-[#B42318]">{ver('texto')}</span>}
+          </label>
+          {/* Cuántos caracteres quedan: solo al acercarse al máximo (Felipe, 30-oct-2026). Aparece con la curva, sin empujar de golpe. */}
+          <Despliegue abierto={avisoTexto !== null} separacion="pt-1">
+            {avisoTexto !== null ? (
+              <span id="pdm-texto-largo" className={`block text-[11px] tabular-nums ${texto.length >= MAX_TEXTO_REPORTE ? 'font-medium text-[#7A4A06]' : 'text-[#667085]'}`}>
+                {avisoTexto}
+              </span>
+            ) : null}
+          </Despliegue>
+        </div>
 
         {correccion && (
           <label className="block">

@@ -13,7 +13,7 @@ import {
   ANIOS_PLAN, anioDeParametro, anioIniciado, anioPorDefecto, estadoDelAnio, requiereReporte, resumirAnio, situacionEn,
 } from '@/lib/pdm/seguimiento'
 import {
-  MAX_BYTES_EVIDENCIA, MAX_BYTES_VIDEO, MAX_EVIDENCIAS, MENSAJE_DEMASIADOS_ARCHIVOS, TIPOS_EVIDENCIA, errorEnArchivos, esNombreDeEvidenciaEnAlmacen, esVideo, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, leerNumero, tipoDeArchivo,
+  AVISO_TEXTO_DESDE, MAX_BYTES_EVIDENCIA, MAX_BYTES_VIDEO, MAX_EVIDENCIAS, MAX_TEXTO_REPORTE, MENSAJE_DEMASIADOS_ARCHIVOS, MENSAJE_TEXTO_LARGO, TIPOS_EVIDENCIA, avisoDeLargo, miles, errorEnArchivos, esNombreDeEvidenciaEnAlmacen, esVideo, limiteDeTipo, errorEnComentario, errorEnReporte, errorEnValidacion, leerNumero, tipoDeArchivo,
 } from '@/lib/pdm/seguimiento-acciones'
 import { clasificarSeleccion } from '@/lib/pdm/evidencias-cola'
 
@@ -223,6 +223,49 @@ test('lo escrito en un reporte', () => {
   assert.match(errorEnReporte(bien, true)!, /qué corriges/)
   assert.equal(errorEnReporte({ ...bien, motivo: 'Faltaba el acta firmada' }, true), null)
   assert.equal(errorEnReporte({ ...bien, valor: 0 }, false), null)
+  // «¿Qué se hizo?» admite hasta 5.000 caracteres (migración 078); los espacios de los bordes no cuentan.
+  assert.equal(errorEnReporte({ ...bien, texto: 'a'.repeat(MAX_TEXTO_REPORTE) }, false), null)
+  assert.equal(errorEnReporte({ ...bien, texto: `  ${'a'.repeat(MAX_TEXTO_REPORTE)}\n ` }, false), null)
+  assert.equal(errorEnReporte({ ...bien, texto: 'a'.repeat(MAX_TEXTO_REPORTE + 1) }, false), MENSAJE_TEXTO_LARGO)
+})
+
+test('el largo de «¿Qué se hizo?»: 5.000 caracteres, y el aviso de cuántos quedan solo al acercarse', () => {
+  assert.equal(MAX_TEXTO_REPORTE, 5000)
+  assert.equal(MENSAJE_TEXTO_LARGO, 'La descripción no puede pasar de 5.000 caracteres.')
+  // El punto de miles es el mismo en todos los navegadores.
+  assert.deepEqual([0, 7, 999, 1000, 5000, 12345, 1234567].map(miles), ['0', '7', '999', '1.000', '5.000', '12.345', '1.234.567'])
+  // Nada hasta el 90 %; desde ahí, cuántos quedan; y al llegar, que llegó.
+  assert.equal(AVISO_TEXTO_DESDE, 0.9)
+  assert.equal(avisoDeLargo(0), null)
+  assert.equal(avisoDeLargo(987), null, 'lo que escribió el reporte más largo de octubre no dice nada')
+  assert.equal(avisoDeLargo(4499), null)
+  assert.equal(avisoDeLargo(4500), 'Quedan 500 caracteres.')
+  assert.equal(avisoDeLargo(3999 + 1000), 'Queda 1 carácter.')
+  assert.equal(avisoDeLargo(5000), 'Llegaste al máximo: 5.000 caracteres.')
+  assert.equal(avisoDeLargo(1000 - 2, 1000), 'Quedan 2 caracteres.')
+})
+
+test('el largo de «¿Qué se hizo?» de la aplicación dice lo mismo que la base (migración 078)', () => {
+  const dir = new URL('../../supabase/migrations/', import.meta.url)
+  const migraciones = readdirSync(dir).filter(n => n.endsWith('.sql')).sort().map(n => ({ n, sql: readFileSync(new URL(n, dir), 'utf8') }))
+  const ultima = (patron: RegExp) => {
+    const m = migraciones.filter(x => patron.test(x.sql)).at(-1)
+    assert.ok(m, `ninguna migración define ${patron}`)
+    return m
+  }
+  const f = ultima(/create or replace function pdm_privado\.max_texto_reporte\(\)/)
+  const enLaFuncion = Number(/create or replace function pdm_privado\.max_texto_reporte\(\)[\s\S]*?as \$f\$ select (\d+) \$f\$/.exec(f.sql)?.[1])
+  assert.equal(enLaFuncion, MAX_TEXTO_REPORTE, `${f.n}: pdm_privado.max_texto_reporte() dice lo mismo que MAX_TEXTO_REPORTE`)
+  const r = ultima(/add constraint pdm_borradores_texto_check/)
+  const enLaRestriccion = Number(/add constraint pdm_borradores_texto_check check \(char_length\(texto\) <= (\d+)\)/.exec(r.sql)?.[1])
+  assert.equal(enLaRestriccion, MAX_TEXTO_REPORTE, `${r.n}: la restricción del borrador dice lo mismo`)
+  // Las dos funciones que reciben el texto consultan la función y no repiten un número.
+  for (const nombre of ['pdm_reportar', 'pdm_borrador_guardar']) {
+    const d = ultima(new RegExp(`create or replace function public\\.${nombre}\\(`))
+    const cuerpo = new RegExp(`create or replace function public\\.${nombre}\\([\\s\\S]*?end \\$f\\$;`).exec(d.sql)![0]
+    assert.match(cuerpo, /char_length\(v_texto\) > pdm_privado\.max_texto_reporte\(\)/, `${d.n}: ${nombre} consulta el largo`)
+    assert.doesNotMatch(cuerpo, /char_length\(v_texto\) > \d/, `${d.n}: ${nombre} no repite un número`)
+  }
 })
 
 test('validar: aprobar no pide nada; devolver exige decir qué falta', () => {

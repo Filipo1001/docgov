@@ -17,20 +17,11 @@
  */
 
 import { Fragment, useId, useRef, useState, type ReactNode } from 'react'
-import { flushSync } from 'react-dom'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import { partirLista, textoVerResto } from '@/lib/pdm/lista-compacta'
+import { empiezaFueraDeVista, plegarSinMoverAncla } from './desplazamiento'
 import { Despliegue } from './Movimiento'
-
-/** Lo que se desplaza cuando la lista crece: la ventana o, dentro de una ficha con su propio desplazamiento, la ficha. */
-function contenedorConScroll(el: HTMLElement): HTMLElement {
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    const { overflowY } = getComputedStyle(p)
-    if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && p.scrollHeight > p.clientHeight) return p
-  }
-  return (document.scrollingElement ?? document.documentElement) as HTMLElement
-}
 
 /** El botón en el módulo, y en la verificación pública (que tiene su propia paleta). */
 const TONOS = {
@@ -76,14 +67,9 @@ export default function ListaCompacta<T>({
     if (!abierta) { setDeGolpe(false); setAbierta(true); return }
     const b = boton.current
     const d = desplegado.current
-    if (!b || !d) { setAbierta(false); return }
-    const caja = contenedorConScroll(b)
-    const techo = caja === document.scrollingElement || caja === document.documentElement ? 0 : caja.getBoundingClientRect().top
     // Lo desplegado empieza dentro de la vista: plegarlo con la curva no saca a nadie de donde estaba.
-    if (d.getBoundingClientRect().top >= techo) { setDeGolpe(false); setAbierta(false); return }
-    const antes = b.getBoundingClientRect().top
-    flushSync(() => { setDeGolpe(true); setAbierta(false) })
-    caja.scrollTop += b.getBoundingClientRect().top - antes
+    if (!b || !d || !empiezaFueraDeVista(d, b)) { setDeGolpe(false); setAbierta(false); return }
+    plegarSinMoverAncla(b, () => { setDeGolpe(true); setAbierta(false) })
   }
 
   const t = TONOS[tono]

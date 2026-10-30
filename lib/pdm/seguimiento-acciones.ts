@@ -37,7 +37,14 @@ export const MAX_BYTES_EVIDENCIA = 25 * 1024 * 1024
  */
 export const MAX_BYTES_VIDEO = 100 * 1024 * 1024
 export const MIN_TEXTO = 10
-export const MAX_TEXTO_REPORTE = 1000
+/**
+ * Cuántos caracteres admite «¿Qué se hizo?» (en el reporte y en su borrador). Eran 1.000 y un reporte real de 2024 llegó a 987: Felipe
+ * (30-oct-2026) pidió muchos más y eligió 5.000 (unas 800 palabras). Está escrito también en la base (`pdm_privado.max_texto_reporte()` y la
+ * restricción `pdm_borradores_texto_check`, migración 078); tests/pdm/seguimiento.test.ts vigila que los tres digan lo mismo.
+ */
+export const MAX_TEXTO_REPORTE = 5000
+/** Desde qué fracción del máximo el formulario dice cuántos caracteres quedan (antes, nada: Felipe, «solo al acercarse»). */
+export const AVISO_TEXTO_DESDE = 0.9
 export const MAX_MOTIVO_CORRECCION = 500
 export const MAX_COMENTARIO = 2000
 export const MAX_COMENTARIO_VALIDACION = 1000
@@ -263,6 +270,23 @@ export interface EntradaDescartarBorrador {
   version: number
 }
 
+/** Un número entero con punto de miles («5.000»), igual en todos los navegadores: `toLocaleString('es')` escribe «5000» y el de otros países «5,000». */
+export const miles = (n: number): string => String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+
+/** Lo que se dice cuando «¿Qué se hizo?» pasa del máximo (el formulario no deja escribir más; esto es para lo que llegue de otro lado). */
+export const MENSAJE_TEXTO_LARGO = `La descripción no puede pasar de ${miles(MAX_TEXTO_REPORTE)} caracteres.`
+
+/**
+ * Lo que dice el formulario debajo de «¿Qué se hizo?»: nada hasta acercarse al máximo (`AVISO_TEXTO_DESDE`), y desde ahí cuántos caracteres
+ * quedan. `largo` se mide como lo mide el campo (`texto.length`), que es lo que el campo deja escribir.
+ */
+export function avisoDeLargo(largo: number, max = MAX_TEXTO_REPORTE): string | null {
+  if (largo < max * AVISO_TEXTO_DESDE) return null
+  const quedan = max - largo
+  if (quedan <= 0) return `Llegaste al máximo: ${miles(max)} caracteres.`
+  return quedan === 1 ? 'Queda 1 carácter.' : `Quedan ${miles(quedan)} caracteres.`
+}
+
 /**
  * `null` si lo escrito en un borrador sirve. Un borrador puede estar incompleto (sin valor, con un texto corto, sin archivos), pero lo
  * que trae tiene que servir y tiene que haber ALGO que guardar. `archivos` cuenta los del borrador y los nuevos; `conservadas`, los de
@@ -274,7 +298,7 @@ export function errorEnBorrador(e: { valor: number | null; texto: string; motivo
     if (e.valor > 1e12) return 'Ese valor es demasiado grande.'
   }
   const texto = typeof e.texto === 'string' ? e.texto : ''
-  if (texto.length > MAX_TEXTO_REPORTE) return `La descripción no puede pasar de ${MAX_TEXTO_REPORTE} caracteres.`
+  if (texto.length > MAX_TEXTO_REPORTE) return MENSAJE_TEXTO_LARGO
   const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
   if (motivo.length > MAX_MOTIVO_CORRECCION) return `El motivo no puede pasar de ${MAX_MOTIVO_CORRECCION} caracteres.`
   if (e.archivos + e.conservadas > MAX_EVIDENCIAS) return MENSAJE_DEMASIADOS_ARCHIVOS
@@ -324,7 +348,7 @@ export function errorEnReporte(e: { valor: unknown; texto: unknown; motivo?: unk
   if (valor > 1e12) return 'Ese valor es demasiado grande.'
   const texto = typeof e.texto === 'string' ? e.texto.trim() : ''
   if (texto.length < MIN_TEXTO) return `Cuenta qué se hizo (al menos ${MIN_TEXTO} caracteres).`
-  if (texto.length > MAX_TEXTO_REPORTE) return `La descripción no puede pasar de ${MAX_TEXTO_REPORTE} caracteres.`
+  if (texto.length > MAX_TEXTO_REPORTE) return MENSAJE_TEXTO_LARGO
   if (correccion) {
     const motivo = typeof e.motivo === 'string' ? e.motivo.trim() : ''
     if (motivo.length < MIN_TEXTO) return `Di qué corriges (al menos ${MIN_TEXTO} caracteres).`

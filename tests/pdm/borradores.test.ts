@@ -8,7 +8,7 @@ import {
 } from '@/lib/pdm/borradores'
 import { traducirErrorPdm } from '@/lib/pdm/acciones'
 import {
-  MAX_EVIDENCIAS, MENSAJE_DEMASIADOS_ARCHIVOS, errorEnArchivos, errorEnArchivosDelBorrador, errorEnBorrador,
+  MAX_EVIDENCIAS, MAX_TEXTO_REPORTE, MENSAJE_DEMASIADOS_ARCHIVOS, errorEnArchivos, errorEnArchivosDelBorrador, errorEnBorrador,
 } from '@/lib/pdm/seguimiento-acciones'
 
 const fila = (o: Partial<FilaBorrador> = {}): FilaBorrador => ({
@@ -97,7 +97,8 @@ test('lo que se escribe en un borrador: puede estar incompleto, pero lo que trae
   assert.match(errorEnBorrador({ ...ok, valor: -1 })!, /número/)
   assert.match(errorEnBorrador({ ...ok, valor: Number.NaN })!, /número/)
   assert.match(errorEnBorrador({ ...ok, valor: 1e13 })!, /grande/)
-  assert.match(errorEnBorrador({ ...ok, texto: 'a'.repeat(1001) })!, /1000/)
+  assert.equal(errorEnBorrador({ ...ok, texto: 'a'.repeat(MAX_TEXTO_REPORTE) }), null, 'el máximo cabe')
+  assert.match(errorEnBorrador({ ...ok, texto: 'a'.repeat(MAX_TEXTO_REPORTE + 1) })!, /5\.000/)
   assert.match(errorEnBorrador({ ...ok, motivo: 'm'.repeat(501) })!, /500/)
 })
 

@@ -47,6 +47,7 @@ import EvolucionDelAnio from './EvolucionDelAnio'
 import { Sello, Seccion, SituacionTexto } from './ui'
 import BotonAccion, { Despliegue, useConfirmar, useNuevos } from './Movimiento'
 import ListaCompacta from './ListaCompacta'
+import TextoLargo from './TextoLargo'
 import { useAvisar } from './Avisos'
 import { Bloque } from './Esqueleto'
 import { T } from './tema'
@@ -452,7 +453,10 @@ function Version({ r, acciones, onHecho, nueva, yoId }: {
         {r.corrigeA && <Sello>Corrección</Sello>}
       </div>
       {r.motivoCorreccion && <p className="mt-1 text-xs italic text-[#667085]">«{r.motivoCorreccion}»</p>}
-      <p className={`mt-1.5 whitespace-pre-line text-sm leading-snug ${tachado || 'text-[#2D3648]'}`}>{r.texto}</p>
+      {/* Lo que se hizo puede ser largo (hasta 5.000 caracteres): seis líneas y «Leer todo». */}
+      <div className="mt-1.5">
+        <TextoLargo texto={r.texto} className={`text-sm leading-snug ${tachado || 'text-[#2D3648]'}`} />
+      </div>
       <Evidencias lista={r.evidencias} acciones={acciones} />
       {r.validaciones.map((v, k) => (
         <p
