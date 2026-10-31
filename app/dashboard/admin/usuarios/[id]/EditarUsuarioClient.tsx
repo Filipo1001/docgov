@@ -12,6 +12,7 @@ import { avatarThumb } from '@/lib/avatar'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 import { MARCO_PDM_DISPONIBLE } from '@/lib/pdm/menu'
 import FirmaUsuario from './FirmaUsuario'
+import ContratosDelUsuario, { type ContratoDelUsuario } from './ContratosDelUsuario'
 
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'alcalde', 'funcionario', 'gobierno', 'hacienda']
 const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
@@ -40,11 +41,14 @@ export default function EditarUsuarioClient({
   usuario,
   dependencias,
   firmaUrl,
+  contratos,
 }: {
   usuario: UsuarioAdmin
   dependencias: Dependencia[]
   /** URL firmada de la firma del usuario (bucket privado), o null. */
   firmaUrl: string | null
+  /** Contratos que tuvo como contratista, ya con su vigencia calculada. */
+  contratos: ContratoDelUsuario[]
 }) {
   const { usuario: editor } = useUsuario()
   // Contratación edita datos pero no puede cambiar el rol (el server action
@@ -393,6 +397,9 @@ export default function EditarUsuarioClient({
           </button>
         </div>
       </div>
+      {/* Contratos de la persona, con su filtro (solo contratistas tienen contratos propios). */}
+      {usuario.rol === 'contratista' && <ContratosDelUsuario contratos={contratos} />}
+
       {/* Firma: vive en el perfil del usuario (solo contratistas la usan en sus informes). */}
       {usuario.rol === 'contratista' && (
         <FirmaUsuario usuarioId={usuario.id} nombre={usuario.nombre_completo} firmaUrl={firmaUrl} />

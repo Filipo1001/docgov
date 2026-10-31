@@ -2,6 +2,9 @@ import { redirect, notFound } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getUsuarioAdmin, getDependencias } from '@/services/admin'
 import { firmarUrls } from '@/lib/storage-firmado'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { hoyEnColombia, vigenciaDe } from '@/lib/vigencia-contrato'
+import type { ContratoDelUsuario } from './ContratosDelUsuario'
 import EditarUsuarioClient from './EditarUsuarioClient'
 
 export default async function EditarUsuarioPage({
@@ -41,5 +44,22 @@ export default async function EditarUsuarioPage({
     ? (await firmarUrls('documentos', [usuario.firma_url]))[usuario.firma_url] ?? null
     : null
 
-  return <EditarUsuarioClient usuario={usuario} dependencias={dependencias} firmaUrl={firmaUrl} />
+  // Los contratos que tuvo como contratista (vigentes y finalizados). Se leen con el cliente de servicio porque la página
+  // ya verificó que quien mira es admin o contratación; «vigente» o «finalizado» lo decide la regla común del sistema.
+  const { data: filas } = await createAdminSupabaseClient()
+    .from('contratos')
+    .select('id, numero, anio, valor_total, estado, fecha_fin, fecha_terminacion, fecha_fin_efectiva')
+    .eq('contratista_id', id)
+    .order('anio', { ascending: false })
+    .order('numero', { ascending: false })
+  const hoy = hoyEnColombia()
+  const contratos: ContratoDelUsuario[] = (filas ?? []).map(c => ({
+    id: c.id as string,
+    numero: c.numero as string,
+    anio: c.anio as number,
+    valorTotal: Number(c.valor_total ?? 0),
+    vigencia: vigenciaDe(c, hoy),
+  }))
+
+  return <EditarUsuarioClient usuario={usuario} dependencias={dependencias} firmaUrl={firmaUrl} contratos={contratos} />
 }
