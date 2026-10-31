@@ -601,7 +601,7 @@ export async function eliminarFirmaAdmin(userId: string): Promise<ActionResult> 
 
   if (error) return { error: error.message }
 
-  revalidatePath('/dashboard/admin/firmas')
+  revalidatePath('/dashboard/admin/usuarios')
   revalidatePath('/dashboard')
   return {}
 }

@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getUsuarioAdmin, getDependencias } from '@/services/admin'
+import { firmarUrls } from '@/lib/storage-firmado'
 import EditarUsuarioClient from './EditarUsuarioClient'
 
 export default async function EditarUsuarioPage({
@@ -35,5 +36,10 @@ export default async function EditarUsuarioPage({
     redirect('/dashboard/admin/usuarios')
   }
 
-  return <EditarUsuarioClient usuario={usuario} dependencias={dependencias} />
+  // La firma vive en el bucket privado: se muestra con una URL firmada. Solo se consulta si el usuario la tiene.
+  const firmaUrl = usuario.firma_url
+    ? (await firmarUrls('documentos', [usuario.firma_url]))[usuario.firma_url] ?? null
+    : null
+
+  return <EditarUsuarioClient usuario={usuario} dependencias={dependencias} firmaUrl={firmaUrl} />
 }

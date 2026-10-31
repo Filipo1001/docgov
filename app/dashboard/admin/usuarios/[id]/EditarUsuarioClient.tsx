@@ -11,6 +11,7 @@ import { useUsuario } from '@/lib/user-context'
 import { avatarThumb } from '@/lib/avatar'
 import type { UsuarioAdmin, Dependencia } from '@/services/admin'
 import { MARCO_PDM_DISPONIBLE } from '@/lib/pdm/menu'
+import FirmaUsuario from './FirmaUsuario'
 
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'alcalde', 'funcionario', 'gobierno', 'hacienda']
 const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
@@ -38,9 +39,12 @@ function Avatar({ foto, nombre, size = 'xl' }: { foto?: string; nombre: string; 
 export default function EditarUsuarioClient({
   usuario,
   dependencias,
+  firmaUrl,
 }: {
   usuario: UsuarioAdmin
   dependencias: Dependencia[]
+  /** URL firmada de la firma del usuario (bucket privado), o null. */
+  firmaUrl: string | null
 }) {
   const { usuario: editor } = useUsuario()
   // Contratación edita datos pero no puede cambiar el rol (el server action
@@ -389,6 +393,11 @@ export default function EditarUsuarioClient({
           </button>
         </div>
       </div>
+      {/* Firma: vive en el perfil del usuario (solo contratistas la usan en sus informes). */}
+      {usuario.rol === 'contratista' && (
+        <FirmaUsuario usuarioId={usuario.id} nombre={usuario.nombre_completo} firmaUrl={firmaUrl} />
+      )}
+
       {/* Security card */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
         <h2 className="text-base font-semibold text-gray-900">Seguridad</h2>

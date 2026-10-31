@@ -265,7 +265,6 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
     admin: [
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
       { href: '/dashboard/admin/usuarios', label: 'Usuarios', icono: 'usuarios' },
-      { href: '/dashboard/admin/firmas', label: 'Firmas', icono: 'firmas' },
       { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
       { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
       { href: '/dashboard/dependencias', label: 'Dependencias', icono: 'dependencias' },

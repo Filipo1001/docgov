@@ -15,6 +15,8 @@ export interface UsuarioAdmin {
   email?: string
   rol: Rol
   cargo?: string
+  /** Ruta en el bucket privado de la firma (no la URL): la pantalla la firma. */
+  firma_url?: string | null
   telefono?: string
   direccion?: string
   rh?: string

@@ -138,7 +138,7 @@ const SIG_SOFT  = 80  // 40–80 units → smooth fade to transparent
  *  2. Remove background via adaptive corner sampling
  *  3. Export as PNG (preserves transparency required for PDF embedding)
  *
- * Extracted from perfil/page.tsx and FirmasAdminClient.tsx — single source of truth.
+ * Extracted from perfil/page.tsx and la firma del perfil de usuario (admin/usuarios/[id]/FirmaUsuario.tsx) — single source of truth.
  */
 export function normalizarFirma(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
