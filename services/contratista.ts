@@ -30,6 +30,8 @@ export interface ContratoContratista {
   fecha_fin: string
   /** Último día de ejecución si se terminó antes de la fecha pactada (migración 081). */
   fecha_terminacion?: string | null
+  /** vigente | suspendido | terminado… (migraciones 081 y 082). */
+  estado?: string | null
   /** La pactada o el último día de ejecución: hasta cuándo va el contrato de verdad. */
   fecha_fin_efectiva?: string | null
   plazo_meses: number
@@ -131,7 +133,7 @@ export async function getDashboardContratista(
     .from('contratos')
     .select(`
       id, numero, anio, objeto, valor_total, valor_mensual,
-      fecha_inicio, fecha_fin, fecha_fin_efectiva, fecha_terminacion, plazo_meses,
+      fecha_inicio, fecha_fin, fecha_fin_efectiva, fecha_terminacion, estado, plazo_meses,
       dependencia:dependencias(nombre, abreviatura),
       supervisor:usuarios!contratos_supervisor_id_fkey(nombre_completo)
     `)

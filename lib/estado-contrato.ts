@@ -24,6 +24,14 @@ export const ESTADOS_CONTRATO: Array<{
   { id: 'cedido',     label: 'Cedido',     ayuda: 'Cedido a otro contratista.',                             color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
 ]
 
+/**
+ * Un contrato suspendido no pide informes mientras dure la suspensión (migración 082): los recordatorios y las listas
+ * de pendientes lo dejan fuera. Sigue vigente: la suspensión detiene la ejecución, no el contrato.
+ */
+export function contratoSuspendido(estado: string | null | undefined): boolean {
+  return estado === 'suspendido'
+}
+
 export function metaEstado(estado: string | null | undefined) {
   return ESTADOS_CONTRATO.find(e => e.id === estado) ?? ESTADOS_CONTRATO[0]
 }

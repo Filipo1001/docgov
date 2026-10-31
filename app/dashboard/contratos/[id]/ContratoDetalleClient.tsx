@@ -22,6 +22,8 @@ import { etiquetaEstado } from '@/lib/estado-contrato'
 import { puedeGestionarTerminacion } from '@/lib/terminacion-contrato'
 import type { TerminacionVigente } from '@/app/actions/terminacion-contrato'
 import TerminacionContrato from './TerminacionContrato'
+import SuspensionContrato from './SuspensionContrato'
+import type { SuspensionAbierta } from '@/app/actions/suspension-contrato'
 import ExpedienteContrato from './ExpedienteContrato'
 import CopiarObligaciones from './CopiarObligaciones'
 import type { DocumentoContratoDTO } from '@/lib/documentos-contrato'
@@ -35,12 +37,14 @@ export default function ContratoDetallePage({
   initialPeriodos,
   initialDocumentos = [],
   terminacion = null,
+  suspension = null,
 }: {
   initialContrato: any
   initialObligaciones: any[]
   initialPeriodos: any[]
   initialDocumentos?: DocumentoContratoDTO[]
   terminacion?: TerminacionVigente | null
+  suspension?: SuspensionAbierta | null
 }) {
   const { id } = useParams()
   const router = useRouter()
@@ -406,6 +410,13 @@ export default function ContratoDetallePage({
           </div>
         )}
       </div>
+
+      {/* Suspensión de la ejecución (migración 082): no se piden informes mientras dure. */}
+      <SuspensionContrato
+        contrato={contrato}
+        suspension={suspension}
+        puedeGestionar={puedeGestionarTerminacion(usuario?.rol, usuario?.id, contrato)}
+      />
 
       {/* Terminación anticipada (migración 081): la registran admin, contratación y el supervisor del contrato. */}
       <TerminacionContrato

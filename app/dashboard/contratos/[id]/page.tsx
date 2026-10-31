@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import ContratoDetalleClient from './ContratoDetalleClient'
 import { listarDocumentosContrato } from '@/app/actions/documentos-contrato'
 import { getTerminacionVigente } from '@/app/actions/terminacion-contrato'
+import { getSuspensionAbierta } from '@/app/actions/suspension-contrato'
 
 /**
  * Server component — fetches all contract data with server-side auth
@@ -31,7 +32,7 @@ export default async function ContratoDetallePage({
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: contrato, error: errorContrato }, { data: obligaciones }, { data: periodos }, documentos, terminacion] = await Promise.all([
+  const [{ data: contrato, error: errorContrato }, { data: obligaciones }, { data: periodos }, documentos, terminacion, suspension] = await Promise.all([
     supabase
       .from('contratos')
       .select(`
@@ -60,6 +61,9 @@ export default async function ContratoDetallePage({
 
     // Terminación anticipada vigente (migración 081), con la misma visibilidad que el contrato.
     getTerminacionVigente(id),
+
+    // Suspensión abierta (migración 082), con la misma visibilidad que el contrato.
+    getSuspensionAbierta(id),
   ])
 
   // Este redirect ocultó durante horas un fallo real: al añadir una columna a
@@ -76,12 +80,13 @@ export default async function ContratoDetallePage({
     // La clave reinicia el estado al cambiar de contrato y también al registrar o deshacer una terminación (migración
     // 081): esa operación cambia el contrato y sus periodos en la base, y la pantalla tiene que nacer de nuevo con ellos.
     <ContratoDetalleClient
-      key={`${id}:${contrato.estado}:${contrato.fecha_terminacion ?? ''}`}
+      key={`${id}:${contrato.estado}:${contrato.fecha_terminacion ?? ''}:${suspension?.id ?? ''}`}
       initialContrato={contrato}
       initialObligaciones={obligaciones ?? []}
       initialPeriodos={periodos ?? []}
       initialDocumentos={documentos}
       terminacion={terminacion}
+      suspension={suspension}
     />
   )
 }

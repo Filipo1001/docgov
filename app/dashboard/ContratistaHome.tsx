@@ -56,14 +56,26 @@ function PanelAccion({
   devolucion,
   contratoId,
   terminacion,
+  suspendido = false,
 }: {
   periodoActual: DashboardContratista['periodoActual']
   devolucion: DashboardContratista['devolucion']
   contratoId: string
   /** Último día de ejecución, si el contrato terminó antes de la fecha pactada (migración 081). */
   terminacion: string | null
+  /** Suspendido: no hay informe que presentar mientras dure (migración 082). */
+  suspendido?: boolean
 }) {
   const mes = mesActualNombre()
+
+  if (suspendido) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+        <p className="text-sm font-semibold text-amber-900">Tu contrato está suspendido</p>
+        <p className="text-xs text-amber-800 mt-1">Mientras dure la suspensión no tienes informes que presentar. La entidad te avisará cuando se reinicie.</p>
+      </div>
+    )
+  }
 
   // Contrato terminado y sin informe este mes: invitarlo a «subir evidencias de» un mes que ya no le corresponde sería
   // falso. Lo que sí le toca son los informes hasta su último día, que siguen en su historial de periodos.
@@ -479,7 +491,7 @@ export default function ContratistaHome({
       {contrato && (
         <>
           {/* ── Action panel ── */}
-          <PanelAccion periodoActual={periodoActual} devolucion={devolucion} contratoId={contrato.id} terminacion={contrato.fecha_terminacion ?? null} />
+          <PanelAccion periodoActual={periodoActual} devolucion={devolucion} contratoId={contrato.id} terminacion={contrato.fecha_terminacion ?? null} suspendido={contrato.estado === 'suspendido'} />
 
           {/* ── Stats row ── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">

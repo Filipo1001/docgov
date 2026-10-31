@@ -86,7 +86,8 @@ export default function EstadoContratoPanel({
               >
                 {/* «Terminado» no está: la terminación anticipada tiene efectos (anula periodos, suspende avisos) y se
                     registra en la ficha del contrato, con su causal. */}
-                {ESTADOS_CONTRATO.filter(e => e.id !== 'terminado').map(e => (
+                {/* «Suspendido» y «Terminado» no están: cada uno tiene su propio registro con efectos (migración 082 y 081). */}
+                {ESTADOS_CONTRATO.filter(e => e.id !== 'terminado' && e.id !== 'suspendido').map(e => (
                   <option key={e.id} value={e.id}>{e.label}</option>
                 ))}
               </select>

@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase'
  */
 type ClienteSupabase = ReturnType<typeof createClient>
 import { getMesActual, MESES } from '@/lib/constants'
+import { contratoSuspendido } from '@/lib/estado-contrato'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -497,7 +498,7 @@ export async function getSupervisorDashboard(
   const { data: contratosData, error: errContratos } = await supabase
     .from('contratos')
     .select(`
-      id, numero, valor_mensual, fecha_inicio, fecha_fin, fecha_fin_efectiva,
+      id, numero, valor_mensual, fecha_inicio, fecha_fin, fecha_fin_efectiva, estado,
       contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)
     `)
     .eq('supervisor_id', supervisorId)
@@ -551,8 +552,10 @@ export async function getSupervisorDashboard(
     periodosActuales.map(p => [p.contrato_id, p.estado]),
   )
 
-  const pipeline = { sinEnviar: 0, enviado: 0, revision: 0, aprobado: 0, rechazado: 0, total: contratosActivos.length }
-  for (const c of contratosActivos) {
+  // Un contrato suspendido no pide informe: ni cuenta como «sin enviar» ni como alerta (migración 082).
+  const deInforme = contratosActivos.filter(c => !contratoSuspendido(c.estado))
+  const pipeline = { sinEnviar: 0, enviado: 0, revision: 0, aprobado: 0, rechazado: 0, total: deInforme.length }
+  for (const c of deInforme) {
     const e = estadoPorContrato.get(c.id)
     if (!e || e === 'borrador') pipeline.sinEnviar++
     else if (e === 'enviado') pipeline.enviado++
@@ -567,7 +570,7 @@ export async function getSupervisorDashboard(
 
   // 4. Alerts
   const alertasTardios = diasEnMes >= 8
-    ? contratosActivos
+    ? deInforme
         .filter(c => { const e = estadoPorContrato.get(c.id); return !e || e === 'borrador' })
         .slice(0, 10)
         .map(c => ({

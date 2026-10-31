@@ -606,6 +606,9 @@ export async function cambiarEstadoContrato(
     if (estado === 'terminado') {
       return { error: 'La terminación anticipada se registra en la ficha del contrato, con su causal y su último día de ejecución.' }
     }
+    if (estado === 'suspendido') {
+      return { error: 'La suspensión se registra en la ficha del contrato, con su fecha, su motivo y su acta (y se reinicia desde allí).' }
+    }
     if (!fecha) return { error: 'Indica la fecha del acto.' }
     if (estado !== 'vigente' && !motivo.trim()) {
       return { error: 'Indica el motivo: queda como constancia en el expediente.' }
@@ -628,7 +631,7 @@ export async function cambiarEstadoContrato(
         estado_motivo: motivo.trim() || null,
         // `activo` se mantiene coherente para el código anterior que aún lo
         // consulta; el estado es a partir de ahora la fuente de verdad.
-        activo: estado === 'vigente' || estado === 'suspendido',
+        activo: estado === 'vigente', // suspendido y terminado tienen su propio registro (082, 081) y siguen activos
         updated_at: new Date().toISOString(),
       })
       .eq('id', contratoId)

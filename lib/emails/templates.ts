@@ -610,6 +610,34 @@ export function emailTerminacionRevertida(data: TemplateData) {
 }
 
 
+/** Suspensión de la ejecución (migración 082): al contratista, al supervisor y a contratación. Sin informes mientras dure. */
+export function emailContratoSuspension(data: TemplateData) {
+  return {
+    subject: `Contrato ${data.contrato} suspendido`,
+    html: baseHtml(
+      'Contrato suspendido',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">${esc(data.detalle ?? `El contrato ${data.contrato} quedó suspendido.`)}</p>
+       <p style="color:#555;font-size:13px;line-height:1.6;">Mientras dure la suspensión no se piden informes. Cuando se reinicie, te avisaremos.</p>`,
+      '#b45309'
+    ),
+  }
+}
+
+/** Reinicio de un contrato suspendido: se retoma la presentación de informes. */
+export function emailContratoReinicio(data: TemplateData) {
+  return {
+    subject: `Contrato ${data.contrato} reiniciado`,
+    html: baseHtml(
+      'Contrato reiniciado',
+      `<p style="color:#333;font-size:14px;line-height:1.6;">Hola ${data.nombreDestinatario},</p>
+       <p style="color:#333;font-size:14px;line-height:1.6;">${esc(data.detalle ?? `El contrato ${data.contrato} se reinició.`)}</p>`,
+      '#047857'
+    ),
+  }
+}
+
+
 // ════════════════════════════════════════════════════════════════════════
 //  Consolidados mensuales
 // ════════════════════════════════════════════════════════════════════════
@@ -922,6 +950,8 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   contrato_vencimiento: emailContratoVencimiento,
   contrato_terminado: emailContratoTerminado,
   contrato_terminacion_revertida: emailTerminacionRevertida,
+  contrato_suspension: emailContratoSuspension,
+  contrato_reinicio: emailContratoReinicio,
   bienvenida: emailBienvenida,
   envio_tardio_habilitado: emailEnvioTardioHabilitado,
   envio_tardio_cancelado: emailEnvioTardioCancelado,

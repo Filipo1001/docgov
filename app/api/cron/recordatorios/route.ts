@@ -59,6 +59,7 @@ import { enviarNotificacion } from '@/lib/notifications'
 import { notasPorObligacion } from '@/lib/notas-obligaciones'
 import { cargarAmbitos, destinatariosDe } from '@/lib/alcance'
 import { MESES } from '@/lib/constants'
+import { contratoSuspendido } from '@/lib/estado-contrato'
 import { enviarCorreo } from '@/lib/resend'
 import { EMAIL_TEMPLATES } from '@/lib/emails/templates'
 
@@ -90,7 +91,7 @@ function fechaMasDias(isoHoy: string, dias: number): string {
 
 type PeriodoBorrador = {
   id: string; mes: string; anio: number; contrato_id: string
-  contrato: { numero: string; contratista_id: string | null; supervisor_id: string | null } | null
+  contrato: { numero: string; contratista_id: string | null; supervisor_id: string | null; estado: string | null } | null
 }
 
 export async function GET(req: NextRequest) {
@@ -148,7 +149,7 @@ export async function GET(req: NextRequest) {
       : 'recordatorio'
     let consulta = admin
       .from('periodos')
-      .select('id, mes, anio, contrato_id, contrato:contratos(numero, contratista_id, supervisor_id)')
+      .select('id, mes, anio, contrato_id, contrato:contratos(numero, contratista_id, supervisor_id, estado)')
       .eq('mes', mesNombre)
       .eq('anio', anioObjetivo)
       .eq('estado', 'borrador')
@@ -165,8 +166,9 @@ export async function GET(req: NextRequest) {
 
     const { data: borradores } = await consulta
 
+    // Un contrato suspendido no pide informe mientras dure la suspensión (migración 082).
     const todos = ((borradores ?? []) as unknown as PeriodoBorrador[])
-      .filter(p => p.contrato?.contratista_id)
+      .filter(p => p.contrato?.contratista_id && !contratoSuspendido(p.contrato.estado))
 
     // ¿Quién ha enviado alguna vez un informe por el sistema?
     //
