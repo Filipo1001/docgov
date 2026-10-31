@@ -194,7 +194,7 @@ begin
   r := public.revertir_terminacion(v_c, 'Se registró en el contrato equivocado', v_adm);
   perform pg_temp.chequeo((r->>'repuestos') = '2' and (r->>'ajuste_repuesto') = 'true', 'E3 · repone los dos periodos y el recortado', r::text);
 
-  select string_agg(mes || ':' || estado || ':' || fecha_fin || ':' || valor_cobro, ', ' order by numero_periodo) into t
+  select string_agg(mes || ':' || estado || ':' || fecha_fin || ':' || valor_cobro::bigint, ', ' order by numero_periodo) into t
     from public.periodos where contrato_id = v_c and numero_periodo >= 4;
   perform pg_temp.chequeo(t = 'Octubre:borrador:2026-10-31:3000000, Noviembre:borrador:2026-11-30:3000000, Diciembre:borrador:2026-12-31:3000000',
     'E4 · cada periodo vuelve a su estado, su fecha y su valor', t);
@@ -213,7 +213,7 @@ begin
   perform pg_temp.chequeo(msg like '%no tiene una terminación vigente%', 'E7 · no se deshace dos veces', msg);
 
   r := public.terminar_contrato(v_c, 'fuerza_mayor', '2026-10-31', null, null, null, 999, v_adm);
-  select string_agg(mes || ':' || estado || ':' || fecha_fin || ':' || valor_cobro, ', ' order by numero_periodo) into t
+  select string_agg(mes || ':' || estado || ':' || fecha_fin || ':' || valor_cobro::bigint, ', ' order by numero_periodo) into t
     from public.periodos where contrato_id = v_c and numero_periodo >= 4;
   perform pg_temp.chequeo(r->'ajustado' = 'null'::jsonb and (r->>'anulados') = '2'
                           and t = 'Octubre:borrador:2026-10-31:3000000, Noviembre:anulado:2026-11-30:3000000, Diciembre:anulado:2026-12-31:3000000',

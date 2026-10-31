@@ -83,10 +83,15 @@ export type ValorPorPeriodo =
  * en silencio, el contrato 015 —diez de sus doce periodos en blanco— quedaba
  * descrito como «varía entre los 2 periodos», que suena a un contrato de dos
  * meses. Quien lea la pantalla tiene que poder ver que faltan datos.
+ *
+ * Los periodos ANULADOS por una terminación anticipada (migración 081) no cuentan para nada: no se cobran. Se descartan
+ * aquí, en el único sitio, para que la lista, el inicio del contratista y la ficha del colaborador no tengan que
+ * acordarse.
  */
 export function valorPorPeriodo(
-  periodos: ReadonlyArray<{ valor_cobro?: number | null }>,
+  todos: ReadonlyArray<{ valor_cobro?: number | null; estado?: string | null }>,
 ): ValorPorPeriodo {
+  const periodos = todos.filter(p => p.estado !== 'anulado')
   const cobros = periodos
     .map(p => p.valor_cobro)
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
@@ -122,7 +127,7 @@ export function pesos(valor: number | null | undefined): string {
  * Ese es justo el fallo que se reportó en el contrato 180.
  */
 export function porPeriodoCorto(
-  periodos: ReadonlyArray<{ valor_cobro?: number | null }>,
+  periodos: ReadonlyArray<{ valor_cobro?: number | null; estado?: string | null }>,
 ): string {
   const v = valorPorPeriodo(periodos)
   if (v.clase === 'sin-periodos') return '—'
@@ -143,7 +148,7 @@ export function porPeriodoCorto(
  * que falta.
  */
 export function valorDeReferencia(
-  periodos: ReadonlyArray<{ valor_cobro?: number | null }>,
+  periodos: ReadonlyArray<{ valor_cobro?: number | null; estado?: string | null }>,
 ): number {
   const v = valorPorPeriodo(periodos)
   if (v.clase === 'sin-periodos') return 0
