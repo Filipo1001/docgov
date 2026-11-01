@@ -68,7 +68,7 @@ export default function TarjetaBancaria({ cuenta, titular }: { cuenta: CuentaBan
 
   return (
     <div
-      className="relative isolate flex min-h-[188px] flex-col justify-between overflow-hidden rounded-2xl p-5"
+      className="relative isolate flex flex-col gap-3 overflow-hidden rounded-2xl p-4"
       style={{ backgroundColor: color, color: tinta }}
     >
       {/* La marca de agua: el icono del banco en grande, girado y casi transparente. */}
@@ -78,25 +78,25 @@ export default function TarjetaBancaria({ cuenta, titular }: { cuenta: CuentaBan
           src={icono}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute -right-10 -bottom-12 -z-10 h-44 w-44 -rotate-[14deg] rounded-[40px] opacity-[0.14]"
+          className="pointer-events-none absolute -right-8 -bottom-10 -z-10 h-32 w-32 -rotate-[14deg] rounded-[30px] opacity-[0.14]"
         />
       ) : (
-        <span aria-hidden="true" className="pointer-events-none absolute -right-8 -bottom-10 -z-10 h-40 w-40 -rotate-[14deg] rounded-[40px] opacity-[0.10]" style={{ backgroundColor: tinta }} />
+        <span aria-hidden="true" className="pointer-events-none absolute -right-6 -bottom-8 -z-10 h-28 w-28 -rotate-[14deg] rounded-[30px] opacity-[0.10]" style={{ backgroundColor: tinta }} />
       )}
 
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {icono ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={icono} alt="" className="h-11 w-11 shrink-0 rounded-xl ring-2 ring-white/60" width={44} height={44} />
+            <img src={icono} alt="" className="h-9 w-9 shrink-0 rounded-[10px] ring-2 ring-white/60" width={36} height={36} />
           ) : (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-2 ring-white/40" style={{ backgroundColor: velo }}>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ring-2 ring-white/40" style={{ backgroundColor: velo }}>
               <Icono glifo={Iconos.dominio.cuentaBancaria} tamano="md" />
             </span>
           )}
           <div className="min-w-0">
-            <p className="text-[15px] font-semibold leading-tight">{nombre}</p>
-            {banco && <p className="mt-0.5 text-xs leading-snug">{banco.entidad}</p>}
+            <p className="text-sm font-semibold leading-tight">{nombre}</p>
+            {banco && <p className="mt-0.5 truncate text-[11px] leading-snug">{banco.entidad}</p>}
           </div>
         </div>
         {tipo && (
@@ -110,27 +110,27 @@ export default function TarjetaBancaria({ cuenta, titular }: { cuenta: CuentaBan
         )}
       </div>
 
-      <div className="mt-5">
-        <p className="text-xs">{banco?.billetera ? 'Número (tu celular)' : 'Número de cuenta'}</p>
-        <p className="mt-0.5 font-mono text-[21px] leading-tight tracking-[0.08em] tabular-nums break-all sm:text-[22px]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 font-mono text-lg leading-tight tracking-[0.08em] tabular-nums break-all">
+          <span className="sr-only">{banco?.billetera ? 'Número (tu celular): ' : 'Número de cuenta: '}</span>
           {numero ?? 'Sin número registrado'}
         </p>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="min-w-0 truncate text-xs">{titular}</p>
         {cuenta.numero && (
           <button
             type="button"
             onClick={copiar}
-            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+            aria-label={copiado === 'ok' ? 'Número copiado' : 'Copiar número de cuenta'}
+            title={copiado === 'ok' ? 'Copiado' : copiado === 'error' ? 'No se pudo copiar' : 'Copiar número'}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
             style={{ backgroundColor: velo }}
           >
             <Icono glifo={copiado === 'ok' ? Iconos.estado.ok : Iconos.accion.copiar} tamano="sm" />
-            <span aria-live="polite">{copiado === 'ok' ? 'Copiado' : copiado === 'error' ? 'No se pudo copiar' : 'Copiar'}</span>
           </button>
         )}
       </div>
+      <p className="truncate text-xs" aria-live="polite">
+        {copiado === 'ok' ? 'Número copiado' : copiado === 'error' ? 'No se pudo copiar el número' : titular}
+      </p>
     </div>
   )
 }

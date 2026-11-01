@@ -231,7 +231,7 @@ function TusDatos({ datos }: { datos: DatosMiCuenta }) {
       {datos.cuentaBancaria && (
         <div className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-gray-700">Cuenta para tus pagos</h3>
-          <div className="max-w-md">
+          <div className="max-w-sm">
             <TarjetaBancaria cuenta={datos.cuentaBancaria} titular={datos.nombre} />
           </div>
         </div>
