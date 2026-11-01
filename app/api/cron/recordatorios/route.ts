@@ -34,7 +34,8 @@
  *  R3 — Contratista con informe DEVUELTO sin corregir (≥3 días), con las
  *       correcciones dentro; a las 2 semanas escala al supervisor
  *  R4 — Contratación/admin: contratos sin CDP, CRP o contrato firmado
- *  R7 — Admin + supervisor del contrato: contratos que vencen en 60 o 30 días
+ *  R7 — Administración, contratación y supervisores: UN resumen semanal (lunes) de los contratos que entraron
+ *       en la ventana de 60 o de 30 días para vencer; antes era un correo por contrato
  *
  * Un contrato terminado anticipadamente (migración 081) deja de producir avisos por sí solo: sus periodos posteriores
  * quedan `anulado` y ninguna regla de periodos los ve, y R4 y R7 miran la fecha de fin EFECTIVA o lo excluyen. Los
@@ -47,7 +48,7 @@
  *        (el guard se evalúa por persona, no por dependencia)
  *  - R3: máximo uno por semana y por periodo; el escalado, uno por semana
  *  - R4: semanal por destinatario — son huecos que no cambian a diario
- *  - R7: dedup natural (solo dispara el día exacto de -60/-30)
+ *  - R7: solo los lunes, un correo por persona y solo si hay algo; las ventanas de 7 días no se solapan (lib/vencimientos.ts)
  *
  * Auth: Vercel envía `Authorization: Bearer ${CRON_SECRET}` automáticamente
  * cuando la env var existe. Sin secret válido → 401.
@@ -58,6 +59,8 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { enviarNotificacion } from '@/lib/notifications'
 import { notasPorObligacion } from '@/lib/notas-obligaciones'
 import { cargarAmbitos, destinatariosDe } from '@/lib/alcance'
+import { esLunes, rangoDeConsulta, repartirVencimientos, paraDestinatario, totalVencimientos, mensajeCampana, type ContratoPorVencer } from '@/lib/vencimientos'
+import { capitalizarNombre } from '@/lib/format'
 import { MESES } from '@/lib/constants'
 import { contratoSuspendido } from '@/lib/estado-contrato'
 import { enviarCorreo } from '@/lib/resend'
@@ -80,13 +83,6 @@ function hoyBogota(): { anio: number; mesIdx: number; dia: number; iso: string }
   }).format(new Date()) // "YYYY-MM-DD"
   const [anio, mes, dia] = parts.split('-').map(Number)
   return { anio, mesIdx: mes - 1, dia, iso: parts }
-}
-
-/** ISO date (YYYY-MM-DD) a N días de hoy Bogotá. */
-function fechaMasDias(isoHoy: string, dias: number): string {
-  const d = new Date(isoHoy + 'T12:00:00Z')
-  d.setUTCDate(d.getUTCDate() + dias)
-  return d.toISOString().slice(0, 10)
 }
 
 type PeriodoBorrador = {
@@ -723,45 +719,70 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ══ R7 — Contratos que vencen en 60 o 30 días ═════════════════
-  {
-    const en60 = fechaMasDias(iso, 60)
-    const en30 = fechaMasDias(iso, 30)
+  // ══ R7 — Contratos por vencer: UN resumen semanal (lunes) ═════
+  //
+  // Antes salía un correo por contrato el día exacto de -60 y -30. Casi todos terminan a fin de año (36 el 31-dic, 31 el
+  // 30-dic, 18 el 30-nov), así que el 31-oct y el 1-nov cada administrador recibió 85 correos iguales; en 30 días, 96 a
+  // administración, 96 a contratación y 96 entre los cinco secretarios, cada uno con su aviso en la campana. Ahora, los
+  // lunes, cada persona recibe UN correo con la lista de lo que entró en la ventana de 60 o de 30 días (lib/vencimientos.ts),
+  // y solo si hay algo. Quien gestiona (administración, contratación) ve todos; un secretario, los suyos.
+  if (esLunes(iso)) {
+    const rango = rangoDeConsulta(iso)
     const { data: porVencer } = await admin
       .from('contratos')
-      .select('id, numero, fecha_fin, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
-      .in('fecha_fin', [en60, en30])
+      .select('numero, fecha_fin, supervisor_id, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
+      .gte('fecha_fin', rango.desde)
+      .lte('fecha_fin', rango.hasta)
       // A un contrato terminado antes no hay prórroga que tramitarle: «vence en 30 días, tramita el otrosí» sería falso.
       .is('fecha_terminacion', null)
 
     type ContratoVence = {
-      id: string; numero: string; fecha_fin: string; supervisor_id: string | null
+      numero: string; fecha_fin: string; supervisor_id: string | null
       contratista: { nombre_completo: string } | null
     }
-    const contratos = ((porVencer ?? []) as unknown as ContratoVence[])
+    const contratos: ContratoPorVencer[] = ((porVencer ?? []) as unknown as ContratoVence[]).map(c => ({
+      numero: c.numero,
+      contratista: capitalizarNombre(c.contratista?.nombre_completo) || '—',
+      fechaFin: c.fecha_fin,
+      supervisorId: c.supervisor_id,
+    }))
 
     if (contratos.length) {
-      // Admin + Contratación (esta última tramita las prórrogas/otrosíes)
-      const { data: admins } = await admin.from('usuarios').select('id').in('rol', ['admin', 'contratacion'])
-      const adminIds = (admins ?? []).map(a => a.id)
+      // Lo que el sistema anterior ya avisó con su correo por contrato («Contrato 017 vence en 60 días»): no se repite.
+      // Solo pesa en la transición, y deja de importar cuando esos avisos salen de los últimos 80 días.
+      const hace80d = new Date(Date.now() - 80 * 24 * 3600_000).toISOString()
+      const { data: previos } = await admin
+        .from('notificaciones').select('titulo').eq('tipo', 'contrato_vencimiento').gte('created_at', hace80d)
+      const yaAvisados = new Set<string>()
+      for (const n of previos ?? []) {
+        const m = /^Contrato (.+) vence en (\d+) días$/.exec(String(n.titulo))
+        if (m) yaAvisados.add(`${m[1]}|${m[2]}`)
+      }
+
+      // Nunca dos en 20 h al mismo destinatario: un reintento del cron no duplica.
+      const { data: recientes } = await admin
+        .from('notificaciones').select('usuario_id').eq('tipo', 'contratos_por_vencer')
+        .gte('created_at', new Date(Date.now() - 20 * 3600_000).toISOString())
+      const yaEsteLunes = new Set((recientes ?? []).map(n => n.usuario_id as string))
+
+      const { data: personas } = await admin
+        .from('usuarios').select('id, rol').in('rol', ['admin', 'contratacion', 'supervisor']).eq('activo', true)
 
       await Promise.allSettled(
-        contratos.map(async (c) => {
-          const dias = c.fecha_fin === en30 ? 30 : 60
-          const detalle = `El contrato ${c.numero} de ${c.contratista?.nombre_completo ?? '?'} vence el ${c.fecha_fin} (en ${dias} días). Si continuará, es momento de tramitar la prórroga u otrosí.`
-          // Admin(s) + supervisor del contrato, sin duplicar
-          const destinatarios = [...new Set([...adminIds, ...(c.supervisor_id ? [c.supervisor_id] : [])])]
-          await Promise.allSettled(
-            destinatarios.map(id => enviarNotificacion({
-              destinatarioId: id,
-              tipo: 'contrato_vencimiento',
-              titulo: `Contrato ${c.numero} vence en ${dias} días`,
-              mensaje: detalle,
-              contrato: c.numero,
-              detalle,
-            })),
-          )
-          resumen.r7_vencimientos += destinatarios.length
+        (personas ?? []).filter(u => !yaEsteLunes.has(u.id as string)).map(async (u) => {
+          const veTodos = u.rol === 'admin' || u.rol === 'contratacion'
+          const suyos = paraDestinatario(contratos, u.id as string, veTodos)
+          const datos = repartirVencimientos(suyos, iso, yaAvisados)
+          const total = totalVencimientos(datos)
+          if (!total) return
+          await enviarNotificacion({
+            destinatarioId: u.id as string,
+            tipo: 'contratos_por_vencer',
+            titulo: total === 1 ? '1 contrato por vencer' : `${total} contratos por vencer`,
+            mensaje: mensajeCampana(datos),
+            datos,
+          })
+          resumen.r7_vencimientos++
         }),
       )
     }

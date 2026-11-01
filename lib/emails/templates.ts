@@ -5,6 +5,7 @@
 
 import { ORIGEN_APP } from '@/lib/dominio'
 import { MARCA } from '@/lib/marca'
+import type { DatosVencimientos, FilaVencimiento } from '@/lib/vencimientos'
 
 interface TemplateData {
   nombreDestinatario: string
@@ -332,6 +333,74 @@ export function emailContratoVencimiento(data: TemplateData) {
          correspondiente para no interrumpir la ejecución.
        </p>`,
       '#b45309'
+    ),
+  }
+}
+
+/**
+ * Contratos por vencer: el resumen semanal que sustituye al correo «uno por contrato».
+ *
+ * Informativo a propósito: no pide nada hoy, dice qué contratos se acercan a su fecha de fin para que quien tramita las
+ * prórrogas lo planee. Las filas se agrupan por fecha y llevan los días que de verdad quedan. Se muestran hasta
+ * `MAX_FILAS` por sección; el resto se cuenta y se remite a Contratos, para que el correo no se vuelva un listado de 70.
+ * Ver lib/vencimientos.ts.
+ */
+const MAX_FILAS_VENCIMIENTO = 30
+
+function fechaCorta(iso: string): string {
+  const [a, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+  return `${d} ${meses[m - 1]} ${a}`
+}
+
+function tablaVencimientos(filas: FilaVencimiento[]): string {
+  // Las cifras del encabezado cuentan TODAS las filas; solo la lista se recorta.
+  const visibles = new Set(filas.slice(0, MAX_FILAS_VENCIMIENTO))
+  const porFecha = new Map<string, FilaVencimiento[]>()
+  for (const f of filas) porFecha.set(f.fechaFin, [...(porFecha.get(f.fechaFin) ?? []), f])
+  const bloques = [...porFecha.entries()].map(([fecha, items]) => {
+    const dias = items[0].dias
+    const filasVisibles = items.filter(f => visibles.has(f))
+    return `<tr><td style="padding:12px 0 4px;font-size:13px;color:#192031;font-weight:700;border-top:1px solid #f1f5f9;">
+        ${esc(fechaCorta(fecha))} <span style="color:#64748b;font-weight:400;">· ${dias === 1 ? 'mañana' : `en ${dias} días`} · ${items.length} ${items.length === 1 ? 'contrato' : 'contratos'}</span>
+      </td></tr>` +
+      filasVisibles.map(f => `<tr><td style="padding:2px 0 2px 12px;font-size:13px;color:#334155;line-height:1.5;">${esc(f.numero)} <span style="color:#64748b;">· ${esc(f.contratista)}</span></td></tr>`).join('')
+  }).join('')
+  const resto = filas.length - visibles.size
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;">${bloques}</table>` +
+    (resto > 0 ? `<p style="color:#64748b;font-size:12px;margin:10px 0 0;">y ${resto} más. Los encuentras todos en <a href="${APP_URL}dashboard/contratos" style="color:#192031;">Contratos</a>.</p>` : '')
+}
+
+export function emailContratosPorVencer(data: TemplateData) {
+  const d = data.datos as DatosVencimientos | undefined
+  const total = d ? d.en30.length + d.en60.length : 0
+  if (!d || !total) {
+    return {
+      subject: 'Contratos por vencer',
+      html: baseHtml('Contratos por vencer', `<p style="color:#333;font-size:14px;">${esc(data.detalle ?? '')}</p>`, '#192031'),
+    }
+  }
+
+  const secciones = [
+    d.en30.length ? seccion(`Vencen en 30 días o menos (${d.en30.length})`, tablaVencimientos(d.en30)) : '',
+    d.en60.length ? seccion(`Vencen en unos 60 días (${d.en60.length})`, tablaVencimientos(d.en60)) : '',
+  ].join('')
+
+  return {
+    subject: total === 1 ? '1 contrato por vencer' : `${total} contratos por vencer`,
+    html: baseHtml(
+      'Contratos por vencer',
+      `<p style="color:#333;font-size:14px;line-height:1.6;margin:0 0 4px;">Hola ${esc(data.nombreDestinatario)},</p>
+       <p style="color:#334155;font-size:14px;line-height:1.6;margin:0;">
+         Estos contratos se acercan a su fecha de finalización. Si alguno continuará, es momento de tramitar la prórroga u otrosí
+         para no interrumpir la ejecución.
+       </p>
+       ${secciones}
+       <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:24px 0 0;">
+         Te escribimos una vez por semana y solo cuando hay contratos nuevos en esa situación; no repetimos los que ya te
+         avisamos. La fecha es la pactada en el contrato.
+       </p>`,
+      '#192031',
     ),
   }
 }
@@ -948,6 +1017,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   expediente_incompleto: emailExpedienteIncompleto,
   primer_informe_pendiente: emailPrimerInformePendiente,
   contrato_vencimiento: emailContratoVencimiento,
+  contratos_por_vencer: emailContratosPorVencer,
   contrato_terminado: emailContratoTerminado,
   contrato_terminacion_revertida: emailTerminacionRevertida,
   contrato_suspension: emailContratoSuspension,
