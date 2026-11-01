@@ -16,6 +16,7 @@ import Avatar from '@/components/ui/Avatar'
 import Icono from '@/components/ui/Icono'
 import { Iconos } from '@/lib/iconos'
 import CapturaFirma from '@/components/firma/CapturaFirma'
+import TarjetaBancaria, { type CuentaBancaria } from '@/components/cuenta/TarjetaBancaria'
 import { comprimirFoto } from '@/lib/compress'
 import { formatCedula } from '@/lib/format'
 import { normalizarTelefono } from '@/lib/telefono'
@@ -35,7 +36,8 @@ export interface DatosMiCuenta {
   foto: string | null
   /** URL firmada de la firma registrada (el espacio `documentos` es privado), o null. */
   firma: string | null
-  cuentaBancaria: { banco: string | null; tipo: string | null; terminaEn: string | null } | null
+  /** Solo para contratistas; null para los demás roles. */
+  cuentaBancaria: CuentaBancaria | null
   avisoCorreo: boolean
   /** null cuando WhatsApp no está configurado en este entorno: entonces no se ofrece. */
   whatsapp: { activo: boolean } | null
@@ -216,12 +218,6 @@ function TusDatos({ datos }: { datos: DatosMiCuenta }) {
   const documento = datos.documento
     ? `${datos.tipoDocumento && datos.tipoDocumento !== 'CC' ? datos.tipoDocumento : 'C.C.'} ${formatCedula(datos.documento)}`
     : null
-  const cb = datos.cuentaBancaria
-  const tipoCuenta = cb?.tipo ? (/^ahorro/i.test(cb.tipo) ? 'ahorros' : /^corriente/i.test(cb.tipo) ? 'corriente' : cb.tipo) : null
-  const cuenta = cb && (cb.banco || cb.terminaEn)
-    ? [cb.banco, tipoCuenta && `cuenta de ${tipoCuenta}`, cb.terminaEn && `termina en ${cb.terminaEn}`].filter(Boolean).join(' · ')
-    : null
-
   return (
     <section aria-labelledby="t-datos" className={TARJETA}>
       <h2 id="t-datos" className={TITULO}>Tus datos</h2>
@@ -231,8 +227,15 @@ function TusDatos({ datos }: { datos: DatosMiCuenta }) {
         <Dato etiqueta="Cargo" valor={datos.cargo} />
         <Dato etiqueta="Dependencia" valor={datos.dependencia} />
         <Dato etiqueta="Dirección" valor={datos.direccion} />
-        {cb && <Dato etiqueta="Cuenta bancaria" valor={cuenta} />}
       </dl>
+      {datos.cuentaBancaria && (
+        <div className="mt-6">
+          <h3 className="mb-3 text-sm font-medium text-gray-700">Cuenta para tus pagos</h3>
+          <div className="max-w-md">
+            <TarjetaBancaria cuenta={datos.cuentaBancaria} titular={datos.nombre} />
+          </div>
+        </div>
+      )}
       <p className="mt-5 flex gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
         <Icono glifo={Iconos.estado.informacion} tamano="sm" className="mt-0.5 shrink-0 text-gray-400" />
         <span>Estos datos los registra la oficina de contratación. Si alguno está mal, pídeles la corrección.</span>

@@ -1,5 +1,6 @@
 'use client'
 
+import { NOMBRES_BANCOS } from '@/lib/bancos'
 import { useRef, useState } from 'react'
 import SubiendoArchivo from '@/components/ui/SubiendoArchivo'
 import { Iconos } from '@/lib/iconos'
@@ -17,12 +18,6 @@ import ContratosDelUsuario, { type ContratoDelUsuario } from './ContratosDelUsua
 const ROLES      = ['admin', 'supervisor', 'contratista', 'asesor', 'contratacion', 'alcalde', 'funcionario', 'gobierno', 'hacienda']
 const TIPOS_DOC  = ['CC', 'CE', 'NIT', 'PAS']
 const TIPOS_CUENTA = ['Ahorros', 'Corriente']
-const BANCOS = [
-  'Bancolombia', 'Davivienda', 'Banco de Bogotá', 'BBVA', 'Banco Popular',
-  'Banco Agrario', 'Nequi', 'Daviplata', 'Banco Caja Social', 'Banco de Occidente',
-  'Banco Falabella', 'Banco Pichincha', 'Banco Finandina', 'Banco Mundo Mujer',
-  'Coopcentral', 'Bancamía', 'Otro',
-]
 
 function Avatar({ foto, nombre, size = 'xl' }: { foto?: string; nombre: string; size?: 'xl' | 'lg' }) {
   const initials = nombre.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
@@ -338,7 +333,7 @@ export default function EditarUsuarioClient({
               onChange={e => setBanco(e.target.value)}
             >
               <option value="">— Seleccionar banco —</option>
-              {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+              {NOMBRES_BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
           <div>

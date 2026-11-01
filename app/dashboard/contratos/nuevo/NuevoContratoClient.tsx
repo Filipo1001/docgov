@@ -1,5 +1,6 @@
 'use client'
 
+import { NOMBRES_BANCOS } from '@/lib/bancos'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -58,12 +59,6 @@ export default function NuevoContratoPage({
   const [resultado, setResultado] = useState<{ contratoId: string; password?: string; nombre?: string } | null>(null)
   const [copiado, setCopiado] = useState(false)
 
-  const BANCOS = [
-    'Bancolombia', 'Davivienda', 'Banco de Bogotá', 'BBVA', 'Banco Popular',
-    'Banco Agrario', 'Nequi', 'Daviplata', 'Banco Caja Social', 'Banco de Occidente',
-    'Banco Falabella', 'Banco Pichincha', 'Banco Finandina', 'Banco Mundo Mujer',
-    'Coopcentral', 'Bancamía', 'Otro',
-  ]
 
   const [form, setForm] = useState({
     numero: '',
@@ -442,7 +437,7 @@ export default function NuevoContratoPage({
                     onChange={e => setNuevoContratista(n => ({ ...n, banco: e.target.value }))}
                     className={inputClass}>
                     <option value="">— Seleccionar —</option>
-                    {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+                    {NOMBRES_BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </div>
                 <div>

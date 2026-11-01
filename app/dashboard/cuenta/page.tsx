@@ -52,14 +52,9 @@ export default async function MiCuentaPage() {
     dependencia,
     foto: u.foto_url ?? null,
     firma,
-    // La cuenta bancaria solo existe para quien cobra. Se muestra con los últimos cuatro dígitos: basta para
-    // reconocerla, y la pantalla se mira a veces delante de otras personas.
+    // La cuenta bancaria solo existe para quien cobra, y se muestra completa: esta pantalla solo la ve su dueño.
     cuentaBancaria: u.rol === 'contratista'
-      ? {
-          banco: u.banco ?? null,
-          tipo: u.tipo_cuenta ?? null,
-          terminaEn: u.numero_cuenta ? String(u.numero_cuenta).replace(/\D/g, '').slice(-4) || null : null,
-        }
+      ? { banco: u.banco ?? null, tipo: u.tipo_cuenta ?? null, numero: u.numero_cuenta ? String(u.numero_cuenta) : null }
       : null,
     avisoCorreo: activo('email'),
     whatsapp: whatsappDisponible() ? { activo: activo('whatsapp') } : null,
