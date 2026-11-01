@@ -13,7 +13,7 @@ import type { EstadoPeriodo, Rol } from './types'
 /** Claves válidas del catálogo de navegación (ver lib/iconos.ts). */
 export type ClaveIconoNavegacion =
   | 'inicio' | 'usuarios' | 'firmas' | 'contratos' | 'informes'
-  | 'dependencias' | 'municipio' | 'historicos' | 'configuracion' | 'cuenta'
+  | 'dependencias' | 'municipio' | 'historicos' | 'configuracion'
   | 'contratistas' | 'colaboradores'
   | 'planDesarrollo'
 
@@ -270,7 +270,6 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
       { href: '/dashboard/dependencias', label: 'Dependencias', icono: 'dependencias' },
       { href: '/dashboard/admin/municipio', label: 'Municipio', icono: 'municipio' },
       { href: '/dashboard/admin/historicos', label: 'Históricos', icono: 'historicos' },
-      { href: '/dashboard/cuenta', label: 'Mi cuenta', icono: 'cuenta' },
     ],
     // Supervisión (asesor y supervisor): la PERSONA y el EXPEDIENTE son dos
     // lentes sobre el mismo ámbito, y ambas hacen falta. Por la persona se
@@ -282,19 +281,16 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
       { href: '/dashboard/contratistas', label: 'Contratistas', icono: 'contratistas' },
       { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
       { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
-      { href: '/dashboard/cuenta', label: 'Mi cuenta', icono: 'cuenta' },
     ],
     supervisor: [
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
       { href: '/dashboard/colaboradores', label: 'Colaboradores', icono: 'colaboradores' },
       { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
       { href: '/dashboard/informes', label: mesLabel, icono: 'informes' },
-      { href: '/dashboard/cuenta', label: 'Mi cuenta', icono: 'cuenta' },
     ],
     contratista: [
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
       { href: '/dashboard/contratos', label: 'Mis contratos', icono: 'contratos' },
-      { href: '/dashboard/cuenta', label: 'Mi cuenta', icono: 'cuenta' },
     ],
     // Dependencia de Contratación: ciclo de vida del contrato y de las cuentas
     // de contratista (crear, corregir, obligaciones, periodos, otrosíes).
@@ -306,7 +302,6 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
       { href: '/dashboard/contratos', label: 'Contratos', icono: 'contratos' },
       { href: '/dashboard/admin/usuarios', label: 'Usuarios', icono: 'usuarios' },
-      { href: '/dashboard/cuenta', label: 'Mi cuenta', icono: 'cuenta' },
     ],
     // Alcalde: una sola pantalla, a propósito.
     //
@@ -316,14 +311,13 @@ export function getMenuPorRol(rol: Rol): ItemMenu[] {
     // no debe cruzar solo invita a cruzarlas.
     alcalde: [
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
-      { href: '/dashboard/cuenta', label: 'Mi cuenta', icono: 'cuenta' },
     ],
-    // Funcionario (personal de planta): sin contratos ni informes. Inicio y
-    // Mi cuenta (para cambiar la contraseña inicial); el botón del Plan de
-    // Desarrollo lo añade el layout cuando el servidor dice que le corresponde.
+    // Funcionario (personal de planta): sin contratos ni informes. Solo Inicio;
+    // la contraseña inicial se cambia en «Mi cuenta», a la que se entra por la
+    // foto de la barra lateral. El botón del Plan de Desarrollo lo añade el
+    // layout cuando el servidor dice que le corresponde.
     funcionario: [
       { href: '/dashboard', label: 'Inicio', icono: 'inicio' },
-      { href: '/dashboard/cuenta', label: 'Mi cuenta', icono: 'cuenta' },
     ],
   }
 

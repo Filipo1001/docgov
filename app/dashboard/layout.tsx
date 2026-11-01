@@ -244,9 +244,14 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             </div>
           )}
           {usuario && (
+            // La única puerta a «Mi cuenta»: no hay entrada en el menú, para no repetirla.
             <Link
               href="/dashboard/cuenta"
-              className="flex items-center gap-3 mb-3 rounded-xl p-1.5 -mx-1.5 hover:bg-gray-50 transition-colors group"
+              aria-label={`Mi cuenta: ${usuario.nombre_completo}`}
+              aria-current={pathname.startsWith('/dashboard/cuenta') ? 'page' : undefined}
+              className={`flex items-center gap-3 mb-3 rounded-xl p-1.5 -mx-1.5 transition-colors group ${
+                pathname.startsWith('/dashboard/cuenta') ? 'bg-gray-100' : 'hover:bg-gray-50'
+              }`}
             >
               <UserAvatar nombre={usuario.nombre_completo} fotoUrl={usuario.foto_url} size={9} />
               <div className="flex-1 min-w-0">
