@@ -90,7 +90,7 @@ export async function aceptarActaTerminacion(periodoId: string): Promise<ActionR
     const ctx = await cargarContextoActa(periodoId)
     if (!ctx) return { error: 'Periodo no encontrado' }
     if (ctx.contratistaId !== user.id) return { error: 'Solo el titular del contrato puede aceptar su acta de terminación' }
-    if (!ctx.firmaUrl) return { error: 'Debes registrar tu firma en tu perfil antes de aceptar el acta de terminación.' }
+    if (!ctx.firmaUrl) return { error: 'Debes registrar tu firma en Mi cuenta antes de aceptar el acta de terminación.' }
 
     // Se revalida aquí: el cliente ya lo consultó, pero esta acción es
     // invocable directamente y no puede fiarse de eso.

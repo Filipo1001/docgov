@@ -130,7 +130,7 @@ export default function ActaTerminacionModal({
           {faltaFirma && (
             <div className="rounded-xl bg-red-50 border border-red-100 p-4">
               <p className="text-[12px] text-red-700 leading-relaxed">
-                No tienes una firma registrada. Ve a <strong>tu perfil</strong> y sube tu firma antes de aceptar el
+                No tienes una firma registrada. Ve a <strong>Mi cuenta</strong> y sube tu firma antes de aceptar el
                 acta de terminación.
               </p>
             </div>

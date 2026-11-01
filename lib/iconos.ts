@@ -50,7 +50,7 @@ import {
   Bell, Mail, MessageSquare, UserPlus, Building,
   // Dominio
   CalendarDays, Coins, Stethoscope, Sparkles, QrCode, Hash, MapPin, Phone,
-  Briefcase, TrendingUp, History, Camera, ListChecks, CreditCard, Target,
+  Briefcase, TrendingUp, History, Camera, ListChecks, CreditCard, Target, CircleUserRound,
   // Sectores y líneas del Plan de Desarrollo
   HeartHandshake, Leaf, Sprout, HeartPulse, GraduationCap, MonitorSmartphone, Shield, Scale, Trophy,
   Drama, Droplets, Store, Map, Zap, Route, House, TreePine, Handshake,
@@ -79,6 +79,7 @@ export const Iconos = {
     municipio: Landmark,
     historicos: Archive,
     configuracion: Settings,
+    cuenta: CircleUserRound,
     contratistas: Users,
     colaboradores: UserCog,
     planDesarrollo: Target,

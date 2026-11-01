@@ -2328,10 +2328,10 @@ export default function PeriodoDetallePage({
             </p>
           </div>
           <Link
-            href="/dashboard/perfil"
+            href="/dashboard/cuenta#firma"
             className="text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900 shrink-0 self-start sm:self-auto"
           >
-            Ir a mi perfil
+            Ir a Mi cuenta
           </Link>
         </div>
       )}

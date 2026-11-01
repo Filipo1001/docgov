@@ -173,7 +173,7 @@ export async function aceptarCertificacion(
     const ctx = await cargarContexto(periodoId)
     if (!ctx) return { error: 'Periodo no encontrado' }
     if (ctx.contratistaId !== user.id) return { error: 'Solo el titular del contrato puede aceptar su certificación' }
-    if (!ctx.firmaUrl) return { error: 'Debes registrar tu firma en tu perfil antes de aceptar la certificación.' }
+    if (!ctx.firmaUrl) return { error: 'Debes registrar tu firma en Mi cuenta antes de aceptar la certificación.' }
 
     const admin = createAdminSupabaseClient()
 

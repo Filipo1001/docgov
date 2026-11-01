@@ -245,7 +245,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           )}
           {usuario && (
             <Link
-              href="/dashboard/perfil"
+              href="/dashboard/cuenta"
               className="flex items-center gap-3 mb-3 rounded-xl p-1.5 -mx-1.5 hover:bg-gray-50 transition-colors group"
             >
               <UserAvatar nombre={usuario.nombre_completo} fotoUrl={usuario.foto_url} size={9} />

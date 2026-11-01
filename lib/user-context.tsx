@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { useQueryClient, onlineManager, focusManager } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase'
 import { obtenerPerfilUsuario } from '@/app/actions/usuario'
@@ -11,9 +11,13 @@ interface UserCtx {
   municipio: Municipio | null
   cargando: boolean
   sesionExpirada: boolean
+  /** Para que un cambio hecho en «Mi cuenta» (la foto) se vea en la barra lateral sin recargar. */
+  actualizarUsuario: (cambios: Partial<Usuario>) => void
 }
 
-const Ctx = createContext<UserCtx>({ usuario: null, municipio: null, cargando: true, sesionExpirada: false })
+const Ctx = createContext<UserCtx>({
+  usuario: null, municipio: null, cargando: true, sesionExpirada: false, actualizarUsuario: () => {},
+})
 
 /** No reconciliar más de una vez por minuto (cambios rápidos de app en móvil). */
 const RECONCILIACION_DEBOUNCE_MS = 60_000
@@ -210,7 +214,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // queryClient es estable (useState en QueryProvider): el efecto no se re-ejecuta.
   }, [queryClient])
 
-  return <Ctx.Provider value={{ usuario, municipio, cargando, sesionExpirada }}>{children}</Ctx.Provider>
+  const actualizarUsuario = useCallback((cambios: Partial<Usuario>) => {
+    setUsuario(prev => (prev ? { ...prev, ...cambios } : prev))
+  }, [])
+
+  return (
+    <Ctx.Provider value={{ usuario, municipio, cargando, sesionExpirada, actualizarUsuario }}>{children}</Ctx.Provider>
+  )
 }
 
 export const useUsuario = () => useContext(Ctx)
