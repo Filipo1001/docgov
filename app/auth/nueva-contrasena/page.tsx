@@ -26,7 +26,6 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Toaster, toast } from 'sonner'
 import { LogoCD } from '@/components/Logo'
-import { liberarMarcaDeClaveInicial } from '@/app/actions/mi-cuenta'
 
 export default function NuevaContrasenaPage() {
   const [verificando, setVerificando] = useState(true)
@@ -93,10 +92,6 @@ export default function NuevaContrasenaPage() {
       toast.error('Error: ' + error.message)
       return
     }
-
-    // Si la cuenta tenía la marca de contraseña inicial, se comprueba en el servidor que ya no lo es y se quita; de lo
-    // contrario, /dashboard la mandaría de vuelta a /cambiar-clave justo después de elegirla.
-    await liberarMarcaDeClaveInicial().catch(() => {})
 
     toast.success('Contraseña actualizada')
     router.push('/dashboard')

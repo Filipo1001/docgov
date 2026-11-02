@@ -13,11 +13,8 @@
  */
 
 import { revalidatePath } from 'next/cache'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
-import { passwordInicialDesdeCedula } from '@/lib/password-inicial'
-import { MARCA_CLAVE_INICIAL, debeCambiarClave, validarClaveNueva } from '@/lib/clave-inicial'
 import type { ActionResult } from '@/lib/types'
 
 const FOTO_PERMITIDA = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
@@ -90,30 +87,17 @@ export async function confirmarMiFoto(urlPublica: string): Promise<ActionResult<
 }
 
 /**
- * Quita la marca de «debe cambiar su contraseña» y renueva la sesión para que el token ya no la lleve (si no, el
- * middleware seguiría mandando a la persona a /cambiar-clave hasta que el token se renovara solo, dentro de una hora).
- */
-async function quitarMarcaDeClaveInicial(userId: string): Promise<void> {
-  await createAdminSupabaseClient().auth.admin.updateUserById(userId, { app_metadata: { [MARCA_CLAVE_INICIAL]: false } })
-  await (await createServerSupabaseClient()).auth.refreshSession()
-}
-
-/**
  * Cambiar la contraseña propia. Va por el servidor (las cookies que renueva el middleware) y no por el cliente del
  * navegador, cuyo token puede estar vencido en las rutas estáticas: ahí el cambio fallaba sin explicación.
- *
- * Si la cuenta estaba marcada con la contraseña inicial (lib/clave-inicial.ts), la marca se quita aquí.
  */
 export async function cambiarMiContrasena(nueva: string, confirmacion: string): Promise<ActionResult> {
   try {
+    if (nueva.length < 8) return { error: 'La contraseña debe tener al menos 8 caracteres.' }
+    if (nueva !== confirmacion) return { error: 'Las contraseñas no coinciden.' }
+
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'Tu sesión terminó. Vuelve a iniciar sesión.' }
-
-    // La cédula sale de la base, no del navegador: es contra lo que se compara la contraseña nueva.
-    const { data: u } = await createAdminSupabaseClient().from('usuarios').select('cedula').eq('id', user.id).single()
-    const rechazo = validarClaveNueva(nueva, confirmacion, (u?.cedula as string | null) ?? null)
-    if (rechazo) return { error: rechazo }
 
     const { error } = await supabase.auth.updateUser({ password: nueva })
     if (error) {
@@ -123,50 +107,8 @@ export async function cambiarMiContrasena(nueva: string, confirmacion: string): 
           : 'No se pudo cambiar la contraseña. Inténtalo de nuevo.',
       }
     }
-
-    // La contraseña ya cambió: si la marca no se pudiera quitar, la persona volvería a la pantalla de cambio sin saber
-    // por qué. Se registra y se sigue; la próxima visita a /cambiar-clave lo resuelve con `liberarMarcaDeClaveInicial`.
-    if (debeCambiarClave(user.app_metadata)) await quitarMarcaDeClaveInicial(user.id).catch(e => console.error('[cuenta] no se pudo quitar la marca de clave inicial:', e instanceof Error ? e.message : e))
     return {}
   } catch {
     return { error: 'No se pudo cambiar la contraseña. Inténtalo de nuevo.' }
-  }
-}
-
-/**
- * Quita la marca SOLO si la contraseña ya no es la inicial. Es para quien cambió su contraseña por otro camino (el
- * enlace de «¿Olvidó su contraseña?», que establece la clave en el navegador) y volvería a /cambiar-clave sin motivo.
- *
- * No se puede confiar en que el navegador diga «ya la cambié»: cualquiera con la marca podría quitársela sin cambiar
- * nada. Por eso se comprueba de verdad: se intenta entrar con la contraseña inicial desde un cliente aparte, que no
- * guarda sesión. Si entra, la contraseña sigue siendo la inicial y la marca se queda.
- */
-export async function liberarMarcaDeClaveInicial(): Promise<ActionResult<{ liberada: boolean }>> {
-  try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Tu sesión terminó. Vuelve a iniciar sesión.' }
-    if (!debeCambiarClave(user.app_metadata)) return { data: { liberada: true } }
-
-    const { data: u } = await createAdminSupabaseClient().from('usuarios').select('cedula, email').eq('id', user.id).single()
-    const inicial = passwordInicialDesdeCedula((u?.cedula as string | null) ?? '')
-    const correo = (u?.email as string | null) ?? user.email
-    if (!inicial || !correo) return { data: { liberada: false } }
-
-    const aparte = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
-    )
-    const { data: intento } = await aparte.auth.signInWithPassword({ email: correo, password: inicial })
-    if (intento?.session) {
-      await aparte.auth.signOut().catch(() => {})
-      return { data: { liberada: false } }
-    }
-
-    await quitarMarcaDeClaveInicial(user.id)
-    return { data: { liberada: true } }
-  } catch {
-    return { error: 'No se pudo verificar tu contraseña. Inténtalo de nuevo.' }
   }
 }

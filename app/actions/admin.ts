@@ -7,7 +7,6 @@ import { normalizeName, normalizeEmail, normalizeFreeText } from '@/lib/format'
 import { passwordInicialDesdeCedula } from '@/lib/password-inicial'
 import { enviarNotificacion } from '@/lib/notifications'
 import type { ActionResult } from '@/lib/types'
-import { APP_METADATA_CLAVE_INICIAL } from '@/lib/clave-inicial'
 
 // ─── Auth guard ───────────────────────────────────────────────
 
@@ -102,7 +101,6 @@ export async function crearUsuario(formData: {
     password: passwordInicial,
     email_confirm: true,
     user_metadata: { nombre_completo: nombreCompleto },
-    app_metadata: APP_METADATA_CLAVE_INICIAL,
   })
 
   if (authError || !authData?.user) {
@@ -195,7 +193,6 @@ export async function activarContratista(
     password: passwordInicial,
     email_confirm: true,
     user_metadata: { nombre_completo: nombreNorm },
-    app_metadata: APP_METADATA_CLAVE_INICIAL,
   })
 
   if (authError || !authData?.user) {
@@ -435,8 +432,7 @@ export async function cambiarContrasena(
         'Authorization': `Bearer ${serviceKey}`,
         'apikey': serviceKey,
       },
-      // Quien se la fija es otra persona y la conoce: la cuenta queda obligada a cambiarla en su primer ingreso.
-      body: JSON.stringify({ password: pw, app_metadata: APP_METADATA_CLAVE_INICIAL }),
+      body: JSON.stringify({ password: pw }),
     })
 
     const body = await res.json().catch(() => ({}))

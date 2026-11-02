@@ -46,14 +46,15 @@ function base64urlADecodificado(segmento: string): string | null {
 }
 
 /**
- * La carga útil (claims) del access token guardado en las cookies, SIN verificar la firma.
+ * Segundos que le quedan de vida al access token guardado en las cookies.
  *
- * `null` si no se puede leer. Supabase trocea la cookie cuando el valor es grande (`...-auth-token.0`, `.1`), así que
- * hay que reensamblarla en orden antes de leerla.
+ * `null` si no se puede saber. Supabase trocea la cookie cuando el valor es
+ * grande (`...-auth-token.0`, `.1`), así que hay que reensamblarla en orden
+ * antes de leerla.
  */
-export function cargaDelToken(
+export function segundosRestantesDelToken(
   cookies: { name: string; value: string }[],
-): Record<string, unknown> | null {
+): number | null {
   const trozos = cookies
     .filter(c => c.name.includes('-auth-token'))
     .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }))
@@ -83,32 +84,12 @@ export function cargaDelToken(
   if (!carga) return null
 
   try {
-    const claims = JSON.parse(carga)
-    return typeof claims === 'object' && claims !== null ? (claims as Record<string, unknown>) : null
+    const { exp } = JSON.parse(carga) as { exp?: unknown }
+    if (typeof exp !== 'number' || !Number.isFinite(exp)) return null
+    return exp - Math.floor(Date.now() / 1000)
   } catch {
     return null
   }
-}
-
-/** Segundos que le quedan de vida al access token guardado en las cookies; `null` si no se puede saber. */
-export function segundosRestantesDelToken(
-  cookies: { name: string; value: string }[],
-): number | null {
-  const exp = cargaDelToken(cookies)?.exp
-  if (typeof exp !== 'number' || !Number.isFinite(exp)) return null
-  return exp - Math.floor(Date.now() / 1000)
-}
-
-/**
- * ¿La cuenta del token debe cambiar su contraseña? (lib/clave-inicial.ts)
- *
- * Aquí tampoco se decide quién entra: es un empujón de usabilidad para llevar a la persona a elegir su contraseña. Un
- * token falsificado solo conseguiría saltarse ese empujón —y el token, verificado por PostgREST y por los guardias del
- * servidor, lo rechazan igual—, así que leerlo sin verificar la firma no concede nada. Ante la duda, `false`.
- */
-export function tokenPideCambiarClave(cookies: { name: string; value: string }[]): boolean {
-  const meta = cargaDelToken(cookies)?.app_metadata
-  return typeof meta === 'object' && meta !== null && (meta as Record<string, unknown>).debe_cambiar_clave === true
 }
 
 /**
