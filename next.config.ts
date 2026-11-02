@@ -42,6 +42,36 @@ const nextConfig: NextConfig = {
     }
   },
 
+  // Cabeceras de seguridad para toda la aplicación (auditoría del 2-nov-2026: en producción solo había HSTS).
+  //
+  //  · X-Content-Type-Options: el navegador no «adivina» el tipo de un archivo; un archivo subido no se ejecuta como script.
+  //  · X-Frame-Options y `frame-ancestors`: ningún otro sitio puede mostrar la aplicación dentro de un marco. Es lo que
+  //    impide el «clickjacking» (una página ajena con la nuestra transparente debajo para que pulses sin saberlo).
+  //    `SAMEORIGIN` y no `DENY`: la propia aplicación sí puede enmarcarse a sí misma.
+  //  · Referrer-Policy: al salir hacia otro sitio solo se manda el dominio, no la ruta completa (que puede llevar un
+  //    código de verificación o un identificador).
+  //  · Permissions-Policy: la aplicación solo usa la cámara (escáner de firma, fotos de evidencia). Micrófono, ubicación,
+  //    pagos y USB quedan cerrados aunque alguna librería los pidiera.
+  //  · CSP mínima: solo las directivas que no pueden romper nada —quién puede enmarcarnos, a qué base apuntan los enlaces
+  //    relativos, adónde se envían los formularios y sin plugins (`object`)—. NO restringe de dónde se cargan scripts ni
+  //    estilos: eso (`script-src`) exige un «nonce» por petición y se hará por separado, con prueba previa.
+  //
+  // HSTS no se toca aquí: ya lo pone Vercel.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'" },
+        ],
+      },
+    ]
+  },
+
   // Keep @react-pdf/renderer and canvas on the Node.js server only.
   // Prevents bundling issues when these packages are imported in API routes.
   serverExternalPackages: ['@react-pdf/renderer', 'canvas'],
