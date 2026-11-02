@@ -50,8 +50,9 @@ const nextConfig: NextConfig = {
   //    `SAMEORIGIN` y no `DENY`: la propia aplicación sí puede enmarcarse a sí misma.
   //  · Referrer-Policy: al salir hacia otro sitio solo se manda el dominio, no la ruta completa (que puede llevar un
   //    código de verificación o un identificador).
-  //  · Permissions-Policy: la aplicación solo usa la cámara (escáner de firma, fotos de evidencia). Micrófono, ubicación,
-  //    pagos y USB quedan cerrados aunque alguna librería los pidiera.
+  //  · Permissions-Policy: la aplicación usa la cámara (escáner de firma, fotos de evidencia) y usará el micrófono (dictado
+  //    de las actividades). Solo ella: ningún sitio incrustado puede pedirlos, y el navegador sigue preguntándole a la
+  //    persona. Ubicación, pagos y USB quedan cerrados aunque alguna librería los pidiera.
   //  · CSP mínima: solo las directivas que no pueden romper nada —quién puede enmarcarnos, a qué base apuntan los enlaces
   //    relativos, adónde se envían los formularios y sin plugins (`object`)—. NO restringe de dónde se cargan scripts ni
   //    estilos: eso (`script-src`) exige un «nonce» por petición y se hará por separado, con prueba previa.
@@ -65,7 +66,7 @@ const nextConfig: NextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()' },
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()' },
           { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'" },
         ],
       },
