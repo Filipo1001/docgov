@@ -129,6 +129,7 @@ function severidadDe(tipo: string): { glifo: LucideIcon; severidad: Severidad } 
     case 'primer_informe_pendiente':
     case 'contrato_vencimiento':     return { glifo: Iconos.estado.advertencia,   severidad: 'exige' }
     case 'contratos_por_vencer':     return { glifo: Iconos.estado.enEspera,      severidad: 'informa' }
+    case 'resumen_semanal':          return { glifo: Iconos.estado.enEspera,      severidad: 'informa' }
     case 'recordatorio':             return { glifo: Iconos.estado.enEspera,      severidad: 'exige' }
     case 'revision':                 return { glifo: Iconos.accion.ver,           severidad: 'informa' }
     case 'enviado':

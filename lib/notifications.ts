@@ -61,6 +61,16 @@ export interface NotificationPayload {
 }
 
 /**
+ * Roles que reciben la campana pero NO el correo (decisión del 2-nov-2026). El asesor jurídico casi no opera en la
+ * alcaldía de Fredonia y recibía 41 correos en 30 días —36 de ellos el resumen de bandeja— de un trabajo que no hace.
+ * El aviso sigue en la campana de la aplicación.
+ */
+const ROLES_SOLO_CAMPANA: ReadonlySet<string> = new Set(['asesor'])
+
+/** Lo que siempre sale por correo aunque el rol sea de solo campana: la bienvenida lleva el acceso a la cuenta. */
+const TIPOS_SIEMPRE_POR_CORREO: ReadonlySet<string> = new Set(['bienvenida'])
+
+/**
  * Send a notification through all enabled channels.
  * Never throws — logs errors silently to avoid breaking the main flow.
  */
@@ -104,7 +114,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   // 2. Get user contact info and preferences
   const { data: usuario } = await adminClient
     .from('usuarios')
-    .select('email, telefono, nombre_completo')
+    .select('email, telefono, nombre_completo, rol')
     .eq('id', payload.destinatarioId)
     .single()
 
@@ -159,7 +169,7 @@ export async function enviarNotificacion(payload: NotificationPayload): Promise<
   // contratistas del municipio y no hace falta para diagnosticar nada. El id
   // de usuario permite rastrear el mismo caso sin exponerlo.
   const emailReal = usuario.email && !usuario.email.endsWith('@pendiente.local') ? usuario.email : null
-  if (payload.sinCorreo) {
+  if (payload.sinCorreo || (ROLES_SOLO_CAMPANA.has(usuario.rol as string) && !TIPOS_SIEMPRE_POR_CORREO.has(payload.tipo))) {
     // 'omitido' y no 'fallido': no salió por decisión, no por error. La
     // distinción importa — 'fallido' es lo que se revisa cuando algo va mal.
     await anotarCorreo('omitido', { error: 'solo_en_app' })

@@ -373,6 +373,9 @@ export async function enviarPeriodo(periodoId: string): Promise<ActionResult> {
             anio: periodo.anio,
             contrato: contrato.numero || '',
             destinatarioId: usuario.id,
+            // Campana sí, correo no (2-nov-2026): la persona acaba de pulsar «Enviar» y lo ve en pantalla; el correo era
+            // el segundo de los 4 o 5 que recibe en el mes. El comprobante que sí importa llega después: aprobado y radicado.
+            sinCorreo: true,
           }),
         ])
       } catch { /* notification failure must not block a successful submit */ }

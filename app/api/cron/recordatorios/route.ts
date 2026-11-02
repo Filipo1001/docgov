@@ -2,7 +2,7 @@
  * GET /api/cron/recordatorios — cron diario de alertas automáticas.
  *
  * Invocado por Vercel Cron (vercel.json) todos los días a las 12:00 UTC
- * (7:00 AM Bogotá). Evalúa cinco reglas y dispara solo las que aplican hoy.
+ * (7:00 AM Bogotá). Evalúa sus reglas y dispara solo las que aplican hoy.
  *
  * ── Qué queda aquí y qué se fue al consolidado mensual ───────────────────
  *
@@ -19,23 +19,25 @@
  *   · La rama de R4 sobre meses sin planilla — es un hueco administrativo que
  *     no cambia de un día para otro; va en el consolidado del día 6.
  *
- *  R1 — Contratistas con informe en borrador (escalonado por día del mes,
- *       22 · 24 · 28 · 2; el 24 es la víspera del corte real del 25):
- *       día 22: recordatorio suave · día 28: urgente · día 2: venció (mes anterior)
- *       El suave estaba el 25 y se adelantó al 22: en agosto el 82% del
- *       trabajo se cargó entre el 24 y el 28, así que avisar el 25 llegaba
- *       cuando la avalancha ya había empezado. Los tres llevan el avance real
- *       de la persona, no solo la fecha — que la fecha ya se la saben.
- *       El aviso de VENCIDO nunca va a quien no ha enviado un informe en su
- *       vida: para esa persona sería su primer contacto con el sistema, y no
- *       puede arreglarlo. Va a su supervisor, que es quien tiene la llave.
- *  R2 — Supervisor + asesores DE SU DEPENDENCIA: el estado de su bandeja —
- *       lo que espera revisión y lo que ya aprobaron y sigue sin radicar
- *  R3 — Contratista con informe DEVUELTO sin corregir (≥3 días), con las
- *       correcciones dentro; a las 2 semanas escala al supervisor
- *  R4 — Contratación/admin: contratos sin CDP, CRP o contrato firmado
- *  R7 — Administración, contratación y supervisores: UN resumen semanal (lunes) de los contratos que entraron
- *       en la ventana de 60 o de 30 días para vencer; antes era un correo por contrato
+ *  R1 — Contratistas con informe en borrador (días 22, 28 y 2):
+ *       día 22: recordatorio, con el avance real de la persona y lo que falta (incluida la firma si no la tiene)
+ *       día 28: urgente · día 2: venció (mes anterior)
+ *       El del 24 se quitó el 2-nov-2026: salía dos días después del primero y repetía su contenido, que ahora
+ *       viaja en el del 22. Se adelantó al 22 porque en agosto el 82% del trabajo se cargó entre el 24 y el 28.
+ *       El aviso de VENCIDO nunca va a quien no ha enviado un informe en su vida: para esa persona sería su primer
+ *       contacto con el sistema, y no puede arreglarlo. Va a su supervisor, que es quien tiene la llave.
+ *  R3 — Contratista con informe DEVUELTO sin corregir (≥3 días), con las correcciones dentro.
+ *
+ * ── Lo que va en el resumen semanal (lunes) y no en correos sueltos ──────
+ *
+ * A quien gestiona (secretarios, contratación, administración) ya no le llega un correo por regla: cada una aporta una
+ * SECCIÓN a un solo resumen semanal (lib/resumen-semanal.ts), y quien no tiene nada pendiente no recibe nada.
+ *  · Tu bandeja (R2): lo que espera revisión y lo aprobado que sigue sin radicar, por dependencia.
+ *  · Devueltos sin corregir hace más de 2 semanas (R3), a su supervisor.
+ *  · Sin su primer informe (antes R1 el día 2), a su supervisor; el primer lunes entre el 2 y el 8.
+ *  · Documentación pendiente (R4), a contratación y administración: contratos sin CDP, CRP o contrato firmado.
+ *  · Contratos por vencer (R7), con las ventanas de 60 y 30 días de lib/vencimientos.ts.
+ * Los asesores reciben la campana pero no el correo.
  *
  * Un contrato terminado anticipadamente (migración 081) deja de producir avisos por sí solo: sus periodos posteriores
  * quedan `anulado` y ninguna regla de periodos los ve, y R4 y R7 miran la fecha de fin EFECTIVA o lo excluyen. Los
@@ -43,12 +45,8 @@
  *
  * Anti-spam:
  *  - R1: guard de 20 h por (tipo, periodo) — un retry del cron no duplica
- *  - R1: el aviso al supervisor sobre primerizos, 20 h (la regla corre 1 vez/mes)
- *  - R2: solo si llegó algo en 24 h o algo lleva ≥5 días; máximo 1 cada 3 días
- *        (el guard se evalúa por persona, no por dependencia)
- *  - R3: máximo uno por semana y por periodo; el escalado, uno por semana
- *  - R4: semanal por destinatario — son huecos que no cambian a diario
- *  - R7: solo los lunes, un correo por persona y solo si hay algo; las ventanas de 7 días no se solapan (lib/vencimientos.ts)
+ *  - R3: máximo uno por semana y por periodo al contratista
+ *  - Resumen semanal: solo los lunes, uno por persona y solo si hay algo; nunca dos en 20 h
  *
  * Auth: Vercel envía `Authorization: Bearer ${CRON_SECRET}` automáticamente
  * cuando la env var existe. Sin secret válido → 401.
@@ -59,7 +57,8 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { enviarNotificacion } from '@/lib/notifications'
 import { notasPorObligacion } from '@/lib/notas-obligaciones'
 import { cargarAmbitos, destinatariosDe } from '@/lib/alcance'
-import { esLunes, rangoDeConsulta, repartirVencimientos, paraDestinatario, totalVencimientos, mensajeCampana, type ContratoPorVencer } from '@/lib/vencimientos'
+import { esLunes, rangoDeConsulta, repartirVencimientos, paraDestinatario, type ContratoPorVencer } from '@/lib/vencimientos'
+import { AcumuladoSemanal, seccion, mensajeCampana, tituloCampana } from '@/lib/resumen-semanal'
 import { capitalizarNombre } from '@/lib/format'
 import { MESES } from '@/lib/constants'
 import { contratoSuspendido } from '@/lib/estado-contrato'
@@ -70,17 +69,24 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
+/** El cuerpo personal del recordatorio del día 22: el avance y lo que falta, en el orden en que se hace. */
+function detalleRecordatorio(avance: string, pasos: string[]): string {
+  return `${avance} Faltan pocos días para que se acabe el mes, así que este es un buen momento para ${enumerar(pasos)}.`
+}
+
 /** «a, b y c» — una lista en español, no separada por comas hasta el final. */
 function enumerar(partes: string[]): string {
   if (partes.length <= 1) return partes[0] ?? ''
   return `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`
 }
 
-/** Fecha actual en Bogotá (el server corre en UTC). */
-function hoyBogota(): { anio: number; mesIdx: number; dia: number; iso: string } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date()) // "YYYY-MM-DD"
+/** Fecha actual en Bogotá (el server corre en UTC). En un ensayo se puede pedir otra (`?fecha=2026-11-09`). */
+function hoyBogota(fechaPedida?: string | null): { anio: number; mesIdx: number; dia: number; iso: string } {
+  const parts = fechaPedida && /^\d{4}-\d{2}-\d{2}$/.test(fechaPedida)
+    ? fechaPedida
+    : new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date()) // "YYYY-MM-DD"
   const [anio, mes, dia] = parts.split('-').map(Number)
   return { anio, mesIdx: mes - 1, dia, iso: parts }
 }
@@ -99,8 +105,28 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = createAdminSupabaseClient()
-  const { anio, mesIdx, dia, iso } = hoyBogota()
-  const resumen: Record<string, number> = { r1_recordatorios: 0, r1_primerizos: 0, r2_bandeja: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r7_vencimientos: 0 }
+
+  // ── Ensayo de la semana: ?ensayo=1[&fecha=2026-11-09] ─────────
+  //
+  // Corre TODAS las reglas con los datos reales y, en vez de escribir una notificación o mandar un correo, anota lo que
+  // habría enviado y lo devuelve. Existe porque el resumen semanal sale los lunes: descubrir un error esperando al
+  // lunes cuesta una semana, y un error ahí le llega a gente real. Con `fecha` se puede pedir otro día (un lunes, por
+  // ejemplo); los guards de tiempo usan el reloj real, así que un ensayo de una fecha lejana es una aproximación.
+  // Sigue exigiendo el CRON_SECRET: las secciones llevan nombres de contratistas.
+  const ensayoSemana = req.nextUrl.searchParams.get('ensayo') === '1'
+  const { anio, mesIdx, dia, iso } = hoyBogota(ensayoSemana ? req.nextUrl.searchParams.get('fecha') : null)
+  const simulados: Parameters<typeof enviarNotificacion>[0][] = []
+  const enviar: typeof enviarNotificacion = ensayoSemana
+    ? async (p) => { simulados.push(p) }
+    : enviarNotificacion
+
+  const resumen: Record<string, number> = { r1_recordatorios: 0, r1_primerizos: 0, r2_bandeja: 0, r3_devueltos: 0, r3_escalados: 0, r4_expediente: 0, r7_vencimientos: 0, resumen_semanal: 0 }
+
+  // Los lunes, lo que antes eran correos sueltos a quien gestiona (bandeja, devueltos estancados, primerizos, expediente
+  // y vencimientos) se junta en UN resumen por persona (lib/resumen-semanal.ts). Cada regla aporta su sección; al final
+  // se manda una sola notificación. Los contadores r2/r3_escalados/r4/r7/r1_primerizos cuentan secciones aportadas.
+  const lunes = esLunes(iso)
+  const semana = new AcumuladoSemanal()
 
   // ── Ensayo: ?prueba=<correo> ─────────────────────────────────
   //
@@ -115,7 +141,7 @@ export async function GET(req: NextRequest) {
   //
   // Y sale antes que las demás reglas: un ensayo no puede acabar mandándole
   // avisos reales a los secretarios.
-  const prueba = req.nextUrl.searchParams.get('prueba')
+  const prueba = ensayoSemana ? null : req.nextUrl.searchParams.get('prueba')
   if (prueba) {
     return NextResponse.json(await ensayoRecordatorio(admin, prueba, MESES[mesIdx], anio))
   }
@@ -131,7 +157,7 @@ export async function GET(req: NextRequest) {
   // El corte del 25 es costumbre, no está estipulado por escrito, y por eso
   // el aviso NO afirma que mañana vence: dice que se acaba el mes y que su
   // informe no ha llegado, que es lo que sí es cierto.
-  if (dia === 22 || dia === 24 || dia === 28 || dia === 2) {
+  if (dia === 22 || dia === 28 || dia === 2) {
     // Día 2 → el mes VENCIDO es el anterior; días 22/28 → el mes en curso
     const esVencido = dia === 2
     const mesObjetivoIdx = esVencido ? (mesIdx === 0 ? 11 : mesIdx - 1) : mesIdx
@@ -141,7 +167,6 @@ export async function GET(req: NextRequest) {
     const tipo = esVencido
       ? 'recordatorio_vencido'
       : dia === 28 ? 'recordatorio_urgente'
-      : dia === 24 ? 'recordatorio_semana_final'
       : 'recordatorio'
     let consulta = admin
       .from('periodos')
@@ -190,7 +215,8 @@ export async function GET(req: NextRequest) {
     // su periodo está bloqueado y solo el supervisor lo abre.
     //
     // Se les saca de aquí y se avisa a quien sí tiene la llave.
-    const primerizos = esVencido ? todos.filter(p => !conHistoria.has(p.contrato_id)) : []
+    //
+    // (A su supervisor se le avisa en el resumen semanal del lunes; ver «Primerizos» más abajo.)
     const candidatos = esVencido
       ? todos.filter(p => conHistoria.has(p.contrato_id))
       : todos
@@ -218,14 +244,15 @@ export async function GET(req: NextRequest) {
 
     // Quién no tiene firma registrada.
     //
-    // Solo hace falta el día 24, que es el único aviso que enumera los pasos
-    // que faltan. Decirle «sube tu firma» a quien ya la tiene es la clase de
+    // Solo hace falta el día 22, que es el único aviso que enumera los pasos
+    // que faltan (antes era el del 24, que se quitó el 2-nov-2026 por salir
+    // dos días después del primero; lo que decía pasó al del 22). Decirle «sube tu firma» a quien ya la tiene es la clase de
     // instrucción que no aplica y que enseña a no leer los correos; y
     // callársela a quien no la tiene es peor, porque es su primer muro: 27
     // de los 120 contratistas no la tienen, y ninguno de esos 27 ha logrado
     // enviar un informe nunca.
     const sinFirma = new Set<string>()
-    if (dia === 24 && pendientesIds.length) {
+    if (dia === 22 && pendientesIds.length) {
       const contratistas = [...new Set(
         candidatos.filter(p => !enviadas.has(p.id)).map(p => p.contrato!.contratista_id!),
       )]
@@ -256,9 +283,7 @@ export async function GET(req: NextRequest) {
           ? `Tu informe de ${p.mes} ${p.anio} venció`
           : dia === 28
             ? `Quedan pocos días — informe de ${p.mes}`
-            : dia === 24
-              ? `Última semana para enviar tu informe de ${p.mes}`
-              : `Recuerda enviar tu informe de ${p.mes}`
+            : `Recuerda enviar tu informe de ${p.mes}`
 
         // El avance va primero y en concreto: quien no ha empezado y quien ya
         // lleva media docena de actividades no están en la misma situación, y
@@ -267,7 +292,7 @@ export async function GET(req: NextRequest) {
           ? 'Todavía no has registrado ninguna actividad.'
           : `Llevas ${hechas} actividad${hechas === 1 ? '' : 'es'} registrada${hechas === 1 ? '' : 's'}.`
 
-        // El día 24 enumera lo que falta, en el orden en que se hace, y la
+        // El día 22 enumera lo que falta, en el orden en que se hace, y la
         // firma solo aparece para quien no la tiene.
         const pasos = [
           sinFirma.has(p.contrato!.contratista_id!) ? 'subir tu firma' : null,
@@ -277,18 +302,16 @@ export async function GET(req: NextRequest) {
         ].filter(Boolean) as string[]
 
         // Lo personal viaja en `detalle`, que es lo que la plantilla del día
-        // 24 pinta: el resto del payload son cadenas fijas y la plantilla no
+        // 22 pinta: el resto del payload son cadenas fijas y la plantilla no
         // ve el `mensaje`, que solo alimenta la campana dentro de la app.
-        const detalle = dia === 24
-          ? `${avance} Ya estamos en la última semana del mes, así que este es un buen momento para ${enumerar(pasos)}.`
-          : undefined
+        const detalle = dia === 22 ? detalleRecordatorio(avance, pasos) : undefined
 
         const mensaje = esVencido
           ? `El plazo para enviar tu informe de ${p.mes} ${p.anio} ya venció. Contacta a tu supervisor para habilitar el envío tardío.`
-          : dia === 24
+          : dia === 22
             ? `Todavía no hemos recibido tu informe de actividades de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. ${detalle}`
             : `${avance} Aún no has enviado tu informe de ${p.mes} ${p.anio} del contrato ${p.contrato!.numero}. Ingresa a Contratista Digital para completarlo.`
-        await enviarNotificacion({
+        await enviar({
           destinatarioId: p.contrato!.contratista_id!,
           tipo, titulo, mensaje, detalle,
           periodoId: p.id,
@@ -298,83 +321,16 @@ export async function GET(req: NextRequest) {
         resumen.r1_recordatorios++
       }),
     )
-
-    // Los primerizos: en vez de regañarlos, se avisa a su supervisor.
-    //
-    // Es el único mensaje del sistema que va sobre alguien y no a alguien, y
-    // va donde está la capacidad de resolverlo: el periodo vencido está
-    // bloqueado y `habilitado_tardio` solo lo levanta el supervisor. Pedirle
-    // a la contratista que envíe algo que la pantalla no la deja enviar es
-    // mandarla contra una puerta cerrada.
-    if (primerizos.length) {
-      const porSupervisor = new Map<string, PeriodoBorrador[]>()
-      for (const p of primerizos) {
-        const sup = p.contrato?.supervisor_id
-        if (!sup) continue
-        porSupervisor.set(sup, [...(porSupervisor.get(sup) ?? []), p])
-      }
-
-      // Una vez al mes basta: esta regla solo corre el día 2.
-      const { data: yaSup } = await admin
-        .from('notificaciones')
-        .select('usuario_id')
-        .eq('tipo', 'primer_informe_pendiente')
-        .gte('created_at', new Date(Date.now() - 20 * 3600_000).toISOString())
-      const supYaAvisados = new Set((yaSup ?? []).map(n => n.usuario_id as string))
-
-      const { data: nombres } = await admin
-        .from('contratos')
-        .select('id, numero, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
-        .in('id', primerizos.map(p => p.contrato_id))
-      const etiqueta = new Map<string, string>()
-      for (const c of (nombres ?? []) as any[]) {
-        etiqueta.set(c.id as string, `${c.contratista?.nombre_completo ?? '?'} (contrato ${c.numero})`)
-      }
-
-      await Promise.allSettled(
-        [...porSupervisor.entries()]
-          .filter(([sup]) => !supYaAvisados.has(sup))
-          .map(async ([sup, lista]) => {
-            const quienes = lista.map(p => etiqueta.get(p.contrato_id) ?? '?')
-            const detalle = `${lista.length} persona${lista.length === 1 ? '' : 's'} a tu cargo no ha${lista.length === 1 ? '' : 'n'} enviado todavía su primer informe por Contratista Digital, y el periodo de ${mesNombre} ya se les cerró: ${quienes.slice(0, 10).join(' · ')}${quienes.length > 10 ? ` · y ${quienes.length - 10} más` : ''}.`
-            await enviarNotificacion({
-              destinatarioId: sup,
-              tipo: 'primer_informe_pendiente',
-              titulo: `${lista.length} contratista(s) sin su primer informe`,
-              mensaje: detalle,
-              mes: mesNombre,
-              anio: anioObjetivo,
-              detalle,
-            })
-            resumen.r1_primerizos++
-          }),
-      )
-    }
   }
 
-  // ══ R2 — El estado de tu bandeja (resumen diario, por dependencia) ═════
+  // ══ R2 — El estado de tu bandeja (sección del resumen semanal) ═════
   //
-  // Un solo correo a quien revisa, con las dos cosas que pueden quedarse
-  // quietas en sus manos: lo que espera revisión y lo que ya aprobó y sigue
-  // sin radicar.
-  //
-  // ── Por qué las dos cosas van juntas ──────────────────────────────────
-  //
-  // Eran dos reglas. La de radicación (R5) mandaba la MISMA lista a todos los
-  // supervisores y al admin: el 17 de septiembre salieron tres nombres —dos de
-  // Gobierno y uno de Hacienda— a cinco personas, y para Desarrollo Territorial
-  // y Bienestar Social el contenido era íntegramente ajeno, cero de tres.
-  //
-  // No bastaba con filtrarla: en 209 radicaciones hechas por alguien que no es
-  // el admin, las 209 las hizo el supervisor de esa misma dependencia. O sea
-  // que quien radica es exactamente la misma persona a la que esta regla ya
-  // escribía. Dos correos al mismo destinatario sobre su propia bandeja son
-  // uno. Y así el secretario deja de recibir alarmas sueltas: lo que le llega
-  // es el estado de su trabajo.
-  //
-  // Solo escribe cuando hay algo que hacer: o llegó algo nuevo en 24 h, o algo
-  // lleva demasiado esperando. En los días tranquilos calla.
-  {
+  // Lo que puede quedarse quieto en manos de quien revisa: lo que espera revisión y lo que ya aprobó y sigue sin
+  // radicar. Antes era un correo propio cada 2 o 3 días (hasta 15 al mes por secretario, 86 en 30 días entre ocho
+  // personas); ahora es una sección del resumen del lunes. Quien radica es la misma persona que revisa, y por eso van
+  // juntas. El reparto sale de lib/alcance.ts: cada dependencia, su gente; ninguna consulta por rol suelta, que es
+  // como se coló la lista global de septiembre (tres nombres de dos secretarías a cinco personas).
+  if (lunes) {
     const ambitos = await cargarAmbitos(admin)
 
     const [{ data: pendientes }, { data: aprobados }] = await Promise.all([
@@ -415,88 +371,35 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (porRevisar.length || porRadicar.length) {
-      const hace24h = Date.now() - 24 * 3600_000
-      const hace5d = Date.now() - 5 * 24 * 3600_000
+    const diasDesde = (iso: string | null | undefined) =>
+      iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 3600_000))) : 0
+    const quien = (p: Fila) => `${capitalizarNombre(p.contrato?.contratista?.nombre_completo) || '?'} (${p.mes})`
 
-      // Un aviso por revisor cada 3 días como mucho; y nunca dos en 20 h, que
-      // es el guard que ya usa R1 contra los reintentos del cron.
-      const hace3d = new Date(Date.now() - 3 * 24 * 3600_000).toISOString()
-      const { data: recientes } = await admin
-        .from('notificaciones')
-        .select('usuario_id, created_at')
-        .eq('tipo', 'revision_pendiente')
-        .gte('created_at', hace3d)
-      const ultimoAviso = new Map<string, number>()
-      for (const n of recientes ?? []) {
-        const t = new Date(n.created_at as string).getTime()
-        const k = n.usuario_id as string
-        ultimoAviso.set(k, Math.max(ultimoAviso.get(k) ?? 0, t))
+    for (const ambito of ambitos.values()) {
+      const revisar = porRevisar.filter(p => p.contrato!.dependencia_id === ambito.dependenciaId)
+      const radicar = porRadicar.filter(p => p.contrato!.dependencia_id === ambito.dependenciaId)
+      if (revisar.length === 0 && radicar.length === 0) continue
+
+      // Lo que más lleva esperando va primero: es lo que se ve si la lista se recorta.
+      const filas = [
+        ...revisar.map(p => ({ dias: diasDesde(p.fecha_envio), texto: `${quien(p)} · espera revisión desde hace ${diasDesde(p.fecha_envio)} d` })),
+        ...radicar.map(p => ({ dias: diasDesde(aprobadoEn.get(p.id)), texto: `${quien(p)} · aprobada hace ${diasDesde(aprobadoEn.get(p.id))} d, sin radicar` })),
+      ].sort((x, y) => y.dias - x.dias)
+
+      const partes = [
+        revisar.length ? `${revisar.length} informe${revisar.length === 1 ? '' : 's'} espera${revisar.length === 1 ? '' : 'n'} revisión` : '',
+        radicar.length ? `${radicar.length} cuenta${radicar.length === 1 ? '' : 's'} aprobada${radicar.length === 1 ? '' : 's'} espera${radicar.length === 1 ? '' : 'n'} radicación` : '',
+      ].filter(Boolean)
+      const cifra = [
+        revisar.length ? `${revisar.length} por revisar` : '',
+        radicar.length ? `${radicar.length} por radicar` : '',
+      ].filter(Boolean).join(' y ')
+
+      const sec = seccion('bandeja', 'Tu bandeja', `${partes.join(' y ')}.`, filas.map(f => f.texto), cifra)
+      for (const revisorId of destinatariosDe(ambito)) {
+        semana.aportar(revisorId, sec)
+        resumen.r2_bandeja++
       }
-
-      const etiqueta = (p: Fila) =>
-        `${p.contrato?.contratista?.nombre_completo ?? '?'} (${p.mes})`
-
-      // El reparto sale de lib/alcance.ts: cada dependencia, su gente. Ninguna
-      // consulta por rol suelta — así es como se coló la lista global.
-      await Promise.allSettled(
-        [...ambitos.values()].map(async (ambito) => {
-          const revisar = porRevisar.filter(p => p.contrato!.dependencia_id === ambito.dependenciaId)
-          const radicar = porRadicar.filter(p => p.contrato!.dependencia_id === ambito.dependenciaId)
-          if (revisar.length === 0 && radicar.length === 0) return
-
-          const nuevos = revisar.filter(p => p.fecha_envio && new Date(p.fecha_envio).getTime() >= hace24h)
-          const viejos = revisar.filter(p => p.fecha_envio && new Date(p.fecha_envio).getTime() <= hace5d)
-          const estancadas = radicar.filter(p => {
-            const f = aprobadoEn.get(p.id)
-            return f && new Date(f).getTime() <= hace5d
-          })
-
-          // Nada nuevo y nada envejeciendo → silencio.
-          if (nuevos.length === 0 && viejos.length === 0 && estancadas.length === 0) return
-
-          const partes = [
-            revisar.length
-              ? `Tienes ${revisar.length} informe${revisar.length === 1 ? '' : 's'} esperando revisión.`
-              : '',
-            nuevos.length ? `${nuevos.length} lleg${nuevos.length === 1 ? 'ó' : 'aron'} en las últimas 24 horas.` : '',
-            viejos.length
-              ? `${viejos.length} llev${viejos.length === 1 ? 'a' : 'an'} más de 5 días sin revisar: ${viejos.slice(0, 5).map(etiqueta).join(', ')}${viejos.length > 5 ? ` y ${viejos.length - 5} más` : ''}.`
-              : '',
-            estancadas.length
-              ? `Y ${estancadas.length} cuenta${estancadas.length === 1 ? '' : 's'} que ya aprobaste llev${estancadas.length === 1 ? 'a' : 'an'} 5 días o más sin radicar: ${estancadas.slice(0, 5).map(etiqueta).join(', ')}${estancadas.length > 5 ? ` y ${estancadas.length - 5} más` : ''}.`
-              : '',
-          ].filter(Boolean)
-          const detalle = partes.join(' ')
-
-          const titulo = revisar.length && estancadas.length
-            ? `${revisar.length} por revisar y ${estancadas.length} por radicar`
-            : estancadas.length
-              ? `${estancadas.length} cuenta(s) esperando radicación`
-              : `${revisar.length} informe(s) esperando revisión`
-
-          await Promise.allSettled(
-            destinatariosDe(ambito).map(async (revisorId) => {
-              const ultimo = ultimoAviso.get(revisorId) ?? 0
-              if (Date.now() - ultimo < 20 * 3600_000) return          // retry del cron
-              // Si no hay nada nuevo, no se insiste más de una vez cada 3 días.
-              if (nuevos.length === 0 && ultimo > 0) return
-
-              await enviarNotificacion({
-                destinatarioId: revisorId,
-                tipo: 'revision_pendiente',
-                titulo,
-                mensaje: detalle,
-                // `motivo` es lo que la plantilla usa de asunto; `titulo` va a
-                // la campana. Los dos dicen lo mismo a propósito.
-                motivo: titulo,
-                detalle,
-              })
-              resumen.r2_bandeja++
-            }),
-          )
-        }),
-      )
     }
   }
 
@@ -570,7 +473,7 @@ export async function GET(req: NextRequest) {
           const detalle = await notasPorObligacion(admin, d.id, d.contrato_id, 'hallazgos')
           const motivo = `Tu informe de ${d.mes} ${d.anio} lleva ${dias} días devuelto sin corregir.`
 
-          await enviarNotificacion({
+          await enviar({
             destinatarioId: d.contrato!.contratista_id!,
             tipo: 'devuelto_sin_corregir',
             titulo: `Informe de ${d.mes} pendiente de corregir`,
@@ -586,8 +489,8 @@ export async function GET(req: NextRequest) {
         }),
       )
 
-      // Escalado: una sola notificación por supervisor con todo lo suyo.
-      if (estancados.length) {
+      // Escalado: pasa al resumen semanal del lunes, una sección por supervisor con todo lo suyo.
+      if (lunes && estancados.length) {
         const porSupervisor = new Map<string, Devuelto[]>()
         for (const d of estancados) {
           const sup = d.contrato!.supervisor_id
@@ -595,33 +498,17 @@ export async function GET(req: NextRequest) {
           porSupervisor.set(sup, [...(porSupervisor.get(sup) ?? []), d])
         }
 
-        const hace7dEsc = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
-        const { data: supAvisados } = await admin
-          .from('notificaciones')
-          .select('usuario_id')
-          .eq('tipo', 'devuelto_estancado')
-          .gte('created_at', hace7dEsc)
-        const supYa = new Set((supAvisados ?? []).map(n => n.usuario_id as string))
-
-        await Promise.allSettled(
-          [...porSupervisor.entries()]
-            .filter(([sup]) => !supYa.has(sup))
-            .map(async ([sup, lista]) => {
-              const nombres = lista
-                .slice(0, 5)
-                .map(d => `${d.contrato?.contratista?.nombre_completo ?? '?'} (${d.mes})`)
-                .join(', ')
-              const detalle = `Hay ${lista.length} informe${lista.length === 1 ? '' : 's'} devuelto${lista.length === 1 ? '' : 's'} hace más de dos semanas sin corregir: ${nombres}${lista.length > 5 ? ` y ${lista.length - 5} más` : ''}.`
-              await enviarNotificacion({
-                destinatarioId: sup,
-                tipo: 'devuelto_estancado',
-                titulo: `${lista.length} devolución(es) sin movimiento`,
-                mensaje: detalle,
-                detalle,
-              })
-              resumen.r3_escalados++
-            }),
-        )
+        for (const [sup, lista] of porSupervisor) {
+          const nombres = lista.map(d => `${capitalizarNombre(d.contrato?.contratista?.nombre_completo) || '?'} (${d.mes})`)
+          semana.aportar(sup, seccion(
+            'devueltos',
+            'Devueltos sin corregir',
+            `${lista.length} informe${lista.length === 1 ? ' lleva' : 's llevan'} más de dos semanas devuelto${lista.length === 1 ? '' : 's'} sin corregir. Puede que no puedan hacerlo si el periodo ya venció y nadie les ha habilitado el envío tardío.`,
+            nombres,
+            `${lista.length} devuelto${lista.length === 1 ? '' : 's'} sin corregir`,
+          ))
+          resumen.r3_escalados++
+        }
       }
     }
   }
@@ -641,16 +528,9 @@ export async function GET(req: NextRequest) {
   //
   // Semanal, no diaria: son huecos administrativos que no cambian de un día
   // para otro, y repetirlos cada mañana es la forma más rápida de que dejen
-  // de leerse.
-  {
-    const hace7dExp = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
-    const { data: avisadosExp } = await admin
-      .from('notificaciones')
-      .select('usuario_id')
-      .eq('tipo', 'expediente_incompleto')
-      .gte('created_at', hace7dExp)
-    const yaAvisadosExp = new Set((avisadosExp ?? []).map(n => n.usuario_id as string))
-
+  // de leerse. Desde el 2-nov-2026 es una sección del resumen del lunes, no un
+  // correo propio.
+  if (lunes) {
     const { data: vigentesRaw } = await admin
       .from('contratos')
       .select('id, numero, cdp, crp, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo)')
@@ -690,43 +570,41 @@ export async function GET(req: NextRequest) {
       const faltaContrato = vigentes.filter(c => !cursados.has(c.id) && !conAdjunto.has(c.id))
 
       if (faltaCdpCrp.length || faltaContrato.length) {
-        const linea = (c: Vig) => `${c.numero} (${c.contratista?.nombre_completo ?? '?'})`
-        const partes: string[] = []
-        if (faltaCdpCrp.length) {
-          partes.push(`${faltaCdpCrp.length} sin CDP o CRP: ${faltaCdpCrp.slice(0, 8).map(linea).join(', ')}${faltaCdpCrp.length > 8 ? ` y ${faltaCdpCrp.length - 8} más` : ''}.`)
-        }
-        if (faltaContrato.length) {
-          partes.push(`${faltaContrato.length} van a pasar su primera cuenta sin el contrato en el expediente: ${faltaContrato.slice(0, 8).map(linea).join(', ')}${faltaContrato.length > 8 ? ` y ${faltaContrato.length - 8} más` : ''}.`)
-        }
-        const detalle = partes.join(' ')
+        const linea = (c: Vig) => `${c.numero} (${capitalizarNombre(c.contratista?.nombre_completo) || '?'})`
+        const items = [
+          ...faltaCdpCrp.map(c => `${linea(c)} · sin CDP o CRP`),
+          ...faltaContrato.map(c => `${linea(c)} · pasará su primera cuenta sin el contrato en el expediente`),
+        ]
+        const intro = [
+          faltaCdpCrp.length ? `${faltaCdpCrp.length} contrato${faltaCdpCrp.length === 1 ? '' : 's'} sin CDP o CRP` : '',
+          faltaContrato.length ? `${faltaContrato.length} van a pasar su primera cuenta sin el contrato firmado en el expediente` : '',
+        ].filter(Boolean).join('; ')
+        const sec = seccion(
+          'expediente',
+          'Documentación pendiente',
+          `${intro}. Conviene resolverlo antes de que se emitan las actas: un documento emitido no se reescribe.`,
+          items,
+          `${faltaCdpCrp.length + faltaContrato.length} con documentación pendiente`,
+        )
 
         const { data: gestores } = await admin
           .from('usuarios').select('id').in('rol', ['contratacion', 'admin']).eq('activo', true)
-
-        await Promise.allSettled(
-          (gestores ?? []).filter(u => !yaAvisadosExp.has(u.id as string)).map(async (u) => {
-            await enviarNotificacion({
-              destinatarioId: u.id as string,
-              tipo: 'expediente_incompleto',
-              titulo: 'Documentación pendiente en contratos vigentes',
-              mensaje: detalle,
-              detalle,
-            })
-            resumen.r4_expediente++
-          }),
-        )
+        for (const u of gestores ?? []) {
+          semana.aportar(u.id as string, sec)
+          resumen.r4_expediente++
+        }
       }
     }
   }
 
-  // ══ R7 — Contratos por vencer: UN resumen semanal (lunes) ═════
+  // ══ R7 — Contratos por vencer (sección del resumen semanal) ═════
   //
   // Antes salía un correo por contrato el día exacto de -60 y -30. Casi todos terminan a fin de año (36 el 31-dic, 31 el
   // 30-dic, 18 el 30-nov), así que el 31-oct y el 1-nov cada administrador recibió 85 correos iguales; en 30 días, 96 a
   // administración, 96 a contratación y 96 entre los cinco secretarios, cada uno con su aviso en la campana. Ahora, los
-  // lunes, cada persona recibe UN correo con la lista de lo que entró en la ventana de 60 o de 30 días (lib/vencimientos.ts),
-  // y solo si hay algo. Quien gestiona (administración, contratación) ve todos; un secretario, los suyos.
-  if (esLunes(iso)) {
+  // lunes, lo que entró en la ventana de 60 o de 30 días (lib/vencimientos.ts) viaja como una sección del resumen semanal (lib/resumen-semanal.ts):
+  // un solo correo por persona. Quien gestiona (administración, contratación) ve todos; un secretario, los suyos.
+  if (lunes) {
     const rango = rangoDeConsulta(iso)
     const { data: porVencer } = await admin
       .from('contratos')
@@ -759,33 +637,119 @@ export async function GET(req: NextRequest) {
         if (m) yaAvisados.add(`${m[1]}|${m[2]}`)
       }
 
-      // Nunca dos en 20 h al mismo destinatario: un reintento del cron no duplica.
-      const { data: recientes } = await admin
-        .from('notificaciones').select('usuario_id').eq('tipo', 'contratos_por_vencer')
-        .gte('created_at', new Date(Date.now() - 20 * 3600_000).toISOString())
-      const yaEsteLunes = new Set((recientes ?? []).map(n => n.usuario_id as string))
-
       const { data: personas } = await admin
         .from('usuarios').select('id, rol').in('rol', ['admin', 'contratacion', 'supervisor']).eq('activo', true)
 
-      await Promise.allSettled(
-        (personas ?? []).filter(u => !yaEsteLunes.has(u.id as string)).map(async (u) => {
-          const veTodos = u.rol === 'admin' || u.rol === 'contratacion'
-          const suyos = paraDestinatario(contratos, u.id as string, veTodos)
-          const datos = repartirVencimientos(suyos, iso, yaAvisados)
-          const total = totalVencimientos(datos)
-          if (!total) return
-          await enviarNotificacion({
-            destinatarioId: u.id as string,
-            tipo: 'contratos_por_vencer',
-            titulo: total === 1 ? '1 contrato por vencer' : `${total} contratos por vencer`,
-            mensaje: mensajeCampana(datos),
-            datos,
-          })
-          resumen.r7_vencimientos++
-        }),
-      )
+      for (const u of personas ?? []) {
+        const veTodos = u.rol === 'admin' || u.rol === 'contratacion'
+        const suyos = paraDestinatario(contratos, u.id as string, veTodos)
+        const datos = repartirVencimientos(suyos, iso, yaAvisados)
+        if (datos.en30.length + datos.en60.length === 0) continue
+        semana.aportarVencimientos(u.id as string, datos)
+        resumen.r7_vencimientos++
+      }
     }
+  }
+
+  // ══ Primerizos — contratistas sin su primer informe (sección del resumen, primer lunes del mes) ═════
+  //
+  // Antes era un correo propio al supervisor el día 2. «Tu informe venció» no puede ser el primer contacto de nadie:
+  // de los 95 que lo recibirían había 39 que nunca habían enviado un informe, y para ellos el periodo vencido está
+  // bloqueado y solo su supervisor lo abre (`habilitado_tardio`). Por eso se avisa a quien tiene la llave. Ahora va como
+  // sección del resumen del primer lunes entre el día 2 y el 8, que es una vez al mes como antes.
+  if (lunes && dia >= 2 && dia <= 8) {
+    const mesPrevioIdx = mesIdx === 0 ? 11 : mesIdx - 1
+    const anioPrevio = mesIdx === 0 ? anio - 1 : anio
+    const mesPrevio = MESES[mesPrevioIdx]
+    const { data: vencidos } = await admin
+      .from('periodos')
+      .select('id, mes, anio, contrato_id, contrato:contratos(numero, contratista_id, supervisor_id, estado, contratista:usuarios!contratos_contratista_id_fkey(nombre_completo))')
+      .eq('mes', mesPrevio)
+      .eq('anio', anioPrevio)
+      .eq('estado', 'borrador')
+      .eq('es_historico', false)
+      // A quien ya tiene la puerta abierta no hay nada que pedirle al supervisor.
+      .eq('habilitado_tardio', false)
+
+    type Vencido = {
+      id: string; mes: string; anio: number; contrato_id: string
+      contrato: { numero: string; contratista_id: string | null; supervisor_id: string | null; estado: string | null; contratista: { nombre_completo: string } | null } | null
+    }
+    const candidatos = ((vencidos ?? []) as unknown as Vencido[])
+      .filter(p => p.contrato?.contratista_id && p.contrato.supervisor_id && !contratoSuspendido(p.contrato.estado))
+
+    if (candidatos.length) {
+      const { data: enviadosAlguna } = await admin
+        .from('periodos').select('contrato_id')
+        .in('contrato_id', [...new Set(candidatos.map(p => p.contrato_id))])
+        .not('fecha_envio', 'is', null)
+      const conHistoria = new Set((enviadosAlguna ?? []).map(p => p.contrato_id as string))
+      const primerizos = candidatos.filter(p => !conHistoria.has(p.contrato_id))
+
+      const porSupervisor = new Map<string, Vencido[]>()
+      for (const p of primerizos) {
+        const sup = p.contrato!.supervisor_id!
+        porSupervisor.set(sup, [...(porSupervisor.get(sup) ?? []), p])
+      }
+      for (const [sup, lista] of porSupervisor) {
+        semana.aportar(sup, seccion(
+          'primerizos',
+          'Sin su primer informe',
+          `${lista.length} persona${lista.length === 1 ? ' a tu cargo no ha enviado' : 's a tu cargo no han enviado'} todavía su primer informe por Contratista Digital, y el periodo de ${mesPrevio} ya se cerró. Solo tú puedes habilitarles el envío tardío; conviene acompañarlo de una explicación de cómo se usa.`,
+          lista.map(p => `${capitalizarNombre(p.contrato?.contratista?.nombre_completo) || '?'} (contrato ${p.contrato!.numero})`),
+          `${lista.length} sin su primer informe`,
+        ))
+        resumen.r1_primerizos++
+      }
+    }
+  }
+
+  // ══ El resumen semanal: UN correo por persona ═════════════════
+  //
+  // Cada regla de arriba aportó su sección a quien le toca; aquí sale una sola notificación por persona, y solo a quien
+  // aportó algo. Nunca dos en 20 h al mismo destinatario: un reintento del cron no duplica. Los asesores reciben la
+  // campana pero no el correo (lib/notifications.ts: ROLES_SOLO_CAMPANA).
+  if (lunes && semana.personas().length) {
+    const { data: recientes } = await admin
+      .from('notificaciones').select('usuario_id').eq('tipo', 'resumen_semanal')
+      .gte('created_at', new Date(Date.now() - 20 * 3600_000).toISOString())
+    const yaEsteLunes = new Set((recientes ?? []).map(n => n.usuario_id as string))
+
+    await Promise.allSettled(
+      semana.personas().filter(id => !yaEsteLunes.has(id)).map(async (id) => {
+        const datos = semana.datosDe(id)
+        if (!datos) return
+        await enviar({
+          destinatarioId: id,
+          tipo: 'resumen_semanal',
+          titulo: tituloCampana(datos),
+          mensaje: mensajeCampana(datos),
+          datos,
+        })
+        resumen.resumen_semanal++
+      }),
+    )
+  }
+
+  if (ensayoSemana) {
+    const ids = [...new Set(simulados.map(p => p.destinatarioId))]
+    const { data: quienes } = ids.length
+      ? await admin.from('usuarios').select('id, rol, nombre_completo, email').in('id', ids)
+      : { data: [] as { id: string; rol: string; nombre_completo: string; email: string }[] }
+    const porId = new Map((quienes ?? []).map(u => [u.id as string, u]))
+    return NextResponse.json({
+      ensayo: true, fecha: iso, dia, esLunes: lunes, ...resumen,
+      nota: 'no se escribió ninguna notificación ni se envió ningún correo',
+      enviaria: simulados.map(p => {
+        const u = porId.get(p.destinatarioId)
+        const d = p.datos as { asunto?: string; secciones?: { clave: string }[]; vencimientos?: { en30: unknown[]; en60: unknown[] } | null } | undefined
+        return {
+          tipo: p.tipo, rol: u?.rol, para: u?.nombre_completo, correo: p.sinCorreo ? '(solo campana)' : u?.rol === 'asesor' ? '(solo campana: asesor)' : 'sí',
+          titulo: p.titulo, asunto: d?.asunto,
+          secciones: d?.secciones?.map(x => x.clave), vencimientos: d?.vencimientos ? d.vencimientos.en30.length + d.vencimientos.en60.length : undefined,
+        }
+      }),
+    })
   }
 
   return NextResponse.json({ ok: true, fecha: iso, dia, ...resumen })
@@ -836,7 +800,7 @@ async function ensayoRecordatorio(
     cuenta.set(k, (cuenta.get(k) ?? 0) + 1)
   }
 
-  const plantilla = EMAIL_TEMPLATES['recordatorio_semana_final']
+  const plantilla = EMAIL_TEMPLATES['recordatorio']
   const enviados: { imitando: string; conPasoDeFirma: boolean; ok: boolean }[] = []
 
   for (const p of muestras) {
@@ -857,7 +821,7 @@ async function ensayoRecordatorio(
       mes: p.mes,
       anio: p.anio,
       contrato: p.contrato!.numero,
-      detalle: `${avance} Ya estamos en la última semana del mes, así que este es un buen momento para ${enumerar(pasos)}.`,
+      detalle: detalleRecordatorio(avance, pasos),
     })
 
     const res = await enviarCorreo({ to: destino, subject: `[ENSAYO] ${subject}`, html })

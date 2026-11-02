@@ -6,6 +6,7 @@
 import { ORIGEN_APP } from '@/lib/dominio'
 import { MARCA } from '@/lib/marca'
 import type { DatosVencimientos, FilaVencimiento } from '@/lib/vencimientos'
+import type { DatosResumenSemana } from '@/lib/resumen-semanal'
 
 interface TemplateData {
   nombreDestinatario: string
@@ -220,9 +221,11 @@ export function emailRecordatorioInforme(data: TemplateData) {
          Te recordamos que aún no has enviado tu informe de actividades de
          <strong>${data.mes} ${data.anio}</strong> para el contrato <strong>${data.contrato}</strong>.
        </p>
-       <p style="color:#333;font-size:14px;line-height:1.6;">
+       ${data.detalle
+         ? `<p style="color:#333;font-size:14px;line-height:1.6;">${data.detalle}</p>`
+         : `<p style="color:#333;font-size:14px;line-height:1.6;">
          Ingresa a Contratista Digital, registra tus actividades y envía tu informe a tiempo.
-       </p>`,
+       </p>`}`,
       '#d97706'
     ),
   }
@@ -399,6 +402,56 @@ export function emailContratosPorVencer(data: TemplateData) {
        <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:24px 0 0;">
          Te escribimos una vez por semana y solo cuando hay contratos nuevos en esa situación; no repetimos los que ya te
          avisamos. La fecha es la pactada en el contrato.
+       </p>`,
+      '#192031',
+    ),
+  }
+}
+
+/**
+ * El resumen semanal de gestión (lunes): el único correo recurrente que reciben secretarios, administración y
+ * contratación. Junta lo que antes llegaba en correos sueltos: el estado de la bandeja, los informes devueltos sin
+ * corregir, los contratistas sin su primer informe, el expediente incompleto y los contratos por vencer.
+ * Cada persona ve solo las secciones que le tocan y solo las que tienen algo. Ver lib/resumen-semanal.ts.
+ */
+export function emailResumenSemanal(data: TemplateData) {
+  const d = data.datos as DatosResumenSemana | undefined
+  if (!d || (!d.secciones.length && !d.vencimientos)) {
+    return {
+      subject: 'Resumen semanal',
+      html: baseHtml('Resumen semanal', `<p style="color:#333;font-size:14px;">${esc(data.detalle ?? '')}</p>`, '#192031'),
+    }
+  }
+
+  const secciones = d.secciones.map(sec => {
+    const filas = sec.items.length ? lista(sec.items.map(t => esc(t)), '') : ''
+    const mas = sec.restantes > 0
+      ? `<p style="color:#64748b;font-size:12px;margin:8px 0 0;">y ${sec.restantes} más. Los ves completos en <a href="${APP_URL}dashboard" style="color:#192031;">Contratista Digital</a>.</p>`
+      : ''
+    return seccion(sec.titulo, `<p style="color:#334155;font-size:13px;line-height:1.6;margin:0 0 6px;">${esc(sec.intro)}</p>${filas}${mas}`)
+  }).join('')
+
+  const venc = d.vencimientos
+    ? seccion(
+        'Contratos por vencer',
+        `<p style="color:#334155;font-size:13px;line-height:1.6;margin:0 0 6px;">Si alguno continuará, es momento de tramitar la prórroga u otrosí para no interrumpir la ejecución.</p>` +
+        (d.vencimientos.en30.length ? `<p style="color:#192031;font-size:12px;font-weight:700;margin:12px 0 0;">Vencen en 30 días o menos (${d.vencimientos.en30.length})</p>${tablaVencimientos(d.vencimientos.en30)}` : '') +
+        (d.vencimientos.en60.length ? `<p style="color:#192031;font-size:12px;font-weight:700;margin:12px 0 0;">Vencen en unos 60 días (${d.vencimientos.en60.length})</p>${tablaVencimientos(d.vencimientos.en60)}` : ''),
+      )
+    : ''
+
+  return {
+    subject: d.asunto,
+    html: baseHtml(
+      'Resumen de la semana',
+      `<p style="color:#333;font-size:14px;line-height:1.6;margin:0 0 4px;">Hola ${esc(data.nombreDestinatario)},</p>
+       <p style="color:#334155;font-size:14px;line-height:1.6;margin:0;">
+         Esto es lo que hay pendiente esta semana. Es el único correo que te enviamos con esta información.
+       </p>
+       ${secciones}
+       ${venc}
+       <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin:24px 0 0;">
+         Te escribimos una vez por semana, los lunes, y solo cuando hay algo pendiente.
        </p>`,
       '#192031',
     ),
@@ -1018,6 +1071,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   primer_informe_pendiente: emailPrimerInformePendiente,
   contrato_vencimiento: emailContratoVencimiento,
   contratos_por_vencer: emailContratosPorVencer,
+  resumen_semanal: emailResumenSemanal,
   contrato_terminado: emailContratoTerminado,
   contrato_terminacion_revertida: emailTerminacionRevertida,
   contrato_suspension: emailContratoSuspension,
