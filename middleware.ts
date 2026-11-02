@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { ORIGEN_APP, HOSTS_REDIRIGIDOS, HOSTS_COMERCIALES, esRutaComercial } from '@/lib/dominio'
 import { SITIO } from '@/lib/seo'
-import { necesitaRenovacion } from '@/lib/jwt-cookie'
+import { necesitaRenovacion, tokenPideCambiarClave } from '@/lib/jwt-cookie'
 import { debeIrAlLogin } from '@/lib/navegacion'
 
 /**
@@ -126,6 +126,24 @@ export async function middleware(request: NextRequest) {
       return conDirectivas(res)
     }
     return conDirectivas(NextResponse.next({ request }))
+  }
+
+  // ── Cambio de contraseña obligatorio ─────────────────────────
+  //
+  // Una cuenta que todavía tiene la contraseña inicial (su cédula) no entra al panel hasta elegir una propia
+  // (lib/clave-inicial.ts). La bandera viaja en el token y se lee sin red. Solo las lecturas (GET) de la aplicación —
+  // tanto la carga de una página como la navegación interna, que pide la página con la cabecera RSC—: una acción de una
+  // pestaña abierta (POST) sigue su curso. /cambiar-clave, el login, /auth y /api quedan fuera para que nunca haya un
+  // bucle. Los prefetch ya salieron arriba, antes de llegar aquí.
+  if ((pathname === '/' || pathname === '/dashboard' || pathname.startsWith('/dashboard/'))
+      && request.method === 'GET'
+      && tokenPideCambiarClave(request.cookies.getAll())) {
+    const destino = request.nextUrl.clone()
+    destino.pathname = '/cambiar-clave'
+    destino.search = ''
+    const res = NextResponse.redirect(destino)
+    res.headers.set('Cache-Control', 'no-store')
+    return conDirectivas(res)
   }
 
   // ── Atajo: no renovar lo que todavía no vence ────────────────

@@ -6,6 +6,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { normalizeName } from '@/lib/format'
 import { numerosALetras } from '@/lib/numero-letras'
 import type { ActionResult } from '@/lib/types'
+import { APP_METADATA_CLAVE_INICIAL } from '@/lib/clave-inicial'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -355,6 +356,7 @@ export async function confirmarImportacion(
           password: fila.cedula,
           email_confirm: true,
           user_metadata: { nombre_completo: fila.nombre_contratista },
+          app_metadata: APP_METADATA_CLAVE_INICIAL,
         })
 
         if (authError || !authData?.user) {

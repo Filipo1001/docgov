@@ -21,6 +21,7 @@ import type { ActionResult } from '@/lib/types'
 import { ESTADOS_CONTRATO, type EstadoContrato } from '@/lib/estado-contrato'
 import { MAX_PLAZO_DIAS, diasDelPlazo, mesesDelPlazo, plazoValido } from '@/lib/plazo-contrato'
 import { ESTADOS_NO_PRESENTADOS, informePresentado } from '@/lib/constants'
+import { APP_METADATA_CLAVE_INICIAL } from '@/lib/clave-inicial'
 
 const ERROR_DE_FECHAS = 'La fecha de terminación no puede ser anterior a la de inicio. Revisa las dos fechas.'
 const ERROR_DE_PLAZO = `El plazo debe ser un número entero de días, entre 1 y ${MAX_PLAZO_DIAS.toLocaleString('es-CO')}.`
@@ -206,6 +207,7 @@ export async function crearContratoConContratista(
         password: passwordInicial,
         email_confirm: true,
         user_metadata: { nombre_completo: nombre },
+        app_metadata: APP_METADATA_CLAVE_INICIAL,
       })
       if (authError || !authData?.user) {
         return { error: authError?.message ?? 'Error creando la cuenta del contratista' }
