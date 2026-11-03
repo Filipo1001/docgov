@@ -1,28 +1,25 @@
+import EsqueletoInformes from './EsqueletoInformes'
+
 /**
- * Shown by Next.js App Router while the informes server component streams —
- * mainly during requireRole + server-side data fetch.
- * Renders inside the already-mounted dashboard shell (sidebar stays visible).
+ * Lo que muestra Next mientras el servidor arma /dashboard/informes (sesión y datos del mes). Se dibuja dentro del panel ya
+ * montado, así que el menú lateral sigue a la vista. Es la misma forma que la pantalla real (ver EsqueletoInformes.tsx),
+ * con su cabecera: el título y los botones de mes ya están en su sitio cuando llegan los datos.
  */
 export default function InformesLoading() {
   return (
-    <div className="space-y-4 animate-pulse max-w-4xl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="h-8 bg-gray-200 rounded-xl w-48" />
-        <div className="h-9 bg-gray-200 rounded-xl w-32" />
+    <div className="max-w-5xl">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" aria-hidden="true">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Informes</h1>
+          <div className="sk mt-2 h-3.5 w-56 rounded-md" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="sk h-9 w-9 rounded-lg" />
+          <div className="sk h-9 w-32 rounded-xl" />
+          <div className="sk h-9 w-9 rounded-lg" />
+        </div>
       </div>
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-20 bg-gray-200 rounded-2xl" />
-        ))}
-      </div>
-      {/* Filter tabs */}
-      <div className="h-10 bg-gray-200 rounded-xl w-full" />
-      {/* Period cards */}
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="h-24 bg-gray-200 rounded-2xl" />
-      ))}
+      <EsqueletoInformes etiqueta="Cargando los informes" />
     </div>
   )
 }

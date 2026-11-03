@@ -32,6 +32,7 @@ import FilterTabs from '@/components/ui/FilterTabs'
 import EmptyState from '@/components/ui/EmptyState'
 import ErrorState from '@/components/ui/ErrorState'
 import InformesLoading from './loading'
+import EsqueletoInformes from './EsqueletoInformes'
 import SearchInput from '@/components/ui/SearchInput'
 import { Iconos } from '@/lib/iconos'
 
@@ -817,17 +818,12 @@ export default function InformesPage({
         }
       />
 
-      {/* Estado de la carga del mes: siempre a la vista bajo los botones de mes, nunca un «Cargando…» suelto. */}
-      {mostrandoMesAnterior && (
+      {/* Si la carga del mes pasa de unos segundos se dice, con salida: nunca una espera muda. El esqueleto de abajo ya
+          indica que algo carga; esto solo aparece cuando tarda más de lo normal. */}
+      {tardando && (
         <div role="status" aria-live="polite" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm text-gray-700">
-          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700 motion-reduce:animate-none" aria-hidden="true" />
-          <span>Cargando {mesNombre.toLowerCase()} de {anio}…</span>
-          {tardando && (
-            <>
-              <span className="text-gray-600">Está tardando más de lo normal.</span>
-              <button onClick={reintentarMes} className="font-medium text-gray-900 underline underline-offset-2 hover:text-gray-700">Reintentar</button>
-            </>
-          )}
+          <span>Cargando {mesNombre.toLowerCase()} de {anio} está tardando más de lo normal.</span>
+          <button onClick={reintentarMes} className="font-medium text-gray-900 underline underline-offset-2 hover:text-gray-700">Reintentar</button>
         </div>
       )}
       {isError && !mostrandoMesAnterior && delMes && (
@@ -837,8 +833,12 @@ export default function InformesPage({
         </div>
       )}
 
-      <div aria-busy={mostrandoMesAnterior} className={mostrandoMesAnterior ? 'pointer-events-none select-none opacity-50 transition-opacity' : 'transition-opacity'}>
-
+      {/* Mientras llega el mes (la primera vez o al cambiar de mes) se dibuja la pantalla sin datos, con la misma forma que la
+          real; así no se ven las cifras de otro mes bajo el nombre del mes nuevo ni salta el contenido al llegar. */}
+      {(isLoading || mostrandoMesAnterior) && !(isError && !delMes) ? (
+        <EsqueletoInformes etiqueta={`Cargando los informes de ${mesNombre.toLowerCase()} de ${anio}`} />
+      ) : (
+      <>
       {/* Stats bar */}
       {periodos.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1170,10 +1170,6 @@ export default function InformesPage({
           onReintentar={reintentarMes}
           reintentando={isFetching}
         />
-      ) : isLoading ? (
-        <div className="space-y-4 animate-pulse" role="status" aria-label={`Cargando ${mesNombre.toLowerCase()} de ${anio}`}>
-          {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-200 rounded-2xl" />)}
-        </div>
       ) : periodosVisibles.length === 0 ? (
         <Card>
           <EmptyState
@@ -1197,7 +1193,8 @@ export default function InformesPage({
           ))}
         </div>
       )}
-      </div>
+      </>
+      )}
     </div>
   )
 }

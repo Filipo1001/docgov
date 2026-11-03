@@ -36,6 +36,26 @@ button, a, [role="button"], label[for], input[type="checkbox"], input[type="radi
   touch-action: manipulation;
 }
 
+/* Esqueletos de carga (ver app/dashboard/informes/EsqueletoInformes.tsx).
+   `.sk` es una pieza gris con un brillo suave que pasa de izquierda a derecha: dice «esto se está cargando» sin gritar.
+   El gris es el color BASE de la pieza; el brillo es solo un añadido: si la animación no corre (pestaña en segundo plano,
+   ahorro de energía) el esqueleto se ve igual, quieto. Tampoco hay entrada con opacidad: un esqueleto que empezara en
+   transparente y dependiera de una animación para aparecer quedaría invisible justo cuando la animación se detiene.
+   Con «reducir movimiento» el brillo se quita. */
+@keyframes sk-brillo {
+  from { background-position: 150% 0; }
+  to   { background-position: -50% 0; }
+}
+.sk {
+  background-color: rgba(17, 24, 39, 0.07);
+  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.65) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: sk-brillo 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk { animation: none; background-image: none; }
+}
+
 /* Upload overlay entry animations */
 @keyframes overlay-fade-in {
   from { opacity: 0; }
