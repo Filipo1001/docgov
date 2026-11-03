@@ -120,8 +120,8 @@ export default function InformesPage({
   const now = new Date()
   const [mesIdx, setMesIdx] = useState(now.getMonth())
   const [anio, setAnio] = useState(now.getFullYear())
-  // Abre en «Por revisar»: es lo que la secretaría tiene que atender.
-  const [filtro, setFiltro] = useState<Filtro>('por_revisar')
+  // Abre en «Todos»: el mes completo de un vistazo; las pestañas acotan.
+  const [filtro, setFiltro] = useState<Filtro>('todos')
   const [busqueda, setBusqueda] = useState('')
   // Filtros para quien ve TODO el municipio. El supervisor no los necesita:
   // la base ya lo acota a sus contratos (periodos_supervisor_read), igual que
@@ -270,7 +270,7 @@ export default function InformesPage({
   // tiene borradores), la vista parezca vacía aunque sí haya informes.
   useEffect(() => {
     setRecordatoriosEnviados(false)
-    setFiltro('por_revisar')
+    setFiltro('todos')
     // Los acotamientos también se resetean: una dependencia que existía en
     // un mes puede no tener nada en otro, y la lista quedaría vacía sin que
     // se vea por qué.
@@ -612,12 +612,13 @@ export default function InformesPage({
           <div className="-mx-1 overflow-x-auto px-1 lg:ml-auto lg:overflow-visible">
             <FilterTabs<Filtro>
               options={[
+                // El orden sigue el camino de un informe: lo que pide algo primero, lo cerrado y lo que falta al final.
+                { key: 'todos', label: 'Todos', count: periodos.length },
                 { key: 'por_revisar', label: 'Por revisar', count: porRevisar.length },
+                { key: 'devueltos', label: 'Devueltos', count: devueltos.length },
                 { key: 'aprobados', label: 'Aprobados', count: aprobadosPorRadicar.length },
                 { key: 'radicados', label: 'Radicados', count: radicados.length },
-                { key: 'devueltos', label: 'Devueltos', count: devueltos.length },
                 { key: 'sin_enviar', label: 'Sin enviar', count: periodosBorrador.length },
-                { key: 'todos', label: 'Todos', count: periodos.length },
               ]}
               value={filtro}
               onChange={setFiltro}

@@ -43,7 +43,7 @@ export default function EsqueletoInformes({ etiqueta }: { etiqueta: string }) {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="sk h-[42px] w-full max-w-md shrink-0 rounded-xl lg:flex-1" />
             <div className="flex gap-2 overflow-hidden lg:ml-auto">
-              {[104, 92, 92, 92, 96, 64].map((w, i) => <div key={i} className="sk h-9 shrink-0 rounded-lg" style={{ width: w }} />)}
+              {[64, 104, 96, 92, 92, 92].map((w, i) => <div key={i} className="sk h-9 shrink-0 rounded-lg" style={{ width: w }} />)}
             </div>
           </div>
         </div>
