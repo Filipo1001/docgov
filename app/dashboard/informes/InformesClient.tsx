@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { invalidarPeriodos } from '@/lib/invalidar-periodos'
@@ -106,6 +106,8 @@ interface InformesProps {
   initialAnio: number
   /** Server-side timestamp used as initialDataUpdatedAt for TanStack Query */
   ssrTimestamp: number
+  /** Abrió en el mes anterior porque todavía tiene informes por revisar o por radicar (ver `mesDeApertura`). */
+  abiertoEnAnterior?: boolean
 }
 
 export default function InformesPage({
@@ -114,16 +116,22 @@ export default function InformesPage({
   initialMes,
   initialAnio,
   ssrTimestamp,
+  abiertoEnAnterior = false,
 }: InformesProps) {
   const { usuario, cargando: cargandoUser } = useUsuario()
   const queryClient = useQueryClient()
 
   // Month navigation — starts on the SSR-fetched month so the initial data matches
   const now = new Date()
-  const [mesIdx, setMesIdx] = useState(now.getMonth())
-  const [anio, setAnio] = useState(now.getFullYear())
-  // Abre en «Por revisar»: es lo que la secretaría tiene que atender.
-  const [filtro, setFiltro] = useState<Filtro>('por_revisar')
+  const [mesIdx, setMesIdx] = useState(() => Math.max(0, MESES.indexOf(initialMes as (typeof MESES)[number])))
+  const [anio, setAnio] = useState(initialAnio)
+  // Abre en «Por revisar», que es lo que la secretaría tiene que atender; si no hay nada por revisar pero sí aprobados por
+  // radicar, abre en «Aprobados» (no en una pestaña vacía).
+  const [filtro, setFiltro] = useState<Filtro>(() =>
+    initialPeriodos.some(p => !p.es_historico && (p.estado === 'enviado' || p.estado === 'revision'))
+      ? 'por_revisar'
+      : initialPeriodos.some(p => !p.es_historico && p.estado === 'aprobado') ? 'aprobados' : 'por_revisar',
+  )
   const [busqueda, setBusqueda] = useState('')
   // Filtros para quien ve TODO el municipio. El supervisor no los necesita:
   // la base ya lo acota a sus contratos (periodos_supervisor_read), igual que
@@ -271,7 +279,10 @@ export default function InformesPage({
   // Resetear a "todos" evita que, al navegar a un mes sin registros en la
   // pestaña activa (p. ej. quedaste en "Aprobados" y vas a un mes que solo
   // tiene borradores), la vista parezca vacía aunque sí haya informes.
+  // Al montar no: el mes y la pestaña de apertura ya vienen elegidos.
+  const montado = useRef(false)
   useEffect(() => {
+    if (!montado.current) { montado.current = true; return }
     setRecordatoriosEnviados(false)
     setFiltro('por_revisar')
     // Los acotamientos también se resetean: una dependencia que existía en
@@ -581,6 +592,19 @@ export default function InformesPage({
           </div>
         }
       />
+
+      {/* Abrió en el mes anterior porque aún tiene trabajo: se dice, con el atajo al mes en curso. */}
+      {abiertoEnAnterior && mesNombre === initialMes && anio === initialAnio && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
+          <Icono glifo={Iconos.estado.informacion} tamano="sm" className="shrink-0 text-blue-700" />
+          <p className="min-w-0 flex-1">
+            Abrimos en <strong>{mesNombre.toLowerCase()}</strong> porque todavía tiene informes por revisar o por radicar.
+          </p>
+          <button type="button" onClick={irAMesActual} className="font-semibold text-blue-800 underline-offset-2 hover:underline">
+            Ir a {MESES[now.getMonth()].toLowerCase()}
+          </button>
+        </div>
+      )}
 
       {/* Si la carga del mes pasa de unos segundos se dice, con salida: nunca una espera muda. El esqueleto de abajo ya
           indica que algo carga; esto solo aparece cuando tarda más de lo normal. */}

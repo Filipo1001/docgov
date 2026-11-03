@@ -65,6 +65,21 @@ export function contarDevoluciones(p: Periodo): number {
   return (p.devoluciones ?? []).filter(h => h.estado_nuevo === 'rechazado').length
 }
 
+/** Lo que todavía pide algo de quien revisa: por revisar (enviado, en revisión) o aprobado sin radicar. */
+export function pendienteDeRevisar(p: Periodo): boolean {
+  return !p.es_historico && (p.estado === 'enviado' || p.estado === 'revision' || p.estado === 'aprobado')
+}
+
+/**
+ * En qué mes abre /dashboard/informes. Los informes de un mes llegan a comienzos del siguiente: el 3 de noviembre, el
+ * trabajo está en octubre y noviembre casi vacío. Por eso abre en el mes ANTERIOR mientras ese mes tenga algo pendiente
+ * (por revisar o por radicar) para quien mira; cuando queda al día, abre en el mes en curso. Se ajusta solo, sin fechas.
+ */
+export function mesDeApertura(hoy: Date, anteriorTienePendientes: boolean): { mesIdx: number; anio: number; esAnterior: boolean } {
+  const actual = { mesIdx: hoy.getMonth(), anio: hoy.getFullYear() }
+  return anteriorTienePendientes ? { ...mesVecino(actual.mesIdx, actual.anio, -1), esAnterior: true } : { ...actual, esAnterior: false }
+}
+
 /** El mes y el año a `delta` meses del dado (mesIdx 0 = enero). */
 export function mesVecino(mesIdx: number, anio: number, delta: number): { mesIdx: number; anio: number } {
   const total = anio * 12 + mesIdx + delta

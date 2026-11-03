@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mesVecino, separarInformesDelMes } from '@/lib/informes-mes'
+import { mesDeApertura, mesVecino, pendienteDeRevisar, separarInformesDelMes } from '@/lib/informes-mes'
 import type { Periodo } from '@/lib/types'
 
 const p = (id: string, estado: string, extra: Record<string, unknown> = {}) =>
@@ -49,4 +49,20 @@ test('el mes vecino cruza el año hacia atrás y hacia adelante', () => {
   assert.deepEqual(mesVecino(0, 2026, -1), { mesIdx: 11, anio: 2025 })
   assert.deepEqual(mesVecino(11, 2026, 1), { mesIdx: 0, anio: 2027 })
   assert.deepEqual(mesVecino(5, 2026, 0), { mesIdx: 5, anio: 2026 })
+})
+
+test('abre en el mes anterior mientras tenga algo por revisar o por radicar; si está al día, en el mes en curso', () => {
+  const hoy = new Date(2026, 10, 3) // 3 de noviembre
+  assert.deepEqual(mesDeApertura(hoy, true), { mesIdx: 9, anio: 2026, esAnterior: true })
+  assert.deepEqual(mesDeApertura(hoy, false), { mesIdx: 10, anio: 2026, esAnterior: false })
+  // En enero, el anterior es diciembre del año pasado.
+  assert.deepEqual(mesDeApertura(new Date(2027, 0, 5), true), { mesIdx: 11, anio: 2026, esAnterior: true })
+})
+
+test('pendiente es lo enviado, en revisión o aprobado sin radicar; nunca lo histórico, radicado, devuelto o borrador', () => {
+  assert.deepEqual(
+    ['enviado', 'revision', 'aprobado', 'radicado', 'rechazado', 'borrador'].map(e => pendienteDeRevisar(p('x', e))),
+    [true, true, true, false, false, false],
+  )
+  assert.equal(pendienteDeRevisar(p('h', 'aprobado', { es_historico: true })), false)
 })
