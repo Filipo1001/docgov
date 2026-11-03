@@ -195,6 +195,8 @@ export interface Periodo {
   // Pre-approvals (joined)
   preaprobaciones?: Preaprobacion[]
   historial?: HistorialPeriodo[]
+  /** Solo el estado de cada paso del historial: con esto /dashboard/informes cuenta las devoluciones. */
+  devoluciones?: { estado_nuevo: EstadoPeriodo | null }[]
   // Historical immutability
   es_historico: boolean
   historico_marcado_por: string | null

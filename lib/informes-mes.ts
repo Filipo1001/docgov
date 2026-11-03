@@ -9,7 +9,10 @@
 import { informePresentado } from '@/lib/constants'
 import type { Periodo } from '@/lib/types'
 
-/** Lo que se lee de cada periodo del mes, con su contrato, las personas y las preaprobaciones. */
+/**
+ * Lo que se lee de cada periodo del mes, con su contrato, las personas y las preaprobaciones. `devoluciones` trae solo el
+ * estado de cada paso del historial: la tarjeta cuenta cuántas veces se devolvió (`contarDevoluciones`).
+ */
 export const SELECT_INFORMES_MES = `
   *,
   contrato:contratos(
@@ -18,7 +21,8 @@ export const SELECT_INFORMES_MES = `
     supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
     dependencia:dependencias(nombre, abreviatura)
   ),
-  preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo))
+  preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo)),
+  devoluciones:historial_periodos(estado_nuevo)
 `
 
 export interface InformesDelMes {
@@ -54,6 +58,11 @@ export function separarInformesDelMes(filas: Periodo[], dependenciaId?: string):
     .sort((a, b) => (a.contrato_id ?? '').localeCompare(b.contrato_id ?? ''))
 
   return { periodos, borradores }
+}
+
+/** Cuántas veces se devolvió un informe al contratista, según su historial. */
+export function contarDevoluciones(p: Periodo): number {
+  return (p.devoluciones ?? []).filter(h => h.estado_nuevo === 'rechazado').length
 }
 
 /** El mes y el año a `delta` meses del dado (mesIdx 0 = enero). */

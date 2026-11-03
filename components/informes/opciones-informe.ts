@@ -4,6 +4,7 @@
  * La idea: que quien revisa no tenga que salir de /dashboard/informes.
  *   · siempre: ver el informe de actividades (vista previa del documento, ahí mismo), el contrato y el historial (en una
  *     ventana);
+ *   · si hay planilla: verla en una ventana (y aprobarla o devolverla);
  *   · aprobado: radicar (pide el número de radicado);
  *   · aprobado o radicado: descargar documentos, una lista con cada uno (antes de aprobar no hay actas que descargar);
  *   · por revisar: devolver (pide un motivo);
@@ -21,6 +22,7 @@ export interface AccionesInforme {
   mesCerrado: boolean
   onVerInforme: () => void
   onHistorial: () => void
+  onVerPlanilla?: () => void
   onRadicar?: () => void
   onDevolver?: () => void
   onRecordar?: () => void
@@ -46,6 +48,9 @@ export function opcionesDeInforme(estado: EstadoTarjeta, a: AccionesInforme): Op
   const lista: OpcionMenu[] = [
     { id: 'informe', etiqueta: 'Ver informe de actividades', icono: Iconos.accion.ver, onSelect: a.onVerInforme },
   ]
+  if (a.onVerPlanilla) {
+    lista.push({ id: 'planilla', etiqueta: 'Ver planilla', icono: Iconos.documentos.planilla, onSelect: a.onVerPlanilla })
+  }
   if (estado === 'aprobado' && a.onRadicar) {
     lista.push({ id: 'radicar', etiqueta: 'Radicar', icono: Iconos.estado.aprobado, onSelect: a.onRadicar })
   }

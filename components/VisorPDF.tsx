@@ -16,7 +16,7 @@
  * descarga cuando el usuario abre un documento por primera vez.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 interface Props {
   url: string
@@ -24,6 +24,10 @@ interface Props {
   onClose: () => void
   /** El aviso mientras llega el documento. Un informe con muchas evidencias tarda unos segundos en armarse la primera vez. */
   mensajeCarga?: string
+  /** Una línea bajo el nombre (por ejemplo, «3 de 8 por revisar»). */
+  subtitulo?: string
+  /** Una barra de acciones abajo (la revisión desde /dashboard/informes: anterior, siguiente, aprobar, devolver). */
+  pie?: ReactNode
 }
 
 /**
@@ -37,7 +41,7 @@ interface Props {
 const ANCHO_MIN = 900
 const ANCHO_MAX = 1600
 
-export default function VisorPDF({ url, nombre, onClose, mensajeCarga }: Props) {
+export default function VisorPDF({ url, nombre, onClose, mensajeCarga, subtitulo, pie }: Props) {
   const areaRef = useRef<HTMLDivElement>(null)
   const contenedorRef = useRef<HTMLDivElement>(null)
   const [estado, setEstado] = useState<'cargando' | 'listo' | 'error'>('cargando')
@@ -153,9 +157,11 @@ export default function VisorPDF({ url, nombre, onClose, mensajeCarga }: Props) 
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{nombre}</p>
-          {paginas > 0 && (
+          {(paginas > 0 || subtitulo) && (
             <p className="text-[11px] text-white/50">
-              {paginas} {paginas === 1 ? 'página' : 'páginas'}
+              {subtitulo}
+              {subtitulo && paginas > 0 && ' · '}
+              {paginas > 0 && `${paginas} ${paginas === 1 ? 'página' : 'páginas'}`}
             </p>
           )}
         </div>
@@ -219,6 +225,15 @@ export default function VisorPDF({ url, nombre, onClose, mensajeCarga }: Props) 
           </div>
         )}
       </div>
+
+      {pie && (
+        <div
+          className="shrink-0 border-t border-white/10 bg-gray-900 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] text-white sm:px-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {pie}
+        </div>
+      )}
     </div>
   )
 }

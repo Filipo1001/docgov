@@ -11,7 +11,8 @@
  *   4. En el pie, el estado como texto con su icono (sin óvalos): «Por revisar · hace 3 días», «Aprobado · falta
  *      radicar», «Devuelto» con su motivo. Lo radicado muestra su número: «N.º 02228».
  * Arriba, un velo suave del color del estado: se distingue de lejos qué tarjeta pide qué, sin una etiqueta más.
- *   5. La planilla, solo cuando hay algo que hacer con ella.
+ *   5. La planilla, solo cuando hay algo que hacer con ella; tocarla la abre en una ventana.
+ *   6. Si ya se devolvió antes, se avisa: «Ya se devolvió 1 vez» al revisarlo de nuevo, «2.ª devolución» si vuelve.
  * Arriba a la derecha, los tres puntos con las opciones que cambian según el estado (ver `opcionesDeInforme`). Aprobar es
  * la única acción a la vista; devolver, que pide un motivo, va en el menú. Toda la tarjeta lleva al informe completo.
  */
@@ -43,6 +44,8 @@ export interface DatosTarjetaInforme {
   motivo: string | null
   /** Solo cuando la planilla pide atención. */
   planilla: 'pendiente' | 'devuelta' | null
+  /** Cuántas veces se devolvió al contratista. */
+  devoluciones: number
 }
 
 function hace(dias: number | null): string {
@@ -76,6 +79,7 @@ export default function TarjetaInforme({
   onAprobar,
   aprobando = false,
   onCopiarRadicado,
+  onVerPlanilla,
 }: {
   datos: DatosTarjetaInforme
   /** El informe completo. */
@@ -87,6 +91,8 @@ export default function TarjetaInforme({
   aprobando?: boolean
   /** Copia el número de radicado; devuelve si se pudo. */
   onCopiarRadicado?: (numero: string) => Promise<boolean>
+  /** Abre la planilla en una ventana (tocando su aviso). */
+  onVerPlanilla?: () => void
 }) {
   const [copiado, setCopiado] = useState(false)
   const nombre = capitalizarNombre(datos.nombre) || 'Sin nombre'
@@ -151,11 +157,26 @@ export default function TarjetaInforme({
           </span>
         )}
 
+        {datos.estado === 'por_revisar' && datos.devoluciones > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700">
+            <Icono glifo={Iconos.accion.devolver} tamano="sm" />
+            Ya se devolvió {datos.devoluciones === 1 ? '1 vez' : `${datos.devoluciones} veces`}
+          </span>
+        )}
+        {datos.estado === 'devuelto' && datos.devoluciones > 1 && (
+          <span className="text-xs font-medium text-red-700">{datos.devoluciones}.ª devolución</span>
+        )}
+
         {datos.planilla && (
-          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${datos.planilla === 'devuelta' ? 'text-red-700' : 'text-amber-800'}`}>
+          <button
+            type="button"
+            onClick={onVerPlanilla}
+            disabled={!onVerPlanilla}
+            className={`pointer-events-auto relative z-10 -mx-1 inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 disabled:pointer-events-none ${datos.planilla === 'devuelta' ? 'text-red-700' : 'text-amber-800'}`}
+          >
             <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${datos.planilla === 'devuelta' ? 'bg-red-500' : 'bg-amber-500'}`} />
             {datos.planilla === 'devuelta' ? 'Planilla devuelta' : 'Planilla por revisar'}
-          </span>
+          </button>
         )}
 
         {datos.estado === 'por_revisar' && onAprobar && (
