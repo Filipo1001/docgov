@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { MESES, informePresentado } from '@/lib/constants'
+import { MESES } from '@/lib/constants'
+import { SELECT_INFORMES_MES, separarInformesDelMes } from '@/lib/informes-mes'
 import InformesClient from './InformesClient'
 import type { Periodo } from '@/lib/types'
 
@@ -23,44 +24,16 @@ export default async function InformesPage() {
 
   const supabase = await createServerSupabaseClient()
 
-  const selectPeriodos = `
-    *,
-    contrato:contratos(
-      id, numero, objeto, contratista_id, supervisor_id, dependencia_id,
-      contratista:usuarios!contratos_contratista_id_fkey(id, nombre_completo, cedula, foto_url),
-      supervisor:usuarios!contratos_supervisor_id_fkey(id, nombre_completo),
-      dependencia:dependencias(nombre, abreviatura)
-    ),
-    preaprobaciones(id, asesor_id, created_at, asesor:usuarios!preaprobaciones_asesor_id_fkey(id, nombre_completo))
-  `
+  // UNA consulta del mes y el mismo reparto que usa el cambio de mes (lib/informes-mes.ts): lo que se ve al abrir y lo que se
+  // ve al volver a este mes son siempre lo mismo.
+  const { data: filas } = await supabase
+    .from('periodos')
+    .select(SELECT_INFORMES_MES)
+    .eq('mes', mes)
+    .eq('anio', anio)
+    .order('fecha_envio', { ascending: true })
 
-  const [{ data: rawPeriodos }, { data: rawBorradores }] = await Promise.all([
-    supabase
-      .from('periodos')
-      .select(selectPeriodos)
-      .eq('mes', mes)
-      .eq('anio', anio)
-      .order('fecha_envio', { ascending: true }),
-
-    supabase
-      .from('periodos')
-      .select(selectPeriodos)
-      .eq('mes', mes)
-      .eq('anio', anio)
-      .eq('estado', 'borrador')
-      .eq('es_historico', false)
-      .order('contrato_id'),
-  ])
-
-  let periodos = ((rawPeriodos ?? []) as Periodo[]).filter(
-    p => informePresentado(p.estado) || p.es_historico === true,
-  )
-  let borradores = (rawBorradores ?? []) as Periodo[]
-
-  if (depId) {
-    periodos  = periodos .filter(p => p.contrato?.dependencia_id === depId)
-    borradores = borradores.filter(p => p.contrato?.dependencia_id === depId)
-  }
+  const { periodos, borradores } = separarInformesDelMes((filas ?? []) as unknown as Periodo[], depId)
 
   return (
     <InformesClient

@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { invalidarPeriodos } from '@/lib/invalidar-periodos'
 import { useUsuario } from '@/lib/user-context'
 import { MESES, ESTADO_COLOR, ESTADO_LABEL } from '@/lib/constants'
-import { getInformesMensuales, getInformesBorrador } from '@/services/periodos'
+import { obtenerInformesDelMes } from '@/app/actions/informes'
+import { conLimite } from '@/lib/con-limite'
+import { mesVecino, type InformesDelMes } from '@/lib/informes-mes'
 import {
   aprobarComoAsesor,
   rechazarComoAsesor,
@@ -28,6 +30,8 @@ import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import FilterTabs from '@/components/ui/FilterTabs'
 import EmptyState from '@/components/ui/EmptyState'
+import ErrorState from '@/components/ui/ErrorState'
+import InformesLoading from './loading'
 import SearchInput from '@/components/ui/SearchInput'
 import { Iconos } from '@/lib/iconos'
 
@@ -477,40 +481,85 @@ export default function InformesPage({
 
   const mesNombre = MESES[mesIdx]
 
-  // Asesor only sees their dependencia
-  const depId = usuario?.rol === 'asesor' ? (usuario.dependencia_id ?? undefined) : undefined
-
-  const informesKey = ['informes', mesNombre, anio, usuario?.id]
-
   // True when the displayed month matches what the server pre-fetched
   const isInitialMonth = mesNombre === initialMes && anio === initialAnio
 
-  const { data: periodos = [], isLoading } = useQuery<Periodo[]>({
-    queryKey: informesKey,
-    queryFn: () => getInformesMensuales(mesNombre, anio, depId),
+  // UNA consulta por mes, que devuelve las dos listas (presentados y sin enviar).
+  //
+  // Cargar un mes distinto al inicial se hacía con el cliente de Supabase del NAVEGADOR, y ahí vivía el «Cargando…»
+  // eterno: la capa de autenticación de ese cliente se puede quedar colgada (pestaña dormida, red móvil intermitente) y la
+  // consulta ni sale ni falla; solo recargar la página lo arreglaba. Ahora va por Server Action (app/actions/informes.ts),
+  // por HTTP a través del middleware, que renueva la sesión. En la base la consulta tarda 1,5 ms: la demora no era de los datos.
+  const claveMes = ['informes-mes', mesNombre, anio, usuario?.id] as const
+  const hoy = new Date()
+  // Un mes ya cerrado casi no cambia: se guarda más tiempo. El mes en curso se refresca cada minuto.
+  const mesCerrado = anio < hoy.getFullYear() || (anio === hoy.getFullYear() && mesIdx < hoy.getMonth())
+
+  const {
+    data: delMes,
+    isLoading,
+    isFetching,
+    isError,
+    isPlaceholderData,
+    refetch,
+  } = useQuery<InformesDelMes>({
+    queryKey: claveMes,
+    // Ninguna petición puede quedar colgada sin límite: pasados 12 s se vuelve un error visible y reintentable.
+    queryFn: () => conLimite(obtenerInformesDelMes(mesNombre, anio), 'Informes del mes', 12_000),
     enabled: !!usuario,
-    // 60 s cache — return-visits within that window show data instantly.
-    // refetchInterval handles background freshness regardless.
-    // Raised 30s → 60s; TanStack pauses the interval while the tab is hidden
-    // (refetchIntervalInBackground defaults to false), so this cuts background
-    // query load without users noticing.
-    staleTime: 60_000,
+    staleTime: mesCerrado ? 5 * 60_000 : 60_000,
     refetchInterval: 60_000,
+    retry: 1,
+    retryDelay: 1_000,
+    // Al cambiar de mes se sigue mostrando el anterior (atenuado, con aviso) hasta que llega el nuevo, en vez de dejar la
+    // pantalla en blanco o con un «Cargando…» suelto.
+    placeholderData: keepPreviousData,
     // Pre-populate with SSR data for the initial month so there is zero
     // loading spinner on first render, even before the client fetches.
-    initialData: isInitialMonth ? initialPeriodos : undefined,
+    initialData: isInitialMonth ? { periodos: initialPeriodos, borradores: initialBorradores } : undefined,
     initialDataUpdatedAt: isInitialMonth ? ssrTimestamp : undefined,
   })
 
-  const { data: periodosBorrador = [] } = useQuery<Periodo[]>({
-    queryKey: ['informes-borrador', mesNombre, anio, usuario?.id],
-    queryFn: () => getInformesBorrador(mesNombre, anio, depId),
-    enabled: !!usuario,
-    staleTime: 60_000,
-    refetchInterval: 60_000,
-    initialData: isInitialMonth ? initialBorradores : undefined,
-    initialDataUpdatedAt: isInitialMonth ? ssrTimestamp : undefined,
-  })
+  const periodos = delMes?.periodos ?? []
+  const periodosBorrador = delMes?.borradores ?? []
+  /** Lo que se ve todavía es el mes anterior: el nuevo está en camino. */
+  const mostrandoMesAnterior = isPlaceholderData
+
+  // «Está tardando»: si la carga del mes pasa de unos segundos, se dice y se ofrece reintentar, sin tener que recargar la
+  // página. Se guarda QUÉ mes tardó (no un sí/no) para que un mes nuevo empiece sin el aviso.
+  const claveTexto = claveMes.join('|')
+  const [mesLento, setMesLento] = useState<string | null>(null)
+  const cargandoMes = isFetching && (isLoading || mostrandoMesAnterior)
+  useEffect(() => {
+    if (!cargandoMes) return
+    const t = setTimeout(() => setMesLento(claveTexto), 5_000)
+    return () => clearTimeout(t)
+  }, [cargandoMes, claveTexto])
+  const tardando = cargandoMes && mesLento === claveTexto
+
+  /** Cancela lo que esté colgado y vuelve a pedir el mes. */
+  async function reintentarMes() {
+    await queryClient.cancelQueries({ queryKey: claveMes })
+    await refetch()
+  }
+
+  // Los meses vecinos se piden de antemano, un instante después de que la pantalla esté lista: pulsar «mes anterior» o
+  // «mes siguiente» muestra el dato al momento. Una sola petición por mes; las acciones del servidor se atienden de a una,
+  // por eso se pide el anterior primero (lo más probable) y sin competir con la carga del mes visible.
+  useEffect(() => {
+    if (!usuario || isLoading || isFetching) return
+    const t = setTimeout(() => {
+      for (const delta of [-1, 1]) {
+        const v = mesVecino(mesIdx, anio, delta)
+        queryClient.prefetchQuery({
+          queryKey: ['informes-mes', MESES[v.mesIdx], v.anio, usuario.id],
+          queryFn: () => conLimite(obtenerInformesDelMes(MESES[v.mesIdx], v.anio), 'Informes del mes', 12_000),
+          staleTime: 5 * 60_000,
+        }).catch(() => {})
+      }
+    }, 800)
+    return () => clearTimeout(t)
+  }, [usuario, isLoading, isFetching, mesIdx, anio, queryClient])
 
   // Actualización OPTIMISTA del estado en el caché local.
   //
@@ -521,9 +570,11 @@ export default function InformesPage({
   // estado viejo hasta un F5. Con este parche el badge cambia de inmediato y el
   // refetch posterior solo reconcilia con el servidor en segundo plano.
   function patchPeriodoLocal(periodoId: string, patch: Partial<Periodo>) {
-    queryClient.setQueryData<Periodo[]>(informesKey, (old) =>
-      (old ?? []).map((p) => (p.id === periodoId ? { ...p, ...patch } : p)),
-    )
+    queryClient.setQueryData<InformesDelMes>(claveMes, (old) => {
+      if (!old) return old
+      const aplicar = (lista: Periodo[]) => lista.map((p) => (p.id === periodoId ? { ...p, ...patch } : p))
+      return { periodos: aplicar(old.periodos), borradores: aplicar(old.borradores) }
+    })
   }
 
   // Refetch de reconciliación tras una acción del servidor. Cubre AMBAS listas
@@ -531,10 +582,7 @@ export default function InformesPage({
   // ['informes']). Ya no es la vía crítica de actualización —el parche optimista
   // lo es— sino la que asegura consistencia con el servidor.
   async function refrescar() {
-    await Promise.all([
-      queryClient.refetchQueries({ queryKey: ['informes'] }),
-      queryClient.refetchQueries({ queryKey: ['informes-borrador'] }),
-    ])
+    await queryClient.refetchQueries({ queryKey: ['informes-mes'] })
     // Y avisar al resto de pantallas que muestran este mismo periodo: sin
     // esto, aprobar aquí dejaba el panel y el detalle con el estado viejo.
     invalidarPeriodos(queryClient)
@@ -715,7 +763,9 @@ export default function InformesPage({
     setEnviandoRecordatorios(false)
   }
 
-  if (cargandoUser || (isLoading && !periodos.length)) return <p className="text-gray-500">Cargando...</p>
+  // Mientras llega la sesión se dibuja el esqueleto de la pantalla, no un texto suelto. La carga de un MES no entra aquí:
+  // la cabecera con los botones de mes se queda siempre a la vista (ver más abajo).
+  if (cargandoUser) return <InformesLoading />
   if (!usuario) return null
 
   const esAsesor = usuario.rol === 'asesor'
@@ -766,6 +816,28 @@ export default function InformesPage({
           </div>
         }
       />
+
+      {/* Estado de la carga del mes: siempre a la vista bajo los botones de mes, nunca un «Cargando…» suelto. */}
+      {mostrandoMesAnterior && (
+        <div role="status" aria-live="polite" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm text-gray-700">
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700 motion-reduce:animate-none" aria-hidden="true" />
+          <span>Cargando {mesNombre.toLowerCase()} de {anio}…</span>
+          {tardando && (
+            <>
+              <span className="text-gray-600">Está tardando más de lo normal.</span>
+              <button onClick={reintentarMes} className="font-medium text-gray-900 underline underline-offset-2 hover:text-gray-700">Reintentar</button>
+            </>
+          )}
+        </div>
+      )}
+      {isError && !mostrandoMesAnterior && delMes && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          <span>No se pudo actualizar este mes. Estás viendo lo último que se cargó.</span>
+          <button onClick={reintentarMes} className="font-medium underline underline-offset-2 hover:text-amber-700">Reintentar</button>
+        </div>
+      )}
+
+      <div aria-busy={mostrandoMesAnterior} className={mostrandoMesAnterior ? 'pointer-events-none select-none opacity-50 transition-opacity' : 'transition-opacity'}>
 
       {/* Stats bar */}
       {periodos.length > 0 && (
@@ -1092,8 +1164,14 @@ export default function InformesPage({
       )}
 
       {/* Content */}
-      {isLoading ? (
-        <div className="space-y-4 animate-pulse">
+      {isError && !delMes ? (
+        <ErrorState
+          mensaje={`No se pudieron cargar los informes de ${mesNombre.toLowerCase()} de ${anio}. Revisa tu conexión e inténtalo de nuevo.`}
+          onReintentar={reintentarMes}
+          reintentando={isFetching}
+        />
+      ) : isLoading ? (
+        <div className="space-y-4 animate-pulse" role="status" aria-label={`Cargando ${mesNombre.toLowerCase()} de ${anio}`}>
           {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-200 rounded-2xl" />)}
         </div>
       ) : periodosVisibles.length === 0 ? (
@@ -1119,6 +1197,7 @@ export default function InformesPage({
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }

@@ -20,8 +20,7 @@ import type { QueryClient } from '@tanstack/react-query'
  * sí solo, solo refresca lo que esté montado.
  */
 const CLAVES_AFECTADAS = [
-  ['informes'],              // /dashboard/informes — lista principal
-  ['informes-borrador'],     // /dashboard/informes — pestaña "sin enviar"
+  ['informes-mes'],          // /dashboard/informes — lista principal y pestaña «sin enviar» (una sola consulta por mes)
   ['dashboard-contratista'], // panel del contratista
   ['dashboard-supervisor'],  // panel de la secretaría
   ['dashboard-admin'],       // panel de administración
