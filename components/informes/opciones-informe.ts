@@ -1,12 +1,14 @@
 /**
  * Las opciones del menú de tres puntos de un informe, según su estado (rediseño de noviembre de 2026).
  *
- * Todas ya existen en el sistema, en otras pantallas; el menú solo las acerca:
- *   · siempre: ver el informe completo, ver el contrato y el historial (quién hizo qué y cuándo);
+ * La idea: que quien revisa no tenga que salir de /dashboard/informes.
+ *   · siempre: ver el informe de actividades (vista previa del documento, ahí mismo), el contrato y el historial (en una
+ *     ventana);
  *   · aprobado: radicar (pide el número de radicado);
- *   · aprobado o radicado: descargar el paquete de documentos; si está radicado, copiar el número;
+ *   · aprobado o radicado: descargar documentos, una lista con cada uno (antes de aprobar no hay actas que descargar);
  *   · por revisar: devolver (pide un motivo);
  *   · sin enviar: recordar al contratista y, si el mes ya cerró, habilitar el envío tardío.
+ * El número de radicado se copia tocándolo en la tarjeta, no desde aquí.
  */
 
 import type { OpcionMenu } from '@/components/ui/MenuOpciones'
@@ -14,31 +16,41 @@ import { Iconos } from '@/lib/iconos'
 import type { EstadoTarjeta } from './TarjetaInforme'
 
 export interface AccionesInforme {
-  hrefInforme: string
+  periodoId: string
   hrefContrato: string
-  hrefHistorial: string
-  hrefDocumentos: string
-  numeroRadicado: string | null
   mesCerrado: boolean
+  onVerInforme: () => void
+  onHistorial: () => void
   onRadicar?: () => void
-  onCopiarRadicado?: () => void
   onDevolver?: () => void
   onRecordar?: () => void
   onHabilitarTardio?: () => void
 }
 
+/** Lo que se puede descargar de un informe aprobado o radicado: cada documento y los dos paquetes. */
+function documentos(periodoId: string): OpcionMenu[] {
+  const base = `/api/pdf/${periodoId}`
+  const doc = (id: string, etiqueta: string, icono: OpcionMenu['icono']): OpcionMenu =>
+    ({ id, etiqueta, icono, href: `${base}/${id}`, descarga: true })
+  return [
+    doc('informe', 'Informe de actividades', Iconos.documentos.informe),
+    doc('cuenta-cobro', 'Cuenta de cobro', Iconos.documentos.cuentaCobro),
+    doc('acta-supervision', 'Acta de supervisión', Iconos.documentos.actaSupervision),
+    doc('acta-pago', 'Acta de pago', Iconos.documentos.actaPago),
+    doc('paquete', 'Todo junto (ZIP)', Iconos.documentos.paquete),
+    doc('secop', 'Paquete para SECOP (ZIP)', Iconos.documentos.paquete),
+  ]
+}
+
 export function opcionesDeInforme(estado: EstadoTarjeta, a: AccionesInforme): OpcionMenu[] {
   const lista: OpcionMenu[] = [
-    { id: 'informe', etiqueta: 'Ver informe completo', icono: Iconos.accion.ver, href: a.hrefInforme },
+    { id: 'informe', etiqueta: 'Ver informe de actividades', icono: Iconos.accion.ver, onSelect: a.onVerInforme },
   ]
   if (estado === 'aprobado' && a.onRadicar) {
     lista.push({ id: 'radicar', etiqueta: 'Radicar', icono: Iconos.estado.aprobado, onSelect: a.onRadicar })
   }
   if (estado === 'aprobado' || estado === 'radicado') {
-    lista.push({ id: 'documentos', etiqueta: 'Descargar documentos', icono: Iconos.documentos.descargar, href: a.hrefDocumentos, nuevaPestana: true })
-  }
-  if (estado === 'radicado' && a.numeroRadicado && a.onCopiarRadicado) {
-    lista.push({ id: 'copiar', etiqueta: 'Copiar n.º de radicado', icono: Iconos.accion.copiar, onSelect: a.onCopiarRadicado })
+    lista.push({ id: 'documentos', etiqueta: 'Descargar documentos', icono: Iconos.documentos.descargar, submenu: documentos(a.periodoId) })
   }
   if (estado === 'sin_enviar' && a.onRecordar) {
     lista.push({ id: 'recordar', etiqueta: 'Recordar al contratista', icono: Iconos.aviso.notificaciones, onSelect: a.onRecordar })
@@ -48,7 +60,7 @@ export function opcionesDeInforme(estado: EstadoTarjeta, a: AccionesInforme): Op
   }
   lista.push(
     { id: 'contrato', etiqueta: 'Ver contrato', icono: Iconos.navegacion.contratos, href: a.hrefContrato },
-    { id: 'historial', etiqueta: 'Historial del informe', icono: Iconos.dominio.actividad, href: a.hrefHistorial },
+    { id: 'historial', etiqueta: 'Historial del informe', icono: Iconos.dominio.actividad, onSelect: a.onHistorial },
   )
   if (estado === 'por_revisar' && a.onDevolver) {
     lista.push({ id: 'devolver', etiqueta: 'Devolver al contratista', icono: Iconos.accion.devolver, onSelect: a.onDevolver, peligro: true })

@@ -48,3 +48,33 @@ export async function obtenerInformesDelMes(mes: string, anio: number): Promise<
   const depId = yo.rol === 'asesor' ? ((yo.dependencia_id as string | null) ?? undefined) : undefined
   return separarInformesDelMes((data ?? []) as unknown as Periodo[], depId)
 }
+
+/** Un paso del historial de un informe, con quién lo dio. */
+export interface PasoHistorial {
+  id: string
+  estado_anterior: string | null
+  estado_nuevo: string | null
+  comentario: string | null
+  created_at: string
+  usuario: { nombre_completo: string; rol: string | null } | null
+}
+
+/**
+ * El historial de UN informe, para la ventana «Historial del informe» de /dashboard/informes. Se lee con la sesión de quien
+ * mira: si la base no le deja ver ese periodo, la lista sale vacía, igual que en la página del periodo.
+ */
+export async function obtenerHistorialInforme(periodoId: string): Promise<PasoHistorial[]> {
+  if (!/^[0-9a-f-]{36}$/i.test(periodoId)) throw new Error('Informe no válido')
+
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Sesión no disponible')
+
+  const { data, error } = await supabase
+    .from('historial_periodos')
+    .select('id, estado_anterior, estado_nuevo, comentario, created_at, usuario:usuarios!historial_periodos_usuario_id_fkey(nombre_completo, rol)')
+    .eq('periodo_id', periodoId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as unknown as PasoHistorial[]
+}

@@ -22,6 +22,8 @@ import {
 import TarjetaInforme, { type DatosTarjetaInforme, type EstadoTarjeta } from '@/components/informes/TarjetaInforme'
 import { opcionesDeInforme } from '@/components/informes/opciones-informe'
 import Dialogo from '@/components/ui/Dialogo'
+import VisorPDF from '@/components/VisorPDF'
+import HistorialInforme from '@/components/informes/HistorialInforme'
 import type { Periodo } from '@/lib/types'
 import RadicacionRapida from './RadicacionRapida'
 import DescargaMasiva from './DescargaMasiva'
@@ -35,6 +37,7 @@ import InformesLoading from './loading'
 import EsqueletoInformes from './EsqueletoInformes'
 import SearchInput from '@/components/ui/SearchInput'
 import { Iconos } from '@/lib/iconos'
+import { capitalizarNombre } from '@/lib/format'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -135,6 +138,9 @@ export default function InformesPage({
   const [radicando, setRadicando] = useState<Periodo | null>(null)
   const [numeroRadicado, setNumeroRadicado] = useState('')
   const [enviandoRadicado, setEnviandoRadicado] = useState(false)
+  // Lo que se abre ahí mismo, sin salir de la pantalla: la vista previa del informe de actividades y el historial.
+  const [viendoInforme, setViendoInforme] = useState<Periodo | null>(null)
+  const [viendoHistorial, setViendoHistorial] = useState<Periodo | null>(null)
 
   // Reminder state
   const [enviandoRecordatorios, setEnviandoRecordatorios] = useState(false)
@@ -438,12 +444,13 @@ export default function InformesPage({
     }
   }
 
-  async function copiarRadicado(numero: string) {
+  async function copiarRadicado(numero: string): Promise<boolean> {
     try {
       await navigator.clipboard.writeText(numero)
-      toast.success(`Copiado: ${numero}`)
+      return true
     } catch {
       toast.error('No se pudo copiar el número')
+      return false
     }
   }
 
@@ -762,15 +769,14 @@ export default function InformesPage({
                 mostrarDependencia={dependencias.length > 1}
                 onAprobar={puedeAprobar ? () => aprobar(p) : undefined}
                 aprobando={aprobandoId === p.id}
+                onCopiarRadicado={copiarRadicado}
                 opciones={opcionesDeInforme(datos.estado, {
-                  hrefInforme,
+                  periodoId: p.id,
                   hrefContrato: `/dashboard/contratos/${p.contrato_id}`,
-                  hrefHistorial: `${hrefInforme}?detalle=1`,
-                  hrefDocumentos: `/api/pdf/${p.id}/actas`,
-                  numeroRadicado: p.numero_radicado ?? null,
                   mesCerrado: mesCerrado && !p.habilitado_tardio,
+                  onVerInforme: () => setViendoInforme(p),
+                  onHistorial: () => setViendoHistorial(p),
                   onRadicar: puedeRadicar ? () => abrirRadicar(p) : undefined,
-                  onCopiarRadicado: p.numero_radicado ? () => copiarRadicado(p.numero_radicado!) : undefined,
                   onDevolver: datos.estado === 'por_revisar' ? () => { setMotivoDevolucion(''); setDevolviendo(p) } : undefined,
                   onRecordar: () => recordar(p),
                   onHabilitarTardio: puedeGestionarTardio ? () => habilitarTardio(p) : undefined,
@@ -781,6 +787,25 @@ export default function InformesPage({
         </div>
       )}
       </>
+      )}
+
+      {viendoInforme && (
+        <VisorPDF
+          url={`/api/pdf/${viendoInforme.id}/informe`}
+          nombre={`Informe de actividades · ${capitalizarNombre(viendoInforme.contrato?.contratista?.nombre_completo ?? '')} · CN ${viendoInforme.contrato?.numero ?? ''}.pdf`}
+          mensajeCarga="Preparando el informe de actividades…"
+          onClose={() => setViendoInforme(null)}
+        />
+      )}
+
+      {viendoHistorial && (
+        <HistorialInforme
+          periodoId={viendoHistorial.id}
+          nombre={viendoHistorial.contrato?.contratista?.nombre_completo ?? ''}
+          contrato={viendoHistorial.contrato?.numero ?? ''}
+          hrefInforme={`/dashboard/contratos/${viendoHistorial.contrato_id}/periodo/${viendoHistorial.id}`}
+          onCerrar={() => setViendoHistorial(null)}
+        />
       )}
 
       {radicando && (

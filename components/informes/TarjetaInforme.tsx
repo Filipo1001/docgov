@@ -16,6 +16,7 @@
  * la única acción a la vista; devolver, que pide un motivo, va en el menú. Toda la tarjeta lleva al informe completo.
  */
 
+import { useState } from 'react'
 import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
 import Icono from '@/components/ui/Icono'
@@ -74,6 +75,7 @@ export default function TarjetaInforme({
   mostrarDependencia = false,
   onAprobar,
   aprobando = false,
+  onCopiarRadicado,
 }: {
   datos: DatosTarjetaInforme
   /** El informe completo. */
@@ -83,7 +85,10 @@ export default function TarjetaInforme({
   /** Solo para «por revisar»: el botón Aprobar. */
   onAprobar?: () => void
   aprobando?: boolean
+  /** Copia el número de radicado; devuelve si se pudo. */
+  onCopiarRadicado?: (numero: string) => Promise<boolean>
 }) {
+  const [copiado, setCopiado] = useState(false)
   const nombre = capitalizarNombre(datos.nombre) || 'Sin nombre'
   const extra = complemento(datos)
   const estado = ESTADO[datos.estado]
@@ -93,11 +98,12 @@ export default function TarjetaInforme({
       {/* Un velo suave del color del estado en la parte de arriba. */}
       <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-0 h-32 rounded-t-2xl bg-gradient-to-b ${estado.velo} to-transparent`} />
 
-      {/* Toda la tarjeta lleva al informe completo: un enlace que la cubre. Lo que se pulsa encima (menú, Aprobar) va por
-          encima con `relative z-10`. */}
+      {/* Toda la tarjeta lleva al periodo de esa persona: un enlace que la cubre. El contenido de encima deja pasar el toque
+          (`pointer-events-none`) para que tocar el nombre, la foto o el valor también abra; solo lo que se pulsa por sí
+          mismo (menú, Aprobar, el número de radicado) lo recupera con `pointer-events-auto`. */}
       <Link href={href} aria-label={`Abrir el informe de ${nombre}`} className="absolute inset-0 z-0 rounded-2xl outline-none" />
 
-      <div className="relative flex flex-1 flex-col p-5 pr-12">
+      <div className="pointer-events-none relative flex flex-1 flex-col p-5 pr-12">
         <div className="flex items-start gap-3.5">
           <Avatar nombre={nombre} foto={datos.foto} clases="h-14 w-14 text-lg ring-4 ring-white shadow-sm" />
           <div className="min-w-0 flex-1 pt-0.5">
@@ -118,13 +124,25 @@ export default function TarjetaInforme({
         )}
       </div>
 
-      <div className="relative mx-5 mt-auto flex min-h-[3.5rem] flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 py-3">
+      <div className="pointer-events-none relative mx-5 mt-auto flex min-h-[3.5rem] flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 py-3">
         {datos.estado === 'radicado' && datos.numeroRadicado ? (
-          <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${estado.color}`}>
-            <Icono glifo={estado.icono} tamano="sm" />
-            <span className="sr-only">Radicado, número </span>
+          // El número se copia tocándolo. En computador, al pasar el mouse aparece «Copiar»; en el teléfono basta tocarlo.
+          <button
+            type="button"
+            onClick={async () => {
+              if (!onCopiarRadicado || !(await onCopiarRadicado(datos.numeroRadicado!))) return
+              setCopiado(true)
+              setTimeout(() => setCopiado(false), 1800)
+            }}
+            aria-label={`Radicado con el número ${datos.numeroRadicado}. Copiar el número`}
+            className={`group/rad pointer-events-auto relative z-10 -mx-1.5 inline-flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm font-semibold transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${estado.color}`}
+          >
+            <Icono glifo={copiado ? Iconos.estado.ok : estado.icono} tamano="sm" />
             <span className="tabular-nums"><span aria-hidden="true">N.º </span>{datos.numeroRadicado}</span>
-          </span>
+            <span aria-live="polite" className={`inline-flex items-center gap-1 text-xs font-medium transition-opacity ${copiado ? 'opacity-100' : 'opacity-0 group-hover/rad:opacity-100 group-focus-visible/rad:opacity-100'}`}>
+              {copiado ? 'Copiado' : <><Icono glifo={Iconos.accion.copiar} tamano="sm" />Copiar</>}
+            </span>
+          </button>
         ) : (
           <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${estado.color}`}>
             <Icono glifo={estado.icono} tamano="sm" />
@@ -145,7 +163,7 @@ export default function TarjetaInforme({
             type="button"
             onClick={onAprobar}
             disabled={aprobando}
-            className="relative z-10 ml-auto inline-flex min-h-9 items-center rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+            className="pointer-events-auto relative z-10 ml-auto inline-flex min-h-9 items-center rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
           >
             {aprobando ? 'Aprobando…' : 'Aprobar'}
           </button>

@@ -22,6 +22,8 @@ interface Props {
   url: string
   nombre: string
   onClose: () => void
+  /** El aviso mientras llega el documento. Un informe con muchas evidencias tarda unos segundos en armarse la primera vez. */
+  mensajeCarga?: string
 }
 
 /**
@@ -35,7 +37,7 @@ interface Props {
 const ANCHO_MIN = 900
 const ANCHO_MAX = 1600
 
-export default function VisorPDF({ url, nombre, onClose }: Props) {
+export default function VisorPDF({ url, nombre, onClose, mensajeCarga }: Props) {
   const areaRef = useRef<HTMLDivElement>(null)
   const contenedorRef = useRef<HTMLDivElement>(null)
   const [estado, setEstado] = useState<'cargando' | 'listo' | 'error'>('cargando')
@@ -114,7 +116,15 @@ export default function VisorPDF({ url, nombre, onClose }: Props) {
         if (!cancelado) setEstado('listo')
       } catch (e) {
         if (cancelado) return
-        setError(e instanceof Error ? e.message : 'No se pudo abrir el documento')
+        // Si el servidor explicó por qué (por ejemplo, faltan datos para armar el documento), se muestra eso y no el error
+        // técnico del lector.
+        let explicacion: string | null = null
+        try {
+          const r = await fetch(url, { method: 'GET' })
+          if (!r.ok) explicacion = ((await r.json()) as { error?: string }).error ?? null
+        } catch { /* sin explicación del servidor */ }
+        if (cancelado) return
+        setError(explicacion ?? (e instanceof Error ? e.message : 'No se pudo abrir el documento'))
         setEstado('error')
       }
     })()
@@ -191,7 +201,7 @@ export default function VisorPDF({ url, nombre, onClose }: Props) {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
-            <p className="text-sm">Abriendo documento…</p>
+            <p className="text-sm">{mensajeCarga ?? 'Abriendo documento…'}</p>
           </div>
         )}
 
