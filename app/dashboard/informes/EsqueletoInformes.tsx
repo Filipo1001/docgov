@@ -14,7 +14,7 @@
 function TarjetaInforme({ conBoton }: { conBoton: boolean }) {
   return (
     <div className="flex min-h-[13.5rem] flex-col rounded-2xl border border-gray-200 bg-white">
-      <div className="flex-1 p-5 pr-14">
+      <div className="flex-1 p-5 pr-12">
         <div className="flex items-start gap-3.5">
           <div className="sk h-14 w-14 shrink-0 rounded-full" />
           <div className="min-w-0 flex-1 pt-1">
