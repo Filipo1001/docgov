@@ -58,6 +58,8 @@ import {
   FileImage,
   // La huella (SHA-256) de una evidencia
   Fingerprint,
+  // El sello de radicación
+  Stamp,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -126,6 +128,8 @@ export const Iconos = {
     desbloqueado: Unlock,
     verificado: ShieldCheck,
     vetado: Ban,
+    /** Radicado: el sello de la ventanilla, junto al número de radicado. */
+    radicado: Stamp,
   },
 
   accion: {
