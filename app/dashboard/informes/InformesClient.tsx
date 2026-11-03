@@ -22,9 +22,8 @@ import {
 import TarjetaInforme, { type DatosTarjetaInforme, type EstadoTarjeta } from '@/components/informes/TarjetaInforme'
 import { opcionesDeInforme } from '@/components/informes/opciones-informe'
 import Dialogo from '@/components/ui/Dialogo'
-import VisorPDF from '@/components/VisorPDF'
 import HistorialInforme from '@/components/informes/HistorialInforme'
-import PlanillaInforme from '@/components/informes/PlanillaInforme'
+import RevisionDocumentos, { type PestanaRevision } from '@/components/informes/RevisionDocumentos'
 import type { Periodo } from '@/lib/types'
 import RadicacionRapida from './RadicacionRapida'
 import DescargaMasiva from './DescargaMasiva'
@@ -39,7 +38,6 @@ import EsqueletoInformes from './EsqueletoInformes'
 import SearchInput from '@/components/ui/SearchInput'
 import { Iconos } from '@/lib/iconos'
 import Icono from '@/components/ui/Icono'
-import { capitalizarNombre } from '@/lib/format'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -152,8 +150,7 @@ export default function InformesPage({
   // Lo que se abre ahí mismo, sin salir de la pantalla: la vista previa del informe de actividades y el historial.
   // La revisión en pantalla: el informe abierto y la lista por la que se avanza con Anterior / Siguiente (la de la pestaña
   // en el momento de abrirlo, para que no se mueva bajo los pies al aprobar).
-  const [revision, setRevision] = useState<{ ids: string[]; i: number } | null>(null)
-  const [viendoPlanilla, setViendoPlanilla] = useState<Periodo | null>(null)
+  const [revision, setRevision] = useState<{ ids: string[]; i: number; pestana: PestanaRevision } | null>(null)
   const [viendoHistorial, setViendoHistorial] = useState<Periodo | null>(null)
 
   // Reminder state
@@ -415,10 +412,10 @@ export default function InformesPage({
   }
 
   // ── Revisión en pantalla ─────────────────────────────────────────────
-  function abrirRevision(p: Periodo) {
+  function abrirRevision(p: Periodo, pestana: PestanaRevision = 'informe') {
     const ids = periodosVisibles.map(x => x.id)
     const i = ids.indexOf(p.id)
-    setRevision(i >= 0 ? { ids, i } : { ids: [p.id], i: 0 })
+    setRevision(i >= 0 ? { ids, i, pestana } : { ids: [p.id], i: 0, pestana })
   }
 
   function siguiente() {
@@ -512,7 +509,7 @@ export default function InformesPage({
 
   // En la revisión, las flechas del teclado pasan de informe (salvo con una ventana encima o escribiendo).
   useEffect(() => {
-    if (!revision || devolviendo || viendoPlanilla) return
+    if (!revision || devolviendo) return
     const tecla = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
@@ -521,7 +518,7 @@ export default function InformesPage({
     }
     document.addEventListener('keydown', tecla)
     return () => document.removeEventListener('keydown', tecla)
-  }, [revision, devolviendo, viendoPlanilla])
+  }, [revision, devolviendo])
 
   // Mientras llega la sesión se dibuja el esqueleto de la pantalla, no un texto suelto. La carga de un MES no entra aquí:
   // la cabecera con los botones de mes se queda siempre a la vista (ver más abajo).
@@ -536,7 +533,6 @@ export default function InformesPage({
   // (su pre-aprobación).
   const puedeAprobar = (p: Periodo) =>
     estadoDeTarjeta(p, p.estado === 'borrador') === 'por_revisar' && (esSecretaria || esAdmin || (esAsesor && p.estado === 'enviado'))
-  const nombreDe = (p: Periodo) => capitalizarNombre(p.contrato?.contratista?.nombre_completo ?? '')
 
   // El informe abierto en la revisión, con su estado de ahora (cambia al aprobar o devolver).
   const enRevision = revision
@@ -852,13 +848,13 @@ export default function InformesPage({
                 onAprobar={puedeAprobar(p) ? () => { void aprobar(p) } : undefined}
                 aprobando={aprobandoId === p.id}
                 onCopiarRadicado={copiarRadicado}
-                onVerPlanilla={() => setViendoPlanilla(p)}
+                onVerPlanilla={() => abrirRevision(p, 'planilla')}
                 opciones={opcionesDeInforme(datos.estado, {
                   periodoId: p.id,
                   hrefContrato: `/dashboard/contratos/${p.contrato_id}`,
                   mesCerrado: mesCerrado && !p.habilitado_tardio,
                   onVerInforme: () => abrirRevision(p),
-                  onVerPlanilla: p.planilla_ss_url ? () => setViendoPlanilla(p) : undefined,
+                  onVerPlanilla: p.planilla_ss_url ? () => abrirRevision(p, 'planilla') : undefined,
                   onHistorial: () => setViendoHistorial(p),
                   onRadicar: puedeRadicar ? () => abrirRadicar(p) : undefined,
                   onDevolver: datos.estado === 'por_revisar' ? () => { setMotivoDevolucion(''); setDevolviendo(p) } : undefined,
@@ -873,95 +869,39 @@ export default function InformesPage({
       </>
       )}
 
-      {enRevision && revision && (
-        <VisorPDF
-          key={enRevision.id}
-          url={`/api/pdf/${enRevision.id}/informe`}
-          nombre={`Informe de actividades · ${nombreDe(enRevision)} · CN ${enRevision.contrato?.numero ?? ''}.pdf`}
-          subtitulo={revision.ids.length > 1 ? `${revision.i + 1} de ${revision.ids.length}` : undefined}
-          mensajeCarga="Preparando el informe de actividades…"
-          // Con una ventana encima (devolver, planilla), Escape la cierra a ella, no a la revisión.
-          onClose={() => { if (!devolviendo && !viendoPlanilla) setRevision(null) }}
-          pie={
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={anterior}
-                  disabled={revision.i === 0}
-                  aria-label="Informe anterior"
-                  className="grid h-10 w-10 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-30"
-                >
-                  <Icono glifo={Iconos.accion.retroceder} tamano="md" />
-                </button>
-                <button
-                  type="button"
-                  onClick={siguiente}
-                  disabled={revision.i >= revision.ids.length - 1}
-                  aria-label="Informe siguiente"
-                  className="grid h-10 w-10 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-30"
-                >
-                  <Icono glifo={Iconos.accion.avanzar} tamano="md" />
-                </button>
-              </div>
-              <p className="min-w-0 flex-1 text-sm">
-                <span className="font-semibold">{nombreDe(enRevision)}</span>
-                <span className="text-white/60">
-                  {' · '}
-                  {estadoDeTarjeta(enRevision, enRevision.estado === 'borrador') === 'por_revisar'
-                    ? 'Por revisar'
-                    : ({ aprobado: 'Aprobado', radicado: 'Radicado', devuelto: 'Devuelto', sin_enviar: 'Sin enviar', historico: 'Histórico', por_revisar: '' } as const)[estadoDeTarjeta(enRevision, enRevision.estado === 'borrador')]}
-                  {porRevisarEnLista > 0 && ` · quedan ${porRevisarEnLista} por revisar`}
-                </span>
-              </p>
-              <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
-                {enRevision.planilla_ss_url && (
-                  <button
-                    type="button"
-                    onClick={() => setViendoPlanilla(enRevision)}
-                    className="min-h-10 rounded-xl px-3 text-sm font-semibold text-white/85 hover:bg-white/10 hover:text-white"
-                  >
-                    Planilla
-                  </button>
-                )}
-                {estadoDeTarjeta(enRevision, enRevision.estado === 'borrador') === 'por_revisar' && (
-                  <button
-                    type="button"
-                    onClick={() => { setMotivoDevolucion(''); setDevolviendo(enRevision) }}
-                    className="min-h-10 rounded-xl border border-white/20 px-4 text-sm font-semibold text-red-200 hover:bg-red-500/15 hover:text-red-100"
-                  >
-                    Devolver
-                  </button>
-                )}
-                {puedeAprobar(enRevision) && (
-                  <button
-                    type="button"
-                    onClick={() => aprobarEnRevision(enRevision)}
-                    disabled={aprobandoId === enRevision.id}
-                    className="min-h-10 rounded-xl bg-white px-5 text-sm font-semibold text-gray-900 hover:bg-gray-100 disabled:opacity-60"
-                  >
-                    {aprobandoId === enRevision.id ? 'Aprobando…' : revision.i < revision.ids.length - 1 ? 'Aprobar y seguir' : 'Aprobar'}
-                  </button>
-                )}
-              </div>
-            </div>
-          }
-        />
-      )}
-
-      {viendoPlanilla && (
-        <PlanillaInforme
-          periodoId={viendoPlanilla.id}
-          nombre={viendoPlanilla.contrato?.contratista?.nombre_completo ?? ''}
-          contrato={viendoPlanilla.contrato?.numero ?? ''}
-          hrefPeriodo={`/dashboard/contratos/${viendoPlanilla.contrato_id}/periodo/${viendoPlanilla.id}`}
-          onCambio={(r, comentario) => {
-            patchPeriodoLocal(viendoPlanilla.id, { planilla_estado: r, planilla_comentario: comentario })
-            void refrescar()
-          }}
-          onCerrar={() => setViendoPlanilla(null)}
-        />
-      )}
+      {enRevision && revision && (() => {
+        const est = estadoDeTarjeta(enRevision, enRevision.estado === 'borrador')
+        const ESTADO_PIE: Record<typeof est, { texto: string; color: string }> = {
+          por_revisar: { texto: 'Por revisar', color: 'text-blue-700' },
+          aprobado: { texto: 'Aprobado · falta radicar', color: 'text-indigo-700' },
+          radicado: { texto: enRevision.numero_radicado ? `Radicado · N.º ${enRevision.numero_radicado}` : 'Radicado', color: 'text-emerald-700' },
+          devuelto: { texto: 'Devuelto al contratista', color: 'text-red-700' },
+          sin_enviar: { texto: 'Sin enviar', color: 'text-amber-800' },
+          historico: { texto: 'Histórico', color: 'text-gray-600' },
+        }
+        return (
+          <RevisionDocumentos
+            periodo={enRevision}
+            pestanaInicial={revision.pestana}
+            posicion={{ i: revision.i, total: revision.ids.length }}
+            estado={ESTADO_PIE[est]}
+            quedan={porRevisarEnLista}
+            onAnterior={anterior}
+            onSiguiente={siguiente}
+            onCerrar={() => setRevision(null)}
+            bloqueado={!!devolviendo}
+            puedeAprobar={puedeAprobar(enRevision)}
+            aprobando={aprobandoId === enRevision.id}
+            onAprobar={() => { void aprobarEnRevision(enRevision) }}
+            puedeDevolver={est === 'por_revisar'}
+            onDevolver={() => { setMotivoDevolucion(''); setDevolviendo(enRevision) }}
+            onPlanillaCambio={(r, comentario) => {
+              patchPeriodoLocal(enRevision.id, { planilla_estado: r, planilla_comentario: comentario })
+              void refrescar()
+            }}
+          />
+        )
+      })()}
 
       {viendoHistorial && (
         <HistorialInforme

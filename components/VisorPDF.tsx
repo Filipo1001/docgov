@@ -16,18 +16,12 @@
  * descarga cuando el usuario abre un documento por primera vez.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface Props {
   url: string
   nombre: string
   onClose: () => void
-  /** El aviso mientras llega el documento. Un informe con muchas evidencias tarda unos segundos en armarse la primera vez. */
-  mensajeCarga?: string
-  /** Una línea bajo el nombre (por ejemplo, «3 de 8 por revisar»). */
-  subtitulo?: string
-  /** Una barra de acciones abajo (la revisión desde /dashboard/informes: anterior, siguiente, aprobar, devolver). */
-  pie?: ReactNode
 }
 
 /**
@@ -41,7 +35,7 @@ interface Props {
 const ANCHO_MIN = 900
 const ANCHO_MAX = 1600
 
-export default function VisorPDF({ url, nombre, onClose, mensajeCarga, subtitulo, pie }: Props) {
+export default function VisorPDF({ url, nombre, onClose }: Props) {
   const areaRef = useRef<HTMLDivElement>(null)
   const contenedorRef = useRef<HTMLDivElement>(null)
   const [estado, setEstado] = useState<'cargando' | 'listo' | 'error'>('cargando')
@@ -120,15 +114,7 @@ export default function VisorPDF({ url, nombre, onClose, mensajeCarga, subtitulo
         if (!cancelado) setEstado('listo')
       } catch (e) {
         if (cancelado) return
-        // Si el servidor explicó por qué (por ejemplo, faltan datos para armar el documento), se muestra eso y no el error
-        // técnico del lector.
-        let explicacion: string | null = null
-        try {
-          const r = await fetch(url, { method: 'GET' })
-          if (!r.ok) explicacion = ((await r.json()) as { error?: string }).error ?? null
-        } catch { /* sin explicación del servidor */ }
-        if (cancelado) return
-        setError(explicacion ?? (e instanceof Error ? e.message : 'No se pudo abrir el documento'))
+        setError(e instanceof Error ? e.message : 'No se pudo abrir el documento')
         setEstado('error')
       }
     })()
@@ -157,11 +143,9 @@ export default function VisorPDF({ url, nombre, onClose, mensajeCarga, subtitulo
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{nombre}</p>
-          {(paginas > 0 || subtitulo) && (
+          {paginas > 0 && (
             <p className="text-[11px] text-white/50">
-              {subtitulo}
-              {subtitulo && paginas > 0 && ' · '}
-              {paginas > 0 && `${paginas} ${paginas === 1 ? 'página' : 'páginas'}`}
+              {paginas} {paginas === 1 ? 'página' : 'páginas'}
             </p>
           )}
         </div>
@@ -207,7 +191,7 @@ export default function VisorPDF({ url, nombre, onClose, mensajeCarga, subtitulo
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
-            <p className="text-sm">{mensajeCarga ?? 'Abriendo documento…'}</p>
+            <p className="text-sm">Abriendo documento…</p>
           </div>
         )}
 
@@ -225,15 +209,6 @@ export default function VisorPDF({ url, nombre, onClose, mensajeCarga, subtitulo
           </div>
         )}
       </div>
-
-      {pie && (
-        <div
-          className="shrink-0 border-t border-white/10 bg-gray-900 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] text-white sm:px-4"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {pie}
-        </div>
-      )}
     </div>
   )
 }
