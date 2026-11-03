@@ -3,6 +3,7 @@
  *
  * Todas ya existen en el sistema, en otras pantallas; el menú solo las acerca:
  *   · siempre: ver el informe completo, ver el contrato y el historial (quién hizo qué y cuándo);
+ *   · aprobado: radicar (pide el número de radicado);
  *   · aprobado o radicado: descargar el paquete de documentos; si está radicado, copiar el número;
  *   · por revisar: devolver (pide un motivo);
  *   · sin enviar: recordar al contratista y, si el mes ya cerró, habilitar el envío tardío.
@@ -19,6 +20,7 @@ export interface AccionesInforme {
   hrefDocumentos: string
   numeroRadicado: string | null
   mesCerrado: boolean
+  onRadicar?: () => void
   onCopiarRadicado?: () => void
   onDevolver?: () => void
   onRecordar?: () => void
@@ -29,6 +31,9 @@ export function opcionesDeInforme(estado: EstadoTarjeta, a: AccionesInforme): Op
   const lista: OpcionMenu[] = [
     { id: 'informe', etiqueta: 'Ver informe completo', icono: Iconos.accion.ver, href: a.hrefInforme },
   ]
+  if (estado === 'aprobado' && a.onRadicar) {
+    lista.push({ id: 'radicar', etiqueta: 'Radicar', icono: Iconos.estado.aprobado, onSelect: a.onRadicar })
+  }
   if (estado === 'aprobado' || estado === 'radicado') {
     lista.push({ id: 'documentos', etiqueta: 'Descargar documentos', icono: Iconos.documentos.descargar, href: a.hrefDocumentos, nuevaPestana: true })
   }

@@ -14,6 +14,7 @@ import {
   rechazarComoAsesor,
   aprobarPeriodos,
   devolverPeriodoAContratista,
+  marcarRadicado,
   enviarRecordatorioInforme,
   enviarRecordatoriosMasivos,
   habilitarEnvioTardio,
@@ -130,6 +131,10 @@ export default function InformesPage({
   const [devolviendo, setDevolviendo] = useState<Periodo | null>(null)
   const [motivoDevolucion, setMotivoDevolucion] = useState('')
   const [enviandoDevolucion, setEnviandoDevolucion] = useState(false)
+  // Radicar uno desde su menú: el diálogo pide el número (con el siguiente consecutivo del mes ya sugerido).
+  const [radicando, setRadicando] = useState<Periodo | null>(null)
+  const [numeroRadicado, setNumeroRadicado] = useState('')
+  const [enviandoRadicado, setEnviandoRadicado] = useState(false)
 
   // Reminder state
   const [enviandoRecordatorios, setEnviandoRecordatorios] = useState(false)
@@ -382,6 +387,40 @@ export default function InformesPage({
       void refrescar()
     }
     setEnviandoDevolucion(false)
+  }
+
+  /** El siguiente número de radicado del mes: el mayor ya usado más uno, con su prefijo y sus ceros («02228» → «02229»). */
+  function sugerirRadicado(): string {
+    let mayor: { valor: number; texto: string } | null = null
+    for (const q of periodos) {
+      const m = q.numero_radicado?.trim().match(/^(.*?)(\d+)$/)
+      if (!m) continue
+      const valor = parseInt(m[2], 10)
+      if (!mayor || valor > mayor.valor) mayor = { valor, texto: q.numero_radicado!.trim() }
+    }
+    if (!mayor) return ''
+    const [, prefijo, digitos] = mayor.texto.match(/^(.*?)(\d+)$/)!
+    return prefijo + String(mayor.valor + 1).padStart(digitos.length, '0')
+  }
+
+  function abrirRadicar(p: Periodo) {
+    setNumeroRadicado(sugerirRadicado())
+    setRadicando(p)
+  }
+
+  async function confirmarRadicado() {
+    const numero = numeroRadicado.trim()
+    if (!radicando || !numero) return
+    setEnviandoRadicado(true)
+    const res = await marcarRadicado(radicando.id, numero)
+    if (res.error) toast.error(res.error)
+    else {
+      toast.success(`Radicado con N.º ${numero}`)
+      patchPeriodoLocal(radicando.id, { estado: 'radicado', numero_radicado: numero })
+      setRadicando(null)
+      void refrescar()
+    }
+    setEnviandoRadicado(false)
   }
 
   async function recordar(p: Periodo) {
@@ -714,6 +753,7 @@ export default function InformesPage({
             // enviado (su pre-aprobación).
             const puedeAprobar = datos.estado === 'por_revisar' && (esSecretaria || esAdmin || (esAsesor && p.estado === 'enviado'))
             const puedeGestionarTardio = esSecretaria || esAdmin
+            const puedeRadicar = (esSecretaria || esAdmin || esAsesor) && !p.es_historico
             return (
               <TarjetaInforme
                 key={p.id}
@@ -729,6 +769,7 @@ export default function InformesPage({
                   hrefDocumentos: `/api/pdf/${p.id}/actas`,
                   numeroRadicado: p.numero_radicado ?? null,
                   mesCerrado: mesCerrado && !p.habilitado_tardio,
+                  onRadicar: puedeRadicar ? () => abrirRadicar(p) : undefined,
                   onCopiarRadicado: p.numero_radicado ? () => copiarRadicado(p.numero_radicado!) : undefined,
                   onDevolver: datos.estado === 'por_revisar' ? () => { setMotivoDevolucion(''); setDevolviendo(p) } : undefined,
                   onRecordar: () => recordar(p),
@@ -740,6 +781,57 @@ export default function InformesPage({
         </div>
       )}
       </>
+      )}
+
+      {radicando && (
+        <Dialogo
+          titulo="Radicar el informe"
+          descripcion={`${(radicando.contrato?.contratista?.nombre_completo ?? '').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase())} · CN ${radicando.contrato?.numero ?? ''}`}
+          icono={Iconos.estado.aprobado}
+          onCerrar={() => setRadicando(null)}
+          ocupado={enviandoRadicado}
+          pie={
+            <>
+              <button
+                type="button"
+                onClick={() => setRadicando(null)}
+                disabled={enviandoRadicado}
+                className="min-h-11 rounded-xl border border-gray-300 px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarRadicado}
+                disabled={enviandoRadicado || !numeroRadicado.trim()}
+                className="min-h-11 rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {enviandoRadicado ? 'Radicando…' : 'Radicar'}
+              </button>
+            </>
+          }
+        >
+          <form onSubmit={e => { e.preventDefault(); void confirmarRadicado() }}>
+            <label htmlFor="numero-radicado" className="mb-1.5 block text-sm font-medium text-gray-700">
+              Número de radicado
+            </label>
+            <input
+              id="numero-radicado"
+              data-autofocus
+              value={numeroRadicado}
+              onChange={e => setNumeroRadicado(e.target.value)}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="Por ejemplo: 02229"
+              className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base tabular-nums text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/15"
+            />
+            <p className="mt-2 text-sm text-gray-500">
+              {numeroRadicado.trim() && numeroRadicado.trim() === sugerirRadicado()
+                ? 'Sugerido: el siguiente al último radicado del mes. Corrígelo si la ventanilla dio otro.'
+                : 'El contratista recibe un aviso con este número.'}
+            </p>
+          </form>
+        </Dialogo>
       )}
 
       {devolviendo && (
