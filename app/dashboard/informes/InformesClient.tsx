@@ -20,7 +20,7 @@ import {
   habilitarEnvioTardio,
 } from '@/app/actions/periodos'
 import TarjetaInforme, { type DatosTarjetaInforme, type EstadoTarjeta } from '@/components/informes/TarjetaInforme'
-import { opcionesDeInforme } from '@/components/informes/opciones-informe'
+import { opcionesDeInforme, DOCUMENTOS_SECOP } from '@/components/informes/opciones-informe'
 import Dialogo from '@/components/ui/Dialogo'
 import HistorialInforme from '@/components/informes/HistorialInforme'
 import RevisionDocumentos, { type PestanaRevision } from '@/components/informes/RevisionDocumentos'
@@ -37,7 +37,6 @@ import InformesLoading from './loading'
 import EsqueletoInformes from './EsqueletoInformes'
 import SearchInput from '@/components/ui/SearchInput'
 import { Iconos } from '@/lib/iconos'
-import Icono from '@/components/ui/Icono'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -417,6 +416,37 @@ export default function InformesPage({
 
   function anterior() {
     setRevision(r => (r && r.i > 0 ? { ...r, i: r.i - 1 } : r))
+  }
+
+  /**
+   * Baja lo marcado en «Descargar documentos»: uno suelto o un ZIP (/api/pdf/[id]/seleccion). Si lo marcado es justo «Lo
+   * de SECOP», se usa el paquete SECOP de siempre (que suma contrato, certificación y acta de terminación cuando tocan).
+   * Se pide con fetch para poder decir qué falló (datos incompletos, por ejemplo) en vez de bajar un archivo de error.
+   */
+  async function descargarDocumentos(p: Periodo, ids: string[]) {
+    const hay = DOCUMENTOS_SECOP.filter(id => (id !== 'planilla' || p.planilla_ss_url) && (id !== 'soporte' || p.soporte_pago_url))
+    const esSecop = ids.length === hay.length && hay.every(id => ids.includes(id))
+    const url = esSecop ? `/api/pdf/${p.id}/secop` : `/api/pdf/${p.id}/seleccion?docs=${ids.join(',')}`
+    const aviso = toast.loading(ids.length === 1 ? 'Preparando el documento…' : `Preparando ${ids.length} documentos…`)
+    try {
+      const r = await fetch(url)
+      if (!r.ok) {
+        const motivo = await r.json().then((j: { error?: string }) => j.error).catch(() => null)
+        toast.error(motivo ?? 'No se pudo preparar la descarga', { id: aviso })
+        return
+      }
+      const nombre = /filename="([^"]+)"/.exec(r.headers.get('content-disposition') ?? '')?.[1] ?? 'documentos'
+      const enlace = document.createElement('a')
+      enlace.href = URL.createObjectURL(await r.blob())
+      enlace.download = nombre
+      document.body.appendChild(enlace)
+      enlace.click()
+      enlace.remove()
+      setTimeout(() => URL.revokeObjectURL(enlace.href), 30_000)
+      toast.success('Descarga lista', { id: aviso })
+    } catch {
+      toast.error('No se pudo descargar. Revisa tu conexión e inténtalo de nuevo.', { id: aviso })
+    }
   }
 
   async function aprobarEnRevision(p: Periodo) {
@@ -827,11 +857,12 @@ export default function InformesPage({
                 onCopiarRadicado={copiarRadicado}
                 onVerPlanilla={() => abrirRevision(p, 'planilla')}
                 opciones={opcionesDeInforme(datos.estado, {
-                  periodoId: p.id,
                   hrefContrato: `/dashboard/contratos/${p.contrato_id}`,
+                  tienePlanilla: !!p.planilla_ss_url,
+                  tieneSoporte: !!p.soporte_pago_url,
+                  onDescargar: (ids) => { void descargarDocumentos(p, ids) },
                   mesCerrado: mesCerrado && !p.habilitado_tardio,
-                  onVerInforme: () => abrirRevision(p),
-                  onVerPlanilla: p.planilla_ss_url ? () => abrirRevision(p, 'planilla') : undefined,
+                  onVerDocumentos: () => abrirRevision(p),
                   onHistorial: () => setViendoHistorial(p),
                   onRadicar: puedeRadicar ? () => abrirRadicar(p) : undefined,
                   onDevolver: datos.estado === 'por_revisar' ? () => { setMotivoDevolucion(''); setDevolviendo(p) } : undefined,

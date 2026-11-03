@@ -2,60 +2,72 @@
  * Las opciones del menú de tres puntos de un informe, según su estado (rediseño de noviembre de 2026).
  *
  * La idea: que quien revisa no tenga que salir de /dashboard/informes.
- *   · siempre: ver el informe de actividades (vista previa del documento, ahí mismo), el contrato y el historial (en una
- *     ventana);
- *   · si hay planilla: verla en una ventana (y aprobarla o devolverla);
+ *   · siempre: ver documentos (la ventana de revisión, con una pestaña por documento: informe, cuenta de cobro, planilla,
+ *     soporte y, desde que se aprueba, las actas), el contrato y el historial (en una ventana);
  *   · aprobado: radicar (pide el número de radicado);
- *   · aprobado o radicado: descargar documentos, una lista con cada uno (antes de aprobar no hay actas que descargar);
+ *   · aprobado o radicado: descargar documentos, una lista con casillas; se marca lo que se necesita (o «Todo», o «Lo de
+ *     SECOP») y «Descargar (N)» baja uno suelto o un ZIP con los marcados (ver `DOCUMENTOS_DESCARGABLES`);
  *   · por revisar: devolver (pide un motivo);
  *   · sin enviar: recordar al contratista y, si el mes ya cerró, habilitar el envío tardío.
  * El número de radicado se copia tocándolo en la tarjeta, no desde aquí.
  */
 
-import type { OpcionMenu } from '@/components/ui/MenuOpciones'
+import type { OpcionMenu, SeleccionMenu } from '@/components/ui/MenuOpciones'
 import { Iconos } from '@/lib/iconos'
 import type { EstadoTarjeta } from './TarjetaInforme'
 
 export interface AccionesInforme {
-  periodoId: string
   hrefContrato: string
   mesCerrado: boolean
-  onVerInforme: () => void
+  tienePlanilla: boolean
+  tieneSoporte: boolean
+  onVerDocumentos: () => void
   onHistorial: () => void
-  onVerPlanilla?: () => void
+  onDescargar: (ids: string[]) => void
   onRadicar?: () => void
   onDevolver?: () => void
   onRecordar?: () => void
   onHabilitarTardio?: () => void
 }
 
-/** Lo que se puede descargar de un informe aprobado o radicado: cada documento y los dos paquetes. */
-function documentos(periodoId: string): OpcionMenu[] {
-  const base = `/api/pdf/${periodoId}`
-  const doc = (id: string, etiqueta: string, icono: OpcionMenu['icono']): OpcionMenu =>
-    ({ id, etiqueta, icono, href: `${base}/${id}`, descarga: true })
-  return [
-    doc('informe', 'Informe de actividades', Iconos.documentos.informe),
-    doc('cuenta-cobro', 'Cuenta de cobro', Iconos.documentos.cuentaCobro),
-    doc('acta-supervision', 'Acta de supervisión', Iconos.documentos.actaSupervision),
-    doc('acta-pago', 'Acta de pago', Iconos.documentos.actaPago),
-    doc('paquete', 'Todo junto (ZIP)', Iconos.documentos.paquete),
-    doc('secop', 'Paquete para SECOP (ZIP)', Iconos.documentos.paquete),
-  ]
+/** Lo que se puede descargar de un informe aprobado o radicado, en el orden del paquete. */
+export const DOCUMENTOS_DESCARGABLES = [
+  { id: 'informe', etiqueta: 'Informe de actividades', icono: Iconos.documentos.informe },
+  { id: 'cuenta-cobro', etiqueta: 'Cuenta de cobro', icono: Iconos.documentos.cuentaCobro },
+  { id: 'acta-supervision', etiqueta: 'Acta de supervisión', icono: Iconos.documentos.actaSupervision },
+  { id: 'acta-pago', etiqueta: 'Acta de pago', icono: Iconos.documentos.actaPago },
+  { id: 'planilla', etiqueta: 'Planilla de seguridad social', icono: Iconos.documentos.planilla },
+  { id: 'soporte', etiqueta: 'Soporte de pago', icono: Iconos.documentos.soportePago },
+] as const
+
+/** Lo que pide SECOP II de cada cuenta. Con exactamente esto marcado se baja el paquete SECOP de siempre, que además suma
+ * el contrato y la certificación de retención en la primera cuenta, y el acta de terminación en la última. */
+export const DOCUMENTOS_SECOP = ['informe', 'cuenta-cobro', 'planilla', 'soporte']
+
+function descargas(a: AccionesInforme): SeleccionMenu {
+  const opciones = DOCUMENTOS_DESCARGABLES.filter(d =>
+    d.id === 'planilla' ? a.tienePlanilla : d.id === 'soporte' ? a.tieneSoporte : true)
+  const hay = new Set(opciones.map(o => o.id as string))
+  return {
+    opciones: [...opciones],
+    atajos: [
+      { etiqueta: 'Todo', ids: [...hay] },
+      { etiqueta: 'Lo de SECOP', ids: DOCUMENTOS_SECOP.filter(id => hay.has(id)) },
+    ],
+    accion: 'Descargar',
+    onConfirmar: a.onDescargar,
+  }
 }
 
 export function opcionesDeInforme(estado: EstadoTarjeta, a: AccionesInforme): OpcionMenu[] {
   const lista: OpcionMenu[] = [
-    { id: 'informe', etiqueta: 'Ver informe de actividades', icono: Iconos.accion.ver, onSelect: a.onVerInforme },
+    { id: 'documentos-ver', etiqueta: 'Ver documentos', icono: Iconos.accion.ver, onSelect: a.onVerDocumentos },
   ]
-  if (a.onVerPlanilla) {
-    lista.push({ id: 'planilla', etiqueta: 'Ver planilla', icono: Iconos.documentos.planilla, onSelect: a.onVerPlanilla })
-  }
   if (estado === 'aprobado' && a.onRadicar) {
     lista.push({ id: 'radicar', etiqueta: 'Radicar', icono: Iconos.estado.aprobado, onSelect: a.onRadicar })
   }
   if (estado === 'aprobado' || estado === 'radicado') {
-    lista.push({ id: 'documentos', etiqueta: 'Descargar documentos', icono: Iconos.documentos.descargar, submenu: documentos(a.periodoId) })
+    lista.push({ id: 'documentos', etiqueta: 'Descargar documentos', icono: Iconos.documentos.descargar, seleccion: descargas(a) })
   }
   if (estado === 'sin_enviar' && a.onRecordar) {
     lista.push({ id: 'recordar', etiqueta: 'Recordar al contratista', icono: Iconos.aviso.notificaciones, onSelect: a.onRecordar })

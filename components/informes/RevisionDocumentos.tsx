@@ -3,10 +3,11 @@
 /**
  * La ventana de revisión de /dashboard/informes: los documentos de un informe y la decisión, sin salir de la pantalla.
  *
- * Una sola ventana con pestañas —Informe de actividades · Planilla · Soporte de pago— en vez de un visor por documento:
+ * Una sola ventana con pestañas —Informe · Cuenta de cobro · Planilla · Soporte de pago · Acta de supervisión · Acta de
+ * pago, solo las que existen (las actas, desde que se aprueba)— en vez de un visor por documento:
  * quien revisa mira el informe, salta a la planilla y vuelve, sin abrir y cerrar ventanas. Arriba, la persona (foto,
  * nombre, contrato, valor y mes) y el zoom; abajo, la decisión de lo que está mirando:
- *   · en el informe: Devolver y «Aprobar y seguir» (que pasa solo al siguiente);
+ *   · en el informe y los demás documentos del sistema: Devolver y «Aprobar y seguir» (que pasa solo al siguiente);
  *   · en la planilla o el soporte: aprobar o devolver la planilla, con el motivo ahí mismo.
  * ‹ › (o las flechas del teclado, desde la pantalla) pasan de informe. Al pasar, se queda en la misma pestaña si el
  * siguiente también tiene ese documento: revisar todas las planillas del mes es planilla tras planilla.
@@ -34,12 +35,19 @@ import { obtenerPlanillaInforme } from '@/app/actions/informes'
 import { revisarPlanilla } from '@/app/actions/periodos'
 import type { Periodo } from '@/lib/types'
 
-export type PestanaRevision = 'informe' | 'planilla' | 'soporte'
+export type PestanaRevision = 'informe' | 'cuenta-cobro' | 'planilla' | 'soporte' | 'acta-supervision' | 'acta-pago'
+
+/** Los que arma el sistema (con su ruta en /api/pdf); planilla y soporte son archivos que sube el contratista. */
+const GENERADOS = new Set<PestanaRevision>(['informe', 'cuenta-cobro', 'acta-supervision', 'acta-pago'])
+const esDeLaPlanilla = (p: PestanaRevision) => p === 'planilla' || p === 'soporte'
 
 const PESTANAS: { id: PestanaRevision; etiqueta: string; corta: string; icono: LucideIcon }[] = [
   { id: 'informe', etiqueta: 'Informe de actividades', corta: 'Informe', icono: Iconos.documentos.informe },
+  { id: 'cuenta-cobro', etiqueta: 'Cuenta de cobro', corta: 'Cuenta', icono: Iconos.documentos.cuentaCobro },
   { id: 'planilla', etiqueta: 'Planilla', corta: 'Planilla', icono: Iconos.documentos.planilla },
   { id: 'soporte', etiqueta: 'Soporte de pago', corta: 'Soporte', icono: Iconos.documentos.soportePago },
+  { id: 'acta-supervision', etiqueta: 'Acta de supervisión', corta: 'Acta sup.', icono: Iconos.documentos.actaSupervision },
+  { id: 'acta-pago', etiqueta: 'Acta de pago', corta: 'Acta pago', icono: Iconos.documentos.actaPago },
 ]
 
 const ZOOMS = [1, 1.25, 1.5, 2]
@@ -93,7 +101,10 @@ export default function RevisionDocumentos({
   const queryClient = useQueryClient()
   const tienePlanilla = !!periodo.planilla_ss_url
   const tieneSoporte = !!periodo.soporte_pago_url
-  const disponible = (p: PestanaRevision) => p === 'informe' || (p === 'planilla' ? tienePlanilla : tieneSoporte)
+  // Las actas existen desde que se aprueba; la cuenta de cobro y el informe, siempre.
+  const hayActas = periodo.estado === 'aprobado' || periodo.estado === 'radicado'
+  const disponible = (p: PestanaRevision) =>
+    p === 'planilla' ? tienePlanilla : p === 'soporte' ? tieneSoporte : p.startsWith('acta-') ? hayActas : true
 
   const [pestanaElegida, setPestana] = useState<PestanaRevision>(pestanaInicial)
   // Al pasar a un informe sin ese documento, se muestra el informe (sin perder la elección para el siguiente).
@@ -117,8 +128,8 @@ export default function RevisionDocumentos({
   })
 
   const documento: { url: string; esPdf: boolean } | null =
-    pestana === 'informe'
-      ? { url: `/api/pdf/${periodo.id}/informe`, esPdf: true }
+    GENERADOS.has(pestana)
+      ? { url: `/api/pdf/${periodo.id}/${pestana}`, esPdf: true }
       : (pestana === 'planilla' ? planilla.data?.planilla : planilla.data?.soporte) ?? null
 
   // Otro documento: zoom al ajuste y sin la explicación del anterior.
@@ -132,11 +143,11 @@ export default function RevisionDocumentos({
     setDevolviendoPlanilla(false)
   }
 
-  // Si el informe no se pudo armar, el servidor dice por qué (por ejemplo, a un borrador le faltan datos).
+  // Si un documento del sistema no se pudo armar, el servidor dice por qué (por ejemplo, a un borrador le faltan datos).
   useEffect(() => {
-    if (estadoDoc !== 'error' || pestana !== 'informe') return
+    if (estadoDoc !== 'error' || !GENERADOS.has(pestana)) return
     let cancelado = false
-    fetch(`/api/pdf/${periodo.id}/informe`)
+    fetch(`/api/pdf/${periodo.id}/${pestana}`)
       // Solo «datos incompletos» (422) se explica así; otro fallo queda con el aviso del lector y su «Reintentar».
       .then(async r => (r.status === 422 ? ((await r.json()) as { error?: string }).error ?? null : null))
       .catch(() => null)
@@ -246,12 +257,12 @@ export default function RevisionDocumentos({
               <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-amber-50 text-amber-700">
                 <Icono glifo={Iconos.estado.advertencia} tamano="md" />
               </span>
-              <p className="mt-3 text-sm font-semibold text-gray-900">Este informe todavía no se puede armar</p>
+              <p className="mt-3 text-sm font-semibold text-gray-900">Este documento todavía no se puede armar</p>
               <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{explicacion}</p>
             </div>
-          ) : pestana !== 'informe' && planilla.isLoading ? (
+          ) : esDeLaPlanilla(pestana) && planilla.isLoading ? (
             <HojaCargando texto="Abriendo la planilla…" />
-          ) : pestana !== 'informe' && planilla.isError && !datosPlanilla ? (
+          ) : esDeLaPlanilla(pestana) && planilla.isError && !datosPlanilla ? (
             <Aviso texto="No se pudo abrir la planilla.">
               <button type="button" onClick={() => planilla.refetch()} className="mt-3 min-h-10 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                 Reintentar
@@ -271,7 +282,7 @@ export default function RevisionDocumentos({
                   key={documento.url}
                   url={documento.url}
                   zoom={zoom}
-                  claves={pestana !== 'informe' && datosPlanilla?.cedula ? [datosPlanilla.cedula] : []}
+                  claves={esDeLaPlanilla(pestana) && datosPlanilla?.cedula ? [datosPlanilla.cedula] : []}
                   onEstado={setEstadoDoc}
                 />
               </div>
@@ -289,7 +300,7 @@ export default function RevisionDocumentos({
 
         {/* ── La decisión de lo que se está mirando. ── */}
         <footer className="border-t border-gray-200 bg-white px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
-          {pestana !== 'informe' && devolviendoPlanilla ? (
+          {esDeLaPlanilla(pestana) && devolviendoPlanilla ? (
             <form onSubmit={(e) => { e.preventDefault(); void decidirPlanilla('rechazada') }} className="flex flex-col gap-2.5 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label htmlFor="motivo-planilla" className="mb-1 block text-sm font-medium text-gray-700">
@@ -328,7 +339,7 @@ export default function RevisionDocumentos({
               </div>
 
               <p className="min-w-0 flex-1 text-sm">
-                {pestana === 'informe' || !datosPlanilla?.revision ? (
+                {!esDeLaPlanilla(pestana) || !datosPlanilla?.revision ? (
                   <span className={`font-semibold ${estado.color}`}>{estado.texto}</span>
                 ) : (
                   <span className={`inline-flex items-center gap-1.5 font-semibold ${REVISION_PLANILLA[datosPlanilla.revision].color}`}>
@@ -337,8 +348,8 @@ export default function RevisionDocumentos({
                     {datosPlanilla.numero && <span className="hidden font-normal tabular-nums text-gray-500 sm:inline">· N.º {datosPlanilla.numero}</span>}
                   </span>
                 )}
-                {pestana === 'informe' && quedan > 0 && <span className="text-gray-500"> · quedan {quedan}<span className="hidden sm:inline"> por revisar</span></span>}
-                {pestana !== 'informe' && (
+                {!esDeLaPlanilla(pestana) && quedan > 0 && <span className="text-gray-500"> · quedan {quedan}<span className="hidden sm:inline"> por revisar</span></span>}
+                {esDeLaPlanilla(pestana) && (
                   <Link
                     href={`/dashboard/contratos/${periodo.contrato_id}/periodo/${periodo.id}`}
                     className="ml-2 hidden text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline sm:inline"
@@ -349,7 +360,7 @@ export default function RevisionDocumentos({
               </p>
 
               <div className="flex w-full justify-end gap-2 sm:w-auto">
-                {pestana === 'informe' ? (
+                {!esDeLaPlanilla(pestana) ? (
                   <>
                     {puedeDevolver && (
                       <button type="button" onClick={onDevolver} className="min-h-11 rounded-xl border border-gray-300 px-4 text-sm font-semibold text-red-700 transition-colors hover:border-red-200 hover:bg-red-50">

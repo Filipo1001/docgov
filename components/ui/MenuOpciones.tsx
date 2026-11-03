@@ -10,6 +10,9 @@
  * Una opción es un enlace (`href`), una acción (`onSelect`) o una lista desplegable (`submenu`): al tocarla, el menú muestra
  * esa lista en su lugar, con «Volver» arriba. `peligro` la pinta en rojo (devolver, por ejemplo) y va separada del resto
  * por una línea.
+ *
+ * Una lista desplegable puede ser de SELECCIÓN (`seleccion`): cada opción con su casilla, atajos para marcar varias de un
+ * toque y, abajo, el botón que actúa sobre lo marcado («Descargar (3)»), que solo se activa con al menos una marcada.
  */
 
 import { useEffect, useId, useRef, useState } from 'react'
@@ -30,12 +33,24 @@ export interface OpcionMenu {
   descarga?: boolean
   /** Una lista que se despliega en el mismo menú (Descargar documentos → cada documento). */
   submenu?: OpcionMenu[]
+  /** Una lista con casillas que se despliega en el mismo menú (ver `SeleccionMenu`). */
+  seleccion?: SeleccionMenu
+}
+
+export interface SeleccionMenu {
+  opciones: { id: string; etiqueta: string; icono: LucideIcon }[]
+  /** Marcar varias de un toque («Todo», «Lo de SECOP»). */
+  atajos?: { etiqueta: string; ids: string[] }[]
+  /** Lo que dice el botón con N marcadas («Descargar»). */
+  accion: string
+  onConfirmar: (ids: string[]) => void
 }
 
 export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionMenu[]; etiqueta: string }) {
   const [abierto, setAbierto] = useState(false)
   // La lista desplegada (submenú), si la hay. Al cerrar el menú se vuelve a la principal.
   const [sub, setSub] = useState<OpcionMenu | null>(null)
+  const [marcados, setMarcados] = useState<Set<string>>(new Set())
   const boton = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
   const idMenu = useId()
@@ -44,7 +59,7 @@ export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionM
   useEffect(() => {
     if (!abierto) return
     // Al abrir o al cambiar de lista, el foco va a la primera opción.
-    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    menu.current?.querySelector<HTMLElement>('[role^="menuitem"]')?.focus()
     const fuera = (e: PointerEvent) => {
       if (!menu.current?.contains(e.target as Node) && !boton.current?.contains(e.target as Node)) setAbierto(false)
     }
@@ -55,11 +70,12 @@ export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionM
   function cerrar(volverAlBoton = true) {
     setAbierto(false)
     setSub(null)
+    setMarcados(new Set())
     if (volverAlBoton) boton.current?.focus()
   }
 
   function teclado(e: React.KeyboardEvent) {
-    const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"], [data-accion-menu]') ?? [])]
     const i = items.indexOf(document.activeElement as HTMLElement)
     if (e.key === 'Escape') { e.preventDefault(); cerrar() }
     else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length]?.focus() }
@@ -79,7 +95,7 @@ export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionM
       <>
         <Icono glifo={o.icono} tamano="sm" className={o.peligro ? 'text-red-600' : 'text-gray-500'} />
         <span className="flex-1">{o.etiqueta}</span>
-        {o.submenu && <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="text-gray-400" />}
+        {(o.submenu || o.seleccion) && <Icono glifo={Iconos.accion.avanzar} tamano="sm" className="text-gray-400" />}
       </>
     )
     const color = o.peligro ? 'text-red-700' : 'text-gray-800'
@@ -120,9 +136,9 @@ export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionM
         role="menuitem"
         tabIndex={-1}
         className={`${claseItem} ${color}`}
-        aria-haspopup={o.submenu ? 'menu' : undefined}
+        aria-haspopup={o.submenu || o.seleccion ? 'menu' : undefined}
         onClick={() => {
-          if (o.submenu) { setSub(o); return }
+          if (o.submenu || o.seleccion) { setSub(o); setMarcados(new Set()); return }
           cerrar(false)
           o.onSelect?.()
         }}
@@ -154,7 +170,7 @@ export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionM
           role="menu"
           aria-label={etiqueta}
           onKeyDown={teclado}
-          className="absolute right-0 top-full z-30 mt-1 w-60 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg"
+          className={`absolute right-0 top-full z-30 mt-1 ${sub?.seleccion ? "w-72" : "w-60"} rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg`}
         >
           {sub && (
             <>
@@ -162,7 +178,7 @@ export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionM
                 type="button"
                 role="menuitem"
                 tabIndex={-1}
-                onClick={() => setSub(null)}
+                onClick={() => { setSub(null); setMarcados(new Set()) }}
                 className={`${claseItem} font-semibold text-gray-900`}
               >
                 <Icono glifo={Iconos.accion.retroceder} tamano="sm" className="text-gray-500" />
@@ -171,11 +187,97 @@ export default function MenuOpciones({ opciones, etiqueta }: { opciones: OpcionM
               <div role="separator" className="my-1.5 border-t border-gray-100" />
             </>
           )}
-          {normales.map(item)}
+          {sub?.seleccion ? (
+            <ListaSeleccion
+              seleccion={sub.seleccion}
+              marcados={marcados}
+              onCambiar={setMarcados}
+              claseItem={claseItem}
+              onConfirmar={() => { const ids = sub.seleccion!.opciones.map(o => o.id).filter(id => marcados.has(id)); cerrar(false); sub.seleccion!.onConfirmar(ids) }}
+            />
+          ) : normales.map(item)}
           {peligrosas.length > 0 && normales.length > 0 && <div role="separator" className="my-1.5 border-t border-gray-100" />}
           {peligrosas.map(item)}
         </div>
       )}
     </div>
+  )
+}
+
+/** Las casillas de una lista de selección, sus atajos y el botón que actúa sobre lo marcado. */
+function ListaSeleccion({
+  seleccion, marcados, onCambiar, onConfirmar, claseItem,
+}: {
+  seleccion: SeleccionMenu
+  marcados: Set<string>
+  onCambiar: (s: Set<string>) => void
+  onConfirmar: () => void
+  claseItem: string
+}) {
+  const alternar = (id: string) => {
+    const s = new Set(marcados)
+    if (s.has(id)) s.delete(id)
+    else s.add(id)
+    onCambiar(s)
+  }
+  const n = marcados.size
+  return (
+    <>
+      {seleccion.atajos && seleccion.atajos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2 pt-0.5 text-xs text-gray-500">
+          Marcar:
+          {seleccion.atajos.map(a => {
+            const activo = a.ids.length === n && a.ids.every(id => marcados.has(id))
+            return (
+              <button
+                key={a.etiqueta}
+                type="button"
+                onClick={() => onCambiar(activo ? new Set() : new Set(a.ids))}
+                aria-pressed={activo}
+                className={`rounded-md px-2 py-1 font-medium transition-colors ${activo ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                {a.etiqueta}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {seleccion.opciones.map(o => {
+        const marcado = marcados.has(o.id)
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={marcado}
+            tabIndex={-1}
+            onClick={() => alternar(o.id)}
+            className={`${claseItem} text-gray-800`}
+          >
+            <span
+              aria-hidden="true"
+              className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border transition-colors ${
+                marcado ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white'
+              }`}
+            >
+              {marcado && <Icono glifo={Iconos.estado.ok} tamano="sm" className="h-3 w-3" />}
+            </span>
+            <Icono glifo={o.icono} tamano="sm" className="text-gray-500" />
+            <span className="flex-1">{o.etiqueta}</span>
+          </button>
+        )
+      })}
+      <div className="mt-1.5 border-t border-gray-100 pt-1.5">
+        <button
+          type="button"
+          data-accion-menu
+          onClick={onConfirmar}
+          disabled={n === 0}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-default disabled:bg-gray-100 disabled:text-gray-400"
+        >
+          {n === 0 ? 'Marca lo que necesitas' : <><Icono glifo={Iconos.documentos.descargar} tamano="sm" />{seleccion.accion} ({n})</>}
+        </button>
+      </div>
+    </>
   )
 }
