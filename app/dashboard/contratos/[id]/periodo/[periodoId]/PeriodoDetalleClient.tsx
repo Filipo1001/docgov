@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { invalidarPeriodos } from '@/lib/invalidar-periodos'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Toaster, toast } from 'sonner'
 import { useUsuario } from '@/lib/user-context'
@@ -464,7 +464,9 @@ export default function PeriodoDetallePage({
 
   // Secretaria: modal de devolución con elección de destino
   // Detalle del periodo — solo asesor/supervisor/admin (ver DetallePeriodo.tsx)
-  const [mostrarDetalle, setMostrarDetalle] = useState(false)
+  // `?detalle=1` lo abre de entrada: es el «Historial del informe» del menú de la tarjeta en /dashboard/informes.
+  const searchParams = useSearchParams()
+  const [mostrarDetalle, setMostrarDetalle] = useState(() => searchParams.get('detalle') === '1')
 
   const [mostrarDevolverModal, setMostrarDevolverModal] = useState(false)
   const [destinoDevolucion, setDestinoDevolucion] = useState<'asesores' | 'contratista' | null>(null)
@@ -5019,7 +5021,11 @@ export default function PeriodoDetallePage({
       {/* Detalle del periodo — lo que ya no cabe (ni debe caber) en la cabecera */}
       <DetallePeriodo
         abierto={mostrarDetalle}
-        onCerrar={() => setMostrarDetalle(false)}
+        onCerrar={() => {
+          setMostrarDetalle(false)
+          // Sin el parámetro, recargar la página no lo vuelve a abrir.
+          if (searchParams.get('detalle')) window.history.replaceState(null, '', window.location.pathname)
+        }}
         contrato={contrato}
         periodo={periodo}
         obligaciones={obligaciones}
