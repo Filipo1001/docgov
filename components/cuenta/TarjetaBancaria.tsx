@@ -35,7 +35,7 @@ export default function TarjetaBancaria({ cuenta, titular }: { cuenta: CuentaBan
   if (!cuenta.banco && !cuenta.numero) {
     return (
       <div className="flex flex-col items-start gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-400">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500">
           <Icono glifo={Iconos.dominio.cuentaBancaria} tamano="md" />
         </span>
         <p className="text-sm font-semibold text-gray-900">Aún no tienes una cuenta registrada</p>
@@ -48,8 +48,10 @@ export default function TarjetaBancaria({ cuenta, titular }: { cuenta: CuentaBan
   const color = banco?.color ?? MARCA
   const oscuro = !!banco?.textoOscuro
   const tinta = oscuro ? '#1F1F1F' : '#FFFFFF'
-  // Velo para las etiquetas y el botón: sobre amarillo, una sombra; sobre colores oscuros, una luz.
-  const velo = oscuro ? 'rgba(31,31,31,0.10)' : 'rgba(255,255,255,0.16)'
+  // Velo para las etiquetas y el botón: una sombra en los dos casos. Una luz (blanco translúcido) aclararía el fondo
+  // justo bajo el texto blanco y lo dejaría por debajo de 4,5:1 en los colores medios (Falabella, Agrario…); la sombra lo
+  // oscurece y el contraste solo sube.
+  const velo = oscuro ? 'rgba(31,31,31,0.10)' : 'rgba(0,0,0,0.22)'
   const nombre = banco?.nombre ?? cuenta.banco ?? 'Cuenta bancaria'
   const tipo = tipoLegible(cuenta.tipo)
   const numero = cuenta.numero ? agruparNumeroCuenta(cuenta.numero, banco) : null

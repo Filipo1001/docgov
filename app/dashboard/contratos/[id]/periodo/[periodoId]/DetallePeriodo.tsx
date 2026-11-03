@@ -90,7 +90,7 @@ function fechaCorta(iso: string): string {
 function Seccion({ titulo, children, className = '' }: { titulo: string; children: React.ReactNode; className?: string }) {
   return (
     <section className={className}>
-      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-3">{titulo}</h4>
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-3">{titulo}</h4>
       {children}
     </section>
   )
@@ -99,7 +99,7 @@ function Seccion({ titulo, children, className = '' }: { titulo: string; childre
 function Dato({ etiqueta, children }: { etiqueta: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">{etiqueta}</p>
+      <p className="text-[11px] uppercase tracking-wide text-gray-500">{etiqueta}</p>
       <p className="text-xs text-gray-800 mt-0.5 break-words">{children}</p>
     </div>
   )
@@ -266,13 +266,13 @@ export default function DetallePeriodo({
         <header className="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900">Detalle del periodo</h3>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5">
               {periodo.mes} {periodo.anio} · Contrato N.° {contrato.numero}
             </p>
           </div>
           <button
             type="button" onClick={onCerrar} aria-label="Cerrar"
-            className="w-9 h-9 -mr-2 -mt-1 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors shrink-0"
+            className="w-9 h-9 -mr-2 -mt-1 flex items-center justify-center rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors shrink-0"
           >
             <Icono glifo={Iconos.accion.cerrar} tamano="md" />
           </button>
@@ -299,11 +299,11 @@ export default function DetallePeriodo({
             <div className="overflow-x-auto -mx-1 px-1">
               <table className="w-full min-w-[420px] text-xs border-collapse">
                 <thead>
-                  <tr className="text-[10px] uppercase tracking-wide text-gray-400">
-                    <th className="text-left font-semibold pb-2 border-b border-gray-200">Periodo</th>
-                    <th className="text-right font-semibold pb-2 pl-4 border-b border-gray-200">Monto</th>
-                    <th className="text-right font-semibold pb-2 pl-4 border-b border-gray-200">Acumulado</th>
-                    <th className="text-right font-semibold pb-2 pl-4 border-b border-gray-200">Restante</th>
+                  <tr className="text-[11px] uppercase tracking-wide text-gray-500">
+                    <th scope="col" className="text-left font-semibold pb-2 border-b border-gray-200">Periodo</th>
+                    <th scope="col" className="text-right font-semibold pb-2 pl-4 border-b border-gray-200">Monto</th>
+                    <th scope="col" className="text-right font-semibold pb-2 pl-4 border-b border-gray-200">Acumulado</th>
+                    <th scope="col" className="text-right font-semibold pb-2 pl-4 border-b border-gray-200">Restante</th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
@@ -332,7 +332,7 @@ export default function DetallePeriodo({
               </table>
             </div>
             {adicionesTotal > 0 && (
-              <p className="text-[11px] text-gray-400 mt-2">
+              <p className="text-[11px] text-gray-500 mt-2">
                 Incluye {pesos(adicionesTotal)} de adiciones por otrosí.
               </p>
             )}
@@ -357,7 +357,7 @@ export default function DetallePeriodo({
             <Seccion titulo={`Días con carga de evidencias · ${periodo.mes} ${anio}`} className="pt-5 border-t border-gray-100">
               <div className="grid grid-cols-7 gap-1 max-w-[300px]">
                 {['L','M','M','J','V','S','D'].map((d, i) => (
-                  <div key={i} className="text-[9px] font-semibold text-gray-400 text-center pb-1">{d}</div>
+                  <div key={i} className="text-[11px] font-semibold text-gray-500 text-center pb-1">{d}</div>
                 ))}
                 {Array.from({ length: desplazamiento }, (_, i) => <div key={`p${i}`} />)}
                 {Array.from({ length: diasDelMes }, (_, i) => {
@@ -373,10 +373,10 @@ export default function DetallePeriodo({
                         onMouseLeave={() => setDiaAbierto(null)}
                         onClick={() => setDiaAbierto(d => (d === dia ? null : dia))}
                         aria-label={activo ? `${dia}: ${n} evidencias subidas` : `${dia}: sin carga`}
-                        className={`w-full aspect-square rounded-md text-[10px] flex items-center justify-center transition-colors ${
+                        className={`w-full aspect-square rounded-md text-[11px] flex items-center justify-center transition-colors ${
                           activo
                             ? 'bg-emerald-500 text-white font-semibold hover:bg-emerald-600 cursor-pointer'
-                            : 'bg-gray-100 text-gray-400 cursor-default'
+                            : 'bg-gray-100 text-gray-500 cursor-default'
                         }`}
                       >
                         {dia}
@@ -392,7 +392,7 @@ export default function DetallePeriodo({
                   )
                 })}
               </div>
-              <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
+              <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
                 {diasConCarga === 0
                   ? 'No se subió ninguna evidencia dentro de este mes.'
                   : `Se cargaron evidencias en ${diasConCarga} ${diasConCarga === 1 ? 'día' : 'días'} del mes.`}
@@ -410,7 +410,7 @@ export default function DetallePeriodo({
               </p>
             )}
             {historial.length === 0 ? (
-              <p className="text-[11px] text-gray-400">Todavía no se ha movido del borrador.</p>
+              <p className="text-[11px] text-gray-500">Todavía no se ha movido del borrador.</p>
             ) : (
               /* Línea de tiempo horizontal. Con scroll propio cuando hay muchos
                  movimientos —hay periodos con 53— en vez de apretar los nodos
@@ -440,7 +440,7 @@ export default function DetallePeriodo({
                                 style={{ backgroundColor: COLOR_NODO[h.estado_nuevo ?? 'borrador'] ?? '#d1d5db' }}
                               />
                             </button>
-                            <span className={`text-[10px] mt-1.5 whitespace-nowrap ${sel ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+                            <span className={`text-[11px] mt-1.5 whitespace-nowrap ${sel ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
                               {fechaCorta(h.created_at)}
                             </span>
                           </div>
@@ -473,10 +473,10 @@ export default function DetallePeriodo({
                       <p className="text-xs text-gray-700 mt-1.5 break-words">
                         {h.usuario?.nombre_completo ?? 'Sistema'}
                         {h.usuario?.rol && (
-                          <span className="text-gray-400"> · {ROL_LABEL[h.usuario.rol] ?? h.usuario.rol}</span>
+                          <span className="text-gray-500"> · {ROL_LABEL[h.usuario.rol] ?? h.usuario.rol}</span>
                         )}
                       </p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">{fechaHora(h.created_at)}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">{fechaHora(h.created_at)}</p>
                       {h.comentario && (
                         <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-200 italic break-words leading-relaxed">
                           {h.comentario}

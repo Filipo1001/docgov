@@ -78,26 +78,26 @@ function Terminado({
   return (
     <section aria-labelledby="terminacion-titulo" className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-4">
-        <h3 id="terminacion-titulo" className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+        <h3 id="terminacion-titulo" className="text-sm font-medium text-gray-500 uppercase tracking-wide">
           Terminación anticipada
         </h3>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-gray-500">
           Registrada por {capitalizarNombre(t.registradaPor)} · {new Date(t.registradaEn).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
         </p>
       </div>
 
       <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
         <div className="min-w-0">
-          <dt className="text-gray-400 text-xs">Último día de ejecución</dt>
+          <dt className="text-gray-500 text-xs">Último día de ejecución</dt>
           <dd className="font-medium text-gray-900">{fechaLarga(t.fechaTerminacion)}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-gray-400 text-xs">Causal</dt>
+          <dt className="text-gray-500 text-xs">Causal</dt>
           <dd className="font-medium text-gray-900">{t.causalNombre}</dd>
-          {causal?.norma && <dd className="text-xs text-gray-400">{causal.norma}</dd>}
+          {causal?.norma && <dd className="text-xs text-gray-500">{causal.norma}</dd>}
         </div>
         <div className="min-w-0">
-          <dt className="text-gray-400 text-xs">Acto</dt>
+          <dt className="text-gray-500 text-xs">Acto</dt>
           <dd className="font-medium text-gray-900">
             {t.numeroActo || t.fechaActo
               ? [t.numeroActo && `N.º ${t.numeroActo}`, t.fechaActo && `del ${fechaLarga(t.fechaActo)}`].filter(Boolean).join(' ')
@@ -254,7 +254,7 @@ function Registrar({ contrato }: { contrato: { id: string; numero: string; fecha
 
   return (
     <section aria-labelledby="registrar-terminacion-titulo" className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-      <h3 id="registrar-terminacion-titulo" className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">
+      <h3 id="registrar-terminacion-titulo" className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">
         Registrar terminación anticipada
       </h3>
       <p className="text-xs text-gray-500 mb-4 max-w-2xl">
@@ -374,7 +374,7 @@ export function VistaPrevia({
 }) {
   if (!plan) {
     return cargando
-      ? <p className="text-xs text-gray-400">Calculando qué pasa con los periodos…</p>
+      ? <p className="text-xs text-gray-500">Calculando qué pasa con los periodos…</p>
       : null
   }
   if (plan.error) return <p role="alert" className="text-sm text-red-700">{plan.error}</p>

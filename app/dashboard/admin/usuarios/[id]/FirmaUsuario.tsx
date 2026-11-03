@@ -73,7 +73,7 @@ export default function FirmaUsuario({
       <Toaster richColors position="top-right" />
       <div className="flex items-center justify-between gap-3 mb-4">
         <h3 id="firma-titulo" className="text-sm font-semibold text-gray-900">Firma</h3>
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${firmaUrl ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${firmaUrl ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
           {firmaUrl ? '✓ Con firma' : 'Sin firma'}
         </span>
       </div>
@@ -90,7 +90,7 @@ export default function FirmaUsuario({
         {firmaUrl ? (
           <img src={firmaUrl} alt={`Firma de ${nombre}`} className="max-h-24 max-w-full object-contain p-2" />
         ) : (
-          <span className="text-xs text-gray-400">Sin firma cargada</span>
+          <span className="text-xs text-gray-500">Sin firma cargada</span>
         )}
       </div>
 
@@ -126,7 +126,7 @@ export default function FirmaUsuario({
             <button
               type="button"
               onClick={() => setConfirmEliminar(false)}
-              className="px-3 py-2 text-xs text-gray-400 border border-gray-200 rounded-xl hover:bg-gray-50"
+              className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50"
             >
               No
             </button>

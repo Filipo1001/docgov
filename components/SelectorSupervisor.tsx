@@ -60,9 +60,9 @@ export default function SelectorSupervisor({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <p className="block text-sm font-medium text-gray-700 mb-2">
         Supervisor del contrato <span className="text-red-500">*</span>
-      </label>
+      </p>
 
       <div
         role="radiogroup"
@@ -108,7 +108,7 @@ export default function SelectorSupervisor({
       {/* Dependencia deducida — visible y corregible, nunca en silencio. */}
       {seleccionado && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <span className="text-gray-400">Dependencia:</span>
+          <span className="text-gray-500">Dependencia:</span>
           {ajustandoDep ? (
             <>
               <select
@@ -120,7 +120,7 @@ export default function SelectorSupervisor({
                 {dependencias.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
               </select>
               <button type="button" onClick={() => setAjustandoDep(false)}
-                className="text-gray-400 hover:text-gray-600">listo</button>
+                className="text-gray-500 hover:text-gray-600">listo</button>
             </>
           ) : (
             <>

@@ -34,7 +34,7 @@ export default function VerificarLandingPage() {
             <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>CD</span>
           </div>
           <h1 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>Contratista Digital</h1>
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Verificación de documentos</p>
+          <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Verificación de documentos</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 24 }}>
@@ -66,12 +66,12 @@ export default function VerificarLandingPage() {
           >
             Verificar documento
           </button>
-          <p style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5, marginTop: 12, marginBottom: 0 }}>
+          <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5, marginTop: 12, marginBottom: 0 }}>
             Escriba el código impreso en el pie del documento (formato CD-XXXX-XXXX, o PDM-XXXX-XXXX en una constancia de reporte del Plan de Desarrollo) o escanee el código QR directamente.
           </p>
         </form>
 
-        <p style={{ textAlign: 'center', fontSize: 11, color: '#cbd5e1', marginTop: 20 }}>
+        <p style={{ textAlign: 'center', fontSize: 11, color: '#64748b', marginTop: 20 }}>
           Contratista Digital — Alcaldía Municipal de Fredonia, Antioquia
         </p>
       </div>

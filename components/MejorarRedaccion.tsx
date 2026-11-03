@@ -137,7 +137,7 @@ export default function MejorarRedaccion({
             >
               Mantener la mía
             </button>
-            <span className="text-[10px] text-gray-400 ml-auto">Corrección: LanguageTool</span>
+            <span className="text-[11px] text-gray-500 ml-auto">Corrección: LanguageTool</span>
           </div>
         </div>
       )}

@@ -321,7 +321,7 @@ export default function NotificacionDetalleModal({
               <Icono glifo={glifo} tamano="md" className={p.glifo} />
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500">
+              <p className="text-[11px] font-bold uppercase tracking-[0.09em] text-slate-500">
                 {ROTULOS[severidad]}
               </p>
               <h2 className="text-lg sm:text-xl font-bold text-[#192031] leading-tight tracking-tight mt-1 text-balance">
@@ -331,7 +331,7 @@ export default function NotificacionDetalleModal({
             <button
               ref={cerrarRef}
               onClick={cerrar}
-              className="shrink-0 -mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none transition-colors"
+              className="shrink-0 -mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none transition-colors"
             >
               <Icono glifo={Iconos.accion.cerrar} tamano="md" etiqueta="Cerrar" />
             </button>
@@ -353,7 +353,7 @@ export default function NotificacionDetalleModal({
               <>
                 <span className="text-slate-300">·</span>
                 <span className="inline-flex items-center gap-1">
-                  <Icono glifo={Iconos.aviso.correo} tamano="sm" className="text-slate-400" />
+                  <Icono glifo={Iconos.aviso.correo} tamano="sm" className="text-slate-500" />
                   También por correo
                 </span>
               </>
@@ -380,7 +380,7 @@ export default function NotificacionDetalleModal({
           {detalle.instruccion && (
             <div className="px-5 sm:px-7 pt-5">
               <div className={`rounded-2xl ${p.panel} border ${p.panelBorde} px-4 sm:px-5 py-4`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500 mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.09em] text-slate-500 mb-1.5">
                   Qué hay que hacer
                 </p>
                 <p className="text-sm text-[#192031] leading-relaxed font-medium">
@@ -394,10 +394,10 @@ export default function NotificacionDetalleModal({
           {detalle.bloques.map((bloque, i) => (
             <div key={i} className="px-5 sm:px-7 pt-6">
               <div className="flex items-baseline justify-between gap-3 mb-2.5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-slate-400">
+                <p className="text-[11px] font-bold uppercase tracking-[0.09em] text-slate-500">
                   {detalle.bloques.length > 1 ? bloque.resumen : 'Contratos'}
                 </p>
-                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
                   {bloque.items.length + bloque.omitidos}
                 </span>
               </div>
@@ -447,7 +447,7 @@ export default function NotificacionDetalleModal({
                 {bloque.omitidos > 0 && (
                   <li className="px-3 sm:px-4 py-3 bg-slate-50/60">
                     <div className="flex items-center gap-3">
-                      <span className="shrink-0 min-w-[2.75rem] px-2 py-1 rounded-lg border border-dashed border-slate-300 text-slate-400 text-xs font-bold tabular-nums text-center">
+                      <span className="shrink-0 min-w-[2.75rem] px-2 py-1 rounded-lg border border-dashed border-slate-300 text-slate-500 text-xs font-bold tabular-nums text-center">
                         +{bloque.omitidos}
                       </span>
                       <span className="text-[11px] text-slate-500 leading-snug">
@@ -465,7 +465,7 @@ export default function NotificacionDetalleModal({
           {principal && (
             <div className="px-5 sm:px-7 pt-6">
               <details className="group">
-                <summary className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 cursor-pointer list-none inline-flex items-center gap-1.5 transition-colors">
+                <summary className="text-[11px] font-semibold text-slate-500 hover:text-slate-600 cursor-pointer list-none inline-flex items-center gap-1.5 transition-colors">
                   <Icono
                     glifo={Iconos.accion.desplegar}
                     tamano="sm"
@@ -495,7 +495,7 @@ export default function NotificacionDetalleModal({
 
           {!detalle.bloques.length && !detalle.parrafos.length && (
             <div className="px-5 sm:px-7 pt-8 pb-2 text-center">
-              <p className="text-sm text-slate-400">Este aviso llegó sin mensaje.</p>
+              <p className="text-sm text-slate-500">Este aviso llegó sin mensaje.</p>
             </div>
           )}
 

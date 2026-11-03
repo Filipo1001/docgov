@@ -107,7 +107,7 @@ function PeriodoRow({
               <span className="font-semibold text-gray-900 text-sm">
                 {periodo.mes} {periodo.anio}
               </span>
-              <span className="text-xs text-gray-400">P{periodo.numero_periodo}</span>
+              <span className="text-xs text-gray-500">P{periodo.numero_periodo}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
@@ -119,7 +119,7 @@ function PeriodoRow({
             </div>
           </div>
 
-          <p className="text-xs text-gray-400 mb-2">
+          <p className="text-xs text-gray-500 mb-2">
             {periodo.fecha_inicio} → {periodo.fecha_fin}
             {periodo.fecha_envio && (
               <span className="ml-2">· Enviado {new Date(periodo.fecha_envio).toLocaleDateString('es-CO')}</span>
@@ -249,7 +249,7 @@ function ContratoSection({
             )}
           </div>
           <p className="text-xs text-gray-500 line-clamp-1">{contrato.objeto}</p>
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
             <span>{contrato.fecha_inicio} → {contrato.fecha_fin}</span>
             <span>·</span>
             <span>{porPeriodoCorto(contrato.periodos)} por periodo</span>
@@ -268,11 +268,11 @@ function ContratoSection({
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="text-xs text-gray-400">{aprobados}/{total}</span>
+              <span className="text-xs text-gray-500">{aprobados}/{total}</span>
             </div>
           )}
           <svg
-            className={`w-5 h-5 text-gray-400 transition-transform ${abierto ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-500 transition-transform ${abierto ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -296,7 +296,7 @@ function ContratoSection({
           </div>
 
           {contrato.periodos.length === 0 ? (
-            <p className="text-xs text-gray-400 italic py-3">
+            <p className="text-xs text-gray-500 italic py-3">
               No se han generado periodos para este contrato.
             </p>
           ) : (
@@ -427,25 +427,25 @@ export default function PersonaDetallePage() {
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-gray-500">
                 {user.telefono && (
                   <a href={`tel:${user.telefono}`} className="flex items-center gap-1.5 hover:text-gray-700">
-                    <Icono glifo={Iconos.dominio.telefono} tamano="sm" className="text-gray-400" />
+                    <Icono glifo={Iconos.dominio.telefono} tamano="sm" className="text-gray-500" />
                     {user.telefono}
                   </a>
                 )}
                 {user.email && (
                   <a href={`mailto:${user.email}`} className="flex items-center gap-1.5 hover:text-gray-700">
-                    <Icono glifo={Iconos.aviso.correo} tamano="sm" className="text-gray-400" />
+                    <Icono glifo={Iconos.aviso.correo} tamano="sm" className="text-gray-500" />
                     {user.email}
                   </a>
                 )}
                 {user.direccion && (
                   <span className="flex items-center gap-1.5">
-                    <Icono glifo={Iconos.dominio.ubicacion} tamano="sm" className="text-gray-400" />
+                    <Icono glifo={Iconos.dominio.ubicacion} tamano="sm" className="text-gray-500" />
                     {user.direccion}
                   </span>
                 )}
                 {user.cargo && (
                   <span className="flex items-center gap-1.5">
-                    <Icono glifo={Iconos.dominio.cargo} tamano="sm" className="text-gray-400" />
+                    <Icono glifo={Iconos.dominio.cargo} tamano="sm" className="text-gray-500" />
                     {user.cargo}
                   </span>
                 )}
@@ -454,7 +454,7 @@ export default function PersonaDetallePage() {
 
             {/* Imported info if no user */}
             {!user && (
-              <div className="mt-3 text-xs text-gray-400">
+              <div className="mt-3 text-xs text-gray-500">
                 <p>Cargo: {persona.cargo}</p>
                 {persona.secretaria && <p>Dependencia: {persona.secretaria}</p>}
               </div>
@@ -479,7 +479,7 @@ export default function PersonaDetallePage() {
         <div>
           <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
             Historial de contratos
-            <span className="text-xs text-gray-400 font-normal">
+            <span className="text-xs text-gray-500 font-normal">
               ({contratos.length})
             </span>
           </h2>

@@ -109,7 +109,7 @@ export default function NuevaContrasenaPage() {
             <LogoCD size={64} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[#192031]">Contratista Digital</h1>
-          <p className="text-sm text-gray-400 mt-1">Alcaldía Municipal de Fredonia</p>
+          <p className="text-sm text-gray-500 mt-1">Alcaldía Municipal de Fredonia</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
@@ -146,23 +146,25 @@ export default function NuevaContrasenaPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="nc2-1" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Contraseña nueva
                 </label>
                 <div className="relative">
-                  <input
+                  <input id="nc2-1"
                     type={mostrar ? 'text' : 'password'}
                     value={nueva}
                     onChange={(e) => setNueva(e.target.value)}
                     placeholder="Mínimo 8 caracteres"
                     required
                     autoFocus
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-400 pr-12"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-500 pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setMostrar(!mostrar)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label={mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    aria-pressed={mostrar}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded text-gray-500 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     {mostrar ? (
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,16 +181,16 @@ export default function NuevaContrasenaPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="nc2-2" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Confirmar contraseña
                 </label>
-                <input
+                <input id="nc2-2"
                   type={mostrar ? 'text' : 'password'}
                   value={confirmar}
                   onChange={(e) => setConfirmar(e.target.value)}
                   placeholder="Repite la contraseña"
                   required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-500"
                 />
               </div>
 
@@ -205,7 +207,7 @@ export default function NuevaContrasenaPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-xs text-gray-500 mt-6">
           Contratista Digital — Piloto Fredonia, Antioquia
         </p>
       </div>

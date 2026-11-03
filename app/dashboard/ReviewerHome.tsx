@@ -105,11 +105,11 @@ function PipelineBar({ stats }: { stats: AsesorStats }) {
           <h3 className="text-sm font-semibold text-gray-900">
             Pipeline · {getMesActual().mes}
           </h3>
-          <p className="text-xs text-gray-400 mt-0.5">{totalContratos} contratos activos</p>
+          <p className="text-xs text-gray-500 mt-0.5">{totalContratos} contratos activos</p>
         </div>
         <div className="text-right">
           <span className="text-2xl font-bold text-emerald-600">{pctCompleto}%</span>
-          <p className="text-xs text-gray-400">completados</p>
+          <p className="text-xs text-gray-500">completados</p>
         </div>
       </div>
 
@@ -144,7 +144,7 @@ function PipelineBar({ stats }: { stats: AsesorStats }) {
             style={{ width: `${rawPct(s.value)}%` }}
           >
             {rawPct(s.value) >= 14 && (
-              <p className={`text-[10px] font-medium ${s.textColor} mt-1.5 truncate px-0.5`}>
+              <p className={`text-[11px] font-medium ${s.textColor} mt-1.5 truncate px-0.5`}>
                 {s.label}
               </p>
             )}
@@ -160,7 +160,7 @@ function PipelineBar({ stats }: { stats: AsesorStats }) {
             <span className="text-xs text-gray-500">
               <span className="font-semibold text-gray-800">{s.value}</span>
               {' '}{s.label}
-              <span className="text-gray-400 ml-1">({fmtPct(s.value)})</span>
+              <span className="text-gray-500 ml-1">({fmtPct(s.value)})</span>
             </span>
           </div>
         ))}
@@ -188,7 +188,7 @@ function PendienteCard({ p }: { p: PeriodoPendienteRevisor }) {
         <p className="text-sm font-medium text-gray-900 truncate">
           {p.contratista_nombre.split(' ').slice(0, 2).join(' ')}
         </p>
-        <p className="text-xs text-gray-400 truncate">
+        <p className="text-xs text-gray-500 truncate">
           Cto. {p.contrato_numero}
           {p.dependencia_nombre && (
             <span className="hidden sm:inline"> · {p.dependencia_nombre}</span>
@@ -197,7 +197,7 @@ function PendienteCard({ p }: { p: PeriodoPendienteRevisor }) {
       </div>
       <div className="text-right flex-shrink-0">
         <p className="text-sm font-semibold text-gray-900">{fmt(p.valor_cobro)}</p>
-        <p className="text-xs text-gray-400">{espera}</p>
+        <p className="text-xs text-gray-500">{espera}</p>
       </div>
       <span className="text-gray-300 group-hover:text-gray-500 text-sm transition">→</span>
     </Link>
@@ -278,7 +278,7 @@ function EmailModule({ stats }: { stats: AsesorStats }) {
           <span className="text-lg">📧</span>
           <span className="text-sm font-semibold text-gray-900">Correo masivo</span>
         </div>
-        <span className="text-gray-400 text-xs">{abierto ? '▲ Cerrar' : '▼ Redactar'}</span>
+        <span className="text-gray-500 text-xs">{abierto ? '▲ Cerrar' : '▼ Redactar'}</span>
       </button>
 
       {abierto && (
@@ -313,8 +313,8 @@ function EmailModule({ stats }: { stats: AsesorStats }) {
 
           {/* Subject */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Asunto</label>
-            <input
+            <label htmlFor="rh-1" className="block text-xs font-medium text-gray-700 mb-1">Asunto</label>
+            <input id="rh-1"
               type="text"
               value={asunto}
               onChange={e => setAsunto(e.target.value)}
@@ -326,7 +326,7 @@ function EmailModule({ stats }: { stats: AsesorStats }) {
           {/* Message */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium text-gray-700">Mensaje</label>
+              <label htmlFor="rh-2" className="text-xs font-medium text-gray-700">Mensaje</label>
               <button
                 type="button"
                 onClick={insertarVariable}
@@ -335,7 +335,7 @@ function EmailModule({ stats }: { stats: AsesorStats }) {
                 + insertar {'{{nombre}}'}
               </button>
             </div>
-            <textarea
+            <textarea id="rh-2"
               ref={textRef}
               rows={5}
               value={mensaje}
@@ -502,12 +502,12 @@ export default function ReviewerHome({
               <p className="text-sm font-bold leading-none">
                 {mes} {anio}
                 {pendientes.length > 0 && (
-                  <span className="ml-2 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full align-middle">
+                  <span className="ml-2 bg-amber-500 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-full align-middle">
                     {pendientes.length}
                   </span>
                 )}
               </p>
-              <p className="text-[11px] text-gray-400 mt-1 leading-none capitalize">
+              <p className="text-[11px] text-gray-500 mt-1 leading-none capitalize">
                 {new Date().toLocaleDateString('es-CO', { weekday: 'long' })}
               </p>
               <p className="text-[11px] text-gray-500 mt-0.5 leading-none group-hover:text-gray-300 transition-colors">
@@ -538,7 +538,7 @@ export default function ReviewerHome({
       <div className="bg-white rounded-2xl border border-gray-100">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900">Pendientes en tu mesa</h3>
-          <Link href="/dashboard/informes" className="text-xs text-gray-400 hover:text-gray-600 transition">
+          <Link href="/dashboard/informes" className="text-xs text-gray-500 hover:text-gray-600 transition">
             Ver todos →
           </Link>
         </div>
@@ -547,7 +547,7 @@ export default function ReviewerHome({
           <div className="py-10 text-center">
             <p className="text-3xl mb-2">✅</p>
             <p className="text-sm font-medium text-gray-700">Todo al día</p>
-            <p className="text-xs text-gray-400 mt-1">No hay informes esperando revisión</p>
+            <p className="text-xs text-gray-500 mt-1">No hay informes esperando revisión</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
@@ -555,7 +555,7 @@ export default function ReviewerHome({
             {resto > 0 && (
               <Link
                 href="/dashboard/informes"
-                className="flex items-center justify-center gap-1 py-3 text-xs text-gray-400 hover:text-gray-600 transition"
+                className="flex items-center justify-center gap-1 py-3 text-xs text-gray-500 hover:text-gray-600 transition"
               >
                 + {resto} más → Ver todos
               </Link>

@@ -85,17 +85,17 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
             <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>CD</span>
           </div>
           <h1 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>Contratista Digital</h1>
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Verificación de documentos</p>
+          <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Verificación de documentos</p>
         </div>
 
         {resultado ? (
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
             {/* Banda de autenticidad */}
-            <div style={{ background: '#059669', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ background: '#047857', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16 }}>✓</div>
               <div>
                 <p style={{ color: '#fff', fontWeight: 700, fontSize: 14, margin: 0 }}>Documento auténtico</p>
-                <p style={{ color: '#d1fae5', fontSize: 11, margin: 0 }}>Emitido por el sistema Contratista Digital</p>
+                <p style={{ color: '#ffffff', fontSize: 11, margin: 0 }}>Emitido por el sistema Contratista Digital</p>
               </div>
             </div>
 
@@ -145,14 +145,14 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
 
               {resultado.hash && (
                 <div style={{ marginTop: 16, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
-                  <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 4px', fontWeight: 600 }}>Huella digital del PDF (SHA-256)</p>
+                  <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 4px', fontWeight: 600 }}>Huella digital del PDF (SHA-256)</p>
                   <p style={{ fontSize: 11, color: '#475569', margin: 0, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all', lineHeight: 1.5 }}>
                     {resultado.hash}
                   </p>
                 </div>
               )}
 
-              <p style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5, marginTop: 16, marginBottom: 0 }}>
+              <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5, marginTop: 16, marginBottom: 0 }}>
                 Compare estos datos con el documento físico o PDF que recibió. Si algún dato no coincide,
                 el documento podría haber sido alterado.
               </p>
@@ -164,7 +164,7 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16 }}>!</div>
               <div>
                 <p style={{ color: '#fff', fontWeight: 700, fontSize: 14, margin: 0 }}>Código no encontrado</p>
-                <p style={{ color: '#fecaca', fontSize: 11, margin: 0 }}>No existe un documento con este código</p>
+                <p style={{ color: '#ffffff', fontSize: 11, margin: 0 }}>No existe un documento con este código</p>
               </div>
             </div>
             <div style={{ padding: 20 }}>
@@ -177,7 +177,7 @@ export default async function VerificarPage({ params }: { params: Promise<{ codi
           </div>
         )}
 
-        <p style={{ textAlign: 'center', fontSize: 11, color: '#cbd5e1', marginTop: 20 }}>
+        <p style={{ textAlign: 'center', fontSize: 11, color: '#64748b', marginTop: 20 }}>
           Contratista Digital — Alcaldía Municipal de Fredonia, Antioquia
         </p>
       </div>

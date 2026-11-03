@@ -76,7 +76,7 @@ export default function CopiarObligaciones({
       </div>
 
       {modelos === null ? (
-        <p className="text-xs text-gray-400 py-3 text-center">Cargando contratos…</p>
+        <p className="text-xs text-gray-500 py-3 text-center">Cargando contratos…</p>
       ) : modelos.length === 0 ? (
         <p className="text-xs text-gray-500 py-3 text-center">
           Aún no hay ningún contrato con obligaciones que sirva de modelo.
@@ -102,7 +102,7 @@ export default function CopiarObligaciones({
                   <span className="text-sm font-medium text-gray-900">
                     N.° {m.numero}-{m.anio}
                   </span>
-                  <span className="text-[11px] text-gray-400 shrink-0">
+                  <span className="text-[11px] text-gray-500 shrink-0">
                     {copiando === m.id ? 'Copiando…' : `${m.obligaciones} obligaciones`}
                   </span>
                 </div>
@@ -110,7 +110,7 @@ export default function CopiarObligaciones({
               </button>
             ))}
             {visibles.length === 0 && (
-              <p className="text-xs text-gray-400 py-3 text-center">Ningún contrato coincide.</p>
+              <p className="text-xs text-gray-500 py-3 text-center">Ningún contrato coincide.</p>
             )}
           </div>
         </>

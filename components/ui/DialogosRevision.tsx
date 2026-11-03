@@ -115,7 +115,7 @@ export function DialogoMes({
             >
               {nombreMes(m)}
               {delInforme && (
-                <span className={`mt-0.5 text-[10px] font-normal leading-none ${elegido ? 'text-white/70' : 'text-gray-400'}`}>Informe</span>
+                <span className={`mt-0.5 text-[11px] font-normal leading-none ${elegido ? 'text-white/70' : 'text-gray-500'}`}>Informe</span>
               )}
             </button>
           )
@@ -228,7 +228,7 @@ export function DialogoBase({
       <div className={`mt-1 flex items-center gap-2 rounded-xl border bg-white px-3 transition-colors focus-within:ring-2 ${
         aviso ? 'border-amber-300 focus-within:ring-amber-200' : 'border-gray-300 focus-within:border-gray-400 focus-within:ring-gray-200'
       }`}>
-        <span className="text-lg text-gray-400">$</span>
+        <span className="text-lg text-gray-500">$</span>
         <input
           ref={campo}
           id="base-cotizacion-modal"

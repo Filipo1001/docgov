@@ -508,7 +508,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
         <div>
           <Link
             href={`/dashboard/contratos/${contratoId}`}
-            className="text-xs text-gray-400 hover:text-gray-600 mb-1 inline-flex items-center gap-1"
+            className="text-xs text-gray-500 hover:text-gray-600 mb-1 inline-flex items-center gap-1"
           >
             ← Volver al contrato
           </Link>
@@ -573,13 +573,13 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Días</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Sugerido</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Actual</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
-                  <th className="px-4 py-3 w-20"></th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
+                  <th scope="col" className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Días</th>
+                  <th scope="col" className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Sugerido</th>
+                  <th scope="col" className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Actual</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
+                  <th scope="col" className="px-4 py-3 w-20"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -593,12 +593,12 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
                   return (
                     <tr key={p.id} className={`${editable ? 'hover:bg-gray-50' : 'opacity-60'}`}>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{p.numero_periodo}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{p.numero_periodo}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{p.mes} {p.anio}</p>
-                        <p className="text-xs text-gray-400">{p.fecha_inicio} — {p.fecha_fin}</p>
+                        <p className="text-xs text-gray-500">{p.fecha_inicio} — {p.fecha_fin}</p>
                         {distItem && (
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-gray-500">
                             {distItem.diasActivos}/{distItem.diasDelMes} días
                           </p>
                         )}
@@ -645,7 +645,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                       </td>
                       <td className="px-4 py-3 text-center">
                         {guardando && (
-                          <span className="text-xs text-gray-400">Guardando…</span>
+                          <span className="text-xs text-gray-500">Guardando…</span>
                         )}
                       </td>
                     </tr>
@@ -735,13 +735,13 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">N.° Planilla</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Mes cotización</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">PDF</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500">Completo</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">N.° Planilla</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Mes cotización</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">PDF</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
+                  <th scope="col" className="text-center px-4 py-3 text-xs font-semibold text-gray-500">Completo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -754,7 +754,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
                   return (
                     <tr key={p.id} className={`${editable ? 'hover:bg-gray-50' : ''}`}>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{p.numero_periodo}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{p.numero_periodo}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{p.mes} {p.anio}</p>
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
@@ -786,7 +786,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                           </div>
                         ) : (
                           <span className="text-gray-700">
-                            {p.numero_planilla ?? <span className="text-gray-400 italic">Sin número</span>}
+                            {p.numero_planilla ?? <span className="text-gray-500 italic">Sin número</span>}
                           </span>
                         )}
                       </td>
@@ -825,7 +825,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                               Ver PDF
                             </a>
                           ) : (
-                            <span className="text-xs text-gray-400">Sin PDF</span>
+                            <span className="text-xs text-gray-500">Sin PDF</span>
                           )}
                           <button
                             onClick={() => {
@@ -846,7 +846,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                             {PLANILLA_ESTADO_LABEL[p.planilla_estado]}
                           </span>
                         ) : (
-                          <span className="text-xs text-gray-400">—</span>
+                          <span className="text-xs text-gray-500">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -940,10 +940,10 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Base cotización SS</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-8">#</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Periodo</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Base cotización SS</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -955,7 +955,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
                   return (
                     <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-400 text-xs">{p.numero_periodo}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{p.numero_periodo}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{p.mes} {p.anio}</p>
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
@@ -989,7 +989,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                           )}
                         </div>
                         {!esCambiado && (
-                          <p className="text-xs text-gray-400 mt-0.5">
+                          <p className="text-xs text-gray-500 mt-0.5">
                             En acta: $ {valorActual.toLocaleString('es-CO')}
                             {p.base_cotizacion_ss == null && ' (por defecto)'}
                           </p>
@@ -1057,7 +1057,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                           Sin aplicar
                         </span>
                       )}
-                      <span className="text-xs text-gray-400">Inicia: {o.fecha_inicio}</span>
+                      <span className="text-xs text-gray-500">Inicia: {o.fecha_inicio}</span>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
                       {o.valor_adicion > 0 && <span>Adición: <strong>$ {o.valor_adicion.toLocaleString('es-CO')}</strong></span>}
@@ -1186,18 +1186,18 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                      <p className="block text-xs font-medium text-gray-600 mb-1">
                         Termina actualmente
-                      </label>
+                      </p>
                       <p className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500">
                         {previsualizacion.fechaFinActual}
                       </p>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                      <label htmlFor="av-1" className="block text-xs font-medium text-gray-600 mb-1">
                         Nueva fecha de terminación
                       </label>
-                      <input
+                      <input id="av-1"
                         type="date"
                         value={fechaFinPropuesta}
                         onChange={(e) => setFechaFinPropuesta(e.target.value)}
@@ -1217,7 +1217,7 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                             <span className="w-32 shrink-0 text-gray-700">
                               {pp.mes} {pp.anio}
                             </span>
-                            <span className="w-40 shrink-0 text-xs text-gray-400">
+                            <span className="w-40 shrink-0 text-xs text-gray-500">
                               {pp.fecha_inicio} → {pp.fecha_fin}
                             </span>
                             <input
@@ -1318,8 +1318,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de modificación</label>
-                  <select
+                  <label htmlFor="av-2" className="block text-xs font-medium text-gray-600 mb-1">Tipo de modificación</label>
+                  <select id="av-2"
                     value={formOtrosi.tipo}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, tipo: e.target.value as TipoOtrosi }))}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
@@ -1331,8 +1331,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Fecha de inicio del otrosí</label>
-                  <input
+                  <label htmlFor="av-3" className="block text-xs font-medium text-gray-600 mb-1">Fecha de inicio del otrosí</label>
+                  <input id="av-3"
                     type="date"
                     value={formOtrosi.fecha_inicio}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, fecha_inicio: e.target.value }))}
@@ -1341,8 +1341,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Valor de la adición (0 si no aplica)</label>
-                  <input
+                  <label htmlFor="av-4" className="block text-xs font-medium text-gray-600 mb-1">Valor de la adición (0 si no aplica)</label>
+                  <input id="av-4"
                     type="text" inputMode="numeric" placeholder="11200000"
                     value={formOtrosi.valor_adicion}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, valor_adicion: e.target.value }))}
@@ -1350,8 +1350,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Plazo adicional en días (0 = NO APLICA)</label>
-                  <input
+                  <label htmlFor="av-5" className="block text-xs font-medium text-gray-600 mb-1">Plazo adicional en días (0 = NO APLICA)</label>
+                  <input id="av-5"
                     type="text" inputMode="numeric" placeholder="0"
                     value={formOtrosi.plazo_dias_adicion}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, plazo_dias_adicion: e.target.value }))}
@@ -1366,8 +1366,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                   </p>
                 )}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">CDP del otrosí</label>
-                  <input
+                  <label htmlFor="av-6" className="block text-xs font-medium text-gray-600 mb-1">CDP del otrosí</label>
+                  <input id="av-6"
                     type="text" placeholder="00402"
                     value={formOtrosi.cdp}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, cdp: e.target.value }))}
@@ -1375,8 +1375,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">CRP del otrosí</label>
-                  <input
+                  <label htmlFor="av-7" className="block text-xs font-medium text-gray-600 mb-1">CRP del otrosí</label>
+                  <input id="av-7"
                     type="text" placeholder="00550"
                     value={formOtrosi.crp}
                     onChange={(e) => setFormOtrosi(f => ({ ...f, crp: e.target.value }))}
@@ -1386,8 +1386,8 @@ export default function AvanzadoClient({ contratoId }: { contratoId: string }) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Nota / considerando (opcional)</label>
-                <textarea
+                <label htmlFor="av-8" className="block text-xs font-medium text-gray-600 mb-1">Nota / considerando (opcional)</label>
+                <textarea id="av-8"
                   rows={2}
                   value={formOtrosi.nota}
                   onChange={(e) => setFormOtrosi(f => ({ ...f, nota: e.target.value }))}

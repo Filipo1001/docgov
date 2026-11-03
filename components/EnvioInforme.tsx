@@ -294,13 +294,13 @@ export default function EnvioInforme({
                 {sellado ? 'Informe enviado a revisión' : 'Enviando tu informe'}
               </p>
               {lento && !sellado && (
-                <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
                   Sigue en curso. No cierres esta página.
                 </p>
               )}
               {escape && !sellado && (
                 <>
-                  <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">
                     Tu informe ya fue enviado. Si esta ventana no se cierra sola,
                     puedes cerrarla y recargar para ver el estado.
                   </p>

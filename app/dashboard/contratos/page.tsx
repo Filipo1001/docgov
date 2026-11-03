@@ -14,7 +14,8 @@
  *    incompletos) aplicados en cliente sobre el dataset completo
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useModalAccesible } from '@/lib/use-modal'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
@@ -66,9 +67,9 @@ function calcularAtencion(c: ContratoListItem): Atencion {
 function InfoRow({ icono, label, value }: { icono: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
-      <Icono glifo={icono} tamano="sm" className="shrink-0 mt-0.5 text-gray-400" />
+      <Icono glifo={icono} tamano="sm" className="shrink-0 mt-0.5 text-gray-500" />
       <div className="min-w-0">
-        <p className="text-xs text-gray-400">{label}</p>
+        <p className="text-xs text-gray-500">{label}</p>
         <p className="text-sm text-gray-800 break-all">{value}</p>
       </div>
     </div>
@@ -82,6 +83,10 @@ function VerUsuarioModal({
   contratista: ContratistaInfo
   onClose: () => void
 }) {
+  const panel = useRef<HTMLDivElement>(null)
+  const idTitulo = useId()
+  useModalAccesible(panel, onClose)
+
   const initials = contratista.nombre_completo
     .split(' ')
     .slice(0, 2)
@@ -100,8 +105,13 @@ function VerUsuarioModal({
     <div
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onClick={onClose}
+      role="presentation"
     >
       <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={idTitulo}
         className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -119,18 +129,18 @@ function VerUsuarioModal({
             </div>
           )}
           <div className="min-w-0">
-            <p className="font-semibold text-gray-900 leading-tight">{contratista.nombre_completo}</p>
+            <p id={idTitulo} className="font-semibold text-gray-900 leading-tight">{contratista.nombre_completo}</p>
             {contratista.cedula && (
               <p className="text-sm text-gray-500 font-mono mt-0.5">{formatCedula(contratista.cedula)}</p>
             )}
             {contratista.cargo && (
-              <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{contratista.cargo}</p>
+              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{contratista.cargo}</p>
             )}
           </div>
           {/* Close */}
           <button
             onClick={onClose}
-            className="ml-auto shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
+            className="ml-auto shrink-0 text-gray-500 hover:text-gray-700 transition-colors"
             aria-label="Cerrar"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -147,7 +157,7 @@ function VerUsuarioModal({
           {tieneCuenta && (
             <>
               <div className="border-t border-gray-100 pt-4">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Cuenta bancaria</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Cuenta bancaria</p>
                 <div className="space-y-4">
                   <InfoRow icono={Iconos.dominio.banco} label="Banco" value={contratista.banco ?? '—'} />
                   <InfoRow
@@ -163,7 +173,7 @@ function VerUsuarioModal({
           {/* Firma preview */}
           {contratista.firma_url && (
             <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs text-gray-400 mb-2">Firma registrada</p>
+              <p className="text-xs text-gray-500 mb-2">Firma registrada</p>
               <img
                 src={contratista.firma_url}
                 alt="Firma"
@@ -274,7 +284,7 @@ function FiltroVigenciaContratista({ valor, onCambio, cuentas }: {
               {o.punto && <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${o.punto}`} />}
               {o.label}
             </span>
-            <span className={`block text-xs tabular-nums mt-0.5 ${activo ? 'text-white/70' : 'text-gray-400'}`}>{cuentas[o.id]}</span>
+            <span className={`block text-xs tabular-nums mt-0.5 ${activo ? 'text-white/70' : 'text-gray-500'}`}>{cuentas[o.id]}</span>
           </button>
         )
       })}
@@ -544,17 +554,17 @@ export default function ContratosPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 space-y-3">
           {/* Search bar */}
           <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar por contratista, cédula, N.º de contrato u objeto…"
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-base text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
             {busqueda && (
-              <button onClick={() => setBusqueda('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setBusqueda('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -650,13 +660,13 @@ export default function ContratosPage() {
             )}
 
             {hayFiltrosActivos && (
-              <button onClick={limpiarFiltros} className="px-3 py-2 text-sm text-gray-400 hover:text-gray-700 underline">
+              <button onClick={limpiarFiltros} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 underline">
                 Limpiar filtros
               </button>
             )}
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-500">
             {hayFiltrosActivos
               ? `Mostrando ${visibles.length} de ${total} contratos`
               : `${total} contratos · ${totalVigentes} vigentes`}
@@ -705,7 +715,7 @@ export default function ContratosPage() {
           <p className="text-sm font-medium text-gray-700">
             {filtroVigencia === 'vigentes' ? 'No tienes contratos vigentes' : 'No tienes contratos finalizados'}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             {filtroVigencia === 'vigentes'
               ? totalVencidos === 1 ? 'Tu contrato anterior está en «Contratos finalizados».' : `Tus ${totalVencidos} contratos anteriores están en «Contratos finalizados».`
               : 'Todos tus contratos están vigentes.'}
@@ -725,7 +735,7 @@ export default function ContratosPage() {
             <Icono glifo={Iconos.accion.buscar} tamano="lg" />
           </div>
           <p className="text-sm font-medium text-gray-700">Sin resultados</p>
-          <p className="text-xs text-gray-400 mt-1">Prueba con otros filtros</p>
+          <p className="text-xs text-gray-500 mt-1">Prueba con otros filtros</p>
           <button onClick={limpiarFiltros} className="mt-3 text-sm text-gray-500 underline hover:text-gray-700">
             Limpiar filtros
           </button>
@@ -803,12 +813,12 @@ export default function ContratosPage() {
                                   {rotuloVigencia}
                                 </span>
                               ) : vencido && (
-                                <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                <span className="text-[11px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
                                   {rotuloVigencia}
                                 </span>
                               )}
                               {incompleto && (
-                                <span className="text-[10px] font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                <span className="text-[11px] font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
                                   Faltan: {faltantes.join(' · ')}
                                 </span>
                               )}
@@ -816,12 +826,12 @@ export default function ContratosPage() {
                                   que yo desbloquee al contratista. Mismo par de
                                   colores que usa el panel del periodo. */}
                               {atencion.porRevisar > 0 && (
-                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                                <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
                                   {atencion.porRevisar} por revisar
                                 </span>
                               )}
                               {atencion.atrasados > 0 && (
-                                <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                                <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
                                   {atencion.atrasados} sin enviar
                                 </span>
                               )}
@@ -829,7 +839,7 @@ export default function ContratosPage() {
 
                             <p className="text-sm text-gray-600 line-clamp-1 mb-2">{contrato.objeto}</p>
 
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                               <span className="font-medium text-gray-700">
                                 {contrato.contratista?.nombre_completo?.split(' ').slice(0, 3).join(' ')}
                               </span>
@@ -849,12 +859,12 @@ export default function ContratosPage() {
                           <div className="text-right shrink-0">
                             <p className="text-sm font-bold text-gray-900">
                               {porPeriodoCorto(contrato.periodos ?? [])}
-                              <span className="text-xs text-gray-400 font-normal"> por periodo</span>
+                              <span className="text-xs text-gray-500 font-normal"> por periodo</span>
                             </p>
-                            <p className="text-xs text-gray-400 mt-0.5">
+                            <p className="text-xs text-gray-500 mt-0.5">
                               {formatCOP(contrato.valor_total ?? 0)} total
                             </p>
-                            <p className="text-xs text-gray-400">
+                            <p className="text-xs text-gray-500">
                               {contrato.plazo_meses}m · {contrato.fecha_inicio?.slice(0, 7)}
                             </p>
                           </div>
@@ -866,7 +876,7 @@ export default function ContratosPage() {
                         <div className="px-5 pb-3.5 flex justify-end -mt-1">
                           <button
                             onClick={() => setViendoUsuario(contrato.contratista!)}
-                            className="text-xs text-gray-400 hover:text-gray-700 font-medium transition-colors flex items-center gap-1"
+                            className="text-xs text-gray-500 hover:text-gray-700 font-medium transition-colors flex items-center gap-1"
                           >
                             Ver usuario
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -885,7 +895,7 @@ export default function ContratosPage() {
           {/* Footer */}
           {visibles.length > 0 && (
             <div className="py-6 text-center">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 {hayFiltrosActivos
                   ? `${visibles.length} de ${total} contratos`
                   : `${total} contratos`}

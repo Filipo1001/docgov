@@ -146,34 +146,34 @@ function ActivarModal({
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
+            <label htmlFor="au-1" className="block text-xs font-medium text-gray-700 mb-1">
               Correo electrónico <span className="text-red-500">*</span>
             </label>
-            <input
+            <input id="au-1"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="correo@ejemplo.com"
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Cédula</label>
-            <input value={cedula} onChange={e => setCedula(e.target.value)}
+            <label htmlFor="au-2" className="block text-xs font-medium text-gray-700 mb-1">Cédula</label>
+            <input id="au-2" value={cedula} onChange={e => setCedula(e.target.value)}
               placeholder="Número de identificación"
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-500" />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Cargo</label>
-            <input value={cargo} onChange={e => setCargo(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
+            <label htmlFor="au-3" className="block text-xs font-medium text-gray-700 mb-1">Cargo</label>
+            <input id="au-3" value={cargo} onChange={e => setCargo(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-500" />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Dependencia</label>
-            <select value={depId} onChange={e => setDepId(e.target.value)}
+            <label htmlFor="au-4" className="block text-xs font-medium text-gray-700 mb-1">Dependencia</label>
+            <select id="au-4" value={depId} onChange={e => setDepId(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
               <option value="">Sin dependencia</option>
               {dependencias.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
@@ -182,15 +182,15 @@ function ActivarModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Teléfono</label>
-              <input value={tel} onChange={e => setTel(e.target.value)}
+              <label htmlFor="au-5" className="block text-xs font-medium text-gray-700 mb-1">Teléfono</label>
+              <input id="au-5" value={tel} onChange={e => setTel(e.target.value)}
                 placeholder="3XX XXX XXXX"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-500" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Dirección</label>
-              <input value={dir} onChange={e => setDir(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400" />
+              <label htmlFor="au-6" className="block text-xs font-medium text-gray-700 mb-1">Dirección</label>
+              <input id="au-6" value={dir} onChange={e => setDir(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-500" />
             </div>
           </div>
         </div>
@@ -264,7 +264,7 @@ function EliminarUsuarioModal({
         </div>
 
         {/* Options */}
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
           ¿Qué deseas eliminar?
         </p>
 
@@ -323,7 +323,7 @@ function EliminarUsuarioModal({
                     Se eliminarán {contratos.map(c => <strong key={c.id}>Contrato N.° {c.numero}</strong>).reduce<React.ReactNode[]>((acc, el, i) => i === 0 ? [el] : [...acc, ' y ', el], [])}, incluyendo todos sus periodos, actividades y evidencias.
                   </p>
                 ) : (
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 mt-1">
                     Este usuario no tiene contrato vinculado — opción no disponible.
                   </p>
                 )}
@@ -421,7 +421,7 @@ export default function AdminUsuariosClient({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Usuarios</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
+          <p className="text-sm text-gray-500 mt-0.5">
             {usuarios.length} activos · {pendientes.length} por activar
           </p>
         </div>
@@ -451,12 +451,12 @@ export default function AdminUsuariosClient({
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre o cédula..."
-            className="flex-1 min-w-48 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400"
+            className="flex-1 min-w-48 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-500"
           />
 
           {tab === 'activos' && (
             <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-400">
+              className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none text-gray-900 placeholder-gray-500">
               <option value="">Todos los roles</option>
               {['admin','supervisor','contratista','asesor','funcionario','gobierno','hacienda']
                 // «Funcionario» solo existe para el módulo del plan: mientras el módulo no exista, no se ofrece (salvo que ya
@@ -473,18 +473,18 @@ export default function AdminUsuariosClient({
       {tab === 'activos' && (
         <div className="bg-white rounded-2xl border overflow-hidden">
           {usuariosFiltrados.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">Sin resultados.</div>
+            <div className="p-8 text-center text-gray-500 text-sm">Sin resultados.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px]">
                 <thead>
                   <tr className="border-b bg-gray-50 text-left">
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500">Usuario</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500">Rol</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Cargo</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Dependencia</th>
-                    <th className="px-5 py-3" />
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500">Usuario</th>
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula</th>
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500">Rol</th>
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Cargo</th>
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Dependencia</th>
+                    <th scope="col" className="px-5 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -495,7 +495,7 @@ export default function AdminUsuariosClient({
                           <Avatar foto={u.foto_url} nombre={u.nombre_completo} />
                           <div>
                             <p className="text-sm font-medium text-gray-900">{u.nombre_completo}</p>
-                            {u.telefono && <p className="text-xs text-gray-400">{u.telefono}</p>}
+                            {u.telefono && <p className="text-xs text-gray-500">{u.telefono}</p>}
                           </div>
                         </div>
                       </td>
@@ -543,10 +543,10 @@ export default function AdminUsuariosClient({
               <table className="w-full min-w-[480px]">
                 <thead>
                   <tr className="border-b bg-gray-50 text-left">
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500">Nombre</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Secretaría</th>
-                    <th className="px-5 py-3" />
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500">Nombre</th>
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula</th>
+                    <th scope="col" className="px-5 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Secretaría</th>
+                    <th scope="col" className="px-5 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -554,7 +554,7 @@ export default function AdminUsuariosClient({
                     <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-medium text-gray-900">{p.nombre_completo}</p>
-                        <p className="text-xs text-gray-400">{p.cargo}</p>
+                        <p className="text-xs text-gray-500">{p.cargo}</p>
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-600 hidden md:table-cell">{formatCedula(p.cedula)}</td>
                       <td className="px-5 py-3.5 text-sm text-gray-600 hidden sm:table-cell">{p.secretaria}</td>

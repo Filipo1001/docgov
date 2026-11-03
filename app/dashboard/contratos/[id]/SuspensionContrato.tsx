@@ -53,7 +53,7 @@ function Suspendido({
 
   return (
     <section aria-labelledby="suspension-titulo" className="bg-white rounded-2xl border border-amber-200 p-6 mb-6">
-      <h3 id="suspension-titulo" className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Suspendido</h3>
+      <h3 id="suspension-titulo" className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Suspendido</h3>
       <p className="text-sm text-gray-800">Desde el {fechaLarga(s.fechaInicio)}: {s.motivo}</p>
       <p className="text-xs text-gray-500 mt-1">
         {s.numeroActo || s.fechaActo
@@ -131,7 +131,7 @@ function Suspender({ contrato }: { contrato: { id: string; fecha_inicio: string;
 
   return (
     <section aria-labelledby="suspender-titulo" className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-      <h3 id="suspender-titulo" className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Suspender la ejecución</h3>
+      <h3 id="suspender-titulo" className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">Suspender la ejecución</h3>
       <p className="text-xs text-gray-500 mb-4 max-w-2xl">
         El contrato sigue vigente, pero no se piden informes hasta que se reinicie. Si el plazo debe extenderse por los días
         suspendidos, eso se registra después como prórroga.

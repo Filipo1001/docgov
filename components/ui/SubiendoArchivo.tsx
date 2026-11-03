@@ -101,7 +101,7 @@ export default function SubiendoArchivo({
 
         <div className="text-center">
           <p className="text-sm font-medium text-gray-900">{etiqueta}</p>
-          {detalle && <p className="text-xs text-gray-400 mt-1 leading-relaxed">{detalle}</p>}
+          {detalle && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{detalle}</p>}
         </div>
       </div>
     </div>

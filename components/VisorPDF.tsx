@@ -139,7 +139,7 @@ export default function VisorPDF({ url, nombre, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <span className="w-8 h-8 rounded-lg bg-red-500/15 text-red-300 flex items-center justify-center shrink-0">
-          <span className="text-[9px] font-bold tracking-tight">PDF</span>
+          <span className="text-[11px] font-bold tracking-tight">PDF</span>
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{nombre}</p>

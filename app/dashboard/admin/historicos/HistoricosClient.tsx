@@ -77,10 +77,10 @@ function PeriodoRow({
             <span className="text-sm font-semibold text-gray-900">
               {periodo.mes} {periodo.anio}
             </span>
-            <span className="text-xs text-gray-400">·</span>
+            <span className="text-xs text-gray-500">·</span>
             <span className="text-xs text-gray-500">Contrato N.° {contratoNum}</span>
-            <span className="text-xs text-gray-400">·</span>
-            <span className="text-xs text-gray-400">{dependencia}</span>
+            <span className="text-xs text-gray-500">·</span>
+            <span className="text-xs text-gray-500">{dependencia}</span>
           </div>
           <p className="text-xs text-gray-600 mt-0.5">{contratista}</p>
           {modo === 'desmarcar' && (
@@ -89,7 +89,7 @@ function PeriodoRow({
                 Marcado {formatFecha(periodo.historico_marcado_at)}
               </span>
               {(periodo as any).marcadoPor && (
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-500">
                   por {(periodo as any).marcadoPor.nombre_completo}
                 </span>
               )}

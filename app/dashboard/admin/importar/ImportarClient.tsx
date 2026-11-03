@@ -14,11 +14,11 @@ function Paso({ n, label, activo, done }: { n: number; label: string; activo: bo
   return (
     <div className="flex items-center gap-2">
       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-        done ? 'bg-emerald-500 text-white' : activo ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'
+        done ? 'bg-emerald-500 text-white' : activo ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'
       }`}>
         {done ? '✓' : n}
       </div>
-      <span className={`text-sm font-medium ${activo ? 'text-gray-900' : done ? 'text-emerald-600' : 'text-gray-400'}`}>
+      <span className={`text-sm font-medium ${activo ? 'text-gray-900' : done ? 'text-emerald-600' : 'text-gray-500'}`}>
         {label}
       </span>
     </div>
@@ -34,20 +34,20 @@ function formatCOP(n: number) {
 function EstadoBadge({ fila }: { fila: FilaImport }) {
   if (fila.errores_bloqueo.length > 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
         ✕ {fila.errores_bloqueo.length} error{fila.errores_bloqueo.length > 1 ? 'es' : ''}
       </span>
     )
   }
   if (fila.advertencias.length > 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
         ⚠ {fila.advertencias.length} aviso{fila.advertencias.length > 1 ? 's' : ''}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
       ✓ Listo
     </span>
   )
@@ -127,7 +127,7 @@ export default function ImportarClient() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/dashboard/admin/usuarios" className="text-gray-400 hover:text-gray-600 transition-colors">
+        <Link href="/dashboard/admin/usuarios" className="text-gray-500 hover:text-gray-600 transition-colors">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
           </svg>
@@ -152,6 +152,11 @@ export default function ImportarClient() {
         <div
           className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-16 flex flex-col items-center gap-4 cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors"
           onClick={() => fileRef.current?.click()}
+          // La zona de carga es un botón: se alcanza con Tab y se activa con Enter o Espacio.
+          role="button"
+          tabIndex={0}
+          aria-label="Seleccionar el archivo Excel de contratos"
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click() } }}
         >
           {cargando ? (
             <p className="text-sm text-gray-500">Analizando el archivo…</p>
@@ -162,7 +167,7 @@ export default function ImportarClient() {
               </svg>
               <div className="text-center">
                 <p className="text-base font-semibold text-gray-700">Haz clic para seleccionar el Excel</p>
-                <p className="text-sm text-gray-400 mt-1">Solo archivos .xlsx</p>
+                <p className="text-sm text-gray-500 mt-1">Solo archivos .xlsx</p>
               </div>
             </>
           )}
@@ -181,12 +186,12 @@ export default function ImportarClient() {
               <p className="text-xs text-emerald-600 mt-0.5">Listos para importar</p>
             </div>
             <div className={`rounded-2xl border p-4 text-center ${filasAdv.length > 0 ? 'bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
-              <p className={`text-2xl font-bold ${filasAdv.length > 0 ? 'text-amber-700' : 'text-gray-400'}`}>{filasAdv.length}</p>
-              <p className={`text-xs mt-0.5 ${filasAdv.length > 0 ? 'text-amber-600' : 'text-gray-400'}`}>Con avisos (se importan)</p>
+              <p className={`text-2xl font-bold ${filasAdv.length > 0 ? 'text-amber-700' : 'text-gray-500'}`}>{filasAdv.length}</p>
+              <p className={`text-xs mt-0.5 ${filasAdv.length > 0 ? 'text-amber-600' : 'text-gray-500'}`}>Con avisos (se importan)</p>
             </div>
             <div className={`rounded-2xl border p-4 text-center ${filasErr.length > 0 ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
-              <p className={`text-2xl font-bold ${filasErr.length > 0 ? 'text-red-700' : 'text-gray-400'}`}>{filasErr.length}</p>
-              <p className={`text-xs mt-0.5 ${filasErr.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>Con errores (se omiten)</p>
+              <p className={`text-2xl font-bold ${filasErr.length > 0 ? 'text-red-700' : 'text-gray-500'}`}>{filasErr.length}</p>
+              <p className={`text-xs mt-0.5 ${filasErr.length > 0 ? 'text-red-600' : 'text-gray-500'}`}>Con errores (se omiten)</p>
             </div>
           </div>
 
@@ -203,13 +208,13 @@ export default function ImportarClient() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b text-left">
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 w-24">Nº Contrato</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Contratista</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula/NIT</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Supervisor</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Dependencia</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right hidden md:table-cell">Valor total</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-center">Estado</th>
+                    <th scope="col" className="px-4 py-3 text-xs font-semibold text-gray-500 w-24">Nº Contrato</th>
+                    <th scope="col" className="px-4 py-3 text-xs font-semibold text-gray-500">Contratista</th>
+                    <th scope="col" className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Cédula/NIT</th>
+                    <th scope="col" className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Supervisor</th>
+                    <th scope="col" className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Dependencia</th>
+                    <th scope="col" className="px-4 py-3 text-xs font-semibold text-gray-500 text-right hidden md:table-cell">Valor total</th>
+                    <th scope="col" className="px-4 py-3 text-xs font-semibold text-gray-500 text-center">Estado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -229,7 +234,7 @@ export default function ImportarClient() {
                           <p className="font-medium text-gray-900 text-xs leading-tight">
                             {fila.nombre_contratista.split(' ').slice(0, 4).join(' ')}
                           </p>
-                          <p className="text-[10px] text-gray-400">{fila.tipo_documento}</p>
+                          <p className="text-[11px] text-gray-500">{fila.tipo_documento}</p>
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell font-mono">{fila.cedula}</td>
                         <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">
@@ -327,8 +332,8 @@ export default function ImportarClient() {
               <p className="text-xs text-gray-500 mt-0.5">Usuarios existentes</p>
             </div>
             <div className={`rounded-2xl border p-4 text-center ${resultado.errores.length > 0 ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
-              <p className={`text-2xl font-bold ${resultado.errores.length > 0 ? 'text-red-700' : 'text-gray-400'}`}>{resultado.errores.length}</p>
-              <p className={`text-xs mt-0.5 ${resultado.errores.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>Errores</p>
+              <p className={`text-2xl font-bold ${resultado.errores.length > 0 ? 'text-red-700' : 'text-gray-500'}`}>{resultado.errores.length}</p>
+              <p className={`text-xs mt-0.5 ${resultado.errores.length > 0 ? 'text-red-600' : 'text-gray-500'}`}>Errores</p>
             </div>
           </div>
 

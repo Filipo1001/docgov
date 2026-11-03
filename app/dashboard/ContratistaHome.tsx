@@ -198,7 +198,7 @@ function PanelAccion({
               {/* Quién y cuándo. Que no sea un reproche anónimo: la fecha sale
                   del historial porque `periodos.fecha_rechazo` está vacía en
                   los 739 periodos — nunca se escribió. */}
-              {firma && <p className="text-xs text-gray-400 mt-0.5">{firma}</p>}
+              {firma && <p className="text-xs text-gray-500 mt-0.5">{firma}</p>}
 
               {devolucion?.motivoGeneral && (
                 <blockquote className="mt-2.5 border-l-2 border-red-200 pl-3 text-xs text-gray-600 leading-relaxed line-clamp-3">
@@ -213,21 +213,21 @@ function PanelAccion({
                 <ul className="mt-3 space-y-2">
                   {visibles.map(c => (
                     <li key={c.obligacionId} className="flex items-start gap-2.5">
-                      <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums">
+                      <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[11px] font-bold flex items-center justify-center shrink-0 tabular-nums">
                         {c.numero}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</p>
+                        <p className="text-[11px] text-gray-500 leading-snug line-clamp-1">{c.descripcion}</p>
                         {c.nota ? (
                           <p className="text-xs text-gray-700 leading-relaxed line-clamp-2 mt-0.5">{c.nota}</p>
                         ) : (
-                          <p className="text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</p>
+                          <p className="text-xs text-gray-500 italic leading-relaxed mt-0.5">Marcada sin texto.</p>
                         )}
                       </div>
                     </li>
                   ))}
                   {restantes > 0 && (
-                    <li className="text-[11px] text-gray-400 pl-[30px]">
+                    <li className="text-[11px] text-gray-500 pl-[30px]">
                       {restantes === 1 ? '+1 corrección más' : `+${restantes} correcciones más`}
                     </li>
                   )}
@@ -243,7 +243,7 @@ function PanelAccion({
                     <Icono glifo={Iconos.dominio.seguridadSocial} tamano="sm" className="w-3 h-3" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-gray-400 leading-snug">Planilla de seguridad social</p>
+                    <p className="text-[11px] text-gray-500 leading-snug">Planilla de seguridad social</p>
                     <p className="text-xs text-gray-700 leading-relaxed line-clamp-2 mt-0.5">
                       {devolucion.planillaComentario ?? 'Devuelta para corrección.'}
                     </p>
@@ -288,7 +288,7 @@ function PanelAccion({
               </div>
               <p className="text-xs text-gray-500 mt-0.5">En revision — te notificaremos cuando este listo</p>
             </div>
-            <div className="text-gray-300 group-hover:text-gray-400 transition-colors">
+            <div className="text-gray-300 group-hover:text-gray-500 transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
@@ -319,7 +319,7 @@ function PanelAccion({
                 {fmt(periodoActual.valor_cobro)} · {estado === 'radicado' ? 'Radicado fisicamente' : 'Aprobado'}
               </p>
             </div>
-            <div className="text-gray-300 group-hover:text-gray-400 transition-colors">
+            <div className="text-gray-300 group-hover:text-gray-500 transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
@@ -341,7 +341,7 @@ function PanelAccion({
               <StatusChip estado={estado} />
             </div>
           </div>
-          <div className="text-gray-300 group-hover:text-gray-400 transition-colors">
+          <div className="text-gray-300 group-hover:text-gray-500 transition-colors">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
@@ -478,7 +478,7 @@ export default function ContratistaHome({
         <Card>
           <div className="text-center py-12">
             <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
-              <svg className="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <svg className="w-7 h-7 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
             </div>
@@ -531,7 +531,7 @@ export default function ContratistaHome({
                 />
               </div>
 
-              <div className="flex items-center justify-between mt-3 text-[11px] sm:text-xs text-gray-400">
+              <div className="flex items-center justify-between mt-3 text-[11px] sm:text-xs text-gray-500">
                 <span className="hidden sm:inline">{contrato.fecha_inicio}</span>
                 <span className="sm:hidden">{contrato.fecha_inicio.slice(5)}</span>
                 <span className="text-gray-600 font-medium">
@@ -563,7 +563,7 @@ export default function ContratistaHome({
                       <span className="text-xs font-medium text-gray-700">
                         {p.mes.charAt(0).toUpperCase() + p.mes.slice(1, 3).toLowerCase()}
                       </span>
-                      <span className={`mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${p.es_historico ? HISTORICO_COLOR : estadoBadgeColor(p.estado)}`}>
+                      <span className={`mt-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${p.es_historico ? HISTORICO_COLOR : estadoBadgeColor(p.estado)}`}>
                         {p.es_historico ? HISTORICO_LABEL : (ESTADO_LABEL[p.estado as EstadoPeriodo] ?? p.estado)}
                       </span>
                     </Link>
@@ -577,7 +577,7 @@ export default function ContratistaHome({
           <Card className="bg-gray-50/60">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">
+                <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wide">
                   {contrato.fecha_terminacion ? 'Contrato terminado anticipadamente' : 'Contrato activo'}
                 </p>
                 <p className="text-sm font-semibold text-gray-900 mt-1">
@@ -589,12 +589,12 @@ export default function ContratistaHome({
                 {/* Se deriva de los periodos y no de `contrato.valor_mensual`:
                     ese campo admite cero y a un contratista le aparecía «$0»
                     como si su contrato no valiera nada. Ver lib/valor-contrato.ts. */}
-                <p className="text-[11px] text-gray-400">Valor por periodo</p>
+                <p className="text-[11px] text-gray-500">Valor por periodo</p>
                 <p className="text-sm font-bold text-gray-900">{porPeriodoCorto(periodos)}</p>
               </div>
             </div>
             {contrato.supervisor && (
-              <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200">
                 Supervisor: <span className="text-gray-600">{contrato.supervisor.nombre_completo}</span>
               </p>
             )}

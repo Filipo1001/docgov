@@ -47,7 +47,7 @@ export default function EstadoContratoPanel({
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
-        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
           Estado del contrato
         </h3>
         <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${actual.color}`}>
@@ -78,8 +78,8 @@ export default function EstadoContratoPanel({
         <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Nuevo estado</label>
-              <select
+              <label htmlFor="ec-1" className="block text-xs font-medium text-gray-500 mb-1">Nuevo estado</label>
+              <select id="ec-1"
                 value={estado}
                 onChange={e => setEstado(e.target.value as EstadoContrato)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -91,11 +91,11 @@ export default function EstadoContratoPanel({
                   <option key={e.id} value={e.id}>{e.label}</option>
                 ))}
               </select>
-              <p className="text-[11px] text-gray-400 mt-1">{elegido.ayuda}</p>
+              <p className="text-[11px] text-gray-500 mt-1">{elegido.ayuda}</p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Fecha del acto</label>
-              <input
+              <label htmlFor="ec-2" className="block text-xs font-medium text-gray-500 mb-1">Fecha del acto</label>
+              <input id="ec-2"
                 type="date"
                 value={fecha}
                 onChange={e => setFecha(e.target.value)}

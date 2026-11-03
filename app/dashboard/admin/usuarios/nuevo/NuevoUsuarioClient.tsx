@@ -151,12 +151,12 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           <h2 className="text-base font-semibold text-gray-900">Acceso al sistema</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="nu-1" className="block text-sm font-medium text-gray-700 mb-1">
               Correo electrónico <span className="text-red-500">*</span>
             </label>
-            <input
+            <input id="nu-1"
               type="email"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="usuario@fredonia.gov.co"
@@ -165,9 +165,9 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-500"
+            <label htmlFor="nu-2" className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
+            <select id="nu-2"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-500"
               value={soloContratistas ? 'contratista' : rol}
               onChange={e => setRol(e.target.value)}
               disabled={soloContratistas}
@@ -178,7 +178,7 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
                 .map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
             {soloContratistas && (
-              <p className="text-xs text-gray-400 mt-1">Contratación crea únicamente usuarios contratistas</p>
+              <p className="text-xs text-gray-500 mt-1">Contratación crea únicamente usuarios contratistas</p>
             )}
           </div>
 
@@ -193,11 +193,11 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="nu-3" className="block text-sm font-medium text-gray-700 mb-1">
                 Nombre completo <span className="text-red-500">*</span>
               </label>
-              <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              <input id="nu-3"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={nombre}
                 onChange={e => setNombre(e.target.value)}
                 placeholder="Apellidos y nombres"
@@ -206,9 +206,9 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de documento</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              <label htmlFor="nu-4" className="block text-sm font-medium text-gray-700 mb-1">Tipo de documento</label>
+              <select id="nu-4"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={tipoDoc}
                 onChange={e => setTipoDoc(e.target.value)}
               >
@@ -217,11 +217,11 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="nu-5" className="block text-sm font-medium text-gray-700 mb-1">
                 Número de documento <span className="text-red-500">*</span>
               </label>
-              <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              <input id="nu-5"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={cedula}
                 onChange={e => setCedula(e.target.value)}
                 required
@@ -237,9 +237,9 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           <h2 className="text-base font-semibold text-gray-900">Cargo y dependencia</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="nu-6" className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+            <input id="nu-6"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={cargo}
               onChange={e => setCargo(e.target.value)}
               placeholder="Ej. Contratista de prestación de servicios"
@@ -247,9 +247,9 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Dependencia</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="nu-7" className="block text-sm font-medium text-gray-700 mb-1">Dependencia</label>
+            <select id="nu-7"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={depId}
               onChange={e => setDepId(e.target.value)}
             >
@@ -266,18 +266,18 @@ export default function NuevoUsuarioClient({ dependencias }: { dependencias: Dep
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono / Celular</label>
-              <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              <label htmlFor="nu-8" className="block text-sm font-medium text-gray-700 mb-1">Teléfono / Celular</label>
+              <input id="nu-8"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={telefono}
                 onChange={e => setTelefono(e.target.value)}
                 placeholder="3XX XXX XXXX"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-              <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              <label htmlFor="nu-9" className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+              <input id="nu-9"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={direccion}
                 onChange={e => setDireccion(e.target.value)}
                 placeholder="Calle XX # XX-XX"

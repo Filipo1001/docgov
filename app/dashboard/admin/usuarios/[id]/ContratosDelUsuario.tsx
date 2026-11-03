@@ -62,9 +62,9 @@ export default function ContratosDelUsuario({ contratos }: { contratos: Contrato
       </div>
 
       {contratos.length === 0 ? (
-        <p className="text-sm text-gray-400">Esta persona no tiene contratos registrados.</p>
+        <p className="text-sm text-gray-500">Esta persona no tiene contratos registrados.</p>
       ) : visibles.length === 0 ? (
-        <p className="text-sm text-gray-400">No hay contratos en esta categoría.</p>
+        <p className="text-sm text-gray-500">No hay contratos en esta categoría.</p>
       ) : (
         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {visibles.map(c => (
@@ -75,12 +75,12 @@ export default function ContratosDelUsuario({ contratos }: { contratos: Contrato
               >
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-900 tabular-nums">
-                    N.º {c.numero} <span className="font-normal text-gray-400">· {c.anio}</span>
+                    N.º {c.numero} <span className="font-normal text-gray-500">· {c.anio}</span>
                   </p>
                   <p className="text-xs text-gray-500 tabular-nums mt-0.5">{pesos(c.valorTotal)}</p>
                 </div>
                 <span
-                  className={`shrink-0 text-[11px] font-medium ${c.vigencia === 'vigente' ? 'text-emerald-700' : 'text-gray-400'}`}
+                  className={`shrink-0 text-[11px] font-medium ${c.vigencia === 'vigente' ? 'text-emerald-700' : 'text-gray-500'}`}
                 >
                   {c.vigencia === 'vigente' ? 'Vigente' : 'Finalizado'}
                 </span>

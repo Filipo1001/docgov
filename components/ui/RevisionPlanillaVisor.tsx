@@ -112,7 +112,7 @@ function FilaCotejo({
 }) {
   const color = tono === 'bien' ? 'border-emerald-200 bg-emerald-50/50' : tono === 'aviso' ? 'border-amber-300 bg-amber-50/60' : 'border-gray-200 bg-gray-50'
   const glifo = estado === 'coincide' ? Iconos.estado.aprobado : estado === 'distinto' ? Iconos.estado.advertencia : Iconos.estado.pendiente
-  const colorGlifo = estado === 'coincide' ? 'text-emerald-600' : estado === 'distinto' ? 'text-amber-600' : 'text-gray-400'
+  const colorGlifo = estado === 'coincide' ? 'text-emerald-600' : estado === 'distinto' ? 'text-amber-600' : 'text-gray-500'
   return (
     <div className={`rounded-xl border p-2.5 sm:p-3 ${color}`}>
       <div className="flex items-start gap-3">
@@ -569,7 +569,7 @@ function RevisionPlanillaVisor({
               />
             )}
 
-            <p className="hidden pt-1 text-[11px] leading-snug text-gray-400 lg:block">
+            <p className="hidden pt-1 text-[11px] leading-snug text-gray-500 lg:block">
               La lectura es una ayuda: la hace tu navegador y el documento no sale del sistema. La decisión es tuya.
             </p>
           </div>
@@ -610,7 +610,7 @@ function RevisionPlanillaVisor({
                     value={motivo}
                     onChange={e => setMotivo(e.target.value)}
                     placeholder="Explica al contratista qué debe corregir…"
-                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-red-300"
+                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-red-300"
                   />
                   <div className="flex gap-2">
                     <button type="button" disabled={ocupado || !motivo.trim()} onClick={devolver} className="h-10 flex-1 rounded-xl bg-red-600 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50">

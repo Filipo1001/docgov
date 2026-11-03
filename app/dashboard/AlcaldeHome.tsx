@@ -67,16 +67,16 @@ function EjecucionMensual({ serie, anio }: { serie: PuntoMes[]; anio: number }) 
     <Card>
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <p className="text-sm font-medium text-gray-900">Ejecución mensual {anio}</p>
-        <p className="text-xs text-gray-400">promedio {millones(promedio)}/mes</p>
+        <p className="text-xs text-gray-500">promedio {millones(promedio)}/mes</p>
       </div>
-      <p className="text-[11px] text-gray-400 mb-5">Pagos radicados a contratistas</p>
+      <p className="text-[11px] text-gray-500 mb-5">Pagos radicados a contratistas</p>
 
       <div className="flex items-end gap-2 h-44">
         {serie.map(p => {
           const alto = Math.max(2, (p.valor / max) * 100)
           return (
             <div key={p.mes} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-              <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
+              <span className="text-[11px] text-gray-500 tabular-nums whitespace-nowrap">
                 {p.valor > 0 ? millones(p.valor) : '—'}
               </span>
               <div className="w-full flex-1 flex items-end">
@@ -93,7 +93,7 @@ function EjecucionMensual({ serie, anio }: { serie: PuntoMes[]; anio: number }) 
                   title={`${p.mes}: ${millones(p.valor)} · ${p.pagos} pagos`}
                 />
               </div>
-              <span className={`text-[10px] whitespace-nowrap ${p.enCurso ? 'text-gray-400 italic' : 'text-gray-500'}`}>
+              <span className={`text-[11px] whitespace-nowrap ${p.enCurso ? 'text-gray-500 italic' : 'text-gray-500'}`}>
                 {p.mes.slice(0, 3)}
               </span>
             </div>
@@ -102,7 +102,7 @@ function EjecucionMensual({ serie, anio }: { serie: PuntoMes[]; anio: number }) 
       </div>
 
       {serie.some(p => p.enCurso) && (
-        <p className="text-[11px] text-gray-400 mt-3 text-right">
+        <p className="text-[11px] text-gray-500 mt-3 text-right">
           {serie[serie.length - 1].mes} va en curso
         </p>
       )}
@@ -116,7 +116,7 @@ function PresupuestoPorSecretaria({ items, total }: { items: TarjetaSecretaria[]
   return (
     <Card>
       <p className="text-sm font-medium text-gray-900 mb-1">Presupuesto por secretaría</p>
-      <p className="text-[11px] text-gray-400 mb-5">
+      <p className="text-[11px] text-gray-500 mb-5">
         Ejecutado y pendiente sobre {millones(total)} contratados
       </p>
 
@@ -128,7 +128,7 @@ function PresupuestoPorSecretaria({ items, total }: { items: TarjetaSecretaria[]
             <div key={s.id}>
               <div className="flex items-baseline justify-between gap-3 mb-1.5">
                 <p className="text-xs text-gray-700 truncate">{s.nombre}</p>
-                <p className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                <p className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
                   <span className="font-semibold" style={{ color: MARCA }}>{millones(s.ejecutado)}</span>
                   {' / '}{millones(s.contratado)}
                 </p>
@@ -170,7 +170,7 @@ function LineaVencimientos({ items }: { items: Vencimiento[] }) {
   return (
     <Card>
       <p className="text-sm font-medium text-gray-900 mb-1">Cuándo terminan los contratos</p>
-      <p className="text-[11px] text-gray-400 mb-6">
+      <p className="text-[11px] text-gray-500 mb-6">
         Cada punto es un mes; su tamaño, cuántos contratos terminan
       </p>
 
@@ -201,7 +201,7 @@ function LineaVencimientos({ items }: { items: Vencimiento[] }) {
                 <p className="text-[11px] text-gray-600 text-center whitespace-nowrap">
                   {v.etiqueta.split(' ')[0].slice(0, 3)}
                 </p>
-                <p className="text-[10px] text-gray-400 text-center whitespace-nowrap">
+                <p className="text-[11px] text-gray-500 text-center whitespace-nowrap">
                   {millones(v.valor)}
                 </p>
               </div>
@@ -257,14 +257,14 @@ function Tarjeta({ s }: { s: TarjetaSecretaria }) {
 
         <div className="mt-3 flex items-baseline gap-1.5">
           <span className="text-2xl font-bold" style={{ color: MARCA }}>{s.contratistas}</span>
-          <span className="text-[11px] text-gray-400">contratistas</span>
+          <span className="text-[11px] text-gray-500">contratistas</span>
         </div>
       </div>
 
       <div className="mt-4 pt-4 border-t border-gray-100">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-xl font-bold" style={{ color: MARCA }}>{millones(s.ejecutado)}</p>
-          <p className="text-sm text-gray-400">de {millones(s.contratado)}</p>
+          <p className="text-sm text-gray-500">de {millones(s.contratado)}</p>
         </div>
 
         <div className="relative mt-2 h-2.5 bg-gray-100 rounded-full overflow-hidden">
@@ -284,7 +284,7 @@ function Tarjeta({ s }: { s: TarjetaSecretaria }) {
           <span className={`text-xs font-medium ${alDia ? 'text-emerald-700' : 'text-amber-700'}`}>
             {s.pctEjecutado}% ejecutado
           </span>
-          <span className="text-[11px] text-gray-400 whitespace-nowrap">{s.pctPlazo}% del plazo</span>
+          <span className="text-[11px] text-gray-500 whitespace-nowrap">{s.pctPlazo}% del plazo</span>
         </div>
 
         {/* El distintivo de vencimiento va en su propia línea: en una columna
@@ -317,7 +317,7 @@ export default function AlcaldeHome({ nombre }: { nombre: string }) {
       {/* El eslogan del plan de desarrollo va como tipografía: no es un
           logotipo, y compuesto así no depende de ningún archivo. */}
       <div>
-        <p className="text-[11px] font-semibold uppercase text-gray-400" style={{ letterSpacing: '0.2em' }}>
+        <p className="text-[11px] font-semibold uppercase text-gray-500" style={{ letterSpacing: '0.2em' }}>
           Por Amor a Fredonia
         </p>
         <h1 className="text-2xl font-bold mt-1.5" style={{ color: MARCA }}>

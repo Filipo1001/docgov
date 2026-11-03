@@ -106,7 +106,7 @@ function HeroCard({
     <div className={`rounded-2xl border p-5 ${bg[color]}`}>
       <p className={`text-2xl font-black tabular-nums leading-none ${vc[color]}`}>{value}</p>
       <p className="text-sm font-medium text-gray-700 mt-1.5">{label}</p>
-      {sublabel && <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>}
+      {sublabel && <p className="text-xs text-gray-500 mt-0.5">{sublabel}</p>}
     </div>
   )
 }
@@ -137,7 +137,7 @@ function PipelineBar({ pipeline, mes, anio }: {
         <p className="text-sm font-semibold text-gray-700">Pipeline {mes} {anio}</p>
         <p className="tabular-nums">
           <span className="text-2xl font-bold text-emerald-600">{pct}%</span>
-          <span className="text-sm font-normal text-gray-400 ml-1">completado</span>
+          <span className="text-sm font-normal text-gray-500 ml-1">completado</span>
         </p>
       </div>
 
@@ -170,7 +170,7 @@ function PipelineBar({ pipeline, mes, anio }: {
           <div key={s.key} className="flex items-center gap-1.5">
             <span className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${s.color}`} />
             <span className={`text-xs font-medium ${s.tc}`}>{s.count}</span>
-            <span className="text-xs text-gray-400">{s.label}</span>
+            <span className="text-xs text-gray-500">{s.label}</span>
           </div>
         ))}
       </div>
@@ -215,12 +215,12 @@ function PeriodoCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <p className="font-semibold text-gray-900 text-sm truncate">{c.contratista.nombre_completo}</p>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ${urgBdg}`}>
+            <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ${urgBdg}`}>
               {urgLbl}
             </span>
           </div>
           <p className="text-xs text-gray-500 mb-2">Cto. {c.numero} · {periodo.mes} {periodo.anio}</p>
-          <div className="flex items-center gap-3 text-[11px] text-gray-400">
+          <div className="flex items-center gap-3 text-[11px] text-gray-500">
             <span className="inline-flex items-center gap-1">
               <Icono glifo={Iconos.dominio.actividades} tamano="sm" />
               {periodo.num_actividades} act.
@@ -427,7 +427,7 @@ export default function SupervisorHome({
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900">{saludo}, {firstName}</h1>
-          <p className="text-sm text-gray-400 mt-1 capitalize">
+          <p className="text-sm text-gray-500 mt-1 capitalize">
             {now.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
@@ -443,12 +443,12 @@ export default function SupervisorHome({
             <p className="text-sm font-bold leading-tight">
               {mes} {anio}
               {data.porAprobar > 0 && (
-                <span className="ml-2 bg-amber-400 text-gray-900 text-[10px] font-black px-1.5 py-0.5 rounded-full tabular-nums">
+                <span className="ml-2 bg-amber-400 text-gray-900 text-[11px] font-black px-1.5 py-0.5 rounded-full tabular-nums">
                   {data.porAprobar}
                 </span>
               )}
             </p>
-            <p className="text-[11px] text-gray-400 capitalize">{weekday}</p>
+            <p className="text-[11px] text-gray-500 capitalize">{weekday}</p>
             <p className="text-[11px] text-gray-500 group-hover:text-gray-300 transition-colors">
               Ver aprobaciones →
             </p>
@@ -509,7 +509,7 @@ export default function SupervisorHome({
               </Link>
             ))}
             {data.alertasTardios.length > 5 && (
-              <p className="text-xs text-gray-400 text-center py-1">
+              <p className="text-xs text-gray-500 text-center py-1">
                 +{data.alertasTardios.length - 5} más sin enviar
               </p>
             )}
@@ -539,7 +539,7 @@ export default function SupervisorHome({
       {data.pendientes.length > 0 ? (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <Icono glifo={Iconos.navegacion.informes} tamano="sm" className="text-gray-400" />
+            <Icono glifo={Iconos.navegacion.informes} tamano="sm" className="text-gray-500" />
             <h2 className="font-semibold text-gray-900">Cola de aprobación</h2>
             <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium tabular-nums">
               {data.pendientes.length}
@@ -581,9 +581,9 @@ export default function SupervisorHome({
       {data.desempeno.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <Icono glifo={Iconos.dominio.tendencia} tamano="sm" className="text-gray-400" />
+            <Icono glifo={Iconos.dominio.tendencia} tamano="sm" className="text-gray-500" />
             <h2 className="font-semibold text-gray-900">Desempeño de contratistas</h2>
-            <span className="ml-auto text-xs text-gray-400">Últimos 5 meses</span>
+            <span className="ml-auto text-xs text-gray-500">Últimos 5 meses</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -604,7 +604,7 @@ export default function SupervisorHome({
                         <p className="text-sm font-medium text-gray-800 truncate leading-tight group-hover:text-emerald-700 transition-colors">
                           {d.contratista_nombre.split(' ').slice(0, 2).join(' ')}
                         </p>
-                        <p className="text-[10px] text-gray-400">Cto. {d.contrato_numero}</p>
+                        <p className="text-[11px] text-gray-500">Cto. {d.contrato_numero}</p>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
                         {d.historial.map((h, i) => <Dot key={i} estado={h.estado} />)}
@@ -632,7 +632,7 @@ export default function SupervisorHome({
                         <p className="text-sm font-medium text-gray-800 truncate leading-tight group-hover:text-red-700 transition-colors">
                           {d.contratista_nombre.split(' ').slice(0, 2).join(' ')}
                         </p>
-                        <p className="text-[10px] text-gray-400">Cto. {d.contrato_numero}</p>
+                        <p className="text-[11px] text-gray-500">Cto. {d.contrato_numero}</p>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
                         {d.historial.map((h, i) => <Dot key={i} estado={h.estado} />)}
@@ -654,7 +654,7 @@ export default function SupervisorHome({
             ].map(item => (
               <div key={item.label} className="flex items-center gap-1.5">
                 <span className={`w-3 h-3 rounded-full flex-shrink-0 ${item.cls}`} />
-                <span className="text-[11px] text-gray-400">{item.label}</span>
+                <span className="text-[11px] text-gray-500">{item.label}</span>
               </div>
             ))}
           </div>
@@ -665,7 +665,7 @@ export default function SupervisorHome({
       {data.tendencia.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <Icono glifo={Iconos.dominio.tendencia} tamano="sm" className="text-gray-400" />
+            <Icono glifo={Iconos.dominio.tendencia} tamano="sm" className="text-gray-500" />
             <h2 className="font-semibold text-gray-900">Tendencia mensual</h2>
           </div>
           <div className="bg-white border border-gray-200 rounded-2xl p-5">
@@ -684,14 +684,14 @@ export default function SupervisorHome({
                         style={{ height: `${barH}px` }}
                       />
                     </div>
-                    <span className={`text-[11px] font-semibold ${isCurrent ? 'text-emerald-600' : 'text-gray-400'}`}>
+                    <span className={`text-[11px] font-semibold ${isCurrent ? 'text-emerald-600' : 'text-gray-500'}`}>
                       {label}
                     </span>
                   </div>
                 )
               })}
             </div>
-            <p className="text-xs text-gray-400 mt-3 text-center">Informes aprobados por mes</p>
+            <p className="text-xs text-gray-500 mt-3 text-center">Informes aprobados por mes</p>
           </div>
         </section>
       )}
@@ -700,7 +700,7 @@ export default function SupervisorHome({
       {data.actividad.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <Icono glifo={Iconos.dominio.actividad} tamano="sm" className="text-gray-400" />
+            <Icono glifo={Iconos.dominio.actividad} tamano="sm" className="text-gray-500" />
             <h2 className="font-semibold text-gray-900">Actividad reciente</h2>
           </div>
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100">
@@ -715,15 +715,15 @@ export default function SupervisorHome({
                     <p className="text-sm font-medium text-gray-800 truncate">
                       {a.contratista_nombre.split(' ').slice(0, 2).join(' ')}
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-500">
                       Cto. {a.contrato_numero} · {a.mes} {a.anio}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${e.fondo} ${e.color}`}>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${e.fondo} ${e.color}`}>
                       {e.label}
                     </span>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{timeAgo(a.fecha)}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{timeAgo(a.fecha)}</p>
                   </div>
                 </div>
               )

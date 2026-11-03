@@ -173,7 +173,7 @@ function InformeCard({
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div>
               <p className="font-semibold text-gray-900 text-sm leading-tight">{nombre}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 Contrato N.° {contrato?.numero} — {contrato?.dependencia?.abreviatura}
               </p>
             </div>
@@ -200,7 +200,7 @@ function InformeCard({
           {/* Secretary rejection note */}
           {(tieneNotaSecretaria || tieneMotivoRechazo) && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 mt-2">
-              <p className="text-[10px] text-red-600">
+              <p className="text-[11px] text-red-600">
                 <strong>{tieneMotivoRechazo ? 'Motivo de la devolución:' : 'Nota secretaria:'}</strong>{' '}
                 {periodo.motivo_rechazo}
               </p>
@@ -364,7 +364,7 @@ function SinEnviarCard({
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div>
               <p className="font-semibold text-gray-900 text-sm leading-tight">{nombre}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 Contrato N.° {contrato?.numero} — {contrato?.dependencia?.abreviatura}
               </p>
             </div>
@@ -451,6 +451,14 @@ export default function InformesPage({
 
   // Secretary action state
   const [menuAbierto, setMenuAbierto] = useState(false)
+
+  // El menú de acciones masivas se cierra con Escape.
+  useEffect(() => {
+    if (!menuAbierto) return
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuAbierto(false) }
+    document.addEventListener('keydown', tecla)
+    return () => document.removeEventListener('keydown', tecla)
+  }, [menuAbierto])
   const [procesandoMasivo, setProcesandoMasivo] = useState(false)
   const [mostrarRechazoMasivo, setMostrarRechazoMasivo] = useState(false)
   // Confirmación previa cuando la tanda incluye planillas sin revisar.
@@ -737,8 +745,8 @@ export default function InformesPage({
         subtitle={subtitulo}
         action={
           <div className="flex items-center gap-2">
-            <button onClick={mesAnterior} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button onClick={mesAnterior} aria-label="Mes anterior" className="p-2 hover:bg-gray-100 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900">
+              <svg aria-hidden="true" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
@@ -750,8 +758,8 @@ export default function InformesPage({
             >
               {mesNombre} {anio}
             </button>
-            <button onClick={mesSiguiente} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button onClick={mesSiguiente} aria-label="Mes siguiente" className="p-2 hover:bg-gray-100 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900">
+              <svg aria-hidden="true" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -827,7 +835,7 @@ export default function InformesPage({
             {(depFiltro !== 'todas' || planillaFiltro !== 'todas') && (
               <button
                 onClick={() => { setDepFiltro('todas'); setPlanillaFiltro('todas') }}
-                className="text-xs font-medium text-gray-400 underline-offset-2 hover:text-gray-700 hover:underline sm:ml-auto"
+                className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-gray-700 hover:underline sm:ml-auto"
               >
                 Quitar filtros
               </button>
@@ -848,7 +856,7 @@ export default function InformesPage({
             </span>
             <button
               onClick={() => setBusqueda('')}
-              className="font-medium text-gray-400 underline-offset-2 transition-colors hover:text-gray-700 hover:underline"
+              className="font-medium text-gray-500 underline-offset-2 transition-colors hover:text-gray-700 hover:underline"
             >
               Limpiar
             </button>
@@ -941,32 +949,32 @@ export default function InformesPage({
 
             {menuAbierto && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
+                <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setMenuAbierto(false)} />
                 <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl border shadow-lg z-20 py-1">
                   <button onClick={() => accionMasiva('aprobar_pre_aprobados')}
                     disabled={idsAprobadosAsesor.length === 0}
                     className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
                     <p className="font-medium text-gray-900">Aprobar aprobados por asesor</p>
-                    <p className="text-xs text-gray-400">{idsAprobadosAsesor.length} informes</p>
+                    <p className="text-xs text-gray-500">{idsAprobadosAsesor.length} informes</p>
                   </button>
                   <button onClick={() => accionMasiva('aprobar_todos')}
                     disabled={idsParaAprobar.length === 0}
                     className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
                     <p className="font-medium text-gray-900">Aprobar todos</p>
-                    <p className="text-xs text-gray-400">{idsParaAprobar.length} informes</p>
+                    <p className="text-xs text-gray-500">{idsParaAprobar.length} informes</p>
                   </button>
                   <div className="border-t border-gray-100 my-1" />
                   <button onClick={() => accionMasiva('aprobar_pre_aprobados_descargar')}
                     disabled={idsAprobadosAsesor.length === 0}
                     className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
                     <p className="font-medium text-gray-900">Aprobar aprobados por asesor + descargar</p>
-                    <p className="text-xs text-gray-400">{idsAprobadosAsesor.length} informes -- genera ZIP</p>
+                    <p className="text-xs text-gray-500">{idsAprobadosAsesor.length} informes -- genera ZIP</p>
                   </button>
                   <button onClick={() => accionMasiva('aprobar_todos_descargar')}
                     disabled={idsParaAprobar.length === 0}
                     className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
                     <p className="font-medium text-gray-900">Aprobar todos + descargar</p>
-                    <p className="text-xs text-gray-400">{idsParaAprobar.length} informes -- genera ZIP</p>
+                    <p className="text-xs text-gray-500">{idsParaAprobar.length} informes -- genera ZIP</p>
                   </button>
                   <div className="border-t border-gray-100 my-1" />
                   <button onClick={() => accionMasiva('rechazar_todos')}

@@ -125,7 +125,7 @@ function Cintillo({ centro = false }: { centro?: boolean }) {
 function Patrocinio({ className = '' }: { className?: string }) {
   return (
     <div className={`flex items-center justify-center gap-2.5 ${className}`}>
-      <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8892A8]">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#8892A8]">
         Apoya
       </span>
       <LogoCD size={20} color={LUZ} />
@@ -337,7 +337,7 @@ export default function AmigoSecretoClient() {
               .filter(([, v]) => v)
               .map(([et, v]) => (
                 <div key={et}>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8892A8]">{et}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#8892A8]">{et}</p>
                   <p className="mt-1 text-[17px] font-semibold text-[#F2ECE0]">{v}</p>
                 </div>
               ))}

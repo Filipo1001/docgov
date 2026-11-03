@@ -52,7 +52,7 @@ function UserAvatar({ nombre, fotoUrl, size = 9 }: { nombre: string; fotoUrl?: s
 function PendingBadge({ n }: { n: number }) {
   if (n === 0) return null
   return (
-    <span className="ml-auto min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none">
+    <span className="ml-auto min-w-[20px] h-5 bg-red-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none">
       {n > 99 ? '99+' : n}
     </span>
   )
@@ -70,6 +70,14 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   useEffect(() => {
     onClose()
   }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // En el teléfono el menú es un panel que se abre sobre la página: Escape lo cierra.
+  useEffect(() => {
+    if (!open) return
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', tecla)
+    return () => document.removeEventListener('keydown', tecla)
+  }, [open, onClose])
 
   // Fetch the count of periods waiting for review (for supervisor/admin)
   useEffect(() => {
@@ -156,6 +164,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
       {open && (
         <div
           className="fixed inset-0 bg-black/30 z-40 md:hidden"
+          aria-hidden="true"
           onClick={onClose}
         />
       )}
@@ -174,7 +183,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             <LogoCD size={40} />
             <div className="min-w-0">
               <h1 className="text-base font-bold tracking-tight text-[#192031] truncate">Contratista Digital</h1>
-              {municipio && <p className="text-xs text-gray-400">{municipio.nombre}</p>}
+              {municipio && <p className="text-xs text-gray-500">{municipio.nombre}</p>}
             </div>
           </div>
         </div>
@@ -213,7 +222,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                       <Icono
                         glifo={Iconos.navegacion[item.icono]}
                         tamano="md"
-                        className={activo ? 'text-white' : 'text-gray-400'}
+                        className={activo ? 'text-white' : 'text-gray-500'}
                       />
                       <span className="flex-1">{item.label}</span>
                       {esInformes && pendientes > 0 && <PendingBadge n={pendientes} />}
@@ -258,7 +267,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                 <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
                   {usuario.nombre_completo.split(' ')[0]}
                 </p>
-                <p className="text-xs text-gray-400 capitalize">{usuario.rol}</p>
+                <p className="text-xs text-gray-500 capitalize">{usuario.rol}</p>
               </div>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 group-hover:text-blue-400 shrink-0 transition-colors">
                 <path d="M5 3l4 4-4 4" />
@@ -298,7 +307,7 @@ function MobileHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
         <LogoCD size={32} />
         <div className="min-w-0">
           <h1 className="text-sm font-bold tracking-tight text-[#192031] truncate">Contratista Digital</h1>
-          {municipio && <p className="text-[10px] text-gray-400 -mt-0.5">{municipio.nombre}</p>}
+          {municipio && <p className="text-[11px] text-gray-500 -mt-0.5">{municipio.nombre}</p>}
         </div>
       </div>
     </header>
@@ -378,10 +387,17 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Quien navega con teclado llega al contenido sin recorrer el menú entero. Solo se ve al recibir el foco. */}
+      <a
+        href="#contenido-principal"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-lg focus:bg-gray-900 focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg"
+      >
+        Saltar al contenido
+      </a>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="md:ml-64 flex flex-col min-h-screen">
         <MobileHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-8 md:pb-8">
+        <main id="contenido-principal" tabIndex={-1} className="flex-1 outline-none p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-8 md:pb-8">
           {/* Encima del contenido de CUALQUIER pantalla del panel: el aviso debe
               verse entre al entrar, sin depender de a dónde navegue cada rol. */}
           <AvisoMigracion />

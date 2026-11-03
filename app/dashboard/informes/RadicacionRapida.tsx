@@ -14,7 +14,8 @@
  * - Fallos parciales del servidor se reportan por fila sin abortar el resto.
  */
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
+import { useModalAccesible } from '@/lib/use-modal'
 import { toast } from 'sonner'
 import { marcarRadicadosMasivo } from '@/app/actions/periodos'
 import type { Periodo } from '@/lib/types'
@@ -46,6 +47,9 @@ export default function RadicacionRapida({
   const [numeros, setNumeros] = useState<Record<string, string>>({})
   const [erroresFila, setErroresFila] = useState<Record<string, string>>({})
   const [guardando, setGuardando] = useState(false)
+  const panel = useRef<HTMLDivElement>(null)
+  const idTitulo = useId()
+  useModalAccesible(panel, onClose, guardando)
 
   // Duplicados dentro del formulario — validación en vivo
   const duplicados = useMemo(() => {
@@ -109,13 +113,13 @@ export default function RadicacionRapida({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={() => !guardando && onClose()} />
+      <div className="absolute inset-0 bg-black/40" aria-hidden="true" onClick={() => !guardando && onClose()} />
 
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={idTitulo} className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Radicación rápida</h2>
+            <h2 id={idTitulo} className="text-base font-bold text-gray-900">Radicación rápida</h2>
             <p className="text-xs text-gray-500 mt-0.5">
               {periodos.length} cuenta{periodos.length === 1 ? '' : 's'} aprobada{periodos.length === 1 ? '' : 's'} en {mesNombre} {anio}.
               Solo se radican las filas con número diligenciado.
@@ -124,7 +128,7 @@ export default function RadicacionRapida({
           <button
             onClick={onClose}
             disabled={guardando}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 shrink-0"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-600 shrink-0"
             aria-label="Cerrar"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -138,9 +142,9 @@ export default function RadicacionRapida({
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
               <tr>
-                <th className="text-left px-6 py-2.5 text-xs font-semibold text-gray-500">Contrato</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">Contratista</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 w-52">N.° de radicado</th>
+                <th scope="col" className="text-left px-6 py-2.5 text-xs font-semibold text-gray-500">Contrato</th>
+                <th scope="col" className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">Contratista</th>
+                <th scope="col" className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 w-52">N.° de radicado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -155,7 +159,7 @@ export default function RadicacionRapida({
                     </td>
                     <td className="px-4 py-2.5 text-gray-700">
                       {p.contrato?.contratista?.nombre_completo ?? 'Sin nombre'}
-                      <span className="text-xs text-gray-400 ml-2">{p.contrato?.dependencia?.abreviatura}</span>
+                      <span className="text-xs text-gray-500 ml-2">{p.contrato?.dependencia?.abreviatura}</span>
                     </td>
                     <td className="px-4 py-2.5">
                       <input
@@ -174,10 +178,10 @@ export default function RadicacionRapida({
                         }`}
                       />
                       {esDuplicado && (
-                        <p className="text-[10px] text-red-600 mt-0.5">Número repetido en el formulario</p>
+                        <p className="text-[11px] text-red-600 mt-0.5">Número repetido en el formulario</p>
                       )}
                       {errorServidor && (
-                        <p className="text-[10px] text-red-600 mt-0.5">{errorServidor}</p>
+                        <p className="text-[11px] text-red-600 mt-0.5">{errorServidor}</p>
                       )}
                     </td>
                   </tr>

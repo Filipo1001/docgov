@@ -123,7 +123,7 @@ export default function Dialogo({ titulo, descripcion, icono, onCerrar, ocupado 
             onClick={onCerrar}
             disabled={ocupado}
             aria-label="Cerrar"
-            className="-mr-1.5 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 disabled:opacity-40"
+            className="-mr-1.5 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 disabled:opacity-40"
           >
             <Icono glifo={Iconos.accion.cerrar} tamano="sm" />
           </button>

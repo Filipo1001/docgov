@@ -58,7 +58,7 @@ type Mensaje = { tipo: 'ok' | 'error'; texto: string } | null
 const TARJETA = 'bg-white rounded-2xl border border-gray-200 p-5 sm:p-6'
 const TITULO = 'text-base font-semibold text-gray-900'
 const CAMPO =
-  'w-full min-h-12 px-3.5 rounded-xl border border-gray-300 bg-white text-base sm:text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-shadow focus:border-gray-900 focus:ring-2 focus:ring-gray-900/15'
+  'w-full min-h-12 px-3.5 rounded-xl border border-gray-300 bg-white text-base sm:text-sm text-gray-900 placeholder:text-gray-500 outline-none transition-shadow focus:border-gray-900 focus:ring-2 focus:ring-gray-900/15'
 const BOTON_PRINCIPAL =
   'inline-flex items-center justify-center min-h-12 px-5 rounded-xl bg-gray-900 text-white text-sm font-semibold transition-colors hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2'
 const BOTON_SECUNDARIO =
@@ -209,7 +209,7 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string | null }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-gray-500">{etiqueta}</dt>
-      <dd className={`mt-0.5 text-sm break-words ${valor ? 'text-gray-900' : 'text-gray-400'}`}>{valor ?? 'Sin registrar'}</dd>
+      <dd className={`mt-0.5 text-sm break-words ${valor ? 'text-gray-900' : 'text-gray-500'}`}>{valor ?? 'Sin registrar'}</dd>
     </div>
   )
 }
@@ -237,7 +237,7 @@ function TusDatos({ datos }: { datos: DatosMiCuenta }) {
         </div>
       )}
       <p className="mt-5 flex gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        <Icono glifo={Iconos.estado.informacion} tamano="sm" className="mt-0.5 shrink-0 text-gray-400" />
+        <Icono glifo={Iconos.estado.informacion} tamano="sm" className="mt-0.5 shrink-0 text-gray-500" />
         <span>Estos datos los registra la oficina de contratación. Si alguno está mal, pídeles la corrección.</span>
       </p>
     </section>

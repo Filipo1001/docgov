@@ -64,7 +64,7 @@ function PipelineStage({
     <div className="flex items-center gap-0.5 sm:gap-1">
       <div className={`flex flex-col items-center rounded-xl px-2 sm:px-3 py-2 sm:py-2.5 min-w-[56px] sm:min-w-[72px] ${color}`}>
         <span className="text-lg sm:text-xl font-bold">{value}</span>
-        <span className="text-[9px] sm:text-[10px] font-medium mt-0.5 text-center leading-tight">{label}</span>
+        <span className="text-[11px] sm:text-[11px] font-medium mt-0.5 text-center leading-tight">{label}</span>
       </div>
       {!isLast && (
         <div className="text-gray-300 text-sm sm:text-lg px-0.5">→</div>
@@ -164,7 +164,7 @@ export default function AdminHome({
               href="/dashboard/informes"
               className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-center bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
             >
-              <Icono glifo={Iconos.dominio.periodo} tamano="sm" className="text-gray-400" />
+              <Icono glifo={Iconos.dominio.periodo} tamano="sm" className="text-gray-500" />
               {mesActualNombre()}
             </Link>
           </div>
@@ -175,7 +175,7 @@ export default function AdminHome({
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900">Pipeline de periodos</h3>
-          <span className="text-xs text-gray-400">{pipeline.totalContratos} contratos activos</span>
+          <span className="text-xs text-gray-500">{pipeline.totalContratos} contratos activos</span>
         </div>
         <div className="flex items-center gap-0 overflow-x-auto pb-2">
           <PipelineStage label="Borrador" value={pipeline.borrador} color="bg-gray-100 text-gray-700" />
@@ -218,7 +218,7 @@ export default function AdminHome({
       <Card>
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Actividad reciente</h3>
         {actividad.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">Sin actividad reciente</p>
+          <p className="text-sm text-gray-500 text-center py-8">Sin actividad reciente</p>
         ) : (
           <div className="space-y-3">
             {actividad.map(a => {
@@ -238,11 +238,11 @@ export default function AdminHome({
                       {' — '}
                       <span className={cfg.color}>{cfg.label}</span>
                     </p>
-                    <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
+                    <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">
                       Cto. {a.contrato_numero} · {a.mes} {a.anio}
                     </p>
                   </div>
-                  <span className="text-[11px] sm:text-xs text-gray-400 flex-shrink-0 mt-1">{timeAgo(a.fecha)}</span>
+                  <span className="text-[11px] sm:text-xs text-gray-500 flex-shrink-0 mt-1">{timeAgo(a.fecha)}</span>
                 </Link>
               )
             })}

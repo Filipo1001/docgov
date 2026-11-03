@@ -382,11 +382,11 @@ function GenericAprobaciones({ rol, userId }: { rol: string; userId: string }) {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold text-gray-900">{fmt(periodo.valor_cobro)}</p>
-                    <p className="text-xs text-gray-400">{periodo.mes} {periodo.anio}</p>
+                    <p className="text-xs text-gray-500">{periodo.mes} {periodo.anio}</p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mb-4">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mb-4">
                   <span>Contratista: <span className="text-gray-600">{contrato?.contratista?.nombre_completo}</span></span>
                   <span>Supervisor: <span className="text-gray-600">{contrato?.supervisor?.nombre_completo}</span></span>
                   <span>Periodo {periodo.numero_periodo}</span>

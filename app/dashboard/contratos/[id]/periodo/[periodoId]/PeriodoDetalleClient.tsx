@@ -166,17 +166,17 @@ function ListaCorrecciones({
       {correcciones.map(c => {
         const cuerpo = (
           <>
-            <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums transition-colors group-hover:bg-amber-100">
+            <span className="mt-px w-5 h-5 rounded-md bg-amber-50 text-amber-700 text-[11px] font-bold flex items-center justify-center shrink-0 tabular-nums transition-colors group-hover:bg-amber-100">
               {c.numero}
             </span>
             <span className="min-w-0 flex-1 block">
               {/* La obligación, recortada a una línea: está para ubicar cuál es,
                   no para volver a leerla entera. */}
-              <span className="block text-[11px] text-gray-400 leading-snug line-clamp-1">{c.descripcion}</span>
+              <span className="block text-[11px] text-gray-500 leading-snug line-clamp-1">{c.descripcion}</span>
               {c.nota ? (
                 <span className="block text-xs text-gray-700 leading-relaxed break-words mt-0.5">{c.nota}</span>
               ) : (
-                <span className="block text-xs text-gray-400 italic leading-relaxed mt-0.5">Marcada sin texto.</span>
+                <span className="block text-xs text-gray-500 italic leading-relaxed mt-0.5">Marcada sin texto.</span>
               )}
             </span>
           </>
@@ -211,7 +211,7 @@ function ListaCorrecciones({
           al acta—, pero se cuentan: quien las vio en azul cielo en el acordeón
           necesita saber que no están en esta lista por algo, no por olvido. */}
       {observadas > 0 && (
-        <li className="text-[11px] text-gray-400 leading-relaxed pl-[30px] pt-1.5">
+        <li className="text-[11px] text-gray-500 leading-relaxed pl-[30px] pt-1.5">
           {observadas === 1
             ? '1 obligación más lleva observación, que no pide corrección.'
             : `${observadas} obligaciones más llevan observación, que no piden corrección.`}
@@ -2308,7 +2308,7 @@ export default function PeriodoDetallePage({
       <Toaster position="top-center" richColors />
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+      <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
         <Link href="/dashboard/contratos" className="hover:text-gray-600">Contratos</Link>
         <span>/</span>
         <Link href={`/dashboard/contratos/${contratoId}`} className="hover:text-gray-600">
@@ -2322,7 +2322,7 @@ export default function PeriodoDetallePage({
       {esEditable && esContratista && !usuario?.firma_url && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
           <div className="flex items-start gap-2 min-w-0">
-            <Icono glifo={Iconos.navegacion.firmas} tamano="sm" className="shrink-0 text-gray-400 mt-0.5" />
+            <Icono glifo={Iconos.navegacion.firmas} tamano="sm" className="shrink-0 text-gray-500 mt-0.5" />
             <p className="text-xs text-amber-700">
               <strong>Recomendado:</strong> Registra tu firma para completar correctamente tus informes.
             </p>
@@ -2339,7 +2339,7 @@ export default function PeriodoDetallePage({
       {/* ── Historical lock banner ──────────────────────────── */}
       {esHistorico && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
-          <Icono glifo={Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
+          <Icono glifo={Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-500" />
           <div>
             <p className="text-sm font-semibold text-amber-800">Periodo histórico — solo lectura</p>
             <p className="text-xs text-amber-700 mt-0.5">
@@ -2353,7 +2353,7 @@ export default function PeriodoDetallePage({
       {/* ── Periodo anulado por la terminación anticipada del contrato (migración 081) ── */}
       {periodo.estado === 'anulado' && (
         <div className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
-          <Icono glifo={Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
+          <Icono glifo={Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-500" />
           <div>
             <p className="text-sm font-semibold text-gray-800">Periodo anulado — no hay informe que presentar</p>
             <p className="text-xs text-gray-600 mt-0.5">
@@ -2367,7 +2367,7 @@ export default function PeriodoDetallePage({
       {/* ── Past-month supervisor control panel ───────────────── */}
       {esPeriodoPasado && esSecretaria && !esAsesor && periodo.estado !== 'anulado' && (
         <div className={`border rounded-2xl px-5 py-4 mb-6 flex flex-wrap items-start gap-3 ${periodo.habilitado_tardio ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
-          <Icono glifo={periodo.habilitado_tardio ? Iconos.estado.desbloqueado : Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-400" />
+          <Icono glifo={periodo.habilitado_tardio ? Iconos.estado.desbloqueado : Iconos.estado.bloqueado} tamano="lg" className="flex-shrink-0 text-gray-500" />
           <div className="flex-1 min-w-[12rem]">
             <p className={`text-sm font-semibold ${periodo.habilitado_tardio ? 'text-emerald-800' : 'text-blue-800'}`}>
               {periodo.habilitado_tardio ? 'Envío tardío activo' : 'Periodo vencido'}
@@ -2404,7 +2404,7 @@ export default function PeriodoDetallePage({
       {/* ── Past-month lock banner (contratista, not unlocked) ── */}
       {periodoVencido && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
-          <Icono glifo={Iconos.dominio.periodo} tamano="lg" className="flex-shrink-0 text-gray-400" />
+          <Icono glifo={Iconos.dominio.periodo} tamano="lg" className="flex-shrink-0 text-gray-500" />
           <div>
             <p className="text-sm font-semibold text-orange-800">Periodo cerrado para envío</p>
             <p className="text-xs text-orange-700 mt-0.5">
@@ -2450,12 +2450,12 @@ export default function PeriodoDetallePage({
             {/* Antetítulo · título · subtítulo. El mes es el titular porque es
                 lo que distingue esta pantalla de las otras once del contrato;
                 el año va en gris para que no le robe peso. */}
-            <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500">
               Contrato N.° {contrato.numero}
             </p>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight mt-1">
               {periodo.mes}{' '}
-              <span className="font-semibold text-gray-400">{periodo.anio}</span>
+              <span className="font-semibold text-gray-500">{periodo.anio}</span>
             </h2>
             <p className="text-sm text-gray-500 mt-1.5 break-words">
               {contrato.contratista?.nombre_completo}
@@ -2535,7 +2535,7 @@ export default function PeriodoDetallePage({
                 {motivoDevolucion_ ? (
                   <p className="text-xs text-gray-600 mt-1 leading-relaxed break-words">{motivoDevolucion_}</p>
                 ) : correcciones.length === 0 ? (
-                  <p className="text-xs text-gray-400 mt-0.5">Sin motivo registrado.</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Sin motivo registrado.</p>
                 ) : null}
               </div>
             </div>
@@ -2571,7 +2571,7 @@ export default function PeriodoDetallePage({
                     ? 'bg-emerald-500 text-white group-hover:ring-2 group-hover:ring-emerald-300 group-hover:ring-offset-1 group-hover:scale-110'
                     : done ? 'bg-emerald-500 text-white'
                     : active ? 'bg-gray-900 text-white ring-2 ring-gray-900 ring-offset-2'
-                    : 'bg-gray-100 text-gray-400'
+                    : 'bg-gray-100 text-gray-500'
                 }`}>
                   {/* Nodo descargable: spinner si está descargando, si no check→descarga en hover */}
                   {esNodoDescargable ? (
@@ -2601,10 +2601,10 @@ export default function PeriodoDetallePage({
               )
 
               const etiqueta = (
-                <span className={`text-[9px] mt-1 font-medium text-center leading-tight ${
+                <span className={`text-[11px] mt-1 font-medium text-center leading-tight ${
                   active ? 'text-gray-900'
                   : done || esNodoDescargable ? 'text-emerald-600 hidden sm:block'
-                  : 'text-gray-400 hidden sm:block'
+                  : 'text-gray-500 hidden sm:block'
                 }`}>
                   {step.short}
                 </span>
@@ -2646,7 +2646,7 @@ export default function PeriodoDetallePage({
         {/* Pre-approval badges */}
         {periodo.estado === 'enviado' && tienePreaprobaciones && (
           <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400">Pre-aprobado por:</span>
+            <span className="text-xs text-gray-500">Pre-aprobado por:</span>
             {preaprobaciones.map(pa => (
               <span key={pa.id} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
                 {pa.asesor?.nombre_completo || 'Asesor'}
@@ -2721,7 +2721,7 @@ export default function PeriodoDetallePage({
                     className="mt-2"
                   />
 
-                  <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+                  <p className="text-xs text-gray-500 mt-3 leading-relaxed">
                     Tus obligaciones están abiertas más abajo. Cuando termines de corregir,
                     reenvía el informe desde el final de la página.
                   </p>
@@ -2750,7 +2750,7 @@ export default function PeriodoDetallePage({
                       No se dejó un motivo escrito. Adjunta la planilla correcta para continuar.
                     </p>
                   )}
-                  <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+                  <p className="text-xs text-gray-500 mt-3 leading-relaxed">
                     {rechazado ? (
                       <>
                         Puedes reemplazarla desde el campo <strong className="font-medium text-gray-500">Planilla Seguridad Social</strong>,
@@ -2775,9 +2775,9 @@ export default function PeriodoDetallePage({
       {usuario?.rol === 'admin' && informePresentado(periodo.estado) && (
         <div className="bg-white rounded-2xl border border-orange-100 p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Icono glifo={Iconos.navegacion.configuracion} tamano="sm" className="text-gray-400" />
+            <Icono glifo={Iconos.navegacion.configuracion} tamano="sm" className="text-gray-500" />
             <h3 className="text-sm font-semibold text-gray-800">Devolución de periodo</h3>
-            <span className="text-xs text-gray-400">Solo admin</span>
+            <span className="text-xs text-gray-500">Solo admin</span>
           </div>
 
           {/* Botones de destino */}
@@ -2877,7 +2877,7 @@ export default function PeriodoDetallePage({
             <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 shrink-0"><Icono glifo={Iconos.accion.ver} tamano="sm" /></div>
             <div className="min-w-0">
               <h3 className="font-medium text-gray-900">Revisión del asesor</h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 {periodo.estado === 'revision'
                   ? 'Este informe está marcado como revisado. Puedes revocar si detectas un problema.'
                   : 'Revisa las actividades y evidencias. Al aprobar, el informe pasa a la secretaría.'}
@@ -2939,7 +2939,7 @@ export default function PeriodoDetallePage({
                   ? 'Mensaje general (opcional) — ya marcaste obligaciones con su texto…'
                   : 'Escribe el motivo del rechazo para el contratista…'}
                 rows={3}
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
               />
               <MejorarRedaccion texto={motivoRechazo} onAceptar={setMotivoRechazo} disabled={procesando} />
               <div className="flex gap-3">
@@ -2977,7 +2977,7 @@ export default function PeriodoDetallePage({
               value={numRadicado}
               onChange={e => setNumRadicado(e.target.value)}
               placeholder="No. de radicado (opcional)"
-              className="flex-1 min-w-0 sm:min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-emerald-300"
+              className="flex-1 min-w-0 sm:min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 outline-none focus:ring-2 focus:ring-emerald-300"
             />
             <button
               onClick={handleRadicado}
@@ -3003,7 +3003,7 @@ export default function PeriodoDetallePage({
         {/* Control global expandir/colapsar — solo si hay obligaciones */}
         {obligaciones.length > 0 && (
           <div className="flex items-center justify-between px-1">
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-500">
               {/* La palabra entera, no un sufijo pegado: «obligación» + «es»
                   daba «obligaciónes», que además de sobrar la tilde llevaba
                   meses a la vista de todo el mundo. */}
@@ -3137,14 +3137,14 @@ export default function PeriodoDetallePage({
                           esCorreccion={estadoRev === 'devuelta' || notaDelCicloAnterior}
                         />
                       )}
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-500">
                         {actsDeObl.length} actividad{actsDeObl.length !== 1 ? 'es' : ''}
                         {numEvidencias > 0 && ` · ${numEvidencias} evidencia${numEvidencias !== 1 ? 's' : ''}`}
                       </span>
                     </div>
                   </div>
                   <svg
-                    className={`w-5 h-5 text-gray-400 shrink-0 mt-1 transition-transform ${abierta ? 'rotate-180' : ''}`}
+                    className={`w-5 h-5 text-gray-500 shrink-0 mt-1 transition-transform ${abierta ? 'rotate-180' : ''}`}
                     fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -3252,7 +3252,7 @@ export default function PeriodoDetallePage({
                             rows={3}
                             autoFocus
                             maxLength={1500}
-                            className="w-full px-3 py-2.5 bg-white border border-blue-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                            className="w-full px-3 py-2.5 bg-white border border-blue-300 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                           />
                           {/* Redacción asistida (LanguageTool) */}
                           <MejorarRedaccion texto={editDesc} onAceptar={setEditDesc} />
@@ -3286,7 +3286,7 @@ export default function PeriodoDetallePage({
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs text-gray-400">{actIndex + 1}.</span>
+                                <span className="text-xs text-gray-500">{actIndex + 1}.</span>
                                 {/* Una obligación declarada sin ejecutar no es
                                     «0 acciones» entre otras tantas: es lo que
                                     el supervisor tiene que mirar primero al
@@ -3310,7 +3310,7 @@ export default function PeriodoDetallePage({
                                   onClick={() => handleAbrirEdicion(act.id, act.descripcion, act.cantidad ?? 1)}
                                   disabled={eliminandoActividad === act.id}
                                   className="w-11 h-11 flex items-center justify-center rounded-xl
-                                             text-gray-400 hover:text-blue-500 active:text-blue-600
+                                             text-gray-500 hover:text-blue-500 active:text-blue-600
                                              hover:bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-30"
                                   aria-label="Editar actividad"
                                 >
@@ -3328,7 +3328,7 @@ export default function PeriodoDetallePage({
                                     disabled:opacity-30
                                     ${confirmarEliminarId === act.id
                                       ? 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700'
-                                      : 'text-gray-400 hover:text-red-500 active:text-red-600 hover:bg-red-50 active:bg-red-100'
+                                      : 'text-gray-500 hover:text-red-500 active:text-red-600 hover:bg-red-50 active:bg-red-100'
                                     }`}
                                   aria-label={confirmarEliminarId === act.id ? 'Confirmar eliminación' : 'Eliminar actividad'}
                                   title={confirmarEliminarId === act.id ? 'Toca de nuevo para confirmar' : 'Eliminar'}
@@ -3456,7 +3456,7 @@ export default function PeriodoDetallePage({
                                     <Icono glifo={Iconos.documentos.adjunto} tamano="sm" className="shrink-0" />
                                     Adjuntar evidencia
                                   </span>
-                                  <span className="text-[10px] font-normal text-blue-400 leading-tight">imágenes o PDF</span>
+                                  <span className="text-[11px] font-normal text-blue-400 leading-tight">imágenes o PDF</span>
                                 </button>
                                 {/* Camera — single capture */}
                                 <button
@@ -3498,7 +3498,7 @@ export default function PeriodoDetallePage({
                           : 'Describe la actividad realizada...'}
                         rows={3}
                         maxLength={1500}
-                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                       />
 
                       {/* ── Redacción asistida (LanguageTool) ── */}
@@ -3638,7 +3638,7 @@ export default function PeriodoDetallePage({
               el botón: quedaba en una columna de una palabra por línea junto
               a un botón que nunca cedía ancho, porque la fila nunca envolvía. */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-gray-100">
-            <p className="text-sm text-gray-400" aria-live="polite">
+            <p className="text-sm text-gray-500" aria-live="polite">
               {/* Ya no narra fases del envío: en cuanto hay algo que contar, la
                   animación de EnvioInforme cubre la pantalla entera y este
                   párrafo queda tapado detrás — que siguiera cambiando de texto
@@ -3694,7 +3694,7 @@ export default function PeriodoDetallePage({
         <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Icono glifo={Iconos.estado.verificado} tamano="lg" className="text-gray-400" />
+              <Icono glifo={Iconos.estado.verificado} tamano="lg" className="text-gray-500" />
               <p className="text-base font-bold text-emerald-700">Periodo radicado</p>
             </div>
             {/* Edit button — only for asesor/supervisor/admin */}
@@ -3720,7 +3720,7 @@ export default function PeriodoDetallePage({
                 value={numRadicadoEdit}
                 onChange={e => setNumRadicadoEdit(e.target.value)}
                 placeholder="Número de radicado"
-                className="flex-1 min-w-0 basis-full sm:basis-auto px-3 py-2 border border-emerald-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="flex-1 min-w-0 basis-full sm:basis-auto px-3 py-2 border border-emerald-300 rounded-xl text-sm text-gray-900 placeholder-gray-500 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 autoFocus
               />
               <button
@@ -3774,7 +3774,7 @@ export default function PeriodoDetallePage({
               {tienePreaprobaciones && (
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   {preaprobaciones.map(pa => (
-                    <span key={pa.id} className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                    <span key={pa.id} className="text-[11px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
                       {pa.asesor?.nombre_completo || 'Asesor'}
                     </span>
                   ))}
@@ -3818,7 +3818,7 @@ export default function PeriodoDetallePage({
               supervisor. */}
           {periodo.estado === 'revision' && !esAsesor && (
             <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-gray-100">
-              <p className="text-xs text-gray-400 min-w-0">
+              <p className="text-xs text-gray-500 min-w-0">
                 Un asesor ya revisó este informe.
               </p>
               <button
@@ -3894,7 +3894,7 @@ export default function PeriodoDetallePage({
                   </button>
                 ) : (
                   <div
-                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-500 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
                     title="Disponible cuando la secretaria apruebe el periodo"
                   >
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -3925,7 +3925,7 @@ export default function PeriodoDetallePage({
                   </button>
                 ) : (
                   <div
-                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
+                    className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-100 text-gray-500 text-xs font-semibold rounded-xl cursor-not-allowed select-none"
                     title="Disponible cuando la secretaria apruebe el periodo"
                   >
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -3951,10 +3951,10 @@ export default function PeriodoDetallePage({
             <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
               <a href={`/api/pdf/${periodoId}/informe`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 flex-1 min-w-0">
-                <Icono glifo={Iconos.documentos.informe} tamano="md" className="shrink-0 text-gray-400" />
+                <Icono glifo={Iconos.documentos.informe} tamano="md" className="shrink-0 text-gray-500" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">Informe de Actividades</p>
-                  <p className="text-xs text-gray-400">Generado automáticamente</p>
+                  <p className="text-xs text-gray-500">Generado automáticamente</p>
                 </div>
               </a>
               <a href={`/api/pdf/${periodoId}/informe?force=1`} target="_blank" rel="noopener noreferrer"
@@ -3973,12 +3973,12 @@ export default function PeriodoDetallePage({
             <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
               <a href={`/api/pdf/${periodoId}/cuenta-cobro`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 flex-1 min-w-0">
-                <Icono glifo={exigeFacturaElectronica ? Iconos.documentos.certificacion : Iconos.documentos.cuentaCobro} tamano="md" className="shrink-0 text-gray-400" />
+                <Icono glifo={exigeFacturaElectronica ? Iconos.documentos.certificacion : Iconos.documentos.cuentaCobro} tamano="md" className="shrink-0 text-gray-500" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">
                     {exigeFacturaElectronica ? 'Factura electrónica' : 'Cuenta de Cobro'}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-500">
                     {exigeFacturaElectronica ? 'Adjuntada por la contratista' : 'Generado automáticamente'}
                   </p>
                 </div>
@@ -3999,10 +3999,10 @@ export default function PeriodoDetallePage({
               <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                 <a href={`/api/certificacion/${periodoId}`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-3 flex-1 min-w-0">
-                  <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-400" />
+                  <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-500" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">Certificación de Retención</p>
-                    <p className="text-xs text-gray-400">Bajo la gravedad de juramento</p>
+                    <p className="text-xs text-gray-500">Bajo la gravedad de juramento</p>
                   </div>
                 </a>
               </div>
@@ -4016,7 +4016,7 @@ export default function PeriodoDetallePage({
                   <Icono glifo={Iconos.documentos.actaTerminacion} tamano="md" className="shrink-0 text-emerald-600" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">Acta de Terminación</p>
-                    <p className="text-xs text-gray-400">Terminación bilateral del contrato</p>
+                    <p className="text-xs text-gray-500">Terminación bilateral del contrato</p>
                   </div>
                 </a>
               </div>
@@ -4029,10 +4029,10 @@ export default function PeriodoDetallePage({
               }`}>
                 <a href={`/api/pdf/${periodoId}/acta-supervision`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-3 flex-1 min-w-0">
-                  <Icono glifo={Iconos.documentos.actaSupervision} tamano="md" className="shrink-0 text-gray-400" />
+                  <Icono glifo={Iconos.documentos.actaSupervision} tamano="md" className="shrink-0 text-gray-500" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">Acta de Supervisión</p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-500">
                       {puedeDescargarPaquete ? 'Firmada' : 'Pendiente aprobación'}
                     </p>
                   </div>
@@ -4058,7 +4058,7 @@ export default function PeriodoDetallePage({
                         placeholder="Escribe una observación adicional para este periodo..."
                         rows={3}
                         autoFocus
-                        className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-400 outline-none resize-none"
+                        className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-amber-400 outline-none resize-none"
                       />
                       {/* Va impresa en el Acta de Supervisión, bajo
                           «Conclusiones y recomendaciones del supervisor». */}
@@ -4111,7 +4111,7 @@ export default function PeriodoDetallePage({
                   ) : (
                     <button
                       onClick={() => { setTextoObservacion(''); setEditandoObservacion(true) }}
-                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-amber-600 transition-colors px-2 py-1"
+                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-600 transition-colors px-2 py-1"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -4128,10 +4128,10 @@ export default function PeriodoDetallePage({
             }`}>
               <a href={`/api/pdf/${periodoId}/acta-pago`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 flex-1 min-w-0">
-                <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-400" />
+                <Icono glifo={Iconos.documentos.certificacion} tamano="md" className="shrink-0 text-gray-500" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">Acta de Pago</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-500">
                     {puedeDescargarPaquete ? 'Firmada' : 'Pendiente aprobación'}
                   </p>
                 </div>
@@ -4234,7 +4234,7 @@ export default function PeriodoDetallePage({
                     </p>
                   </div>
                   <svg
-                    className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${planillaMenuAbierto ? 'rotate-180' : ''}`}
+                    className={`w-4 h-4 text-gray-500 transition-transform duration-200 flex-shrink-0 ${planillaMenuAbierto ? 'rotate-180' : ''}`}
                     fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -4587,10 +4587,10 @@ export default function PeriodoDetallePage({
                     : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                <Icono glifo={Iconos.accion.ver} tamano="md" className="flex-shrink-0 text-gray-400" />
+                <Icono glifo={Iconos.accion.ver} tamano="md" className="flex-shrink-0 text-gray-500" />
                 <div>
                   <p className="text-sm font-medium">Devolver a asesor</p>
-                  <p className="text-xs text-gray-400 mt-0.5">El asesor revisará y reenviará a secretaría</p>
+                  <p className="text-xs text-gray-500 mt-0.5">El asesor revisará y reenviará a secretaría</p>
                 </div>
               </button>
               <button
@@ -4602,10 +4602,10 @@ export default function PeriodoDetallePage({
                     : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                <Icono glifo={Iconos.accion.devolver} tamano="md" className="flex-shrink-0 text-gray-400" />
+                <Icono glifo={Iconos.accion.devolver} tamano="md" className="flex-shrink-0 text-gray-500" />
                 <div>
                   <p className="text-sm font-medium">Devolver a contratista</p>
-                  <p className="text-xs text-gray-400 mt-0.5">El contratista corregirá y volverá a enviar</p>
+                  <p className="text-xs text-gray-500 mt-0.5">El contratista corregirá y volverá a enviar</p>
                 </div>
               </button>
             </div>
@@ -4631,7 +4631,7 @@ export default function PeriodoDetallePage({
                   rows={3}
                   autoFocus
                   disabled={procesandoDevolucion}
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none resize-none disabled:opacity-50"
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none resize-none disabled:opacity-50"
                 />
                 <div className="mb-3">
                   <MejorarRedaccion
@@ -4731,7 +4731,7 @@ export default function PeriodoDetallePage({
               ))}
             </div>
 
-            <p className="text-xs text-gray-400 mt-4">
+            <p className="text-xs text-gray-500 mt-4">
               Esta es una alerta informativa. No impide la aprobación del informe.
             </p>
 
@@ -4788,7 +4788,7 @@ export default function PeriodoDetallePage({
               placeholder={notaModal.estado === 'devuelta'
                 ? 'Ej: No se adjuntó el registro fotográfico de las visitas reportadas a la vereda Combia.'
                 : 'Ej: Se cumple, pero se hace un llamado de atención por el reporte tardío de las actividades.'}
-              className={`w-full px-3 py-2.5 bg-white border rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none resize-none focus:ring-2 ${
+              className={`w-full px-3 py-2.5 bg-white border rounded-xl text-sm text-gray-900 placeholder-gray-500 outline-none resize-none focus:ring-2 ${
                 notaModal.estado === 'devuelta'
                   ? 'border-amber-200 focus:ring-amber-400 focus:border-amber-400'
                   : 'border-sky-200 focus:ring-sky-400 focus:border-sky-400'

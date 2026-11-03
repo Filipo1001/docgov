@@ -104,14 +104,14 @@ export default function ActaTerminacionModal({
               ['Supervisor', prefill.supervisor],
             ].map(([etiqueta, valor]) => (
               <div key={etiqueta} className="flex gap-4 px-4 py-2.5">
-                <span className="w-36 shrink-0 text-gray-400">{etiqueta}</span>
+                <span className="w-36 shrink-0 text-gray-500">{etiqueta}</span>
                 <span className="flex-1 text-gray-800">{valor}</span>
               </div>
             ))}
           </div>
 
           <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Qué estás aceptando</p>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Qué estás aceptando</p>
             <p className="text-[13px] text-gray-600 leading-relaxed">
               Que el {fechaLarga(prefill.fechaTerminacion)} queda fijado como fecha de terminación del contrato, por
               haber acreditado el cumplimiento del objeto dentro del plazo, y que a partir de la suscripción del acta

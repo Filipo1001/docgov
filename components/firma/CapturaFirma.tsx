@@ -112,13 +112,13 @@ export default function CapturaFirma({
           {nombre}
         </p>
         {cedula && (
-          <p className="text-[10px] text-gray-500 mt-0.5">C.C. {formatCedula(cedula)}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">C.C. {formatCedula(cedula)}</p>
         )}
-        <p className="text-[10px] text-gray-500">Contratista</p>
+        <p className="text-[11px] text-gray-500">Contratista</p>
       </div>
 
       {!firmaActual && (
-        <span className="absolute top-3 right-3 text-[9px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+        <span className="absolute top-3 right-3 text-[11px] font-semibold uppercase tracking-wider text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
           Falta
         </span>
       )}
@@ -190,7 +190,7 @@ export default function CapturaFirma({
               </span>
               <span className="min-w-0">
                 <span className="block font-semibold text-[15px] leading-tight">Subir una imagen</span>
-                <span className="block text-[12px] text-gray-400 leading-tight mt-0.5">
+                <span className="block text-[12px] text-gray-500 leading-tight mt-0.5">
                   Si ya tienes una foto de tu firma
                 </span>
               </span>
@@ -202,7 +202,7 @@ export default function CapturaFirma({
             saber que no le van a pedir recortar nada; quien ya la tiene y está
             pensando en cambiarla necesita saber otra cosa: que los documentos
             que ya salieron no se tocan (regla 3 del CLAUDE.md). */}
-        <p className="text-[11px] text-gray-400 text-center mt-4 leading-relaxed max-w-xs mx-auto">
+        <p className="text-[11px] text-gray-500 text-center mt-4 leading-relaxed max-w-xs mx-auto">
           {firmaActual
             ? 'Puedes cambiarla cuando quieras. Los documentos ya emitidos conservan la firma con la que salieron.'
             : 'Con cualquiera de los dos: no tienes que recortar nada ni quitarle el fondo, y la ves antes de guardarla.'}
@@ -239,7 +239,7 @@ export default function CapturaFirma({
     <div className="bg-white rounded-2xl border border-gray-100 p-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-gray-900">Firma</h2>
-        <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 ${
+        <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 ${
           firmaActual
             ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
             : 'text-amber-700 bg-amber-50 border border-amber-200'
@@ -271,7 +271,7 @@ function BotonFirma({
       disabled={disabled}
       className="bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 active:scale-[.98] disabled:opacity-60 text-gray-700 rounded-2xl py-3 px-3 transition-all flex flex-col items-center gap-1.5"
     >
-      <span className="text-gray-400">{icono}</span>
+      <span className="text-gray-500">{icono}</span>
       <span className="text-[12px] font-medium leading-tight text-center">{titulo}</span>
     </button>
   )

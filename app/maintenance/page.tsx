@@ -44,7 +44,7 @@ export default function MantenimientoPage() {
 
         {/* Divider */}
         <div className="mt-7 pt-6 border-t border-gray-100">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-500">
             Att.{' '}
             <span className="font-semibold text-gray-600">Felipe Restrepo</span>
           </p>

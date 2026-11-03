@@ -28,7 +28,7 @@ function ProgressBar({ aprobados, total }: { aprobados: number; total: number })
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-xs text-gray-400 font-medium tabular-nums">
+      <span className="text-xs text-gray-500 font-medium tabular-nums">
         {aprobados}/{total}
       </span>
     </div>
@@ -207,9 +207,9 @@ export default function ColaboradoresPage() {
                   {p.nombre_completo}
                 </p>
                 {p.cedula && (
-                  <p className="text-xs text-gray-400 mt-0.5">C.C. {formatCedula(p.cedula)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">C.C. {formatCedula(p.cedula)}</p>
                 )}
-                <p className="text-xs text-gray-400 mt-0.5">{p.cargo}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{p.cargo}</p>
               </div>
             </div>
 
@@ -232,11 +232,11 @@ export default function ColaboradoresPage() {
                 />
               </div>
             ) : p.tiene_contrato ? (
-              <div className="text-xs text-gray-400 mb-3">
+              <div className="text-xs text-gray-500 mb-3">
                 {p.num_contratos} contrato{p.num_contratos !== 1 ? 's' : ''} anteriores
               </div>
             ) : (
-              <div className="text-xs text-gray-300 mb-3 italic">
+              <div className="text-xs text-gray-500 mb-3 italic">
                 Sin contratos registrados
               </div>
             )}
@@ -244,7 +244,7 @@ export default function ColaboradoresPage() {
             {/* Footer */}
             <div className="flex items-center justify-between">
               <EstadoBadge item={p} />
-              <span className="text-xs text-gray-400 group-hover:text-emerald-600 transition-colors">
+              <span className="text-xs text-gray-500 group-hover:text-emerald-600 transition-colors">
                 Ver perfil →
               </span>
             </div>

@@ -82,7 +82,7 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
         {ACCESOS.map(a => (
           <Link key={a.href} href={a.href} className="block">
             <Card className="h-full hover:shadow-md hover:border-gray-300 transition-all">
-              <Icono glifo={a.icono} tamano="lg" className="text-gray-400" />
+              <Icono glifo={a.icono} tamano="lg" className="text-gray-500" />
               <h3 className="font-medium text-gray-900 text-sm mt-2">{a.titulo}</h3>
               <p className="text-xs text-gray-500 mt-1">{a.desc}</p>
             </Card>
@@ -101,7 +101,7 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
             <h3 className="text-sm font-semibold text-gray-900">
               Datos faltantes para generar documentos
             </h3>
-            <span className="text-xs text-gray-400 whitespace-nowrap">
+            <span className="text-xs text-gray-500 whitespace-nowrap">
               {faltantes.filas.length} de {faltantes.contratosRevisados} contratos
             </span>
           </div>
@@ -131,7 +131,7 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{f.contratista}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         Contrato N.° {f.contratoNumero}
                         {f.dependencia && ` — ${f.dependencia}`}
                       </p>
@@ -159,7 +159,7 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
                         />
                         <span className="min-w-0">
                           <span className="text-xs text-gray-700">{x.detalle}</span>
-                          <span className="block text-[11px] text-gray-400">
+                          <span className="block text-[11px] text-gray-500">
                             Afecta: {x.afecta.join(' · ')}
                           </span>
                         </span>
@@ -203,7 +203,7 @@ export default function ContratacionHome({ nombre }: { nombre: string }) {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{c.contratista}</p>
-                  <p className="text-xs text-gray-400">Contrato N.° {c.numero}</p>
+                  <p className="text-xs text-gray-500">Contrato N.° {c.numero}</p>
                 </div>
                 <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full whitespace-nowrap">
                   {fmtFecha(c.fecha_fin)}

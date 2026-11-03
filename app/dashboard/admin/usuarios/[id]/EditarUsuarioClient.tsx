@@ -184,7 +184,7 @@ export default function EditarUsuarioClient({
           >
             {uploading ? 'Subiendo…' : 'Cambiar foto'}
           </button>
-          <p className="text-xs text-gray-400">JPEG, PNG, WEBP o HEIC · máx 5 MB</p>
+          <p className="text-xs text-gray-500">JPEG, PNG, WEBP o HEIC · máx 5 MB</p>
           <input
             ref={fileRef}
             type="file"
@@ -201,20 +201,20 @@ export default function EditarUsuarioClient({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="eu-1" className="block text-sm font-medium text-gray-700 mb-1">
               Nombre completo <span className="text-red-500">*</span>
             </label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <input id="eu-1"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={nombre}
               onChange={e => setNombre(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de documento</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="eu-2" className="block text-sm font-medium text-gray-700 mb-1">Tipo de documento</label>
+            <select id="eu-2"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={tipoDoc}
               onChange={e => setTipoDoc(e.target.value)}
             >
@@ -223,20 +223,20 @@ export default function EditarUsuarioClient({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="eu-3" className="block text-sm font-medium text-gray-700 mb-1">
               Número de documento <span className="text-red-500">*</span>
             </label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <input id="eu-3"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={cedula}
               onChange={e => setCedula(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-500"
+            <label htmlFor="eu-4" className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
+            <select id="eu-4"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-500"
               value={rol}
               onChange={e => setRol(e.target.value as typeof rol)}
               disabled={editorEsContratacion}
@@ -248,7 +248,7 @@ export default function EditarUsuarioClient({
                 .map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
             </select>
             {editorEsContratacion && (
-              <p className="text-xs text-gray-400 mt-1">Contratación no puede cambiar el rol de un usuario</p>
+              <p className="text-xs text-gray-500 mt-1">Contratación no puede cambiar el rol de un usuario</p>
             )}
           </div>
 
@@ -262,9 +262,9 @@ export default function EditarUsuarioClient({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="eu-5" className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+            <input id="eu-5"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={cargo}
               onChange={e => setCargo(e.target.value)}
               placeholder="Ej. Contratista de prestación de servicios"
@@ -272,9 +272,9 @@ export default function EditarUsuarioClient({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Dependencia</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="eu-6" className="block text-sm font-medium text-gray-700 mb-1">Dependencia</label>
+            <select id="eu-6"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={depId}
               onChange={e => setDepId(e.target.value)}
             >
@@ -291,9 +291,9 @@ export default function EditarUsuarioClient({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono / Celular</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="eu-7" className="block text-sm font-medium text-gray-700 mb-1">Teléfono / Celular</label>
+            <input id="eu-7"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={telefono}
               onChange={e => setTelefono(e.target.value)}
               placeholder="3XX XXX XXXX"
@@ -301,9 +301,9 @@ export default function EditarUsuarioClient({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="eu-8" className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+            <input id="eu-8"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="correo@ejemplo.com"
@@ -311,9 +311,9 @@ export default function EditarUsuarioClient({
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="eu-9" className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+            <input id="eu-9"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={direccion}
               onChange={e => setDireccion(e.target.value)}
               placeholder="Calle XX # XX-XX"
@@ -326,8 +326,8 @@ export default function EditarUsuarioClient({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
-            <select
+            <label htmlFor="eu-10" className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+            <select id="eu-10"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={banco}
               onChange={e => setBanco(e.target.value)}
@@ -337,8 +337,8 @@ export default function EditarUsuarioClient({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de cuenta</label>
-            <select
+            <label htmlFor="eu-11" className="block text-sm font-medium text-gray-700 mb-1">Tipo de cuenta</label>
+            <select id="eu-11"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={tipoCuenta}
               onChange={e => setTipoCuenta(e.target.value)}
@@ -348,19 +348,19 @@ export default function EditarUsuarioClient({
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuenta</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="eu-12" className="block text-sm font-medium text-gray-700 mb-1">Número de cuenta</label>
+            <input id="eu-12"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={numeroCuenta}
               onChange={e => setNumeroCuenta(e.target.value)}
               placeholder="XXXX XXXX XXXX"
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="eu-13" className="block text-sm font-medium text-gray-700 mb-1">
               ¿Obligado a facturar electrónicamente?
             </label>
-            <select
+            <select id="eu-13"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={facturaElectronica}
               onChange={e => setFacturaElectronica(e.target.value as '' | 'si' | 'no')}
@@ -369,7 +369,7 @@ export default function EditarUsuarioClient({
               <option value="no">No — se genera Cuenta de Cobro</option>
               <option value="si">Sí — adjuntará su factura electrónica</option>
             </select>
-            <p className="text-[11px] text-gray-400 mt-1">
+            <p className="text-[11px] text-gray-500 mt-1">
               Según sus responsabilidades en el RUT.
             </p>
           </div>
@@ -407,20 +407,20 @@ export default function EditarUsuarioClient({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
-            <input
+            <label htmlFor="eu-14" className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
+            <input id="eu-14"
               type="password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={nuevaPass}
               onChange={e => setNuevaPass(e.target.value)}
               placeholder="Mínimo 8 caracteres"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar contraseña</label>
-            <input
+            <label htmlFor="eu-15" className="block text-sm font-medium text-gray-700 mb-1">Confirmar contraseña</label>
+            <input id="eu-15"
               type="password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={confirmarPass}
               onChange={e => setConfirmarPass(e.target.value)}
               placeholder="Repite la contraseña"

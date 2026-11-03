@@ -66,7 +66,7 @@ export default function EliminarContrato({
         </p>
 
         {resumen === null ? (
-          <p className="text-sm text-gray-400 py-4">Calculando lo que se eliminaría…</p>
+          <p className="text-sm text-gray-500 py-4">Calculando lo que se eliminaría…</p>
         ) : (
           <>
             <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 mb-4">

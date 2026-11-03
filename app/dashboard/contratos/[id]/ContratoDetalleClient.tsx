@@ -279,7 +279,7 @@ export default function ContratoDetallePage({
       <Toaster position="top-center" richColors />
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+      <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
         <Link href="/dashboard/contratos" className="hover:text-gray-600">
           {esGestor ? 'Contratos' : 'Mis contratos'}
         </Link>
@@ -302,7 +302,7 @@ export default function ContratoDetallePage({
               {/* Con adiciones, el valor en letras del contrato quedó obsoleto:
                   corresponde a lo firmado, no a lo que vale hoy. Se sustituye
                   por lo que explica la diferencia. */}
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 {valorContrato.adiciones > 0
                   ? `Incluye ${pesos(valorContrato.adiciones)} en adiciones`
                   : contrato.valor_letras_total}
@@ -346,27 +346,27 @@ export default function ContratoDetallePage({
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div className="min-w-0">
-            <span className="text-gray-400 text-xs">Contratista</span>
+            <span className="text-gray-500 text-xs">Contratista</span>
             <p className="font-medium text-gray-900 truncate">{contrato.contratista?.nombre_completo}</p>
-            <p className="text-xs text-gray-400">CC {formatCedula(contrato.contratista?.cedula)}</p>
+            <p className="text-xs text-gray-500">CC {formatCedula(contrato.contratista?.cedula)}</p>
             {/* Decide si el cobro se documenta con Cuenta de Cobro o con
                 factura electrónica. Solo se marca cuando está confirmado:
                 un dato sin verificar no debe parecer una respuesta. */}
             {contrato.contratista?.obligado_facturar_electronicamente === true && (
-              <span className="inline-block mt-1 text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+              <span className="inline-block mt-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
                 Factura electrónica
               </span>
             )}
           </div>
           <div className="min-w-0">
-            <span className="text-gray-400 text-xs">Supervisor</span>
+            <span className="text-gray-500 text-xs">Supervisor</span>
             <p className="font-medium text-gray-900 truncate">{contrato.supervisor?.nombre_completo}</p>
-            <p className="text-xs text-gray-400">CC {formatCedula(contrato.supervisor?.cedula)}</p>
+            <p className="text-xs text-gray-500">CC {formatCedula(contrato.supervisor?.cedula)}</p>
           </div>
           <div className="min-w-0">
-            <span className="text-gray-400 text-xs">Plazo</span>
+            <span className="text-gray-500 text-xs">Plazo</span>
             <p className="font-medium text-gray-900">{contrato.plazo_meses} meses</p>
-            <p className="text-xs text-gray-400">{formatDateMedium(contrato.fecha_inicio)} — {formatDateMedium(contrato.fecha_fin)}</p>
+            <p className="text-xs text-gray-500">{formatDateMedium(contrato.fecha_inicio)} — {formatDateMedium(contrato.fecha_fin)}</p>
             {contrato.fecha_terminacion && (
               <p className="text-xs font-medium text-gray-600">Terminó el {formatDateMedium(contrato.fecha_terminacion)}</p>
             )}
@@ -376,20 +376,20 @@ export default function ContratoDetallePage({
                 En los contratos que no lo tienen cargado salía «$0», y en los
                 que empiezan a mitad de mes escondía que el primer periodo se
                 cobra proporcional. */}
-            <span className="text-gray-400 text-xs">Valor por periodo</span>
+            <span className="text-gray-500 text-xs">Valor por periodo</span>
             <p className="font-medium text-gray-900">{cobro.monto}</p>
-            <p className="text-xs text-gray-400 truncate">{cobro.nota}</p>
+            <p className="text-xs text-gray-500 truncate">{cobro.nota}</p>
           </div>
         </div>
 
         {(contrato.cdp || contrato.crp) && usuario?.rol !== 'contratista' && (
           <div className="grid grid-cols-2 gap-4 text-sm mt-4 pt-4 border-t border-gray-100">
             <div>
-              <span className="text-gray-400 text-xs">No. CDP</span>
+              <span className="text-gray-500 text-xs">No. CDP</span>
               <p className="font-medium text-gray-900">{contrato.cdp || '—'}</p>
             </div>
             <div>
-              <span className="text-gray-400 text-xs">No. CRP</span>
+              <span className="text-gray-500 text-xs">No. CRP</span>
               <p className="font-medium text-gray-900">{contrato.crp || '—'}</p>
             </div>
           </div>
@@ -397,7 +397,7 @@ export default function ContratoDetallePage({
 
         {contrato.secop_url && (
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <span className="text-gray-400 text-xs">Enlace SECOP II</span>
+            <span className="text-gray-500 text-xs">Enlace SECOP II</span>
             <a
               href={contrato.secop_url}
               target="_blank"
@@ -428,7 +428,7 @@ export default function ContratoDetallePage({
       {/* Obligaciones */}
       <div className="bg-white rounded-2xl border p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
             Obligaciones específicas ({obligaciones.length})
           </h3>
         </div>
@@ -441,7 +441,7 @@ export default function ContratoDetallePage({
                 : null
               return (
                 <div key={obl.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl group min-w-0">
-                  <span className="text-xs font-medium text-gray-400 mt-0.5 min-w-[20px]">{index + 1}.</span>
+                  <span className="text-xs font-medium text-gray-500 mt-0.5 min-w-[20px]">{index + 1}.</span>
 
                   {editandoOblId === obl.id ? (
                     <div className="flex-1 min-w-0">
@@ -501,7 +501,7 @@ export default function ContratoDetallePage({
                           onClick={() => abrirEdicionObligacion(obl)}
                           title="Editar obligación"
                           aria-label="Editar obligación"
-                          className="text-gray-300 hover:text-blue-600 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
+                          className="text-gray-500 hover:text-blue-600 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
@@ -511,7 +511,7 @@ export default function ContratoDetallePage({
                           onClick={() => eliminarObligacion(obl.id)}
                           title="Eliminar obligación"
                           aria-label="Eliminar obligación"
-                          className="text-gray-300 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
+                          className="text-gray-500 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
                         >
                           <Icono glifo={Iconos.accion.eliminar} tamano="sm" />
                         </button>
@@ -582,7 +582,7 @@ export default function ContratoDetallePage({
         )}
 
         {!esGestor && obligaciones.length === 0 && (
-          <p className="text-sm text-gray-400 text-center py-4">
+          <p className="text-sm text-gray-500 text-center py-4">
             La dependencia de contratación aún no ha definido las obligaciones de este contrato.
           </p>
         )}
@@ -600,13 +600,13 @@ export default function ContratoDetallePage({
       {/* Ejecución del contrato */}
       <div className="bg-white rounded-2xl border p-6">
         <div className="flex items-center justify-between mb-4 gap-3">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
             Ejecución del contrato
             {/* El conteo a secas —«(12)»— no decía nada que la lista de abajo
                 no dijera. Cuántos quedaron radicados sí: es el avance real del
                 contrato y se lee sin bajar la vista. */}
             {enEjecucion.length > 0 && (
-              <span className="ml-2 normal-case tracking-normal text-gray-400">
+              <span className="ml-2 normal-case tracking-normal text-gray-500">
                 {radicados} de {enEjecucion.length} radicados
               </span>
             )}
@@ -623,19 +623,19 @@ export default function ContratoDetallePage({
         </div>
 
         {periodos.length === 0 && esGestor && obligaciones.length === 0 && (
-          <p className="text-sm text-gray-400 text-center py-6">
+          <p className="text-sm text-gray-500 text-center py-6">
             Agrega las obligaciones del contrato primero, luego genera los periodos.
           </p>
         )}
 
         {periodos.length === 0 && esGestor && obligaciones.length > 0 && (
-          <p className="text-sm text-gray-400 text-center py-6">
+          <p className="text-sm text-gray-500 text-center py-6">
             Haz clic en "Generar periodos automáticamente" para crear los {contrato.plazo_meses} periodos mensuales.
           </p>
         )}
 
         {periodos.length === 0 && !esGestor && (
-          <p className="text-sm text-gray-400 text-center py-6">
+          <p className="text-sm text-gray-500 text-center py-6">
             Los periodos de pago aún no han sido generados por la dependencia de contratación.
           </p>
         )}
@@ -649,7 +649,7 @@ export default function ContratoDetallePage({
                 className={`flex items-center gap-3 p-4 rounded-xl transition-colors ${
                   // Un periodo anulado se sigue viendo (y se abre: conserva lo escrito), pero se aparta del resto.
                   periodo.estado === 'anulado'
-                    ? 'bg-white border border-dashed border-gray-200 text-gray-400 hover:bg-gray-50'
+                    ? 'bg-white border border-dashed border-gray-200 text-gray-500 hover:bg-gray-50'
                     : 'bg-gray-50 hover:bg-gray-100 active:bg-gray-200'
                 }`}
               >
@@ -661,7 +661,7 @@ export default function ContratoDetallePage({
                 {/* Mes + fechas */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{periodo.mes} {periodo.anio}</p>
-                  <p className="text-xs text-gray-400 truncate">
+                  <p className="text-xs text-gray-500 truncate">
                     {formatDateMedium(periodo.fecha_inicio)} — {formatDateMedium(periodo.fecha_fin)}
                   </p>
                 </div>

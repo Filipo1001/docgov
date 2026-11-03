@@ -88,7 +88,7 @@ export default function LoginPage() {
             <LogoCD size={64} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[#192031]">Contratista Digital</h1>
-          <p className="text-sm text-gray-400 mt-1">Alcaldía Municipal de Fredonia</p>
+          <p className="text-sm text-gray-500 mt-1">Alcaldía Municipal de Fredonia</p>
         </div>
 
         {/* Expired session banner */}
@@ -106,35 +106,37 @@ export default function LoginPage() {
               <form onSubmit={handleLogin}>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="lg-1" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Correo electrónico
                     </label>
-                    <input
+                    <input id="lg-1"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="tu.correo@ejemplo.com"
                       required
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-400"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="lg-2" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Contraseña
                     </label>
                     <div className="relative">
-                      <input
+                      <input id="lg-2"
                         type={mostrarPassword ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Tu contraseña"
                         required
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-400 pr-12"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-500 pr-12"
                       />
                       <button
                         type="button"
                         onClick={() => setMostrarPassword(!mostrarPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        aria-pressed={mostrarPassword}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded text-gray-500 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                       >
                         {mostrarPassword ? (
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,7 +164,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setModo('recuperar')}
-                  className="w-full mt-3 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                  className="w-full mt-3 text-sm text-gray-500 hover:text-gray-600 transition-colors"
                 >
                   ¿Olvidaste tu contraseña?
                 </button>
@@ -175,7 +177,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setModo('login')}
-                  className="text-sm text-gray-400 hover:text-gray-600 mb-4 flex items-center gap-1"
+                  className="text-sm text-gray-500 hover:text-gray-600 mb-4 flex items-center gap-1"
                 >
                   ← Volver al login
                 </button>
@@ -186,16 +188,16 @@ export default function LoginPage() {
                   Te enviamos un enlace para crear una nueva contraseña.
                 </p>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label htmlFor="lg-3" className="block text-sm font-medium text-gray-700 mb-1.5">
                     Correo electrónico
                   </label>
-                  <input
+                  <input id="lg-3"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="tu.correo@ejemplo.com"
                     required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-400"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all text-gray-900 placeholder-gray-500"
                   />
                 </div>
                 <button
@@ -211,7 +213,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-xs text-gray-500 mt-6">
           Contratista Digital — Piloto Fredonia, Antioquia
         </p>
       </div>

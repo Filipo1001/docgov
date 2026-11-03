@@ -87,11 +87,11 @@ export default function AvisosPendientesClient() {
             <table className="w-full text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase text-gray-500">
                 <tr>
-                  <th className="px-4 py-3">Contratista</th>
-                  <th className="px-4 py-3">Correo</th>
-                  <th className="px-4 py-3">Periodo</th>
-                  <th className="px-4 py-3">Contrato</th>
-                  <th className="px-4 py-3">Radicado</th>
+                  <th scope="col" className="px-4 py-3">Contratista</th>
+                  <th scope="col" className="px-4 py-3">Correo</th>
+                  <th scope="col" className="px-4 py-3">Periodo</th>
+                  <th scope="col" className="px-4 py-3">Contrato</th>
+                  <th scope="col" className="px-4 py-3">Radicado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

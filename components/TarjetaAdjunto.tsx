@@ -32,7 +32,7 @@ export default function TarjetaAdjunto({ adjunto, editable, onAbrir, onEliminar 
         </svg>
         {/* Mismo número que imprimirá el informe: el contratista puede
             comprobar la correspondencia antes de enviarlo. */}
-        <span className="text-[9px] font-semibold text-red-600 leading-none">
+        <span className="text-[11px] font-semibold text-red-600 leading-none">
           Anexo {adjunto.orden}
         </span>
         <span className="text-[8px] text-gray-500 leading-tight text-center line-clamp-1 break-all w-full">

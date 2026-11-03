@@ -30,7 +30,7 @@ export default function CampoPlazo({ plazo, porFechas, fechasAlReves, deshabilit
     <div className="col-span-2">
       <label htmlFor="plazo_dias" className="block text-sm font-medium text-gray-700 mb-1">
         Plazo (días)
-        <span className="text-xs text-gray-400 font-normal ml-1">lo que dice el contrato</span>
+        <span className="text-xs text-gray-500 font-normal ml-1">lo que dice el contrato</span>
       </label>
       <input
         id="plazo_dias" name="plazo_dias" inputMode="numeric" autoComplete="off"
@@ -55,7 +55,7 @@ export default function CampoPlazo({ plazo, porFechas, fechasAlReves, deshabilit
         {fechasAlReves ? (
           <p className="text-xs text-red-700">La fecha de terminación es anterior a la de inicio.</p>
         ) : porFechas === null ? (
-          <p className="text-xs text-gray-400">Escribe las dos fechas y se sugiere el plazo contando el primer y el último día.</p>
+          <p className="text-xs text-gray-500">Escribe las dos fechas y se sugiere el plazo contando el primer y el último día.</p>
         ) : comparacion.tipo === 'coincide' ? (
           <p className="text-xs text-emerald-700">Coincide con las fechas ({porFechas} días, contando el primer y el último día).</p>
         ) : comparacion.tipo === 'distinto' ? (

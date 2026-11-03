@@ -179,7 +179,7 @@ export default function NotificacionesBell() {
         <Icono glifo={Iconos.aviso.notificaciones} tamano="md" etiqueta="Notificaciones" />
         <span className="flex-1 text-left">Notificaciones</span>
         {totalNoLeidas > 0 && (
-          <span className="min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none">
+          <span className="min-w-[20px] h-5 bg-red-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none">
             {totalNoLeidas > 99 ? '99+' : totalNoLeidas}
           </span>
         )}
@@ -217,7 +217,7 @@ export default function NotificacionesBell() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <Icono glifo={iconoPorTipo(n.tipo)} tamano="md" className="flex-shrink-0 mt-0.5 text-gray-400" />
+                    <Icono glifo={iconoPorTipo(n.tipo)} tamano="md" className="flex-shrink-0 mt-0.5 text-gray-500" />
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium leading-tight ${!n.leida ? 'text-gray-900' : 'text-gray-700'}`}>
                         {n.titulo}
@@ -227,7 +227,7 @@ export default function NotificacionesBell() {
                           {n.mensaje}
                         </p>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-1">{tiempoRelativo(n.created_at)}</p>
+                      <p className="text-[11px] text-gray-500 mt-1">{tiempoRelativo(n.created_at)}</p>
                     </div>
                     {!n.leida && (
                       <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1.5" />

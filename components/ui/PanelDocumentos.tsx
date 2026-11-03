@@ -161,7 +161,7 @@ function MenuPuntitos({
         aria-haspopup="menu"
         aria-expanded={abierto}
         onClick={() => onCambiar(!abierto)}
-        className={`grid h-7 w-7 place-items-center rounded-md text-gray-400 transition-colors hover:bg-black/5 hover:text-gray-800 ${ENFOQUE}`}
+        className={`grid h-7 w-7 place-items-center rounded-md text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-800 ${ENFOQUE}`}
       >
         <Icono glifo={Iconos.accion.mas} tamano="sm" />
       </button>
@@ -228,7 +228,7 @@ function ContenidoFicha({ d }: { d: Documento }) {
     <>
       <Icono glifo={d.icono} tamano="md" className={colorIcono(d.estado)} />
       <span className={`text-xs font-medium leading-tight ${d.estado === 'error' ? 'text-red-600' : 'text-gray-800'}`}>{d.etiqueta}</span>
-      <span className="flex h-4 items-center text-[11px] leading-none text-gray-400">
+      <span className="flex h-4 items-center text-[11px] leading-none text-gray-500">
         {cargado
           ? <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />
           : d.estado === 'subiendo' ? 'Subiendo…' : d.onSubir ? 'Subir' : 'Sin cargar'}
@@ -326,7 +326,7 @@ function FichaNumero({
           {n.etiqueta}
           {lleno && <Icono glifo={Iconos.estado.aprobado} tamano="sm" className="text-emerald-600" />}
         </span>
-        <span className={`w-full min-w-0 break-all text-sm tracking-wide ${lleno ? 'font-semibold text-gray-900' : 'text-gray-400'}`}>
+        <span className={`w-full min-w-0 break-all text-sm tracking-wide ${lleno ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
           {lleno ? n.valor : 'Sin número'}
         </span>
       </div>

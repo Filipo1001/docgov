@@ -86,27 +86,27 @@ export default function MunicipioClient({ municipio }: { municipio: MunicipioAdm
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del municipio</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="mu-1" className="block text-sm font-medium text-gray-700 mb-1">Nombre del municipio</label>
+            <input id="mu-1"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={nombre}
               onChange={e => setNombre(e.target.value)}
               placeholder="Ej. Fredonia"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="mu-2" className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
+            <input id="mu-2"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={departamento}
               onChange={e => setDepartamento(e.target.value)}
               placeholder="Ej. Antioquia"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">NIT</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="mu-3" className="block text-sm font-medium text-gray-700 mb-1">NIT</label>
+            <input id="mu-3"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={nit}
               onChange={e => setNit(e.target.value)}
               placeholder="Ej. 890980848-1"
@@ -121,18 +121,18 @@ export default function MunicipioClient({ municipio }: { municipio: MunicipioAdm
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del representante legal</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="mu-4" className="block text-sm font-medium text-gray-700 mb-1">Nombre del representante legal</label>
+            <input id="mu-4"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={repLegal}
               onChange={e => setRepLegal(e.target.value)}
               placeholder="Ej. Aldubar de Jesús Vanegas Marín"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cédula del representante</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            <label htmlFor="mu-5" className="block text-sm font-medium text-gray-700 mb-1">Cédula del representante</label>
+            <input id="mu-5"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               value={cedulaRep}
               onChange={e => setCedulaRep(e.target.value)}
               placeholder="Ej. 8.461.720"
@@ -144,13 +144,13 @@ export default function MunicipioClient({ municipio }: { municipio: MunicipioAdm
             Se estampa en el Acta de Terminación cuando el supervisor aprueba
             el último informe del contrato. */}
         <div className="pt-4 border-t border-gray-100">
-          <label className="block text-sm font-medium text-gray-700">Firma del representante legal</label>
+          <label htmlFor="mu-6" className="block text-sm font-medium text-gray-700">Firma del representante legal</label>
           <p className="text-xs text-gray-500 mt-1 mb-3">
             Se estampa en el Acta de Terminación cuando el supervisor aprueba el último informe del
             contrato. Imagen con fondo transparente, preferiblemente PNG.
           </p>
 
-          <input
+          <input id="mu-6"
             ref={firmaInputRef}
             type="file"
             accept="image/png,image/jpeg,image/webp"

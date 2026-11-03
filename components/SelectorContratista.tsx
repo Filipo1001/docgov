@@ -9,7 +9,7 @@
  * nombre o cédula, y al elegir queda a la vista con su foto.
  */
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { formatCedula } from '@/lib/format'
 
@@ -35,6 +35,7 @@ const MAX_VISIBLES = 6
 
 export default function SelectorContratista({ contratistas, valor, onChange }: Props) {
   const [busqueda, setBusqueda] = useState('')
+  const idBusqueda = useId()
 
   const elegido = contratistas.find(c => c.id === valor) ?? null
 
@@ -49,9 +50,9 @@ export default function SelectorContratista({ contratistas, valor, onChange }: P
   if (elegido) {
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <p className="block text-sm font-medium text-gray-700 mb-2">
           Contratista <span className="text-red-500">*</span>
-        </label>
+        </p>
         <div className="flex items-center gap-3 p-3 rounded-2xl border border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/20">
           <Avatar nombre={elegido.nombre_completo} foto={elegido.foto_url} size="md" />
           <div className="min-w-0 flex-1">
@@ -72,16 +73,17 @@ export default function SelectorContratista({ contratistas, valor, onChange }: P
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label htmlFor={idBusqueda} className="block text-sm font-medium text-gray-700 mb-2">
         Contratista <span className="text-red-500">*</span>
       </label>
 
       <div className="relative">
-        <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+        <svg className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
           fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
         </svg>
         <input
+          id={idBusqueda}
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre o cédula…"
@@ -100,18 +102,18 @@ export default function SelectorContratista({ contratistas, valor, onChange }: P
             <Avatar nombre={c.nombre_completo} foto={c.foto_url} size="sm" />
             <div className="min-w-0 flex-1">
               <p className="text-sm text-gray-900 truncate">{c.nombre_completo}</p>
-              <p className="text-[11px] text-gray-400">C.C. {formatCedula(c.cedula)}</p>
+              <p className="text-[11px] text-gray-500">C.C. {formatCedula(c.cedula)}</p>
             </div>
           </button>
         ))}
 
         {resultados.length === 0 && (
-          <p className="text-xs text-gray-400 py-3 text-center">
+          <p className="text-xs text-gray-500 py-3 text-center">
             Ningún contratista coincide con «{busqueda}».
           </p>
         )}
         {!busqueda && contratistas.length > MAX_VISIBLES && (
-          <p className="text-[11px] text-gray-400 pt-1 text-center">
+          <p className="text-[11px] text-gray-500 pt-1 text-center">
             {contratistas.length - MAX_VISIBLES} más — escribe para buscar
           </p>
         )}

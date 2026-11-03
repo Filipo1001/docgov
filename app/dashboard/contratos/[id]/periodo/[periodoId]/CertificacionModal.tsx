@@ -108,7 +108,7 @@ export default function CertificacionModal({
           </p>
 
           <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-1.5">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Fundamento legal</p>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Fundamento legal</p>
             <p className="text-[13px] text-gray-600 leading-relaxed">
               Parágrafo 2 del artículo 383 del Estatuto Tributario, modificado por la Ley 1819 de 2016. La tarifa de
               retención depende de si has <strong>contratado o vinculado más de un trabajador</strong> asociado a tu
@@ -117,7 +117,7 @@ export default function CertificacionModal({
           </div>
 
           <div>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">A nombre de</p>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">A nombre de</p>
             <div className="rounded-xl border border-gray-100 p-4 text-[13px] text-gray-700 space-y-0.5">
               <p className="font-semibold text-gray-900">{prefill.nombre}</p>
               <p>C.C. {formatCedula(prefill.cedula)}</p>
@@ -154,7 +154,7 @@ export default function CertificacionModal({
             ya se sepa de qué trata.
           */}
           <div>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Tu declaración</p>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Tu declaración</p>
 
             <div className="rounded-xl border border-gray-200 p-4">
               <p className="text-[15px] font-semibold text-gray-900 leading-snug">
@@ -227,7 +227,7 @@ export default function CertificacionModal({
               )}
 
               {vinculo === null && (
-                <p className="text-[12px] text-gray-400 mt-3">
+                <p className="text-[12px] text-gray-500 mt-3">
                   Elige una de las dos para poder continuar.
                 </p>
               )}
@@ -235,7 +235,7 @@ export default function CertificacionModal({
 
             {/* El texto que se jura y que va impreso en la carta, literal. */}
             <div className="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-4">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                 Lo que dirá el documento
               </p>
               <p className="text-[13px] text-gray-600 leading-relaxed">

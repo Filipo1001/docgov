@@ -126,7 +126,7 @@ const FALTA = 'border-dashed border-amber-300 bg-amber-50/40'
 /** La esquina de arriba a la derecha: lo que se puede hacer con la ficha. */
 function Esquina({ glifo, className = '' }: { glifo: LucideIcon; className?: string }) {
   return (
-    <span aria-hidden className={`pointer-events-none absolute right-2 top-2 text-gray-400 ${className}`}>
+    <span aria-hidden className={`pointer-events-none absolute right-2 top-2 text-gray-500 ${className}`}>
       <Icono glifo={glifo} tamano="sm" />
     </span>
   )
@@ -364,7 +364,7 @@ export default function PanelRevisionPlanilla({ planilla, soporte, numero, mes, 
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               placeholder="Explica al contratista qué debe corregir…"
-              className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-red-300"
+              className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-red-300"
             />
             <div className="flex gap-2">
               <button

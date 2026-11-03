@@ -20,7 +20,7 @@ export default function GlobalError({
   }, [error])
 
   return (
-    <html>
+    <html lang="es">
       <body>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
           <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">

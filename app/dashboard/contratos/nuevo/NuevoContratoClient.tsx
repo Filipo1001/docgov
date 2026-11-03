@@ -272,7 +272,7 @@ export default function NuevoContratoPage({
   const supervisores = usuarios.filter(u => u.rol === 'supervisor')
 
   const inputClass =
-    'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
+    'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none'
   const autoClass = inputClass + ' bg-emerald-50 border-emerald-200'
 
   // Pantalla de éxito con la contraseña inicial del contratista recién creado
@@ -292,7 +292,7 @@ export default function NuevoContratoPage({
             Su contraseña inicial es su número de cédula. Podrá cambiarla al ingresar.
           </p>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5">
-            <p className="text-xs text-gray-400 mb-1">Contraseña inicial (su cédula)</p>
+            <p className="text-xs text-gray-500 mb-1">Contraseña inicial (su cédula)</p>
             <p className="text-2xl font-mono font-bold text-gray-900 tracking-wider select-all">{resultado.password}</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -329,7 +329,7 @@ export default function NuevoContratoPage({
 
         {/* Datos del contrato */}
         <div className="bg-white rounded-2xl border p-6">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
             Datos del contrato
           </h3>
           <div className="grid grid-cols-2 gap-4">
@@ -347,13 +347,13 @@ export default function NuevoContratoPage({
                 placeholder="022-2026" className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Año</label>
-              <input name="anio" type="number" value={form.anio} onChange={handleChange} required
+              <label htmlFor="nc-1" className="block text-sm font-medium text-gray-700 mb-1">Año</label>
+              <input id="nc-1" name="anio" type="number" value={form.anio} onChange={handleChange} required
                 className={inputClass} />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Objeto del contrato</label>
-              <textarea name="objeto" value={form.objeto} onChange={handleChange} required rows={3}
+              <label htmlFor="nc-2" className="block text-sm font-medium text-gray-700 mb-1">Objeto del contrato</label>
+              <textarea id="nc-2" name="objeto" value={form.objeto} onChange={handleChange} required rows={3}
                 placeholder="PRESTACIÓN DE SERVICIOS DE APOYO A LA GESTIÓN..."
                 className={`${excelEncontrado ? autoClass : inputClass} resize-none`} />
             </div>
@@ -362,7 +362,7 @@ export default function NuevoContratoPage({
 
         {/* Personas */}
         <div className="bg-white rounded-2xl border p-6">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
             Contratista y supervisor
           </h3>
 
@@ -402,38 +402,38 @@ export default function NuevoContratoPage({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
-                  <input value={nuevoContratista.nombre_completo}
+                  <label htmlFor="nc-3" className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
+                  <input id="nc-3" value={nuevoContratista.nombre_completo}
                     onChange={e => setNuevoContratista(n => ({ ...n, nombre_completo: e.target.value }))}
                     placeholder="Ej. Juan Pérez Gómez" className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
-                  <input value={nuevoContratista.cedula}
+                  <label htmlFor="nc-4" className="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
+                  <input id="nc-4" value={nuevoContratista.cedula}
                     onChange={e => setNuevoContratista(n => ({ ...n, cedula: e.target.value }))}
                     placeholder="1036..." className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Correo *</label>
-                  <input type="email" value={nuevoContratista.email}
+                  <label htmlFor="nc-5" className="block text-sm font-medium text-gray-700 mb-1">Correo *</label>
+                  <input id="nc-5" type="email" value={nuevoContratista.email}
                     onChange={e => setNuevoContratista(n => ({ ...n, email: e.target.value }))}
                     placeholder="correo@ejemplo.com" className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                  <input value={nuevoContratista.telefono}
+                  <label htmlFor="nc-6" className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                  <input id="nc-6" value={nuevoContratista.telefono}
                     onChange={e => setNuevoContratista(n => ({ ...n, telefono: e.target.value }))}
                     placeholder="300..." className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-                  <input value={nuevoContratista.direccion}
+                  <label htmlFor="nc-7" className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                  <input id="nc-7" value={nuevoContratista.direccion}
                     onChange={e => setNuevoContratista(n => ({ ...n, direccion: e.target.value }))}
                     className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
-                  <select value={nuevoContratista.banco}
+                  <label htmlFor="nc-8" className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+                  <select id="nc-8" value={nuevoContratista.banco}
                     onChange={e => setNuevoContratista(n => ({ ...n, banco: e.target.value }))}
                     className={inputClass}>
                     <option value="">— Seleccionar —</option>
@@ -441,8 +441,8 @@ export default function NuevoContratoPage({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de cuenta</label>
-                  <select value={nuevoContratista.tipo_cuenta}
+                  <label htmlFor="nc-9" className="block text-sm font-medium text-gray-700 mb-1">Tipo de cuenta</label>
+                  <select id="nc-9" value={nuevoContratista.tipo_cuenta}
                     onChange={e => setNuevoContratista(n => ({ ...n, tipo_cuenta: e.target.value }))}
                     className={inputClass}>
                     <option value="">— Seleccionar —</option>
@@ -451,23 +451,23 @@ export default function NuevoContratoPage({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">N.° de cuenta</label>
-                  <input value={nuevoContratista.numero_cuenta}
+                  <label htmlFor="nc-10" className="block text-sm font-medium text-gray-700 mb-1">N.° de cuenta</label>
+                  <input id="nc-10" value={nuevoContratista.numero_cuenta}
                     onChange={e => setNuevoContratista(n => ({ ...n, numero_cuenta: e.target.value }))}
                     className={inputClass} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="nc-11" className="block text-sm font-medium text-gray-700 mb-1">
                     ¿Obligado a facturar electrónicamente?
                   </label>
-                  <select value={nuevoContratista.factura_electronica}
+                  <select id="nc-11" value={nuevoContratista.factura_electronica}
                     onChange={e => setNuevoContratista(n => ({ ...n, factura_electronica: e.target.value as '' | 'si' | 'no' }))}
                     className={inputClass}>
                     <option value="">Sin verificar</option>
                     <option value="no">No — se genera Cuenta de Cobro</option>
                     <option value="si">Sí — adjuntará su factura electrónica</option>
                   </select>
-                  <p className="text-[11px] text-gray-400 mt-1">
+                  <p className="text-[11px] text-gray-500 mt-1">
                     Según sus responsabilidades en el RUT. Se puede cambiar después.
                   </p>
                 </div>
@@ -490,13 +490,13 @@ export default function NuevoContratoPage({
 
         {/* Valores */}
         <div className="bg-white rounded-2xl border p-6">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
             Valores y plazo
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Valor total ($)</label>
-              <input name="valor_total" type="number" value={form.valor_total} onChange={handleChange} required
+              <label htmlFor="nc-12" className="block text-sm font-medium text-gray-700 mb-1">Valor total ($)</label>
+              <input id="nc-12" name="valor_total" type="number" value={form.valor_total} onChange={handleChange} required
                 placeholder="24000000" className={excelEncontrado && form.valor_total ? autoClass : inputClass} />
             </div>
             <div>
@@ -508,28 +508,28 @@ export default function NuevoContratoPage({
                   No se calcula solo a partir del total: entre los contratos ya
                   cargados, el mensual va desde total/6 hasta total/12 según lo
                   pactado. Es una cifra negociada, no derivada. */}
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="nc-13" className="block text-sm font-medium text-gray-700 mb-1">
                 Valor mensual ($)
-                <span className="text-xs text-gray-400 font-normal ml-1">del Excel o manual</span>
+                <span className="text-xs text-gray-500 font-normal ml-1">del Excel o manual</span>
               </label>
-              <input name="valor_mensual" type="number" value={form.valor_mensual} onChange={handleChange} required
+              <input id="nc-13" name="valor_mensual" type="number" value={form.valor_mensual} onChange={handleChange} required
                 placeholder="3000000" className={excelEncontrado && form.valor_mensual ? autoClass : inputClass} />
-              <p className="text-xs text-gray-400 mt-1">Con este valor se calcula la base de seguridad social.</p>
+              <p className="text-xs text-gray-500 mt-1">Con este valor se calcula la base de seguridad social.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="nc-14" className="block text-sm font-medium text-gray-700 mb-1">
                 Valor total (letras)
                 <span className="text-xs text-emerald-600 font-normal ml-1">auto-generado</span>
               </label>
-              <input name="valor_letras_total" value={form.valor_letras_total} onChange={handleChange}
+              <input id="nc-14" name="valor_letras_total" value={form.valor_letras_total} onChange={handleChange}
                 placeholder="Se genera al ingresar el valor total" className={form.valor_letras_total ? autoClass : inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="nc-15" className="block text-sm font-medium text-gray-700 mb-1">
                 Valor mensual (letras)
                 <span className="text-xs text-emerald-600 font-normal ml-1">auto-generado</span>
               </label>
-              <input name="valor_letras_mensual" value={form.valor_letras_mensual} onChange={handleChange}
+              <input id="nc-15" name="valor_letras_mensual" value={form.valor_letras_mensual} onChange={handleChange}
                 placeholder="Se genera al ingresar el valor mensual" className={form.valor_letras_mensual ? autoClass : inputClass} />
             </div>
             <div>
@@ -553,7 +553,7 @@ export default function NuevoContratoPage({
 
         {/* CDP / CRP */}
         <div className="bg-white rounded-2xl border p-6">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
             Certificados presupuestales
           </h3>
           <div className="grid grid-cols-2 gap-4">
@@ -582,15 +582,15 @@ export default function NuevoContratoPage({
 
         {/* SECOP URL */}
         <div className="bg-white rounded-2xl border p-6">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
             Enlace SECOP II
           </h3>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="nc-16" className="block text-sm font-medium text-gray-700 mb-1">
               URL del contrato en SECOP II
-              <span className="text-xs text-gray-400 font-normal ml-1">(opcional)</span>
+              <span className="text-xs text-gray-500 font-normal ml-1">(opcional)</span>
             </label>
-            <input
+            <input id="nc-16"
               name="secop_url"
               type="text"
               inputMode="url"
