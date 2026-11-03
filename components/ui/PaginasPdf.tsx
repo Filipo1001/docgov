@@ -30,6 +30,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { cajasDe, leerTexto, type Caja, type ItemTexto, type Marca } from '@/lib/pdf-texto'
+import { reportarFalloDocumento } from '@/app/actions/visor-documentos'
 
 export type { Marca }
 
@@ -48,19 +49,43 @@ const ESPERA_MAX_MS = 60_000
 /** Un error que se le puede explicar a quien revisa. */
 class ErrorDeDocumento extends Error {
   readonly protegido: boolean
-  constructor(mensaje: string, protegido = false) {
+  /** Lo que dijo de verdad el navegador o el lector (para el registro, no para la pantalla). */
+  readonly tecnico: string | null
+  constructor(mensaje: string, protegido = false, tecnico: string | null = null) {
     super(mensaje)
     this.protegido = protegido
+    this.tecnico = tecnico
   }
+}
+
+const describir = (e: unknown) => {
+  const x = e as { name?: string; message?: string }
+  return `${x?.name ?? 'Error'}: ${x?.message ?? String(e)}`
+}
+
+/**
+ * El lector de PDF en su versión de COMPATIBILIDAD (`legacy`), no la moderna. La moderna exige funciones que solo traen
+ * los navegadores recientes (por ejemplo `Promise.withResolvers`, de 2024): en un teléfono con el navegador algo atrás
+ * fallaba antes de leer la primera página, con «No se pudo mostrar el documento». La de compatibilidad trae esas
+ * funciones consigo y se comporta igual en los nuevos. Es la que el propio proyecto pdf.js recomienda para llegar a todos.
+ */
+async function cargarLector(): Promise<typeof import('pdfjs-dist')> {
+  const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as unknown as typeof import('pdfjs-dist')
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString()
+  return pdfjs
 }
 
 /** Dirección sin la firma: identifica el ARCHIVO, no el permiso temporal para leerlo. */
 export const identidadDelArchivo = (url: string) => url.split('?')[0]
 
 async function abrirDocumento(url: string, claves: string[]): Promise<{ doc: PDFDocumentProxy; pdfjs: typeof import('pdfjs-dist') }> {
-  const pdfjs = await import('pdfjs-dist')
   // El worker se sirve desde el propio bundle (evita CDN externo, que además estaría bloqueado por la política de contenido).
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+  let pdfjs: typeof import('pdfjs-dist')
+  try {
+    pdfjs = await cargarLector()
+  } catch (e) {
+    throw new ErrorDeDocumento('No se pudo cargar el lector de documentos. Reintenta.', false, describir(e))
+  }
 
   const control = new AbortController()
   const reloj = setTimeout(() => control.abort(), ESPERA_MAX_MS)
@@ -75,8 +100,8 @@ async function abrirDocumento(url: string, claves: string[]): Promise<{ doc: PDF
     bytes = new Uint8Array(await respuesta.arrayBuffer())
   } catch (e) {
     if (e instanceof ErrorDeDocumento) throw e
-    if ((e as { name?: string })?.name === 'AbortError') throw new ErrorDeDocumento('El documento tarda demasiado en llegar. Revisa tu conexión y reintenta.')
-    throw new ErrorDeDocumento('No se pudo descargar el documento. Revisa tu conexión y reintenta.')
+    if ((e as { name?: string })?.name === 'AbortError') throw new ErrorDeDocumento('El documento tarda demasiado en llegar. Revisa tu conexión y reintenta.', false, describir(e))
+    throw new ErrorDeDocumento('No se pudo descargar el documento. Revisa tu conexión y reintenta.', false, describir(e))
   } finally {
     clearTimeout(reloj)
   }
@@ -90,9 +115,9 @@ async function abrirDocumento(url: string, claves: string[]): Promise<{ doc: PDF
     } catch (e) {
       const nombre = (e as { name?: string })?.name
       if (nombre === 'PasswordException') continue
-      if (nombre === 'InvalidPDFException' || nombre === 'FormatError') throw new ErrorDeDocumento('El archivo no es un PDF válido o está dañado.')
-      if (nombre === 'MissingPDFException') throw new ErrorDeDocumento('El documento no se encontró.')
-      throw new ErrorDeDocumento('No se pudo abrir el documento.')
+      if (nombre === 'InvalidPDFException' || nombre === 'FormatError') throw new ErrorDeDocumento('El archivo no es un PDF válido o está dañado.', false, describir(e))
+      if (nombre === 'MissingPDFException') throw new ErrorDeDocumento('El documento no se encontró.', false, describir(e))
+      throw new ErrorDeDocumento('No se pudo abrir el documento.', false, describir(e))
     }
   }
   throw new ErrorDeDocumento('protegido', true)
@@ -189,6 +214,8 @@ export default function PaginasPdf({
   const [paginas, setPaginas] = useState<{ page: PDFPageProxy; items: ItemTexto[] }[]>([])
   const [ancho, setAncho] = useState(ANCHO_MIN)
   const [intento, setIntento] = useState(0)
+  // Un tropiezo pasajero (la red del teléfono, un corte) se reintenta solo UNA vez antes de mostrar el error.
+  const reintentoSolo = useRef<string | null>(null)
   const [clavePuesta, setClavePuesta] = useState<string | null>(null)
   const [claveMala, setClaveMala] = useState(false)
   const [borrador, setBorrador] = useState('')
@@ -232,8 +259,16 @@ export default function PaginasPdf({
       } catch (e) {
         if (cancelado) return
         if (e instanceof ErrorDeDocumento && e.protegido) { setClaveMala(!!clavePuesta); cambiar('protegido'); return }
+        const llave = `${archivo}#${intento}`
+        if (reintentoSolo.current === null) { reintentoSolo.current = llave; setIntento(n => n + 1); return }
         setError(e instanceof Error ? e.message : 'No se pudo abrir el documento.')
         cambiar('error')
+        void reportarFalloDocumento({
+          donde: 'paginas',
+          mensaje: e instanceof Error ? e.message : String(e),
+          tecnico: e instanceof ErrorDeDocumento ? e.tecnico : describir(e),
+          ruta: urlVigente.current,
+        })
       }
     })()
 

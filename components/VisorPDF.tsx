@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { reportarFalloDocumento } from '@/app/actions/visor-documentos'
 
 interface Props {
   url: string
@@ -66,11 +67,13 @@ export default function VisorPDF({ url, nombre, onClose }: Props) {
 
     ;(async () => {
       try {
-        const pdfjs = await import('pdfjs-dist')
+        // Versión de COMPATIBILIDAD del lector (`legacy`): la moderna exige funciones que solo traen los navegadores
+        // recientes y fallaba en teléfonos con el navegador algo atrás (ver components/ui/PaginasPdf.tsx).
+        const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as unknown as typeof import('pdfjs-dist')
         // El worker se sirve desde el propio bundle (evita CDN externo, que
         // además estaría bloqueado por la política de contenido).
         pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          'pdfjs-dist/build/pdf.worker.min.mjs',
+          'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
           import.meta.url,
         ).toString()
 
@@ -116,6 +119,12 @@ export default function VisorPDF({ url, nombre, onClose }: Props) {
         if (cancelado) return
         setError(e instanceof Error ? e.message : 'No se pudo abrir el documento')
         setEstado('error')
+        void reportarFalloDocumento({
+          donde: 'visor',
+          mensaje: 'No se pudo mostrar el documento',
+          tecnico: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+          ruta: url,
+        })
       }
     })()
 
