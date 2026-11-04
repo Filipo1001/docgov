@@ -19,6 +19,8 @@ import type { EstadoTarjeta } from './TarjetaInforme'
 export interface AccionesInforme {
   hrefContrato: string
   mesCerrado: boolean
+  /** Para el supervisor, «Lo de SECOP» son sus dos actas; para los demás, lo de la contratista. */
+  esSupervisor: boolean
   tienePlanilla: boolean
   tieneSoporte: boolean
   onVerDocumentos: () => void
@@ -40,9 +42,12 @@ export const DOCUMENTOS_DESCARGABLES = [
   { id: 'soporte', etiqueta: 'Soporte de pago', icono: Iconos.documentos.soportePago },
 ] as const
 
-/** Lo que pide SECOP II de cada cuenta. Con exactamente esto marcado se baja el paquete SECOP de siempre, que además suma
- * el contrato y la certificación de retención en la primera cuenta, y el acta de terminación en la última. */
+/** Lo que la CONTRATISTA sube a SECOP II de cada cuenta. Con exactamente esto marcado se baja el paquete SECOP de siempre,
+ * que además suma el contrato y la certificación de retención en la primera cuenta, y el acta de terminación en la última. */
 export const DOCUMENTOS_SECOP = ['informe', 'cuenta-cobro', 'planilla', 'soporte']
+
+/** Lo que el SUPERVISOR sube a SECOP II: sus dos actas (Felipe, 3-nov-2026). Es lo que marca su «Lo de SECOP». */
+export const DOCUMENTOS_SECOP_SUPERVISOR = ['acta-supervision', 'acta-pago']
 
 function descargas(a: AccionesInforme): SeleccionMenu {
   const opciones = DOCUMENTOS_DESCARGABLES.filter(d =>
@@ -52,7 +57,7 @@ function descargas(a: AccionesInforme): SeleccionMenu {
     opciones: [...opciones],
     atajos: [
       { etiqueta: 'Todo', ids: [...hay] },
-      { etiqueta: 'Lo de SECOP', ids: DOCUMENTOS_SECOP.filter(id => hay.has(id)) },
+      { etiqueta: 'Lo de SECOP', ids: (a.esSupervisor ? DOCUMENTOS_SECOP_SUPERVISOR : DOCUMENTOS_SECOP).filter(id => hay.has(id)) },
     ],
     accion: 'Descargar',
     onConfirmar: a.onDescargar,

@@ -425,7 +425,8 @@ export default function InformesPage({
    */
   async function descargarDocumentos(p: Periodo, ids: string[]) {
     const hay = DOCUMENTOS_SECOP.filter(id => (id !== 'planilla' || p.planilla_ss_url) && (id !== 'soporte' || p.soporte_pago_url))
-    const esSecop = ids.length === hay.length && hay.every(id => ids.includes(id))
+    // El paquete SECOP de la contratista; el supervisor, con sus dos actas, baja un ZIP normal de lo marcado.
+    const esSecop = !esSecretaria && ids.length === hay.length && hay.every(id => ids.includes(id))
     const url = esSecop ? `/api/pdf/${p.id}/secop` : `/api/pdf/${p.id}/seleccion?docs=${ids.join(',')}`
     const aviso = toast.loading(ids.length === 1 ? 'Preparando el documento…' : `Preparando ${ids.length} documentos…`)
     try {
@@ -858,6 +859,7 @@ export default function InformesPage({
                 onVerPlanilla={() => abrirRevision(p, 'planilla')}
                 opciones={opcionesDeInforme(datos.estado, {
                   hrefContrato: `/dashboard/contratos/${p.contrato_id}`,
+                  esSupervisor: esSecretaria,
                   tienePlanilla: !!p.planilla_ss_url,
                   tieneSoporte: !!p.soporte_pago_url,
                   onDescargar: (ids) => { void descargarDocumentos(p, ids) },
